@@ -5,6 +5,7 @@ import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.runner.Nds3dMode
 import com.nxredux.mobile.runner.Res3dConsole
 import com.nxredux.mobile.runner.Nds3dResolution
+import com.nxredux.mobile.runner.NdsRegion
 import com.nxredux.mobile.settings.stepFrom
 
 /** A DS setting's stored [value] and what the menu and hotkey labels show. */
@@ -171,6 +172,22 @@ object NdsOptions {
         return rows.filter { (it.key !in LAYOUT_KEYS || it.key == active) && (it.key !in INSET_KEYS || pip) }
     }
 
+    /** Shader Screens (DS and 3DS): the shader on the top screen alone, or on the touch screen too. */
+    const val SHADER_SCREENS = "nx_shader_screens"
+    const val SHADER_TOP = "top"
+    const val SHADER_BOTH = "both"
+
+    val shaderScreensRow = FrontendOption(
+        SHADER_SCREENS, "Shader Screens", listOf(SHADER_TOP, SHADER_BOTH), SHADER_TOP,
+        "Which screens the shader draws on.\nThe touch screen is left plain by default: a shader that curves or moves the picture " +
+            "would put what you see away from where your finger lands.",
+        visual = true, valueLabels = listOf("Top screen", "Both screens"),
+    )
+
+    /** [region] with Shader Screens Both in [values] also shading the touch screen; a picture-in-picture inset stays plain. */
+    fun shaded(region: NdsRegion, values: Map<String, String>): NdsRegion =
+        if (region.shaded || region.inset || values[SHADER_SCREENS] != SHADER_BOTH) region else region.copy(shaded = true)
+
     private const val SPLIT_NOTE = "Screen Scaling and the screen offsets do not apply to the DS screens."
 
     /** The DS / 3DS layout rows' note: half-folded, the fold places the screens and SELECT + Left/Right does nothing. */
@@ -181,19 +198,22 @@ object NdsOptions {
 
     /**
      * Local Wireless (default on): a game's local multiplayer finds other NX Redux devices on the same network, through the
-     * core's own room. Read when the game starts.
+     * core's own room. Switched in the game too: off leaves the room at once.
      */
     const val LOCAL_WIRELESS = "nx_nds_local_wireless"
     const val LOCAL_WIRELESS_ON = "on"
     const val LOCAL_WIRELESS_OFF = "off"
 
-    val localWirelessRow = FrontendOption(
-        LOCAL_WIRELESS, "Local Wireless", listOf(LOCAL_WIRELESS_ON, LOCAL_WIRELESS_OFF), LOCAL_WIRELESS_ON,
+    val localWirelessRow = localWirelessRowFor(LOCAL_WIRELESS)
+
+    /** The DS and 3DS Local Wireless row, stored under [key]. */
+    internal fun localWirelessRowFor(key: String): FrontendOption = FrontendOption(
+        key, "Local Wireless", listOf(LOCAL_WIRELESS_ON, LOCAL_WIRELESS_OFF), LOCAL_WIRELESS_ON,
         "A game's local multiplayer finds other NX Redux\ndevices on the same Wi-Fi: start the game on each\ndevice and use its local play menu.\n" +
-            "Nothing is sent until a game turns its wireless on.\nA save state can't be loaded while a game is linked.\n" +
+            "Nothing is sent until a game turns its wireless on.\nA save state can't be loaded while another device\nis linked. Switched off in a game, it leaves at once\n(Disconnect switches it off); switched on, it joins again.\n" +
             "Turn it off on a network you share with people\nyou don't want to play with.",
         brief = "Local multiplayer with nearby devices",
-        visual = false, valueLabels = listOf("On", "Off"), atLaunch = true,
+        visual = false, valueLabels = listOf("On", "Off"),
     )
 
     fun localWireless(values: Map<String, String>): Boolean = values[LOCAL_WIRELESS] != LOCAL_WIRELESS_OFF
@@ -321,7 +341,7 @@ object NdsOptions {
         return PIP_CORNER to next.value
     }
 
-    /** R2: the other screen as the big one. */
+    /** L2 (or L3, SELECT + L1): the other screen as the big one. */
     fun swapBigScreen(values: Map<String, String>): Pair<String, String> = BIG_SCREEN to NdsSettings.parse(values).big.other.value
 
     /** The label a hotkey shows for its new value ("Bottom screen", "Stacked"). */
@@ -332,34 +352,43 @@ private fun scales(console: Res3dConsole, max: Int): List<String> = (1..max.coer
 
 /**
  * [console]'s 3D Resolution row and its two sub-rows: Max Scale (Auto) and Scale (Performance). [displayMax] is the biggest
- * scale the display reaches (null, unknown, offers every scale the core has). Not [visual][FrontendOption.visual]: the
- * core is paused while the menu shows, so an Adjust strip over the frozen frame could never show the 3D change.
+ * scale the display reaches (null, unknown, offers every scale the core has); [cap] the Max Scale an unset game starts
+ * with. Not [visual][FrontendOption.visual]: the core is paused while the menu shows, so an Adjust strip over the frozen
+ * frame could never show the 3D change.
  */
-fun resolutionRows(console: Res3dConsole, displayMax: Int?): List<FrontendOption> {
+fun resolutionRows(console: Res3dConsole, displayMax: Int?, cap: Int = console.defaultCap): List<FrontendOption> {
     val maxScales = scales(console, displayMax ?: console.coreMax)
     val perfScales = scales(console, displayMax?.let { Nds3dResolution.performanceCeiling(it, console) } ?: console.coreMax)
     val screen = when (console) {
         Res3dConsole.DS -> "DS"
         Res3dConsole.N3DS -> "3DS"
         Res3dConsole.PS2 -> "PS2"
+        Res3dConsole.PSP -> "PSP"
+        Res3dConsole.DOLPHIN -> "console"
+        Res3dConsole.PS1, Res3dConsole.PCSX -> "PS1"
+        Res3dConsole.DC -> "Dreamcast"
+        Res3dConsole.N64 -> "N64"
     }
+    // what the scale draws: the PS2 and PSP cores draw the whole picture at it, the DS and 3DS ones only the 3D
+    val drawn = if (console.wholePicture) "the game" else "3D"
     return listOfNotNull(
         FrontendOption(
             console.modeKey, "3D Resolution", Nds3dMode.entries.map { it.value }, Nds3dMode.AUTO.value,
-            if (console == Res3dConsole.PS2) "How sharply the game is drawn. The screen's size doesn't change."
-            else "How sharply 3D models are drawn. 2D art, text and the screen's size don't change.",
+            (if (console.wholePicture) "How sharply the game is drawn. The screen's size doesn't change."
+            else "How sharply 3D models are drawn. 2D art, text and the screen's size don't change.") +
+                "\nWith a shader on, Auto draws at 1x: the shader works from the console's own resolution.",
             visual = false, valueLabels = Nds3dMode.entries.map { it.label },
         ),
         FrontendOption(
-            console.maxScaleKey, "Max Scale", maxScales, console.defaultCap.toString(),
-            if (console == Res3dConsole.PS2) "The most Auto draws the game at, as a multiple of the PS2's own resolution."
+            console.maxScaleKey, "Max Scale", maxScales, cap.toString(),
+            if (console.wholePicture) "The most Auto draws the game at, as a multiple of the $screen's own resolution."
             else "The most Auto draws 3D at, as a multiple of the $screen screen.",
             visual = false, valueLabels = maxScales.map { "${it}x" }, shownWhen = console.modeKey to setOf(Nds3dMode.AUTO.value),
         ),
-        // The PS2's Performance is native: no scale to pick.
-        if (console == Res3dConsole.PS2) null else FrontendOption(
+        // Performance at native size: no scale to pick.
+        if (console.nativePerformance) null else FrontendOption(
             console.scaleKey, "Scale", perfScales, Nds3dResolution.DEFAULT_PERFORMANCE_SCALE.toString(),
-            "The fixed resolution Performance draws 3D at, as a multiple of the $screen screen.",
+            "The fixed resolution Performance draws $drawn at, as a multiple of the $screen screen.",
             visual = false, valueLabels = perfScales.map { "${it}x" }, shownWhen = console.modeKey to setOf(Nds3dMode.PERFORMANCE.value),
         ),
     )

@@ -19,8 +19,9 @@ sealed interface GridTile {
         val screenshotUrl: String?, val title: String, val appId: String? = null, val heroShot: Boolean = false,
         val abstractUrl: String? = null,
         val resumeFrame: Boolean = false,   // the picture is Continue's resume frame: trimmed of its letterbox and zoomed, as Grid Home's card
+        val badge: String? = null,   // a pill on its own row over the name ([GameEntry.badge])
     ) : GridTile
-    data class Tool(val icon: DrawableResource, val lines: List<String>, val appId: String? = null) : GridTile   // appId: an Android app's, drawn with its own icon
+    data class Tool(val icon: DrawableResource, val lines: List<String>, val appId: String? = null, val backgroundUrl: String? = null) : GridTile   // appId: an Android app's, drawn with its own icon; backgroundUrl: abstract art ground (Carousel Home)
     data class Collection(val name: String, val count: Int? = null) : GridTile   // count: its games; null when unknown
 }
 
@@ -51,6 +52,7 @@ private fun gameTile(e: Listed, title: String, shot: String? = null) =
     GridTile.Game(
         shot ?: e.game.screenshotRef?.value, title, e.appId, heroShot = shot == null && e.game.heroShot, abstractUrl = abstractArtFor(e),
         resumeFrame = shot != null,   // a hidden save state's frame: trimmed and zoomed, as Continue's
+        badge = e.game.badge,
     )
 
 /**
@@ -59,9 +61,8 @@ private fun gameTile(e: Listed, title: String, shot: String? = null) =
  * Home's [continuePictures]). An Android game's is [abstractAppArtUrl] by its app id: seeded by [ANDROID_TAG] and the
  * app id (stable per app, so its shapes never match a ROM of the same name), in its launcher icon's colours with the
  * icon in the middle. Never art for fetching: the refs stay empty, so a game showing it still counts as missing.
- * Non-null for every game.
  */
-internal fun abstractArtFor(e: Listed): String? =
+internal fun abstractArtFor(e: Listed): String =
     e.appId?.let(::abstractAppArtUrl) ?: abstractArtUrl(e.system.tag, e.game.fileName)
 
 /** Continue's resume frame: the hidden save state's (Save & Quit's, [HomeShot]), else the resume slot's screenshot. */
@@ -91,8 +92,12 @@ internal fun gameBackground(e: Listed, portrait: Boolean): String? =
  * ([abstractAppArtUrl] icon = false: the same palette and shapes; the Backdrop cover already shows the icon, and a
  * centred icon reads oddly behind a list); a ROM's as [abstractArtFor].
  */
-internal fun abstractBackgroundFor(e: Listed): String? =
+internal fun abstractBackgroundFor(e: Listed): String =
     e.appId?.let { abstractAppArtUrl(it, icon = false) } ?: abstractArtFor(e)
+
+/** A pinned tool's abstract background art: an Android app's icon-palette art without the icon, else seeded by its pin key. */
+internal fun toolAbstractArtUrl(row: ToolRow): String =
+    row.appId?.let { abstractAppArtUrl(it, icon = false) } ?: abstractArtUrl("TOOL", row.pinKey)
 
 /**
  * A merged console row (SFC + SUPA) takes the first logo any of its tags has, as [menuBackground] does, and counts the

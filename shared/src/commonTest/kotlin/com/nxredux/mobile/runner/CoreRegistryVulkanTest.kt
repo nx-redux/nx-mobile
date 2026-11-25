@@ -38,15 +38,15 @@ class CoreRegistryVulkanTest {
 
     @Test fun azahar_always_sets_its_graphics_api() {
         val d = CoreRegistry.forTag("3DS")!!
-        assertEquals(VulkanSwitch(gles = mapOf("citra_graphics_api" to "OpenGL"), vulkan = mapOf("citra_graphics_api" to "Vulkan")), d.vulkan)
+        assertEquals(VulkanSwitch(gles = mapOf("citra_graphics_api" to "OpenGL"), vulkan = mapOf("citra_graphics_api" to "Vulkan"), autoOnMali = true, maliNeedsCustomDriver = true, autoOnXclipse = true), d.vulkan)
         assertTrue("citra_graphics_api" in d.lockedOptions)
         assertEquals("OpenGL", d.defaultOptions["citra_graphics_api"])
     }
 
-    // DBZ BT3 runs on the Fold over the Vulkan bridge: the Graphics API row picks the core's renderer.
+    // The Graphics API row picks the core's renderer.
     @Test fun ps2SwitchesRenderer() {
         val d = CoreRegistry.forTag("PS2")!!
-        assertEquals(VulkanSwitch(gles = mapOf("armsx2_renderer" to "OpenGL"), vulkan = mapOf("armsx2_renderer" to "Vulkan")), d.vulkan)
+        assertEquals(VulkanSwitch(gles = mapOf("armsx2_renderer" to "OpenGL"), vulkan = mapOf("armsx2_renderer" to "Vulkan"), autoOnMali = true, autoOnXclipse = true), d.vulkan)
         assertTrue("armsx2_renderer" in d.lockedOptions)
         assertTrue(GraphicsApiOptions.appliesTo("PS2"))
     }

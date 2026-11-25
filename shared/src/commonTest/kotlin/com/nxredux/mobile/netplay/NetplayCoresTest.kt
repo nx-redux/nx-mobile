@@ -21,13 +21,13 @@ class NetplayCoresTest {
             "FBN" to listOf("fbneo"),
             "N64" to listOf("mupen64plus_next"),
             "GB" to listOf("gambatte"), "GBC" to listOf("gambatte"), "GBA" to listOf("gpsp", "mgba"), "MGBA" to listOf("mgba", "gpsp"),
-            "3DS" to listOf("azahar"), "NDS" to listOf("melondsds"), "PSP" to listOf("ppsspp"),
+            "3DS" to listOf("azahar"), "NDS" to listOf("melondsds"), "PSP" to listOf("ppsspp"), "DC" to listOf("flycast"),
         )
         want.forEach { (tag, cores) ->
             assertEquals(cores, NetplayCores.offered(tag), tag)
             assertEquals(cores.first(), NetplayCores.defaultCore(tag), tag)
         }
-        for (tag in listOf("SGB", "DC")) assertFalse(NetplayCores.supported(tag), tag)
+        for (tag in listOf("SGB", "VB")) assertFalse(NetplayCores.supported(tag), tag)
         assertTrue(NetplayCores.supported("sfc"))
         assertNull(NetplayCores.defaultCore("SGB"))
     }
@@ -221,7 +221,6 @@ class NetplayCoresTest {
     @Test fun cable_link_runs_mgba_even_for_gpsp_default() {
         assertEquals("gpsp", NetplayCores.defaultCore("GBA"))
         assertEquals("mgba", NetplayCores.CABLE_LINK_CORE)
-        assertEquals(NetplayCores.CABLE_LINK_CORE, com.nxredux.mobile.netplay.wizard.Wizard.CABLE_LINK_CORE)
         // A Cable Link session is a lockstep one on the engine, never the GBA link's netpacket session.
         val s = NetplaySession(NetplayRole.HOST, "10.0.0.2", "mgba", "gpsp", cableLink = true, otherRomPath = "/c/x.gba")
         assertNull(s.linkKind)

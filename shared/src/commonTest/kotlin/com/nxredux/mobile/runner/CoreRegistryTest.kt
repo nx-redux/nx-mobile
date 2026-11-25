@@ -1,6 +1,7 @@
 package com.nxredux.mobile.runner
 
 import com.nxredux.mobile.library.Names
+import com.nxredux.mobile.options.CoreConfig
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -59,8 +60,12 @@ class CoreRegistryTest {
         assertEquals(30, ids.size)
     }
     @Test fun the_bricks_pak_defaults_are_carried() {
-        // The second memory card stays out, as the Brick's pin had it (upstream's default since 2026 is a shared card).
-        assertEquals(mapOf("pcsx_rearmed_dithering" to "enabled", "pcsx_rearmed_memcard2" to "none"), CoreRegistry.forTag("PS")!!.defaultOptions)
+        // The second memory card stays out, as on the Brick (upstream's default is a shared card).
+        // Enhanced Resolution is the app's (Res3dConsole.PCSX): off until the launch sends the 3D Resolution.
+        assertEquals(
+            mapOf("pcsx_rearmed_dithering" to "enabled", "pcsx_rearmed_memcard2" to "none", "pcsx_rearmed_neon_enhancement_enable" to "disabled"),
+            CoreRegistry.forTag("PS")!!.defaultOptions,
+        )
         assertEquals(mapOf("race_dark_filter_level" to "50"), CoreRegistry.forTag("NGPC")!!.defaultOptions)
         assertEquals("anaglyph", CoreRegistry.forTag("VB")!!.defaultOptions["vb_3dmode"])
         assertEquals(
@@ -105,9 +110,9 @@ class CoreRegistryTest {
         assertEquals("libmupen64plus_next_gles3_libretro_android.so", CoreRegistry.forTag("N64")!!.libraryFileName)
         assertTrue(CoreRegistry.forTag("PSP")!!.biosFiles.contains("PPSSPP/"))
     }
-    @Test fun cores_read_file_descriptors_except_prboom_and_picodrive() {
+    @Test fun cores_read_file_descriptors_except_prboom() {
         for (core in CoreRegistry.all) {
-            val real = core.id in setOf("prboom", "picodrive")
+            val real = core.id == "prboom"
             assertEquals(if (real) LoadMode.REAL_PATH else LoadMode.FILE_DESCRIPTOR, core.loadMode, core.id)
             assertTrue(core.extensions.isNotEmpty(), core.id)
             assertTrue(core.extensions.all { it == it.lowercase() && !it.startsWith(".") }, core.id)
@@ -147,16 +152,27 @@ class CoreRegistryTest {
     }
     @Test fun every_hidden_value_key_has_a_default_that_is_not_hidden() {
         // A hidden value is only skipped in the menu and ignored in a .cfg: with no default of ours, the core's own
-        // default (possibly the hidden value) would reach the core.
+        // default (possibly the hidden value) would reach the core. melonDS's file paths are the exception: its own
+        // default is the file it finds, the placeholder only when there is none.
+        val coreDefaultWanted = setOf("melonds_firmware_nds_path", "melonds_firmware_dsi_path", "melonds_dsi_nand_path")
         for (tag in CoreRegistry.tags) {
             val core = CoreRegistry.forTag(tag)!!
             val defaults = core.defaultOptions.mapKeys { it.key.removePrefix("-") }
-            for ((key, values) in core.hiddenValues) {
+            for ((key, values) in core.hiddenValues - coreDefaultWanted) {
                 val default = defaults[key]
                 assertTrue(default != null, "$tag ${core.id}: $key has hidden values but no defaultOptions entry")
                 assertFalse(default in values, "$tag ${core.id}: $key defaults to a hidden value")
             }
         }
+    }
+    @Test fun a_stored_melonds_none_found_file_is_left_to_the_core() {
+        val nds = CoreRegistry.forTag("NDS")!!
+        fun resolved(cfg: String) = CoreConfig.resolve(nds.defaultOptions, null, CoreConfig.parse(cfg), nds.lockedOptions, nds.hiddenValues).values
+        val r = resolved("melonds_firmware_nds_path = /notfound\nmelonds_firmware_dsi_path = /notfound\nmelonds_sysfile_mode = native\n")
+        assertFalse("melonds_firmware_nds_path" in r)
+        assertFalse("melonds_firmware_dsi_path" in r)
+        assertEquals("native", r["melonds_sysfile_mode"])
+        assertEquals("/sys/firmware.bin", resolved("melonds_firmware_nds_path = /sys/firmware.bin\n")["melonds_firmware_nds_path"])
     }
     @Test fun values_and_keys_the_app_cannot_serve_are_kept_from_emulator_settings() {
         // Any affinity mask but 0x0 aborts the app at load: locked, so neither the page nor a .cfg can set one.
@@ -252,7 +268,7 @@ class CoreRegistryTest {
         assertEquals("gba", CoreRegistry.consoleByAlias("mgba")!!.id)
         assertEquals("nds", CoreRegistry.consoleByAlias("DS")!!.id)
         assertEquals("psp", CoreRegistry.consoleByAlias("PPSSPP")!!.id)
-        assertEquals("sgb", CoreRegistry.consoleByAlias("Super Game Boy")!!.id)    // moved from gb
+        assertEquals("sgb", CoreRegistry.consoleByAlias("Super Game Boy")!!.id)
         assertEquals("segacd", CoreRegistry.consoleByAlias("Mega CD")!!.id)
         assertEquals("pce", CoreRegistry.consoleByAlias("PC Engine")!!.id)
         assertEquals("wsc", CoreRegistry.consoleByAlias("WonderSwan")!!.id)
@@ -303,7 +319,7 @@ class CoreRegistryTest {
         assertNull(CoreRegistry.consoleForFolderName("My GBA"))          // "my" is not a stop word
         assertNull(CoreRegistry.consoleForFolderName("Games"))
         assertNull(CoreRegistry.consoleForFolderName("Roms Games"))
-        assertEquals("sfc", CoreRegistry.consoleForFolderName("My SNES Games")!!.id)   // long alias: unchanged
+        assertEquals("sfc", CoreRegistry.consoleForFolderName("My SNES Games")!!.id)   // long alias
     }
     @Test fun playstation_has_a_core_and_every_console_has_one_on_every_tag() {
         val ps = CoreRegistry.consoleOf("PS")!!

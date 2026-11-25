@@ -7,6 +7,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import com.nxredux.mobile.options.WiiOptions
 import com.nxredux.mobile.options.WiiScreen
+import com.nxredux.mobile.settings.AndroidAppSettings
 import com.nxredux.mobile.ui.nx.PadProfile
 import com.swordfish.libretrodroid.GLRetroView
 import com.swordfish.libretrodroid.LibretroDroid
@@ -22,6 +23,7 @@ import kotlinx.coroutines.withContext
  * values and config writes Motion Controls goes through, and the pad and menu it rebuilds when the controller changes.
  */
 internal interface WiiDolphinHost : GameScreenHost {
+    val settings: AndroidAppSettings
     val gameTag: String
     val isWii: Boolean
     val isDolphin: Boolean
@@ -58,6 +60,13 @@ internal class WiiDolphinController(
         const val DOLPHIN_ID = "dolphin"
         /** How long the Wii's HOME holds the core's Home (R3): a few frames, as a tap. */
         private const val WII_HOME_PRESS_MS = 150L
+
+        /**
+         * Left without HOME this session, the resume point on disk is an older session's, behind the game's own save on
+         * the NAND: dropped so the next launch boots fresh. Without Save on quit nothing points at it any more (the stop
+         * unlinks it), so the file stays.
+         */
+        fun dropsResumePointOnCoreEnd(homeSaved: Boolean, saveOnQuit: Boolean): Boolean = !homeSaved && saveOnQuit
     }
 
     /** The Wii game's controls from GameTDB, looked up by the disc ID read at launch (null = unread or not listed). */
@@ -316,7 +325,7 @@ internal class WiiDolphinController(
         val wide = WiiScreen.isWide(g[2])
         if (wide != pointerWide) {
             pointerWide = wide
-            NxLog.i("GameActivity", "Wii game draws ${if (wide) "16:9" else "4:3"} (launched ${if (launchWide) "16:9" else "4:3"}): pointer follows")
+            NxLog.i(TAG_LOG, "Wii game draws ${if (wide) "16:9" else "4:3"} (launched ${if (launchWide) "16:9" else "4:3"}): pointer follows")
             host.applyOptions(pointerOptions(wide).map { (k, v) -> Variable(k, v) })
         }
         if (!shapeNoted) WiiScreen.keptShapeNote(wide, launchWide)?.let {
@@ -336,7 +345,9 @@ internal class WiiDolphinController(
         if (homeSaving || host.quitting || endedByCore) return
         val view = host.retroView ?: return
         val ss = saves.saveStates
-        if (ss == null || !host.gameReady || saves.resumePending) { tapHome(view); return }
+        // Without Save on quit there is no resume point to keep: HOME opens at once.
+        val keep = host.settings.saveOnQuit
+        if (ss == null || !host.gameReady || saves.resumePending || !keep) { tapHome(view); return }
         homeSaving = true
         saves.writeHomeResumePoint(view, ss, onSaved = { homeSaved = true }) { homeSaving = false; if (!host.quitting) tapHome(view) }
     }

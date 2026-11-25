@@ -3,6 +3,9 @@ package com.nxredux.mobile.ui.nx
 import com.nxredux.mobile.achievements.RaAchievement
 import com.nxredux.mobile.cheats.CheatEntry
 import com.nxredux.mobile.gametime.GameTimeFormat
+import com.nxredux.mobile.netplay.NetplayRole
+import com.nxredux.mobile.netplay.NetplaySession
+import com.nxredux.mobile.netplay.NetplayText
 import com.nxredux.mobile.shortcuts.ShortcutAction
 import com.nxredux.mobile.shortcuts.TouchSlot
 
@@ -19,22 +22,30 @@ const val MENU_TAB_LABEL = "Menu"
 
 /**
  * The Shortcuts tab's tiles, in display order: the player's touch buttons ([TOUCH], each its own action), then the
- * panel's own. No Screenshot: the spec dropped it everywhere.
+ * panel's own.
  */
 enum class Shortcut(val label: String) {
     TOUCH(""), SWAP_DISC("Swap disc"), FAST_FORWARD("Fast forward"), REWIND("Rewind"), MIC("Mic"), RESET("Reset"),
 }
 
 /**
- * One shortcut tile: [enabled] false is drawn dimmed and does nothing; [value] is the display text under the label
+ * One shortcut tile: [value] is the display text under the label
  * ("2/3" for discs, "Slot 2" for a save state); [on] makes it a toggle (fast forward, rewind, the mic; null for the
  * action shortcuts), drawn as a quick-settings tile: filled while on, outlined while off, with no On/Off words.
  * [action]: a [Shortcut.TOUCH] tile's, run as its touch button runs it (held while pressed).
  */
 data class ShortcutState(
-    val shortcut: Shortcut, val label: String, val enabled: Boolean, val value: String? = null, val on: Boolean? = null,
+    val shortcut: Shortcut, val label: String, val value: String? = null, val on: Boolean? = null,
     val action: ShortcutAction? = null,
 )
+
+/**
+ * The Shortcuts tab's card while a netplay session or a DS game's wireless holds the game, in place of the tiles it
+ * hides: what the session is ([title]), how this device plays in it ([detail], a line each), why the tiles are gone
+ * ([note]) and where its way out is ([hint]). No button of its own: a resting thumb on the touch screen would open the
+ * menu, which pauses the other player or runs the DS room's idle count.
+ */
+data class GamePanelSession(val title: String, val detail: List<String>, val note: String, val hint: String)
 
 /**
  * The header on every tab: the game's [title], its box art ([artPath]; null draws the [consoleTag]'s logo), its total
@@ -74,6 +85,9 @@ sealed interface QuickSetting {
         val key: String, override val label: String, val values: List<String>, val labels: List<String>, val index: Int,
         val current: String, val segments: Boolean, val enabled: Boolean = true,
     ) : QuickSetting
+
+    /** The shader in use by its name ([value]); a tap opens the in-game menu's shader picker ([GamePanelEvent.OpenShaders]). */
+    data class Shader(override val label: String, val value: String) : QuickSetting
 }
 
 /** Where a controller is inside the panel (single-screen in-game menu): the tab row, or the current tab's item [index]. */
@@ -102,11 +116,15 @@ data class GamePanelState(
     val noCheatsText: String = "",
     val focus: PanelFocus? = null,
     val showGamePill: Boolean = false,
+    // the Game pill in the corner buttons' look, as the Panel pill it answers there (a controller attached); else the hollow pill
+    val gamePillCorner: Boolean = false,
     /** The Shortcuts tab's save-state slots, in slot order (none: no strip), and the one Save and Load use (1-based). */
     val slots: List<SlotUi> = emptyList(),
     val slot: Int? = null,
     /** The Settings tab's rows. */
     val quick: List<QuickSetting> = emptyList(),
+    /** The Shortcuts tab's session card; null outside a session. */
+    val session: GamePanelSession? = null,
 )
 
 /** What a tap (or A) on the panel asks the game for. */
@@ -119,6 +137,8 @@ sealed interface GamePanelEvent {
     data class SetQuick(val key: String, val value: String) : GamePanelEvent
     /** The Settings tab's "All options": the in-game menu on its Options page. */
     data object OpenOptions : GamePanelEvent
+    /** The Settings tab's Shader row: the in-game menu opens on its shader picker. */
+    data object OpenShaders : GamePanelEvent
     /** Save-state [slot] (1-based) picked on the strip: Save and Load use it. */
     data class SelectSlot(val slot: Int) : GamePanelEvent
     /** A touch button's tile pressed ([down]) or let go, as the button on the pad: a hold runs while down. */
@@ -134,8 +154,8 @@ sealed interface GamePanelEvent {
     data class SetFastForward(val on: Boolean) : GamePanelEvent
     /** The toggled rewind to [on]. */
     data class SetRewind(val on: Boolean) : GamePanelEvent
-    /** The session's mic toggled to [on] (the tile shows the live state). */
-    data class SetMic(val on: Boolean) : GamePanelEvent
+    /** The pad's mic button [shown] or hidden (hidden turns the mic off; the button itself turns it on and off). */
+    data class SetMicButton(val shown: Boolean) : GamePanelEvent
     /** Reset: always asks first (the in-game menu's Reset dialog). */
     data object Reset : GamePanelEvent
 }
@@ -145,15 +165,23 @@ object GamePanelModel {
     /**
      * Shortcuts always; Settings on the second-screen panel ([settings]); Achievements only with a RetroAchievements
      * set; Cheats while the core takes them ([cheats], even with none for the game: the tab says how to add some);
-     * Players only with more than one player slot.
+     * Players as [playersShown] says.
      */
-    fun tabs(raAvailable: Boolean, playerSlots: Int, cheats: Boolean = false, settings: Boolean = false): List<GamePanelTab> = buildList {
+    fun tabs(raAvailable: Boolean, players: Boolean, cheats: Boolean = false, settings: Boolean = false): List<GamePanelTab> = buildList {
         add(GamePanelTab.SHORTCUTS)
         if (settings) add(GamePanelTab.SETTINGS)
         if (raAvailable) add(GamePanelTab.ACHIEVEMENTS)
         if (cheats) add(GamePanelTab.CHEATS)
-        if (playerSlots > 1) add(GamePanelTab.PLAYERS)
+        if (players) add(GamePanelTab.PLAYERS)
     }
+
+    /**
+     * The Players tab shows for a game with more than one slot while more than one controller is connected ([pads]: a
+     * handheld's built-in controls count as one): with a single pad there is no one to hand a slot to. A benched pad
+     * keeps it shown, or a pad benched before the others left could never be put back in play.
+     */
+    fun playersShown(slots: List<PlayerSlotRow>, pads: List<PlayerPadRow>): Boolean =
+        slots.size > 1 && (pads.size > 1 || pads.any { it.benched })
 
     /**
      * A Settings tab option: [values] with the one in use ([current]) marked; side by side while there are at most
@@ -204,39 +232,75 @@ object GamePanelModel {
             else -> action.label
         }
         val state = action == ShortcutAction.SAVE_STATE || action == ShortcutAction.LOAD_STATE
-        return ShortcutState(Shortcut.TOUCH, label, true, value = slot?.takeIf { state }?.let { "Slot $it" }, action = action)
+        return ShortcutState(Shortcut.TOUCH, label, value = slot?.takeIf { state }?.let { "Slot $it" }, action = action)
     }
 
     /**
      * The Shortcuts tab: the touch buttons' tiles ([touch], [panelTouchActions]; Save and Load on the save-state [slot]),
      * Swap disc for a multi-disc game outside netplay (disc swaps aren't synced), then Fast forward ([ff]: running now),
      * Rewind ([rewind]: rewinding now; null where the game can't rewind, the core or its Rewind row off: hidden, never
-     * greyed), Mic ([mic]: on now; null off DS/3DS: hidden) and Reset. Netplay and link sessions keep only Swap disc's
-     * rule: the rest would desync the players. [discIndex] is 0-based.
+     * greyed), Mic ([mic]: the pad's mic button shown, "Shown" / "Hidden"; null off DS/3DS: no tile) and Reset. Fast forward shows its speed ([ffSpeed], "4x").
+     * A session ([netplay]) keeps only the Mic: DS and 3DS sessions are links, each player on their own game, and the
+     * rest would desync the players. [discIndex] is 0-based.
      */
     fun shortcuts(
         discCount: Int, discIndex: Int, netplay: Boolean, ff: Boolean, rewind: Boolean?, mic: Boolean? = null,
-        touch: List<ShortcutAction> = emptyList(), slot: Int? = null,
+        touch: List<ShortcutAction> = emptyList(), slot: Int? = null, ffSpeed: Int? = null,
     ): List<ShortcutState> = buildList {
         if (!netplay) touch.forEach { add(touchTile(it, slot)) }
-        if (discCount > 1 && !netplay) add(ShortcutState(Shortcut.SWAP_DISC, Shortcut.SWAP_DISC.label, true, "${discIndex + 1}/$discCount"))
-        if (netplay) return@buildList
-        add(ShortcutState(Shortcut.FAST_FORWARD, Shortcut.FAST_FORWARD.label, true, on = ff))
-        if (rewind != null) add(ShortcutState(Shortcut.REWIND, Shortcut.REWIND.label, true, on = rewind))
-        if (mic != null) add(ShortcutState(Shortcut.MIC, Shortcut.MIC.label, true, on = mic))
-        add(ShortcutState(Shortcut.RESET, Shortcut.RESET.label, true))
+        if (discCount > 1 && !netplay) add(ShortcutState(Shortcut.SWAP_DISC, Shortcut.SWAP_DISC.label, "${discIndex + 1}/$discCount"))
+        if (netplay) { micTile(mic)?.let(::add); return@buildList }
+        add(ShortcutState(Shortcut.FAST_FORWARD, Shortcut.FAST_FORWARD.label, value = ffSpeed?.let { "${it}x" }, on = ff))
+        if (rewind != null) add(ShortcutState(Shortcut.REWIND, Shortcut.REWIND.label, on = rewind))
+        micTile(mic)?.let(::add)
+        add(ShortcutState(Shortcut.RESET, Shortcut.RESET.label))
+    }
+
+    private fun micTile(mic: Boolean?): ShortcutState? =
+        mic?.let { ShortcutState(Shortcut.MIC, Shortcut.MIC.label, value = if (it) "Shown" else "Hidden", on = it) }
+
+    /**
+     * The Shortcuts tab's session card: for [netplay] (the session this screen plays in; [ended] once it is over and the
+     * game plays on alone), else for a DS game's wireless ([dsWireless], [wirelessNow] where it stands; null for PSP's ad
+     * hoc, which says nothing). Null outside a session.
+     */
+    fun session(netplay: NetplaySession?, ended: Boolean, dsWireless: Boolean, wirelessNow: String?): GamePanelSession? = when {
+        netplay != null && ended -> GamePanelSession(
+            NetplayText.ENDED, emptyList(),
+            if (netplay.cableLink) NetplayText.CABLE_LINK_ENDED else NetplayText.ENDED_PLAYS_ON, NetplayText.MENU_TO_QUIT,
+        )
+        netplay != null -> {
+            val link = netplay.endsAsLocalGame
+            val role = if (netplay.role == NetplayRole.HOST) NetplayText.ROLE_HOST else NetplayText.ROLE_GUEST
+            GamePanelSession(
+                title = if (netplay.cableLink) NetplayText.CABLE_LINK_TAB else NetplayText.TITLE,
+                // A link's players each run their own game: no player numbers to tell apart.
+                detail = listOfNotNull(
+                    if (link) role else "${NetplayText.player(netplay.localSlot)} · $role",
+                    netplay.peerName?.let(NetplayText::playingWith),
+                    if (netplay.overUsb) NetplayText.USB_CABLE else NetplayText.WIFI,
+                ),
+                note = if (link) NetplayText.LINK_LOCKED_NOTE else NetplayText.SYNC_LOCKED_NOTE,
+                hint = if (link) NetplayText.MENU_TO_DISCONNECT else NetplayText.MENU_TO_LEAVE,
+            )
+        }
+        dsWireless -> GamePanelSession(
+            NetplayText.LOCAL_WIRELESS, listOfNotNull(wirelessNow?.replaceFirstChar { it.uppercase() }),
+            NetplayText.LINK_LOCKED_NOTE, NetplayText.MENU_TO_DISCONNECT,
+        )
+        else -> null
     }
 
     /**
-     * What activating [s] asks for: nothing while disabled; Swap disc, a toggle flipped (from its live [ShortcutState.on]),
+     * What activating [s] asks for: Swap disc, a toggle flipped (from its live [ShortcutState.on]),
      * or Reset. A touch button's tile asks on its press and release instead ([GamePanelEvent.Touch]).
      */
-    fun eventFor(s: ShortcutState): GamePanelEvent? = if (!s.enabled) null else when (s.shortcut) {
+    fun eventFor(s: ShortcutState): GamePanelEvent? = when (s.shortcut) {
         Shortcut.TOUCH -> null
         Shortcut.SWAP_DISC -> GamePanelEvent.SwapDisc
         Shortcut.FAST_FORWARD -> s.on?.let { GamePanelEvent.SetFastForward(on = !it) }
         Shortcut.REWIND -> s.on?.let { GamePanelEvent.SetRewind(on = !it) }
-        Shortcut.MIC -> s.on?.let { GamePanelEvent.SetMic(on = !it) }
+        Shortcut.MIC -> s.on?.let { GamePanelEvent.SetMicButton(shown = !it) }
         Shortcut.RESET -> GamePanelEvent.Reset
     }
 

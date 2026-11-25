@@ -115,68 +115,42 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_pause(
     JNIEnv* env,
     jclass obj
 ) {
-    try {
-        np_pause();
-    } catch (std::exception &exception) {
-        LOGE("Error in netplay pause: %s", exception.what());
-        JavaUtils::throwRetroException(env, ERROR_GENERIC);
-    }
+    np_pause();
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_resume(
     JNIEnv* env,
     jclass obj
 ) {
-    try {
-        np_resume();
-    } catch (std::exception &exception) {
-        LOGE("Error in netplay resume: %s", exception.what());
-        JavaUtils::throwRetroException(env, ERROR_GENERIC);
-    }
+    np_resume();
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_leave(
     JNIEnv* env,
     jclass obj
 ) {
-    try {
-        np_leave();
-    } catch (std::exception &exception) {
-        LOGE("Error in netplay leave: %s", exception.what());
-        JavaUtils::throwRetroException(env, ERROR_GENERIC);
-    }
+    np_leave();
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_shutdown(
     JNIEnv* env,
     jclass obj
 ) {
-    try {
-        np_shutdown();
-    } catch (std::exception &exception) {
-        LOGE("Error in netplay shutdown: %s", exception.what());
-        JavaUtils::throwRetroException(env, ERROR_GENERIC);
-    }
+    np_shutdown();
 }
 
 JNIEXPORT jintArray JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_status(
     JNIEnv* env,
     jclass obj
 ) {
-    try {
-        int seconds = 0;
-        np_reason reason = NP_REASON_NONE;
-        np_state state = np_get_state(&seconds, &reason);
-        jint values[3] = { (jint) state, (jint) seconds, (jint) reason };
-        jintArray result = env->NewIntArray(3);
-        if (result == nullptr) return nullptr;   // OutOfMemoryError pending
-        env->SetIntArrayRegion(result, 0, 3, values);
-        return result;
-    } catch (std::exception &exception) {
-        LOGE("Error in netplay status: %s", exception.what());
-        JavaUtils::throwRetroException(env, ERROR_GENERIC);
-    }
-    return nullptr;
+    int seconds = 0;
+    np_reason reason = NP_REASON_NONE;
+    np_state state = np_get_state(&seconds, &reason);
+    jint values[3] = { (jint) state, (jint) seconds, (jint) reason };
+    jintArray result = env->NewIntArray(3);
+    if (result == nullptr) return nullptr;   // OutOfMemoryError pending
+    env->SetIntArrayRegion(result, 0, 3, values);
+    return result;
 }
 
 }

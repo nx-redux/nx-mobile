@@ -89,10 +89,4 @@ size_t Utils::getFileSize(FILE* file) {
     return size;
 }
 
-const char* Utils::cloneToCString(const std::string &input) {
-    char* result = new char[input.length() + 1];
-    std::strcpy(result, input.c_str());
-    return result;
-}
-
 } //namespace libretrodroid

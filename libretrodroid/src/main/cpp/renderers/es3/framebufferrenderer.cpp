@@ -93,9 +93,7 @@ void FramebufferRenderer::initializeBuffers() {
     LOGI("Core framebuffer %u x %u (base %u x %u, largest frame %u x %u, GL limit %u)",
          width, height, baseWidth, baseHeight, largestFrameWidth, largestFrameHeight, maxSize);
     // The pass framebuffers being replaced are deleted, not just dropped: their GL names would leak.
-    for (auto& pass : *framebuffers) {
-        ES3Utils::deleteFramebuffer(std::move(pass));
-    }
+    ES3Utils::deleteFramebuffers(*framebuffers);
     framebuffers = ES3Utils::buildShaderPasses(width, height, shaders);
 
     ES3Utils::deleteFramebuffer(std::move(framebuffer));
@@ -110,10 +108,7 @@ void FramebufferRenderer::initializeBuffers() {
 }
 
 void FramebufferRenderer::releaseGlObjects() {
-    for (auto& pass : *framebuffers) {
-        ES3Utils::deleteFramebuffer(std::move(pass));
-    }
-    framebuffers->clear();
+    ES3Utils::deleteFramebuffers(*framebuffers);
     ES3Utils::deleteFramebuffer(std::move(framebuffer));
     framebuffer = std::make_unique<ES3Utils::Framebuffer>();
 }

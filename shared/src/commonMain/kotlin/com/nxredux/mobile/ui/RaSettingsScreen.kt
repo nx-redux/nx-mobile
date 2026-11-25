@@ -15,7 +15,6 @@ import com.nxredux.mobile.ui.nx.NxSettingEvent
 import com.nxredux.mobile.ui.nx.NxSettingRow
 import com.nxredux.mobile.ui.nx.NxSettingsPage
 import com.nxredux.mobile.ui.nx.NxSignInPrompt
-import com.nxredux.mobile.ui.nx.splitWindow
 
 /**
  * Tools -> RetroAchievements -> Settings: the account (Sign in or Sign out with the status under it), game data
@@ -44,7 +43,7 @@ fun RaSettingsScreen(
     Box(modifier.fillMaxSize()) {
         NxSettingsPage(
             toolPageTitle(screen, split), rows, selectedIndex,
-            hints = if (editing >= 0) NX_EDIT_HINTS else raSettingsHints(screen.rows.getOrNull(selectedIndex), touch, touch != null && nxShowsInfo(touch, truncated), rowEditTwoPane(screen, settingsSplit(splitWindow()))),
+            hints = if (editing >= 0) NX_EDIT_HINTS else raSettingsHints(screen.rows.getOrNull(selectedIndex), touch, touch != null && nxShowsInfo(touch, truncated)),
             onSelect = onSelect, onOpen = onOpen, onEvent = onSetting, onTruncated = onTruncated, onHint = onHint,
         )
         if (!split) RaSettingsDialogs(screen, state, onHint)
@@ -88,9 +87,6 @@ internal fun raSettingsTouchRow(row: RaSettingsRow): NxSettingRow {
 
 /** Rows whose secondary (the status, the cached count) is their description, not a value. */
 private val RA_DESCRIBED_KINDS = setOf(RaSettingKind.SIGN_IN, RaSettingKind.SIGN_OUT, RaSettingKind.DOWNLOAD_ALL)
-
-/** A compact row: no line, [text] (or a fuller [detail]) behind the info icon only. */
-private fun quiet(text: String, detail: String = "") = SettingText("", detail.ifEmpty { text })
 
 /**
  * [row]'s description, from the user guide's RetroAchievements page: a line for a status (the account, the cached count),

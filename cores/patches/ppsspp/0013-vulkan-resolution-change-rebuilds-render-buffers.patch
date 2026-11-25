@@ -1,0 +1,22 @@
+# license: modifies PPSSPP (https://github.com/hrydgard/ppsspp), GPL-2.0-or-later (LICENSE.TXT); this patch is distributed under the same license.
+# A Rendering Resolution change while a game runs: on GLES the core resets the hardware context, which rebuilds every
+# buffer at the new scale. On Vulkan it skips the reset, and its output images follow the new size each frame, but the
+# render buffers kept the old scale: the game drew at the scale it started at and the larger output only stretched it.
+# On Vulkan the change now also asks for a render resize, as the MSAA option already does.
+diff --git a/libretro/libretro.cpp b/libretro/libretro.cpp
+--- a/libretro/libretro.cpp
++++ b/libretro/libretro.cpp
+@@ -1168,6 +1168,13 @@
+          gpu->NotifyDisplayResized();
+          if (ctx && ctx->GetGPUCore() != GPUCORE_VULKAN)
+             resetHWContext = true;
++         else
++         {
++            // nx-redux: Vulkan has no context reset here, so the render buffers are rebuilt at the new scale too;
++            // without it they stay at the old one and the larger output only stretches them.
++            const DisplayLayoutConfig &config = g_Config.GetDisplayLayoutConfig(g_display.GetDeviceOrientation());
++            gpu->NotifyRenderResized(config);
++         }
+       }
+    }
+ 

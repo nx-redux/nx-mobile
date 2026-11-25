@@ -3,7 +3,6 @@ package com.nxredux.mobile.ui
 import com.nxredux.mobile.library.Collections
 import com.nxredux.mobile.library.FolderMerge
 import com.nxredux.mobile.library.FolderSummary
-import com.nxredux.mobile.library.LibraryIndex
 import com.nxredux.mobile.library.LibraryScanner
 import com.nxredux.mobile.library.LooseFile
 import com.nxredux.mobile.library.MoveItem
@@ -14,6 +13,7 @@ import com.nxredux.mobile.library.folderSummary
 import com.nxredux.mobile.library.homeSummary
 import com.nxredux.mobile.library.rewriteLines
 import com.nxredux.mobile.library.splitFolders
+import com.nxredux.mobile.library.unassignedHint
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.storage.Recents
 import com.nxredux.mobile.tryOr
@@ -29,6 +29,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import com.nxredux.mobile.ui.nx.NxRow
 
 /** What first setup's folder summaries need from [AppState]: the home, a scan, the ROMs folder offer and the steps' end. */
 internal interface FolderSummaryHost {
@@ -47,7 +48,7 @@ internal interface FolderSummaryHost {
 
 /**
  * First setup's folder summaries: the home page after the home pick (what the home holds in `Roms/` and outside it, and
- * the move that tidies it), and an added ROMs folder's summary with its move into the home. A move's progress shows on the
+ * the move that tidies it), and an added ROMs folder's summary (only read: no move). A move's progress shows on the
  * page; B stops it after the current game ([moveCancelled]).
  */
 internal class FolderSummaryController(
@@ -108,50 +109,48 @@ internal class FolderSummaryController(
      * other folders merged into its main one, every line naming a merged game rewritten (Recents, pins, hidden games,
      * collections), then a rescan and the result.
      */
-    private fun moveHomeOutside(s: Screen.FolderSummary) = launchMove(s) { home, index, mover ->
-        // Each merged game's old line → new, filled as it moves: whatever ends the move (a stop, an error, the app
-        // closing), every line naming a game that did move is rewritten to it.
-        val moved = LinkedHashMap<String, String>()
-        // The lines of the games moved so far, rewritten every few seconds too: a process killed mid-merge leaves
-        // only the last few seconds' games at their old paths, not all of them.
-        val rewritten = HashSet<String>()
-        suspend fun flushLines() {
-            val fresh = moved.filterKeys { it !in rewritten }
-            if (fresh.isEmpty()) return
-            runCatching { rewriteHomeLines(fresh) }.onSuccess { rewritten += fresh.keys }
-        }
-        val flusher = launch { while (true) { delay(LINES_FLUSH_MS); withContext(NonCancellable) { flushLines() } } }
-        var outside = MoveResult()
-        val result = try {
-            val items = mover.planLoose(homeOutside, index)
-            val movedItems = HashSet<MoveItem>()
-            outside = mover.run(items, ::moveProgress, onMoved = { movedItems += it }) { moveCancelled }
-            // Folders where a game (or a file nothing placed) stayed are never tried: a wrong empty listing must not delete them.
-            val keep = homeOutside.filter { f -> movedItems.none { it.relativeDir == f.relativeDir && (it.subdir != null || f.entry.name in it.files) } }
-            mover.pruneEmpty(home, homeOutside.map { it.relativeDir }, keep = keep.map { it.relativeDir })
-            val merged = if (outside.cancelled) MoveResult() else FolderMerge(deps.source, home).merge(index, splitFolders(index), moved, ::moveProgress) { moveCancelled }.first
-            MoveResult(outside.moved + merged.moved, outside.clashed + merged.clashed, outside.failed + merged.failed, outside.cancelled || merged.cancelled)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            // What moved is counted; the rest (outside and merge) stays where it was.
-            outside.copy(moved = outside.moved + moved.size, failed = outside.failed + 1)
-        } finally {
-            flusher.cancel()
-            withContext(NonCancellable) { flushLines() }
-        }
-        homeOutside = emptyList()
-        host.scanNow(home, then = { showHomeSummary(s.summary, result) })
-    }
-
-    /** A move from [s]: its progress on the page from 0, then [move] with the home, the library and a mover into the home. */
-    private fun launchMove(s: Screen.FolderSummary, move: suspend CoroutineScope.(home: ContentRef, index: LibraryIndex, mover: RomMover) -> Unit) {
+    private fun moveHomeOutside(s: Screen.FolderSummary) {
         val home = host.home() ?: return
         val index = library.snapshot ?: return
         moveCancelled = false
         screen.value = s.copy(progress = 0 to 0)
         selection.value = ListSelection(0, 0)
-        scope.launch { move(home, index, RomMover(deps.source, home)) }
+        scope.launch {
+            val mover = RomMover(deps.source, home)
+            // Each merged game's old line → new, filled as it moves: whatever ends the move (a stop, an error, the app
+            // closing), every line naming a game that did move is rewritten to it.
+            val moved = LinkedHashMap<String, String>()
+            // The lines of the games moved so far, rewritten every few seconds too: a process killed mid-merge leaves
+            // only the last few seconds' games at their old paths, not all of them.
+            val rewritten = HashSet<String>()
+            suspend fun flushLines() {
+                val fresh = moved.filterKeys { it !in rewritten }
+                if (fresh.isEmpty()) return
+                runCatching { rewriteHomeLines(fresh) }.onSuccess { rewritten += fresh.keys }
+            }
+            val flusher = launch { while (true) { delay(LINES_FLUSH_MS); withContext(NonCancellable) { flushLines() } } }
+            var outside = MoveResult()
+            val result = try {
+                val items = mover.planLoose(homeOutside, index)
+                val movedItems = HashSet<MoveItem>()
+                outside = mover.run(items, ::moveProgress, onMoved = { movedItems += it }) { moveCancelled }
+                // Folders where a game (or a file nothing placed) stayed are never tried: a wrong empty listing must not delete them.
+                val keep = homeOutside.filter { f -> movedItems.none { it.relativeDir == f.relativeDir && (it.subdir != null || f.entry.name in it.files) } }
+                mover.pruneEmpty(home, homeOutside.map { it.relativeDir }, keep = keep.map { it.relativeDir })
+                val merged = if (outside.cancelled) MoveResult() else FolderMerge(deps.source, home).merge(index, splitFolders(index), moved, ::moveProgress) { moveCancelled }.first
+                MoveResult(outside.moved + merged.moved, outside.clashed + merged.clashed, outside.failed + merged.failed, outside.cancelled || merged.cancelled)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // What moved is counted; the rest (outside and merge) stays where it was.
+                outside.copy(moved = outside.moved + moved.size, failed = outside.failed + 1)
+            } finally {
+                flusher.cancel()
+                withContext(NonCancellable) { flushLines() }
+            }
+            homeOutside = emptyList()
+            host.scanNow(home, then = { showHomeSummary(s.summary, result) })
+        }
     }
 
     /** A move's progress, on the summary page while it shows. */
@@ -183,24 +182,22 @@ internal class FolderSummaryController(
     }
 
     /**
-     * First setup's summary of the folder [extraId] just added, from the library its scan stored, on Continue. After a
-     * move, [before] (what the folder held) stays the summary, so the page still says what was found.
+     * First setup's summary of the folder [extraId] just added, from the library its scan stored: what was found, then
+     * Continue. An extra folder is only read: nothing in it is moved, renamed or written.
      */
-    fun showFolderSummary(extraId: String, result: MoveResult? = null, before: FolderSummary? = null) {
+    fun showFolderSummary(extraId: String) {
         val index = library.snapshot ?: return host.finishFolderSteps()
         val extra = deps.settings.extraFolders.firstOrNull { it.id == extraId }
         val name = extra?.let { deps.source.displayName(it.ref) } ?: ""
         val home = host.home()?.let { deps.source.displayName(it) } ?: ""
-        val summary = before ?: folderSummary(index, extraId)
-        val s = Screen.FolderSummary(extraId, name, home, summary, move = result != null, result = result)
+        val s = Screen.FolderSummary(extraId, name, home, folderSummary(index, extraId))
         screen.value = s
-        val rows = folderSummaryRows(s)
-        selection.value = ListSelection(0, rows.size)   // on the first row: the Move option where it is offered, else Continue
+        selection.value = ListSelection(0, folderSummaryRows(s).size)   // Continue
     }
 
     /**
-     * A or a tap on the summary's row [index]: Move toggles; Continue with Move on asks first ([Screen.FolderSummary.confirmMove]),
-     * else goes on.
+     * A or a tap on the summary's row [index]: the home's Move toggles; Continue with Move on asks first
+     * ([Screen.FolderSummary.confirmMove]), else goes on.
      */
     fun folderSummaryRow(s: Screen.FolderSummary, index: Int) {
         if (s.progress != null) return
@@ -218,7 +215,6 @@ internal class FolderSummaryController(
             if (s.move && s.result == null && homeTidy(s.summary)) moveHomeOutside(s) else host.showAddFirstExtra()
             return
         }
-        if (s.move && s.result == null && s.summary.games > s.summary.unassigned) return moveSummaryGames(s)
         host.finishFolderSteps()
     }
 
@@ -230,25 +226,69 @@ internal class FolderSummaryController(
             else -> Unit
         }
     }
-
-    /** The summary's move: [s]'s placed games into the home's Roms, its progress on the page, then a rescan and the result. */
-    private fun moveSummaryGames(s: Screen.FolderSummary) = launchMove(s) { home, index, mover ->
-        // An unexpected error is a result too (nothing moved past it), never a crash of the app's scope.
-        val result = tryOr({ MoveResult(failed = s.summary.games - s.summary.unassigned) }) {
-            mover.run(mover.plan(index, s.extraId), ::moveProgress) { moveCancelled }
-        }
-        host.scanNow(home, then = {
-            // Emptied by the move: the folder is no longer a source.
-            val extra = deps.settings.extraFolders.firstOrNull { it.id == s.extraId }
-            if (extra != null && library.snapshot?.let { folderSummary(it, s.extraId).games } == 0) {
-                deps.settings.extraFolders = deps.settings.extraFolders - extra
-                deps.folderPicker.forget(extra.ref)
-                host.markLibraryDirty()
-            }
-            showFolderSummary(s.extraId, result, before = s.summary)
-        })
-    }
 }
 
 /** How often a home move rewrites the lines of the games it moved so far. */
 private const val LINES_FLUSH_MS = 3_000L
+
+/** A summary page row: the Move choice or Continue. */
+internal enum class SummaryRowKind { MOVE, CONTINUE }
+
+internal data class SummaryRow(val kind: SummaryRowKind, val row: NxRow)
+
+/**
+ * The summary page's rows: the home's Move choice (only when it has games to tidy and nothing ran yet) and Continue. None
+ * while a move runs. An extra folder has Continue alone: it is only read, never changed.
+ */
+internal fun folderSummaryRows(s: Screen.FolderSummary): List<SummaryRow> = buildList {
+    if (s.progress != null) return@buildList
+    val movable = s.extraId == Recents.HOME && (s.summary.outside > 0 || s.summary.split > 0)
+    if (s.result == null && movable) {
+        add(SummaryRow(SummaryRowKind.MOVE, NxRow("Move them into ${s.home}/Roms", secondary = onOff(s.move), cycleable = true)))
+    }
+    add(SummaryRow(SummaryRowKind.CONTINUE, NxRow("Continue")))
+}
+
+/**
+ * The move's confirmation for [s] (title, text), or null when Continue moves nothing: Move off, already run, nothing to
+ * move, or an extra folder (only read, never moved from). The home's games outside Roms move in and a console's extra
+ * folders merge into one.
+ */
+internal fun folderMoveAsk(s: Screen.FolderSummary): Pair<String, String>? {
+    if (!s.move || s.result != null || s.progress != null || s.extraId != Recents.HOME) return null
+    val sum = s.summary
+    fun games(n: Int) = if (n == 1) "1 game" else "$n games"
+    if (sum.outside == 0 && sum.split == 0) return null
+    val parts = listOfNotNull(
+        if (sum.outside > 0) "${games(sum.outside)} outside Roms will be moved into ${s.home}/Roms" else null,
+        if (sum.split > 0) (if (sum.split == 1) "1 console's folders will be merged into one" else "${sum.split} consoles' folders will be merged into one") else null,
+    )
+    return "Move games?" to (parts.joinToString(", and ") + ". Folders left empty are removed.")
+}
+
+/** The summary page's headline and lines: what was found, per console, where the unassigned are; the move's progress or result. */
+internal fun folderSummaryDetails(s: Screen.FolderSummary): List<String> = buildList {
+    val sum = s.summary
+    add(if (sum.games == 0) "No games found in ${s.name}" else if (sum.games == 1) "Found 1 game in ${s.name}" else "Found ${sum.games} games in ${s.name}")
+    sum.byConsole.forEach { (name, n) -> add("$name ($n)") }   // a line each, largest first
+    val after = ArrayList<String>()
+    val progress = s.progress
+    if (progress != null) after += if (progress.second == 0) "Moving…" else "Moving ${progress.first} of ${progress.second}…"
+    else s.result?.let { r ->
+        after += (listOfNotNull(
+            "Moved ${r.moved} into ${s.home}/Roms",
+            if (r.clashed > 0) "${r.clashed} left in place (same name already in Roms)" else null,
+            if (r.failed > 0) "${r.failed} could not be moved" else null,
+            if (r.cancelled) "Stopped" else null,
+        ).joinToString(" · "))
+    }
+    if (progress == null) unassignedHint(sum.unassigned)?.let { after += it }
+    // The home: how many lie outside its Roms (moved in by the Move row).
+    if (progress == null && s.result == null && sum.outside > 0) after += if (sum.outside == 1) "1 of them is outside Roms." else "${sum.outside} of them are outside Roms."
+    if (progress == null && s.result == null && sum.split > 0) {
+        after += if (sum.split == 1) "1 console has more than one folder; they are merged into one."
+        else "${sum.split} consoles have more than one folder; they are merged into one."
+    }
+    if (after.isNotEmpty() && sum.byConsole.isNotEmpty()) add("")   // a blank line between the console list and what follows
+    addAll(after)
+}

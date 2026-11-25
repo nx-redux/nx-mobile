@@ -34,4 +34,14 @@ data class GameSession(
     val netplay: NetplaySession? = null,
     /** Picked in the Game Switcher: the runner keeps a [SwitcherReturnMark] for this launch, so its end reopens the switcher. */
     val fromSwitcher: Boolean = false,
+    /**
+     * Asked to start from the beginning (Play from start, A with A resumes off): the game this process may still run
+     * suspended is replaced, not brought back where it was ([canBringBack]).
+     */
+    val fresh: Boolean = false,
+    /**
+     * Continues the game from its last save (A on a game, Continue, the Game Switcher): [resumeSlot] is wherever its resume
+     * pointer is, a manual slot too, and the game this process still runs is newer than it, so it is brought back.
+     */
+    val continuing: Boolean = false,
 )

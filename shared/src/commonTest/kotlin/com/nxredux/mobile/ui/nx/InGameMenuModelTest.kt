@@ -11,6 +11,7 @@ import com.nxredux.mobile.options.ConsoleSettings
 import com.nxredux.mobile.options.CoreOption
 import com.nxredux.mobile.options.FrontendOptions
 import com.nxredux.mobile.options.PadOptions
+import com.nxredux.mobile.options.ShaderBrowse
 import com.nxredux.mobile.options.ShaderOptions
 import com.nxredux.mobile.options.AudioOptions
 import com.nxredux.mobile.options.SpeedOptions
@@ -29,15 +30,14 @@ import com.nxredux.mobile.ui.SHORTCUTS_NO_CONTROLLER
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNotNull
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class InGameMenuModelTest {
     /**
-     * A console whose Console Settings page is empty: every tag has the shared Controller Layout and speed rows, so they
-     * are locked here (a locked row is hidden, and a page with none left is not offered).
+     * A console with no rows of its own: the Controller Layout, speed and audio rows every tag has are locked here (a
+     * locked row is hidden, and a group with none left is not offered).
      */
     private val plainTag = "GBA"   // a console with the Controller Layout row only (N64 has Graphics API too)
     private val plainLocked = setOf(PadOptions.LAYOUT) + (SpeedOptions.table + AudioOptions.rows).map { it.key }
@@ -65,7 +65,7 @@ class InGameMenuModelTest {
         repeat(4) { press(NxButton.DOWN) }   // Options
         press(NxButton.A)                                                  // -> Options page
         select(optionsRow("Emulator"))
-        assertEquals(MenuEffect.OpenCoreOptions, press(NxButton.A))        // Core Options (host loads)
+        assertEquals(MenuEffect.OpenCoreOptions, press(NxButton.A))        // Emulator (the host loads)
         showCoreOptions(listOf(palette, speed, hidden), locked = emptySet())
         return this
     }
@@ -195,6 +195,15 @@ class InGameMenuModelTest {
         assertEquals(MenuEffect.Quit, m.activate(0))
     }
 
+    @Test fun without_save_on_quit_the_quit_row_just_quits() {
+        val m = model().apply { saveOnQuit = false; refresh() }
+        val row = m.state.page.rows.last()
+        assertEquals("Quit", row.label)
+        assertEquals(MenuAction.QUIT_ONLY, (row as MenuRow.Action).action)
+        assertEquals(MenuEffect.QuitWithoutResume, m.activate(m.state.page.rows.size - 1))
+        assertEquals(MenuAction.QUIT, (model().state.page.rows.last() as MenuRow.Action).action)   // on: asks how to quit
+    }
+
     @Test fun quit_on_the_quit_page_quits_without_a_resume_point() {
         val m = model()
         m.activate(5)
@@ -279,16 +288,18 @@ class InGameMenuModelTest {
         assertNull(m.press(NxButton.A))                      // open Video
         assertEquals(PageKind.Category("video"), m.state.page.kind)
         assertEquals("Video", m.state.page.title)
-        assertEquals(MenuEffect.SetOption("pal", "b"), m.press(NxButton.A))   // A steps segments
+        assertNull(m.press(NxButton.A))                      // A starts changing segments
+        assertEquals(MenuEffect.SetOption("pal", "b"), m.press(NxButton.RIGHT))
         assertEquals("B", (m.state.page.rows.single() as MenuRow.Option).valueLabel)
-        assertEquals(MenuEffect.SetOption("pal", "a"), m.press(NxButton.A))   // wraps
+        assertEquals(MenuEffect.SetOption("pal", "a"), m.press(NxButton.RIGHT))   // wraps
     }
 
-    @Test fun a_on_a_segmented_option_steps_it_and_shows_no_page() {
+    @Test fun a_on_a_segmented_option_starts_changing_it_and_shows_no_page() {
         val m = model().openCoreOptions()
         m.press(NxButton.A)                                  // Video
         assertEquals(NxSettingControl.SEGMENTED, m.optionRow(0).control)   // A / B
-        assertEquals(MenuEffect.SetOption("pal", "b"), m.press(NxButton.A))
+        assertNull(m.press(NxButton.A)); assertTrue(m.state.editing)
+        assertEquals(MenuEffect.SetOption("pal", "b"), m.press(NxButton.RIGHT))
         assertEquals(PageKind.Category("video"), m.state.page.kind)
         assertNull(m.state.popup)
         assertEquals(1, m.optionRow(0).index)
@@ -357,7 +368,7 @@ class InGameMenuModelTest {
     }
 
     private fun InGameMenuModel.toCoreOptionsRow(): InGameMenuModel {
-        select(4); activate(4); select(optionsRow("Emulator"))   // Options page, Core Options selected
+        select(4); activate(4); select(optionsRow("Emulator"))   // Options page, Emulator selected
         return this
     }
 
@@ -392,7 +403,8 @@ class InGameMenuModelTest {
         m.updateOptions(listOf(a.copy(visible = false), b, c))
         assertEquals(1, m.state.page.selected)
         assertEquals("c", (m.state.page.rows[m.state.page.selected] as MenuRow.Option).key)
-        assertEquals(MenuEffect.SetOption("c", "2"), m.press(NxButton.A))
+        m.press(NxButton.A)
+        assertEquals(MenuEffect.SetOption("c", "2"), m.press(NxButton.RIGHT))
         m.updateOptions(listOf(a, b, c.copy(value = "2")))  // a revealed above the selection
         assertEquals(2, m.state.page.selected)
         assertEquals("c", (m.state.page.rows[m.state.page.selected] as MenuRow.Option).key)
@@ -414,11 +426,25 @@ class InGameMenuModelTest {
         assertEquals(MenuEffect.Close, m.press(NxButton.MENU))
     }
 
+    @Test fun a_change_ends_when_its_row_goes() {
+        val a = CoreOption("a", "1", label = "A", values = listOf("1", "2"))
+        val c = CoreOption("c", "1", label = "C", values = listOf("1", "2"))
+        val m = model().toCoreOptionsRow()
+        m.press(NxButton.A)
+        m.showCoreOptions(listOf(a, c), emptySet())
+        m.press(NxButton.DOWN)                                   // C
+        assertNull(m.press(NxButton.A)); assertTrue(m.state.editing)
+        m.updateOptions(listOf(a, c.copy(visible = false)))      // C hidden: the highlight lands on A
+        assertFalse(m.state.editing)
+        assertNull(m.press(NxButton.RIGHT))                      // A is not changed without its own A
+    }
+
     @Test fun cycling_from_a_raw_value_goes_to_first_choice() {
         val m = model().toCoreOptionsRow()
         m.press(NxButton.A)
         m.showCoreOptions(listOf(CoreOption("k", "z", label = "K", values = listOf("x", "y"))), emptySet())
-        assertEquals(MenuEffect.SetOption("k", "x"), m.press(NxButton.A))
+        m.press(NxButton.A)
+        assertEquals(MenuEffect.SetOption("k", "x"), m.press(NxButton.RIGHT))
     }
 
     private val overlayNames = listOf("Aspect.png", "Native.png")
@@ -467,7 +493,8 @@ class InGameMenuModelTest {
         assertEquals(listOf("100%", "60%", "40%", "25%"), opacity.choices)
         assertEquals(1, opacity.index)                       // 60%, the default
         m.select(1)
-        assertEquals(MenuEffect.SetFrontend(FrontendOptions.PAD_LANDSCAPE_OPACITY, "40"), m.press(NxButton.A))   // A steps segments
+        assertNull(m.press(NxButton.A))                                    // A starts changing segments
+        assertEquals(MenuEffect.SetFrontend(FrontendOptions.PAD_LANDSCAPE_OPACITY, "40"), m.press(NxButton.RIGHT))
         assertEquals("40%", m.optionRow(1).valueLabel)                     // not a visual row: in place
     }
 
@@ -547,7 +574,7 @@ class InGameMenuModelTest {
         val m = model().openFrontend()
         m.select(4); m.press(NxButton.A)                     // adjust Offset screen Y
         m.press(NxButton.DOWN)
-        assertEquals(PageKind.Adjust(FrontendOptions.SCALING), m.state.page.kind)   // Pad Opacity and Debug HUD skipped, wrapped
+        assertEquals(PageKind.Adjust(FrontendOptions.SCALING), m.state.page.kind)   // Debug HUD skipped, wrapped
         m.press(NxButton.UP)
         assertEquals(PageKind.Adjust(FrontendOptions.OFFSET_Y), m.state.page.kind)
         m.press(NxButton.UP)
@@ -616,9 +643,9 @@ class InGameMenuModelTest {
 
     private val scan = com.nxredux.mobile.shaders.ShaderParam("SCAN", "Scanline weight", 0.5f, 0f, 1f, 0.5f)
     private val mask = com.nxredux.mobile.shaders.ShaderParam("MASK", "Mask", 1f, 0f, 2f, 1f)
-    private val presets = listOf("crt/crt-pi.glslp", "nx/line.glslp")
+    private val presets = listOf("crt/crt-pie.glslp", "nx/line.glslp")
 
-    private fun shadersModel(values: Map<String, String> = mapOf("nx_shader" to "crt/crt-pi.glslp"), params: List<com.nxredux.mobile.shaders.ShaderParam> = listOf(scan, mask)): InGameMenuModel {
+    private fun shadersModel(values: Map<String, String> = mapOf("nx_shader" to "crt/crt-pie.glslp"), params: List<com.nxredux.mobile.shaders.ShaderParam> = listOf(scan, mask)): InGameMenuModel {
         val m = plain(InGameMenuModel("Game", 9))
         m.setShaders(values, presets, params)
         repeat(4) { m.press(NxButton.DOWN) }   // Options
@@ -628,19 +655,13 @@ class InGameMenuModelTest {
         return m
     }
 
-    @Test fun options_page_lists_frontend_shaders_core_options_save_changes() {
-        val m = plain(InGameMenuModel("Game", 9))
-        repeat(4) { m.press(NxButton.DOWN) }; m.press(NxButton.A)
-        assertEquals(PLAIN_OPTIONS, m.state.page.rows.map { it.label })
-    }
-
     @Test fun shaders_page_rows_and_values() {
         val m = shadersModel()
         assertEquals(PageKind.Shaders, m.state.page.kind)
         val rows = m.state.page.rows
         assertEquals(listOf("Shader", "Shader Parameters", "Reset Parameters"), rows.map { it.label })
         val preset = rows[0] as MenuRow.Option
-        assertEquals("crt/crt-pi.glslp", preset.valueLabel); assertEquals(true, preset.visual)
+        assertEquals("CRT Pie", preset.valueLabel); assertEquals(false, preset.visual)
         assertEquals(PageKind.ShaderParams, (rows[1] as MenuRow.Submenu).target)
         assertEquals(MenuAction.RESET_SHADER_PARAMS, (rows[2] as MenuRow.Action).action)
     }
@@ -651,7 +672,7 @@ class InGameMenuModelTest {
         val absent = shadersModel(values = emptyMap())
         assertEquals(listOf("Shader"), absent.state.page.rows.map { it.label })
         // Choosing a preset rebuilds the page with all three, the selection still on the Shader row.
-        none.setShaders(mapOf("nx_shader" to "crt/crt-pi.glslp"), presets, listOf(scan, mask))
+        none.setShaders(mapOf("nx_shader" to "crt/crt-pie.glslp"), presets, listOf(scan, mask))
         assertEquals(listOf("Shader", "Shader Parameters", "Reset Parameters"), none.state.page.rows.map { it.label })
         assertEquals(0, none.state.page.selected)
         none.press(NxButton.DOWN)
@@ -668,23 +689,23 @@ class InGameMenuModelTest {
         assertEquals(MenuRow.Submenu("Controls", PageKind.Settings(OptionGroup.CONTROLS)), m.state.page.rows[1])
     }
 
-    @Test fun left_right_on_the_shader_row_emit_set_shader() {
+    @Test fun left_right_on_the_shader_row_change_nothing() {
         val m = shadersModel(values = mapOf("nx_shader" to "None"))
-        m.press(NxButton.A)                                  // its live preview
-        assertEquals(MenuEffect.SetShader("nx_shader", "crt/crt-pi.glslp"), m.press(NxButton.RIGHT))
-        assertEquals("crt/crt-pi.glslp", (m.state.page.rows[0] as MenuRow.Option).valueLabel)
-        assertEquals(MenuEffect.SetShader("nx_shader", "None"), m.press(NxButton.LEFT))
+        assertEquals(null, m.press(NxButton.RIGHT))
+        assertEquals(null, m.press(NxButton.LEFT))
+        assertEquals("None", (m.state.page.rows[0] as MenuRow.Option).valueLabel)
+        assertEquals(PageKind.Shaders, m.state.page.kind)
     }
 
-    @Test fun raw_preset_value_shows_raw_and_right_goes_to_none() {
-        val m = shadersModel(values = mapOf("nx_shader" to "gone/x.glslp"))
-        assertEquals("gone/x.glslp", (m.state.page.rows[0] as MenuRow.Option).valueLabel)
-        m.press(NxButton.A)                                  // its live preview
-        assertEquals(MenuEffect.SetShader("nx_shader", "None"), m.press(NxButton.RIGHT))
+    @Test fun a_preset_no_longer_listed_still_shows_by_name_and_marks_nothing() {
+        val m = shadersModel(values = mapOf("nx_shader" to "User/gone/x.glslp"))
+        assertEquals("x", (m.state.page.rows[0] as MenuRow.Option).valueLabel)
+        m.press(NxButton.A)
+        assertEquals(listOf("None", "CRT"), m.state.page.rows.map { it.label })
     }
 
     @Test fun params_page_lists_labels_values_and_is_visual() {
-        val m = shadersModel(values = mapOf("nx_shader" to "crt/crt-pi.glslp", "nx_shader_param_SCAN" to "1.00"))
+        val m = shadersModel(values = mapOf("nx_shader" to "crt/crt-pie.glslp", "nx_shader_param_SCAN" to "1.00"))
         m.press(NxButton.DOWN); m.press(NxButton.A)
         assertEquals(PageKind.ShaderParams, m.state.page.kind)
         val rows = m.state.page.rows.map { it as MenuRow.Option }
@@ -711,12 +732,12 @@ class InGameMenuModelTest {
         m.setShaders(mapOf("nx_shader" to "nx/line.glslp"), presets, emptyList())
         assertEquals(PageKind.ShaderParams, m.state.page.kind)
         assertEquals("No settings for this shader.", m.state.page.footer)
-        m.setShaders(mapOf("nx_shader" to "crt/crt-pi.glslp"), presets, listOf(scan))
+        m.setShaders(mapOf("nx_shader" to "crt/crt-pie.glslp"), presets, listOf(scan))
         assertEquals(listOf("Scanline weight"), m.state.page.rows.map { it.label })
     }
 
     @Test fun reset_parameters_emits_defaults_and_shows_a_message() {
-        val m = shadersModel(values = mapOf("nx_shader" to "crt/crt-pi.glslp", "nx_shader_param_SCAN" to "1.00"))
+        val m = shadersModel(values = mapOf("nx_shader" to "crt/crt-pie.glslp", "nx_shader_param_SCAN" to "1.00"))
         m.press(NxButton.DOWN); m.press(NxButton.DOWN)
         assertEquals(MenuEffect.SetShaders(listOf("nx_shader_param_SCAN" to "0.50", "nx_shader_param_MASK" to "1.00")), m.press(NxButton.A))
         assertEquals(PageKind.Message, m.state.page.kind)
@@ -725,14 +746,8 @@ class InGameMenuModelTest {
         assertEquals(PageKind.Shaders, m.state.page.kind)
     }
 
-    @Test fun adjust_on_the_shader_row_and_on_params_stays_within_its_page() {
+    @Test fun adjust_on_params_stays_within_its_page() {
         val m = shadersModel()
-        assertEquals(null, m.press(NxButton.A))
-        assertEquals(PageKind.Adjust("nx_shader"), m.state.page.kind)
-        m.press(NxButton.DOWN)   // only one visual row on the Shaders page: stays
-        assertEquals(PageKind.Adjust("nx_shader"), m.state.page.kind)
-        assertEquals(MenuEffect.SetShader("nx_shader", "nx/line.glslp"), m.press(NxButton.RIGHT))
-        m.press(NxButton.B)
         m.press(NxButton.DOWN); m.press(NxButton.A)   // params page
         m.press(NxButton.A)
         assertEquals(PageKind.Adjust("nx_shader_param_SCAN"), m.state.page.kind)
@@ -743,6 +758,134 @@ class InGameMenuModelTest {
         assertEquals(MenuEffect.SetShader("nx_shader_param_SCAN", "1.00"), m.press(NxButton.RIGHT))
         m.press(NxButton.B)
         assertEquals(PageKind.ShaderParams, m.state.page.kind)
+        assertEquals(0, m.state.page.selected)
+    }
+
+    private val library = listOf(
+        "crt/crt-geom.glslp", "crt/crt-pie.glslp", "nx/line.glslp", "slang/crt/crt-geom.slangp", "slang/crt/crt-royale.slangp",
+        "User/mine.glslp", "User/shaders_slang/crt/a.slangp", "User/shaders_slang/crt/b.slangp",
+    )
+
+    private fun pickerModel(value: String = "crt/crt-pie.glslp"): InGameMenuModel {
+        val m = shadersModel(values = mapOf("nx_shader" to value))
+        m.setShaders(mapOf("nx_shader" to value), library, listOf(scan, mask))
+        m.press(NxButton.A)   // the Shader row
+        return m
+    }
+
+    @Test fun the_shader_row_opens_the_picker_on_its_groups() {
+        val m = pickerModel()
+        assertEquals(PageKind.ShaderBrowse(""), m.state.page.kind)
+        assertEquals("Shader", m.state.page.title)
+        assertEquals(listOf("None", "CRT", "Personal"), m.state.page.rows.map { it.label })
+        assertEquals(ShaderBrowse.intro("@CRT"), m.state.page.rows[1].info)
+        assertEquals("", m.state.page.intro)
+        m.press(NxButton.B)
+        assertEquals(PageKind.Shaders, m.state.page.kind)
+    }
+
+    @Test fun a_group_lists_its_presets_with_the_one_in_use_marked_and_highlighted() {
+        val m = pickerModel()
+        m.select(1); m.press(NxButton.A)   // CRT
+        assertEquals(PageKind.ShaderBrowse("@CRT"), m.state.page.kind)
+        assertEquals(listOf("CRT Geom", "CRT Pie  $IN_USE_MARK", "CRT Royale", "Line"), m.state.page.rows.map { it.label })
+        assertEquals(1, m.state.page.selected)
+        assertEquals(ShaderBrowse.intro("@CRT"), m.state.page.intro)
+    }
+
+    @Test fun a_on_a_preset_uses_it_and_shows_its_preview_stepping_through_the_level() {
+        val m = pickerModel()
+        m.select(1); m.press(NxButton.A)   // CRT
+        m.select(2)
+        assertEquals(MenuEffect.SetShader("nx_shader", "slang/crt/crt-royale.slangp"), m.press(NxButton.A))
+        assertEquals(PageKind.Adjust("nx_shader"), m.state.page.kind)
+        assertEquals("CRT Royale", (m.state.page.rows[0] as MenuRow.Option).valueLabel)
+        assertEquals(MenuEffect.SetShader("nx_shader", "nx/line.glslp"), m.press(NxButton.RIGHT))
+        assertEquals(MenuEffect.SetShader("nx_shader", "slang/crt/crt-geom.slangp"), m.press(NxButton.RIGHT))   // wraps within CRT
+        m.press(NxButton.LEFT)
+        assertEquals(MenuEffect.SetShader("nx_shader", "slang/crt/crt-royale.slangp"), m.press(NxButton.LEFT))
+        assertEquals(MenuEffect.SetShader("nx_shader", "crt/crt-pie.glslp"), m.press(NxButton.LEFT))
+        m.press(NxButton.B)
+        assertEquals(PageKind.ShaderBrowse("@CRT"), m.state.page.kind)
+        assertEquals(listOf("CRT Geom", "CRT Pie  $IN_USE_MARK", "CRT Royale", "Line"), m.state.page.rows.map { it.label })
+    }
+
+    @Test fun b_from_a_preview_highlights_the_preset_stepped_to() {
+        val m = pickerModel()
+        m.select(1); m.press(NxButton.A)   // CRT
+        m.select(2); m.press(NxButton.A)   // CRT Royale, its preview
+        m.press(NxButton.RIGHT)            // Line
+        m.press(NxButton.B)
+        assertEquals(listOf("CRT Geom", "CRT Pie", "CRT Royale", "Line  $IN_USE_MARK"), m.state.page.rows.map { it.label })
+        assertEquals(3, m.state.page.selected)
+    }
+
+    @Test fun a_level_without_the_preset_in_use_keeps_its_highlight() {
+        val m = pickerModel()
+        m.select(1); m.press(NxButton.A)   // CRT
+        m.select(2); m.press(NxButton.A); m.press(NxButton.B)
+        m.press(NxButton.B)                // back on the groups: CRT stays highlighted
+        assertEquals(PageKind.ShaderBrowse(""), m.state.page.kind)
+        assertEquals(1, m.state.page.selected)
+    }
+
+    @Test fun a_preset_row_is_used_and_a_folder_row_opened() {
+        val m = pickerModel()
+        m.select(1); m.press(NxButton.A)   // CRT
+        val preset = m.state.page.rows[0] as MenuRow.Submenu
+        assertTrue(preset.usesPreset)
+        assertEquals(listOf(Hint(NxButton.A, "Use"), Hint(NxButton.B, "Back")), hintsFor(m.state.page, preset))
+        m.press(NxButton.B)
+        val folder = m.state.page.rows[1] as MenuRow.Submenu
+        assertFalse(folder.usesPreset)
+        assertEquals(listOf(Hint(NxButton.A, "Open"), Hint(NxButton.B, "Back")), hintsFor(m.state.page, folder))
+    }
+
+    @Test fun a_on_the_preset_in_use_only_shows_its_preview() {
+        val m = pickerModel()
+        m.select(1); m.press(NxButton.A)
+        assertEquals(null, m.press(NxButton.A))
+        assertEquals(PageKind.Adjust("nx_shader"), m.state.page.kind)
+    }
+
+    @Test fun none_is_used_without_a_preview() {
+        val m = pickerModel()
+        m.select(0)
+        assertEquals(MenuEffect.SetShader("nx_shader", "None"), m.press(NxButton.A))
+        assertEquals(PageKind.ShaderBrowse(""), m.state.page.kind)
+        assertEquals("None  $IN_USE_MARK", m.state.page.rows[0].label)
+    }
+
+    @Test fun the_users_folders_open_a_level_at_a_time() {
+        val m = pickerModel()
+        m.select(2); m.press(NxButton.A)   // Personal
+        assertEquals(listOf("shaders_slang", "mine"), m.state.page.rows.map { it.label })
+        m.press(NxButton.A)
+        assertEquals("shaders_slang", m.state.page.title)
+        m.press(NxButton.A)
+        assertEquals(listOf("a", "b"), m.state.page.rows.map { it.label })
+        m.select(1)
+        assertEquals(MenuEffect.SetShader("nx_shader", "User/shaders_slang/crt/b.slangp"), m.press(NxButton.A))
+        assertEquals(MenuEffect.SetShader("nx_shader", "User/shaders_slang/crt/a.slangp"), m.press(NxButton.RIGHT))
+        m.press(NxButton.B); m.press(NxButton.B)
+        assertEquals(PageKind.ShaderBrowse("User/shaders_slang"), m.state.page.kind)
+    }
+
+    @Test fun the_panels_shader_row_opens_the_picker_over_options_and_shaders() {
+        val m = plain(InGameMenuModel("Game", 9))
+        m.setShaders(mapOf("nx_shader" to "None"), library, emptyList())
+        m.openShaderPicker()
+        assertEquals(listOf(PageKind.Root, PageKind.Options, PageKind.Shaders, PageKind.ShaderBrowse("")), m.state.stack.map { it.kind })
+        m.press(NxButton.B)
+        assertEquals(PageKind.Shaders, m.state.page.kind)
+        m.press(NxButton.B)
+        assertEquals("Shaders", m.state.page.rows[m.state.page.selected].label)
+    }
+
+    @Test fun the_other_format_of_the_bundled_preset_in_use_is_marked() {
+        val m = pickerModel("crt/crt-geom.glslp")
+        m.select(1); m.press(NxButton.A)
+        assertEquals("CRT Geom  $IN_USE_MARK", m.state.page.rows[0].label)
         assertEquals(0, m.state.page.selected)
     }
 
@@ -778,7 +921,7 @@ class InGameMenuModelTest {
     @Test fun cheats_tab_sits_after_achievements_and_before_players() {
         val m = model().also { it.cheatsAvailable = true }
         m.setAchievements(listOf(ach(1, RaAchievementState.UNLOCKED)), 1 to 1, RaSortOrder.DEFAULT, emptySet(), BADGES)
-        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA))
+        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA, padB))
         assertEquals(listOf(GamePanelTab.SHORTCUTS, GamePanelTab.ACHIEVEMENTS, GamePanelTab.CHEATS, GamePanelTab.PLAYERS), m.panelState().tabs)
     }
 
@@ -901,13 +1044,13 @@ class InGameMenuModelTest {
     @Test fun root_has_no_second_screen_or_players_row() {
         val m = model()
         m.setSecondScreen(connected = true)
-        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA))
+        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA, padB))
         assertEquals(listOf("Continue", "Save", "Load", "Reset", "Options", "Quit"), m.labels())
     }
 
     @Test fun the_tab_row_steps_tabs_sideways_and_goes_down_into_the_tab() {
         val m = model()
-        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA))
+        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA, padB))
         m.press(NxButton.UP)                                 // the tab row
         m.press(NxButton.RIGHT); assertEquals(GamePanelTab.PLAYERS, m.state.panelTab)
         assertEquals(PanelFocus.Tabs, m.state.panelFocus)
@@ -922,7 +1065,7 @@ class InGameMenuModelTest {
 
     @Test fun b_on_another_tab_comes_back_to_the_menu_words() {
         val m = model()
-        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA))
+        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA, padB))
         m.panelEvent(GamePanelEvent.SelectTab(GamePanelTab.PLAYERS))   // a tap: no focus
         assertNull(m.state.panelFocus)
         m.press(NxButton.DOWN); assertEquals(PanelFocus.Item(0), m.state.panelFocus)   // no focus there reads as the tab row
@@ -951,7 +1094,7 @@ class InGameMenuModelTest {
     @Test fun l1_r1_switch_tabs() {
         val m = model()
         m.setAchievements(listOf(ach(1, RaAchievementState.UNLOCKED)), 1 to 1, RaSortOrder.DEFAULT, emptySet(), BADGES)
-        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA))
+        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA, padB))
         assertEquals(listOf(GamePanelTab.SHORTCUTS, GamePanelTab.ACHIEVEMENTS, GamePanelTab.PLAYERS), m.panelState().tabs)
         // From the words too: another tab hides them, so the focus goes to the tab row.
         m.press(NxButton.R1); assertEquals(GamePanelTab.ACHIEVEMENTS, m.state.panelTab)
@@ -974,9 +1117,9 @@ class InGameMenuModelTest {
     @Test fun micTileEffect() {
         val m = model()
         m.setMicTile(false)
-        assertEquals(MenuEffect.SetMic(true), m.panelEvent(GamePanelEvent.SetMic(on = true)))
+        assertEquals(MenuEffect.SetMicButton(true), m.panelEvent(GamePanelEvent.SetMicButton(shown = true)))
         m.setMicTile(null)
-        assertNull(m.panelEvent(GamePanelEvent.SetMic(on = true)))
+        assertNull(m.panelEvent(GamePanelEvent.SetMicButton(shown = true)))
     }
 
     @Test fun resetTileOpensDialog() {
@@ -1169,7 +1312,7 @@ class InGameMenuModelTest {
 
     @Test fun the_panel_state_is_reused_until_an_input_changes() {
         val m = model()
-        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA))
+        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA, padB))
         val first = m.panelState()
         assertTrue(first === m.panelState())
         m.setPlayers(listOf(p1, PlayerSlotRow("k2", "Xbox Wireless Controller", connected = true)), listOf(padA, padB))
@@ -1182,7 +1325,7 @@ class InGameMenuModelTest {
         // The host publishes the state after each change; an equal value would not redraw the panel.
         val m = model()
         var before = m.state
-        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA))
+        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA, padB))
         assertTrue(before != m.state); before = m.state
         m.setSecondScreen(connected = true)
         assertTrue(before != m.state); before = m.state
@@ -1197,7 +1340,7 @@ class InGameMenuModelTest {
 
     @Test fun a_tab_tap_selects_it() {
         val m = model()
-        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA))
+        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA, padB))
         assertNull(m.panelEvent(GamePanelEvent.SelectTab(GamePanelTab.PLAYERS)))
         assertEquals(GamePanelTab.PLAYERS, m.state.panelTab)
         m.panelEvent(GamePanelEvent.SelectTab(GamePanelTab.ACHIEVEMENTS))   // no set: not shown, so ignored
@@ -1206,7 +1349,7 @@ class InGameMenuModelTest {
 
     @Test fun panel_hints_name_tabs_select_and_back() {
         val m = model()
-        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA))
+        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA, padB))
         m.press(NxButton.UP)                                 // the tab row
         assertEquals(listOf(Hint(NxButton.L1, "Tab"), Hint(NxButton.B, "Back"), Hint(NxButton.R1, "Tab")),
             hintsFor(m.state.page, m.state.page.rows[0], panelFocus = m.state.panelFocus, panelTab = m.state.panelTab))
@@ -1296,7 +1439,7 @@ class InGameMenuModelTest {
         m.setFrontend(FrontendOptions.defaults("NDS"), emptyList(), emptySet(), "NDS", overlayAvailable = false)
         m.select(4); m.activate(4)                           // Root → Options
         assertEquals(
-            FULL_OPTIONS,
+            FULL_OPTIONS.toMutableList().apply { add(indexOf("Audio"), "Multiplayer") },   // Local Wireless switches in the game
             m.state.page.rows.map { it.label },
         )
         assertEquals(MenuRow.Submenu("Display", DISPLAY), m.state.page.rows.first())
@@ -1334,24 +1477,31 @@ class InGameMenuModelTest {
     // A row read only when the game starts (FrontendOption.atLaunch) is set in Game Settings or Emulator
     // Settings, not in the running game's menu.
     @Test fun rows_read_only_at_launch_stay_out_of_the_in_game_groups() {
-        assertEquals(PICTURE_ROWS, inGameGroups("N64").getValue("Display"))   // no Graphics API
+        assertEquals(listOf("3D Resolution", "Max Scale") + PICTURE_ROWS, inGameGroups("N64").getValue("Display"))   // no Graphics API
         val gc = inGameGroups("GC")
-        assertEquals(PICTURE_ROWS, gc.getValue("Display"))
+        // 3D Resolution and its Auto sub-row (Max Scale) apply while the game runs; Scale shows under Performance only.
+        assertEquals(listOf("3D Resolution", "Max Scale") + PICTURE_ROWS, gc.getValue("Display"))
         assertEquals(SPEED_ROWS + "Frame Skip", gc.getValue("Gameplay"))
         val wii = inGameGroups("WII")
-        assertEquals(PICTURE_ROWS, wii.getValue("Display"))                   // no Wii Screen
+        assertEquals(listOf("3D Resolution", "Max Scale") + PICTURE_ROWS, wii.getValue("Display"))   // no Wii Screen
         assertEquals(listOf("Wii Controller", "Motion Controls", "Controller Layout", "Pad Opacity (landscape)"), wii.getValue("Controls"))
         assertEquals(SPEED_ROWS + "Frame Skip", wii.getValue("Gameplay"))
     }
 
-    // Local Wireless is read when the game starts, so Multiplayer (its only row) has no page in the running game.
-    @Test fun multiplayer_has_no_in_game_page() {
-        for (tag in listOf("NDS", "PSP")) {
+    // PSP's Local Wireless is read when the game starts, so Multiplayer (its only row) has no page in its running game;
+    // the DS's and 3DS's switch in the game.
+    @Test fun multiplayer_has_an_in_game_page_where_local_wireless_switches_live() {
+        for ((tag, shown) in listOf("NDS" to true, "3DS" to true, "PSP" to false)) {
             val m = model()
             m.setFrontend(FrontendOptions.defaults(tag), emptyList(), emptySet(), tag)
             m.select(4); m.activate(4)
-            assertEquals(false, "Multiplayer" in m.state.page.rows.map { it.label }, tag)
+            assertEquals(shown, "Multiplayer" in m.state.page.rows.map { it.label }, tag)
         }
+        val m = model()
+        m.setFrontend(FrontendOptions.defaults("3DS"), emptyList(), emptySet(), "3DS")
+        m.select(4); m.activate(4)
+        assertNull(m.activate(m.optionsRow("Multiplayer")))
+        assertEquals(listOf("Local Wireless"), m.state.page.rows.map { it.label })
     }
 
     // Bottom screen (every console) shows on the running game's Display page only while a second display is
@@ -1379,7 +1529,7 @@ class InGameMenuModelTest {
     @Test fun a_second_display_offers_display_where_every_other_row_is_locked() {
         val m = model()
         m.setFrontend(FrontendOptions.defaults(plainTag), emptyList(), pictureLocked, plainTag)
-        m.select(4); m.activate(4)                                         // Options (no Second screen row on the root)
+        m.select(4); m.activate(4)                                         // Options
         assertEquals(NO_DISPLAY_OPTIONS, m.state.page.rows.map { it.label })
         m.setSecondScreen(connected = true)
         assertEquals(PLAIN_OPTIONS, m.state.page.rows.map { it.label })
@@ -1414,12 +1564,6 @@ class InGameMenuModelTest {
         assertEquals(NO_DISPLAY_OPTIONS, m.state.page.rows.map { it.label })
     }
 
-    @Test fun a_group_is_not_offered_when_every_row_is_locked() {
-        val m = model()   // plainLocked: the plain console's rows locked
-        m.select(4); m.activate(4)
-        assertEquals(PLAIN_OPTIONS, m.state.page.rows.map { it.label })
-    }
-
     @Test fun console_settings_lists_the_ds_rows_and_edits_them_like_frontend_rows() {
         val m = model().openConsoleSettings()
         assertEquals("Display", m.state.page.title)
@@ -1430,7 +1574,7 @@ class InGameMenuModelTest {
         assertEquals(
             listOf(
                 "Layout (portrait)", "Layout (portrait, controller)", "Layout (landscape)", "3D Resolution", "Max Scale", "Big Screen", "Inset Corner", "Inset Size",
-                "Inset Opacity", "Screen Scaling", "Screen Sharpness", "Debug HUD",
+                "Inset Opacity", "Shader Screens", "Screen Scaling", "Screen Sharpness", "Debug HUD",
             ),
             m.state.page.rows.map { it.label },
         )
@@ -1496,13 +1640,7 @@ class InGameMenuModelTest {
     @Test fun a_locked_console_row_is_hidden() {
         val m = model().openConsoleSettings(locked = setOf(NdsOptions.BIG_SCREEN))
         assertTrue(m.state.page.rows.none { it.label == "Big Screen" })
-        assertEquals(11, m.state.page.rows.size)
-    }
-
-    @Test fun other_consoles_have_only_the_picture_rows_on_display() {
-        val m = model().openFrontend(tag = "GBA")
-        assertEquals(6, m.state.page.rows.size)
-        assertEquals("Screen Scaling", m.state.page.rows.first().label)
+        assertEquals(12, m.state.page.rows.size)
     }
 
     @Test fun overlay_and_offsets_are_hidden_while_the_app_places_the_screens() {
@@ -1560,7 +1698,7 @@ class InGameMenuModelTest {
         m.select(m.state.page.rows.indexOfFirst { it.label == "Layout (landscape)" })
         m.press(NxButton.A)
         assertTrue(m.state.page.kind is PageKind.Adjust)
-        // Turned to portrait: the landscape row is no longer listed, so its strip closes back onto Console Settings.
+        // Turned to portrait: the landscape row is no longer listed, so its strip closes back onto the Display page.
         m.ndsView = NdsView(landscape = false, controllerMode = false)
         assertEquals(DISPLAY, m.state.page.kind)
     }
@@ -1679,7 +1817,7 @@ class InGameMenuModelTest {
     }
 
     @Test fun x_shows_the_full_text_of_a_compact_visual_row() {
-        // NDS Console Settings: Layout (portrait) is visual (A would Adjust) and compact, its text behind the info icon.
+        // The DS's Display page: Layout (portrait) is visual (A would Adjust) and compact, its text behind the info icon.
         val m = model().openConsoleSettings()
         m.select(0)
         assertTrue(m.optionRow(0).visual)
@@ -1818,16 +1956,30 @@ class InGameMenuModelTest {
         assertEquals(listOf(Hint(NxButton.B, "Back")), hintsFor(MenuPage(PageKind.Message, "T", emptyList(), footer = "x"), null))
     }
 
-    @Test fun one_page_left_right_change_a_row_at_once_and_a_steps_segments() {
+    @Test fun one_page_left_right_leave_a_switch_alone_and_a_toggles_it() {
         val m = model().openFrontend()   // not split: one page
         m.select(5)                                                            // Debug HUD, a switch
-        assertEquals(MenuEffect.SetFrontend(FrontendOptions.DEBUG_HUD, "On"), m.press(NxButton.RIGHT))
-        assertEquals(MenuEffect.SetFrontend(FrontendOptions.DEBUG_HUD, "Off"), m.press(NxButton.LEFT))
-        assertFalse(m.state.editing)                                           // no change step on one page
-        assertEquals(
-            listOf(Hint(NxButton.LEFT, "Change"), Hint(NxButton.A, "Toggle"), Hint(NxButton.B, "Back")),
-            hintsFor(m.state.page, m.state.page.rows[5], twoPane = false),
-        )
+        val kind = m.state.page.kind
+        assertNull(m.press(NxButton.RIGHT)); assertNull(m.press(NxButton.LEFT))   // no change, no page left
+        assertEquals(kind, m.state.page.kind); assertEquals(0, m.optionRow(5).index)
+        assertEquals(MenuEffect.SetFrontend(FrontendOptions.DEBUG_HUD, "On"), m.press(NxButton.A))
+        assertFalse(m.state.editing)
+        assertEquals(listOf(Hint(NxButton.A, "Toggle"), Hint(NxButton.B, "Back")), hintsFor(m.state.page, m.state.page.rows[5]))
+    }
+
+    @Test fun one_page_a_starts_changing_segments_and_b_stops() {
+        val m = model().openCoreOptions()
+        m.press(NxButton.A)                                                    // Video, not split: one page
+        assertEquals(NxSettingControl.SEGMENTED, m.optionRow(0).control)
+        assertNull(m.press(NxButton.RIGHT)); assertEquals(0, m.optionRow(0).index)   // not changing: RIGHT changes nothing
+        assertNull(m.press(NxButton.LEFT)); assertEquals(PageKind.Category("video"), m.state.page.kind)
+        assertEquals(listOf(Hint(NxButton.A, "Change"), Hint(NxButton.B, "Back")), hintsFor(m.state.page, m.state.page.rows[0]).filter { it.button != NxButton.X })
+        assertNull(m.press(NxButton.A)); assertTrue(m.state.editing)
+        assertEquals(MenuEffect.SetOption("pal", "b"), m.press(NxButton.RIGHT))
+        assertNull(m.press(NxButton.DOWN)); assertNull(m.press(NxButton.UP))   // only A or B end the change
+        assertTrue(m.state.editing); assertEquals(0, m.state.page.selected)
+        assertNull(m.press(NxButton.B)); assertFalse(m.state.editing)
+        assertEquals(PageKind.Category("video"), m.state.page.kind)
     }
 
     @Test fun two_panes_a_starts_changing_segments_and_b_stops() {
@@ -1900,10 +2052,31 @@ class InGameMenuModelTest {
     @Test fun players_tab_shows_only_for_a_multiplayer_core() {
         val m = model()
         assertEquals(listOf(GamePanelTab.SHORTCUTS), m.panelState().tabs)
-        m.setPlayers(listOf(p1), listOf(padA))   // one slot: a one-player core
+        m.setPlayers(listOf(p1), listOf(padA, padB))   // one slot: a one-player core
         assertEquals(listOf(GamePanelTab.SHORTCUTS), m.panelState().tabs)
-        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA))
+        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA, padB))
         assertEquals(listOf(GamePanelTab.SHORTCUTS, GamePanelTab.PLAYERS), m.panelState().tabs)
+    }
+
+    @Test fun players_tab_needs_a_second_controller() {
+        val m = model()
+        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA))   // the built-in controls alone
+        assertEquals(listOf(GamePanelTab.SHORTCUTS), m.panelState().tabs)
+        m.setPlayers(listOf(p1, PlayerSlotRow(null, "", connected = false)), listOf(padA, padB))
+        assertEquals(listOf(GamePanelTab.SHORTCUTS, GamePanelTab.PLAYERS), m.panelState().tabs)
+    }
+
+    @Test fun the_players_tab_going_away_falls_back_to_shortcuts() {
+        val m = model()
+        m.setPlayers(listOf(p1, PlayerSlotRow("k2", "Xbox Wireless Controller", connected = true)), listOf(padA, padB))
+        m.press(NxButton.UP); m.toTab(GamePanelTab.PLAYERS); m.press(NxButton.DOWN)
+        assertEquals(PanelFocus.Item(0), m.state.panelFocus)
+        m.setPlayers(listOf(p1, PlayerSlotRow("k2", "Xbox Wireless Controller", connected = false)), listOf(padA))   // the second pad left
+        assertEquals(GamePanelTab.SHORTCUTS, m.state.panelTab)
+        assertEquals(GamePanelTab.SHORTCUTS, m.panelState().tab)
+        assertEquals(PanelFocus.Tabs, m.state.panelFocus)
+        m.setPlayers(listOf(p1, PlayerSlotRow("k2", "Xbox Wireless Controller", connected = true)), listOf(padA, padB))
+        assertEquals(GamePanelTab.SHORTCUTS, m.state.panelTab)   // back, but not shown again by itself
     }
 
     @Test fun a_on_a_player_row_in_the_panel_cycles_its_pad() {
@@ -1948,7 +2121,7 @@ class InGameMenuModelTest {
 
     @Test fun a_held_slot_cycles_from_empty() {
         val m = model()
-        m.setPlayers(listOf(PlayerSlotRow("k9", "DualSense", connected = false), PlayerSlotRow(null, "", connected = false)), listOf(padA))
+        m.setPlayers(listOf(PlayerSlotRow("k9", "DualSense", connected = false), PlayerSlotRow(null, "", connected = false)), listOf(padA, padB))
         m.openPlayers()
         assertNull(m.press(NxButton.A))                                         // A opens its picker
         assertIs<MenuPopup.Picker>(m.state.popup)
@@ -1972,7 +2145,6 @@ class InGameMenuModelTest {
         m.setPlayers(listOf(p1, PlayerSlotRow("k2", "Xbox Wireless Controller", connected = true)), listOf(padA, padB))
         val rows = m.state.page.rows.map { assertIs<MenuRow.Option>(it) }
         assertEquals(listOf("", ""), rows.take(2).map { it.info })              // Player rows: the footer shows instead
-        assertTrue(rows.drop(2).all { it.info.isNotBlank() })                   // pad rows keep their info
         assertEquals(InGameMenuModel.PLAYERS_FOOTER, m.state.page.footer)
         // Presses while the menu is open never claim a slot, so the hint says to close it first.
         assertEquals("Close the menu, then press a button\non a new controller to join.", m.state.page.footer)
@@ -1986,7 +2158,7 @@ class InGameMenuModelTest {
         assertEquals("Leave netplay?", m.state.page.title)
         assertEquals(listOf("Continue", "Leave"), m.state.page.rows.map { it.label })
         assertEquals("Leaving ends the netplay session.", m.state.page.footer)
-        assertEquals(listOf(GamePanelTab.SHORTCUTS), m.panelState().tabs)   // no Players tab in netplay, as no Players row before
+        assertEquals(listOf(GamePanelTab.SHORTCUTS), m.panelState().tabs)   // no Players tab in netplay
         m.press(NxButton.DOWN)
         assertEquals(MenuEffect.LeaveNetplay, m.press(NxButton.A))
         m.press(NxButton.UP)
@@ -2045,6 +2217,41 @@ class InGameMenuModelTest {
         assertEquals(full, m.state.page.rows.map { it.label })
         assertEquals(0, m.state.page.selected)                // Disconnect is gone: back on Continue
         assertTrue(m.panelBeside)
+    }
+
+    @Test fun kids_lock_hides_options_from_the_root() {
+        val m = model()
+        m.setKidsLocked(true)
+        val labels = m.state.page.rows.map { it.label }
+        assertFalse("Options" in labels)
+        assertEquals(listOf("Continue", "Save", "Load", "Reset", "Quit"), labels)
+        assertNull(m.state.preview)
+    }
+
+    @Test fun kids_lock_off_brings_options_back() {
+        val m = model()
+        val full = m.state.page.rows.map { it.label }
+        m.setKidsLocked(true)
+        m.setKidsLocked(false)
+        assertEquals(full, m.state.page.rows.map { it.label })
+    }
+
+    @Test fun kids_lock_returns_an_open_options_page_to_the_root() {
+        val m = model()
+        m.activate(m.state.page.rows.indexOfFirst { it.label == "Options" })
+        assertEquals(PageKind.Options, m.state.page.kind)
+        m.setKidsLocked(true)
+        assertEquals(PageKind.Root, m.state.page.kind)
+        assertEquals(1, m.state.stack.size)
+    }
+
+    @Test fun kids_lock_refuses_the_panels_options_and_shader_picker() {
+        val m = model()
+        m.setKidsLocked(true)
+        m.openOptions()
+        assertEquals(PageKind.Root, m.state.page.kind)
+        m.openShaderPicker()
+        assertEquals(PageKind.Root, m.state.page.kind)
     }
 
     @Test fun ds_wireless_on_returns_an_open_sub_page_to_the_root() {
@@ -2391,15 +2598,11 @@ class InGameMenuModelTest {
         assertEquals(1, m.optionRow(1).index)
     }
 
-    @Test fun shader_rows_carry_presets_and_parameter_steps() {
+    @Test fun the_shader_row_names_the_preset_and_parameter_rows_carry_steps() {
         val m = shadersModel()
         val preset = m.optionRow(0)
-        assertEquals(listOf("None", "crt/crt-pi.glslp", "nx/line.glslp"), preset.choices)
-        assertEquals(1, preset.index)
-        assertEquals(MenuEffect.SetShader("nx_shader", "nx/line.glslp"), m.setChoice(0, 2))
-        assertEquals(PageKind.Adjust(ShaderOptions.PRESET), m.state.page.kind)   // the live preview shows it
-        assertEquals(2, m.optionRow(0).index)
-        m.press(NxButton.B)
+        assertEquals("CRT Pie", preset.valueLabel)
+        assertEquals(emptyList(), preset.choices)   // chosen in the picker, not stepped
         m.select(1); m.press(NxButton.A)                     // Shader Parameters
         val scanRow = m.optionRow(0)
         assertEquals(listOf("0.00", "0.50", "1.00"), scanRow.choices)
@@ -2588,11 +2791,15 @@ class InGameMenuModelTest {
     private fun InGameMenuModel.row(label: String): MenuRow.Option = state.page.rows.first { it.label == label } as MenuRow.Option
     private fun InGameMenuModel.selectRow(label: String) = select(state.page.rows.indexOfFirst { it.label == label })
 
-    @Test fun optionsOrder() {
+    @Test fun save_and_quit_shortcut_is_named_quit_without_save_on_quit() {
         val m = model()
-        m.setFrontend(FrontendOptions.defaults("GBA"), emptyList(), emptySet(), "GBA")
+        m.saveOnQuit = false
+        m.setShortcuts(ShortcutSet.EMPTY, ShortcutOverrides.NONE, ConsoleHotkeys.claimed(plainTag), true, false)
         m.select(4); m.activate(4)
-        assertEquals(FULL_OPTIONS, m.state.page.rows.map { it.label })
+        assertNull(m.activate(m.state.page.rows.indexOfFirst { it.label == "Shortcuts" }))
+        val labels = m.state.page.rows.map { it.label }
+        assertTrue("Quit" in labels)
+        assertFalse("Save & Quit" in labels)
     }
 
     @Test fun inheritedShowsDefault() {
@@ -2686,7 +2893,7 @@ class InGameMenuModelTest {
         assertNull(m.captureKey(KeyCodes.BUTTON_R2, down = true))
         assertEquals(ShortcutOverrides.NONE, m.shortcutOverrides)
         assertEquals(PageKind.Message, m.state.page.kind)
-        assertTrue("R2 swaps the DS screens" in m.state.page.footer)
+        assertTrue("R2 is the stylus" in m.state.page.footer)
         m.press(NxButton.A)
         assertEquals("None (default)", m.row("Toggle FF").valueLabel)
     }
@@ -2704,7 +2911,7 @@ class InGameMenuModelTest {
         val m = shortcuts(base = ShortcutSet(mapOf(ShortcutAction.TOGGLE_FF to r2), emptyMap()), tag = "NDS")
         val row = m.row("Toggle FF")
         assertEquals("Unavailable", row.valueLabel)
-        assertEquals("R2 swaps the DS screens", row.info)
+        assertEquals("R2 is the stylus", row.info)
     }
 
     @Test fun xClearsToNoneHere() {

@@ -14,14 +14,14 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from fold import Fold, FoldError, q  # noqa: E402
+from fold import PKG, Fold, FoldError  # noqa: E402
 
-GAME_PROCESS = "com.nxredux.mobile.dev:game"
+GAME_PROCESS = PKG + ":game"
 
 
 def one_run(dev, a, n):
-    dev.sh("am force-stop com.nxredux.mobile.dev; input keyevent KEYCODE_WAKEUP; wm dismiss-keyguard; "
-           "logcat -c; logcat -b events -c")
+    dev.sh("am force-stop %s; input keyevent KEYCODE_WAKEUP; wm dismiss-keyguard; "
+           "logcat -c; logcat -b events -c" % PKG)
     try:
         dev.game(a.rom, a.tag, timeout=90)
     except FoldError as e:
@@ -35,7 +35,7 @@ def one_run(dev, a, n):
     closed = time.time() - t0
     alive = bool(dev.sh("pidof %s" % GAME_PROCESS).strip())
     anr = int(dev.sh("logcat -d -b events | grep -c am_anr").strip() or 0)
-    watchdog = int(dev.sh("logcat -d | grep -c -E 'stuck in one frame|stopped responding'").strip() or 0)
+    watchdog = int(dev.sh("logcat -d adbd:S | grep -c -E 'stuck in one frame|stopped responding'").strip() or 0)
     ok = running and not alive and anr == 0 and watchdog == 0
     return ("run %d: %s running=%s closed_after=%.1fs still_alive=%s anr=%d watchdog=%d"
             % (n, "ok  " if ok else "FAIL", running, closed, alive, anr, watchdog)), ok

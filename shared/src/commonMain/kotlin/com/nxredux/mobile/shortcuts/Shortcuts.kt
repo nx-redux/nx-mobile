@@ -109,7 +109,7 @@ object Shortcuts {
 
     /**
      * The bindings that fire. Overrides replace base rows, and an override that takes a button drops any base action on
-     * it (L24: one button, one action). Rewind actions go without [canRewind], mic ones without [canMic]. A binding a console hotkey claims moves to
+     * it (one button, one action). Rewind actions go without [canRewind], mic ones without [canMic]. A binding a console hotkey claims moves to
      * [EffectiveShortcuts.blocked]: built-in hotkeys win.
      */
     fun effective(

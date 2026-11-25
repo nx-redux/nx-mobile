@@ -74,8 +74,9 @@ internal fun homeRowIn(row: MainRow?, rows: List<MainRow>, pinnedTools: List<Too
 internal fun homeLaunchedPin(was: MainRow?, rows: List<MainRow>): Int? {
     val entry = (was as? MainRow.Pin)?.entry ?: (was as? MainRow.Shelf)?.entry ?: return null
     if (was in rows) return null
-    val cont = rows.firstOrNull() as? MainRow.Continue ?: return null
-    return 0.takeIf { cont.entry.game.path == entry.game.path }
+    val at = rows.indexOfFirst { it is MainRow.Continue }.takeIf { it >= 0 } ?: return null
+    val cont = rows[at] as MainRow.Continue
+    return at.takeIf { cont.entry.game.path == entry.game.path }
 }
 
 /** What Home needs from [AppState]: its layout, the clock, the library and the main menu's tab moves. */
@@ -151,9 +152,6 @@ internal class HomeController(
     private fun homeBoardFor(stripLines: Int, tools: Int, games: Int, frame: HomeFrame = homeFrameNow(), shelves: List<Pair<HomeShelf, Int>> = emptyList()) =
         homeBoard(frame, stripLines, tools, games, shelves)
 
-    /** The strip's lines: two, or one with no Most played ([homeStripLines]). */
-    private fun homeLinesFor(strip: HomeStrip?) = homeStripLines(strip)
-
     /**
      * Home from its [inputs], its slots from the board they make on the frame ([homeBoardFor]: the tool tiles that fit
      * the face, [com.nxredux.mobile.ui.nx.HomeBoard.slots]), with Home's shelves
@@ -165,46 +163,48 @@ internal class HomeController(
         val picked = host.shelvesFor(inputs)
         // List, Minimal and Carousel: up to [HOME_SHELF_LIST_MAX] a shelf; Grid: what its board shows ([homeShelfCap]).
         val shelves = picked.map { (shelf, games) -> shelf to games.take(HOME_SHELF_LIST_MAX) }
+        fun build(slots: Int, shown: List<Pair<HomeShelf, List<Listed>>>, inline: Int = 0) =
+            buildHome(last, games, tools, homeStats, slots, shown, inline, tag = host::shelfTag, shot = { inputs.shots[it.game.path] })
         when (host.homeStyle()) {
-            // List and Minimal: every tool is a row. Carousel: the dock's squares, "+N" for the rest.
-            MenuStyle.LIST, MenuStyle.MINIMAL -> return buildHome(last, games, tools, homeStats, Int.MAX_VALUE, shelves, tag = host::shelfTag, shot = { inputs.shots[it.game.path] })
-            MenuStyle.CAROUSEL, MenuStyle.BACKDROP -> {
-                // The dock's squares on this frame ([homeDockSide]).
-                val f = homeFrameNow()
-                val side = homeDockSide(f, homeLinesFor(strip))
-                return buildHome(last, games, tools, homeStats, homeDockFit(f, side), shelves, tag = host::shelfTag, shot = { inputs.shots[it.game.path] })
-            }
+            // List, Minimal and Carousel: every pinned tool is shown (Carousel places them to the left of Continue).
+            MenuStyle.LIST, MenuStyle.MINIMAL, MenuStyle.CAROUSEL, MenuStyle.BACKDROP -> return build(Int.MAX_VALUE, shelves)
             MenuStyle.GRID -> Unit
         }
         val gamesLeft = games.count { it.game.path != last?.entry?.game?.path }
-        val lines = homeLinesFor(strip)
+        val lines = homeStripLines(strip)
         // The board caps each shelf to what its face shows ([homeShelfCap]); its sizes follow the non-empty shelves in order.
         val b = homeBoardFor(lines, tools.size, gamesLeft, shelves = picked.map { (shelf, games) -> shelf to games.size })
         var k = 0
         val gridShelves = picked.map { (shelf, games) -> shelf to if (games.isEmpty()) games else games.take(b.shelfSizes.getOrElse(k++) { 0 }) }
-        return buildHome(last, games, tools, homeStats, b.slots, gridShelves, b.inlineGames, tag = host::shelfTag, shot = { inputs.shots[it.game.path] })
+        return build(b.slots, gridShelves, b.inlineGames)
     }
 
     /** [built] is the Home tab now: its view shows once the screen shows its rows ([publishHomeView]). */
-    fun noteHomeBuilt(built: Home) {
-        val rows = homeTabRows(built, host.homeStyle())
-        val lines = homeLinesFor(built.strip)
+    fun noteHomeBuilt(built: Home, rows: List<MainRow> = homeTabRows(built, host.homeStyle())) {
+        val lines = homeStripLines(built.strip)
+        val view = homeView(built, rows).copy(frame = homeFrame, lines = lines)
+        // When the first real frame produces rows equal to the stand-in build's, MutableStateFlow keeps the stand-in
+        // screen instance; replacing the stand-in entry under its rows reference keeps snapshot restores matched.
+        val prev = homeBuilds.firstOrNull()
+        val key = if (prev != null && prev.view.frame == null && prev.rows == rows) {
+            homeBuilds.removeFirst(); prev.rows
+        } else rows
         // The view carries the frame and lines the rows were built for: HomeScreen places them on that board.
-        homeBuilds.addFirst(HomeBuild(rows, homeView(built, rows).copy(frame = homeFrame, lines = lines), homeFrameNow(), lines))
+        homeBuilds.addFirst(HomeBuild(key, view, homeFrameNow(), lines))
         while (homeBuilds.size > HOME_BUILDS_KEPT) homeBuilds.removeLast()
         publishHomeView()
     }
 
     /**
-     * Publishes the view of the Home rows on screen: the newest build's off the main menu, else the build of the rows
-     * the menu shows (older ones while a menu holds the swap back, or a restored snapshot: the switcher, Game Settings).
-     * HomeScreen splits the rows it draws with it, so the two always match. Call it after every assignment of a
+     * Publishes the view of the Home rows on [target] (defaults to the screen now): the newest build's off the main
+     * menu, else the build of the rows [target] shows (preferring the exact list instance, so a held-back or restored
+     * snapshot keeps its own view even when two frames produce equal rows). Call it after every assignment of a
      * [Screen.Systems].
      */
-    fun publishHomeView() {
+    fun publishHomeView(target: Screen = screen.value) {
         val newest = homeBuilds.firstOrNull() ?: return
-        val shown = (screen.value as? Screen.Systems)?.tabs?.firstOrNull { it.category == MenuCategory.HOME }?.rows
-        val build = if (shown == null) newest else homeBuilds.firstOrNull { it.rows == shown } ?: return
+        val shown = (target as? Screen.Systems)?.tabs?.firstOrNull { it.category == MenuCategory.HOME }?.rows
+        val build = if (shown == null) newest else homeBuilds.firstOrNull { it.rows === shown } ?: homeBuilds.firstOrNull { it.rows == shown } ?: return
         _homeView.value = build.view
     }
 
@@ -256,7 +256,7 @@ internal class HomeController(
     private fun homeShapeOf(rows: List<MainRow>): HomeShape {
         val build = homeBuilds.firstOrNull { it.rows == rows }
         val tools = rows.count { it is MainRow.PinnedTool } + (rows.firstNotNullOfOrNull { it as? MainRow.MoreTools }?.count ?: 0)
-        val lines = build?.lines ?: homeLinesFor(homeBuilds.firstOrNull()?.view?.strip ?: _homeView.value.strip)
+        val lines = build?.lines ?: homeStripLines(homeBuilds.firstOrNull()?.view?.strip ?: _homeView.value.strip)
         return homeShape(homeBoardFor(lines, tools, rows.count { it is MainRow.Pin }, build?.frame ?: homeFrameNow(), shelfBands(rows)))
     }
 
@@ -280,9 +280,8 @@ internal class HomeController(
 
     /** The Carousel Home's focus is on [index] in [rows]: the row's item or the dock square last used (reset when the row count changed). */
     private fun noteCarouselFocus(index: Int, rows: List<MainRow>) {
-        val rowCount = homeCarouselRowCount(rows)
-        if (rowCount != homeCarouselRows) { homeCarouselRows = rowCount; homeRowLast = 0; homeDockLast = null }
-        if (index < rowCount) homeRowLast = index else homeDockLast = index
+        if (rows.size != homeCarouselRows) { homeCarouselRows = rows.size; homeDockLast = null }
+        homeRowLast = index
     }
 
     /**
@@ -319,6 +318,7 @@ internal class HomeController(
     fun rememberedRow(r: ListSelection, rows: List<MainRow>): ListSelection {
         homeFind(homeSelRow, rows)?.let { return ListSelection(it, rows.size) }
         homeLaunchedPin(homeSelRow, rows)?.let { return ListSelection(it, rows.size) }
+        if (homeSelRow is MainRow.Continue || homeSelRow == MainRow.PickAGame) return ListSelection(homeInitialIndex(rows), rows.size)
         if (host.homeStyle() != MenuStyle.GRID) return r
         val old = homeSelShape ?: return r
         val new = homeShapeOf(rows)
@@ -332,13 +332,14 @@ internal class HomeController(
      * never on the dock's first square).
      */
     fun keptIndex(from: Screen.Systems, to: Screen.Systems): Int {
-        (from.rows.getOrNull(selection.value.index) as? MainRow.Shelf)?.let { homeFind(it, to.rows) }?.let { return it }
+        val prev = from.rows.getOrNull(selection.value.index)
+        (prev as? MainRow.Shelf)?.let { homeFind(it, to.rows) }?.let { return it }
         when (host.homeStyle()) {
             MenuStyle.LIST, MenuStyle.MINIMAL -> return selection.value.index
             MenuStyle.CAROUSEL, MenuStyle.BACKDROP -> {
-                val i = selection.value.index
-                val rowCount = homeCarouselRowCount(to.rows)
-                return if (i < homeCarouselRowCount(from.rows) && rowCount > 0) i.coerceAtMost(rowCount - 1) else i
+                // When Continue changes game or Pick a game is replaced after scan, stay anchored on Continue / Pick a game.
+                if (prev is MainRow.Continue || prev == MainRow.PickAGame) return homeInitialIndex(to.rows)
+                return selection.value.index.coerceIn(0, (to.rows.size - 1).coerceAtLeast(0))
             }
             MenuStyle.GRID -> Unit
         }
@@ -420,8 +421,8 @@ internal class HomeController(
 
     private fun homeCarouselMove(s: Screen.Systems, button: NxButton, repeat: Boolean): Boolean {
         val sel = selection.value
-        val rowCount = homeCarouselRowCount(s.rows)
-        when (val m = homeCarouselStep(sel.index, rowCount, s.rows.size, button, homeRowLast, homeDockLast)) {
+        val n = s.rows.size
+        when (val m = homeCarouselStep(sel.index, n, n, button, homeRowLast, homeDockLast)) {
             is HomeCarouselMove.To -> if (m.index != sel.index) { selection.value = sel.copy(index = m.index); noteHomeFocus(m.index, s.rows); host.refreshResume() }
             is HomeCarouselMove.SwitchTab -> if (!repeat) host.switchTab(m.step)
             HomeCarouselMove.Stay -> Unit

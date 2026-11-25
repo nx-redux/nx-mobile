@@ -54,7 +54,6 @@
 #include "environment.h"
 #include "vfs/vfsfile.h"
 #include "renderers/es3/framebufferrenderer.h"
-#include "renderers/es2/imagerendereres2.h"
 #include "renderers/es3/imagerendereres3.h"
 #include "utils/rect.h"
 #include "achievements/achievements.h"
@@ -115,18 +114,14 @@ public:
     void onSurfaceChanged(unsigned int width, unsigned int height);
 
     void create(
-        unsigned int GLESVersion,
         const std::string& soFilePath,
         const std::string& systemDir,
         const std::string& savesDir,
         std::vector<Variable> variables,
         const ShaderManager::Config& shaderConfig,
         float refreshRate,
-        bool lowLatencyAudio,
         bool enableVirtualFileSystem,
         bool enableMicrophone,
-        bool duplicateFrames,
-        std::optional<ImmersiveMode::Config> immersiveModeConfig,
         const std::string& language
     );
     // resume() and pause() run on the UI thread while the GL thread is paused, though its queued events still run:
@@ -162,7 +157,6 @@ public:
     std::vector<Variable> getVariables();
     void updateVariable(const Variable& variable);
 
-    std::vector<std::vector<struct Controller>> getControllers();
     void setControllerType(unsigned int port, unsigned int type);
 
     // Wii: GL thread (queued), like the other input setters.
@@ -179,6 +173,17 @@ public:
     // The next create() offers the core Vulkan (bridged into the GLES presentation). Set before create().
     void setPreferVulkan(bool value) { preferVulkan = value; }
     void setVulkanSwapchainFrames(bool value) { vulkanSwapchainFrames = value; }
+    // The next create()'s Vulkan bridge loads [libraryName] from [driverDir] through libadrenotools (empty: the system
+    // driver). [hookLibDir]: the app's nativeLibraryDir; [tmpDir]: patched libraries below API 29. [reader]: its frames
+    // go through a swapchain on an image reader (it cannot import a shared buffer). Set before create().
+    void setVulkanDriver(std::string driverDir, std::string libraryName, std::string hookLibDir, std::string tmpDir,
+                         bool reader) {
+        vulkanDriverReader = reader;
+        vulkanDriverDir = std::move(driverDir);
+        vulkanDriverLibrary = std::move(libraryName);
+        vulkanDriverHookLibDir = std::move(hookLibDir);
+        vulkanDriverTmpDir = std::move(tmpDir);
+    }
     // Offer video views to the next core loaded (GET_VIDEO_VIEWS_STATUS answers PRESENTS).
     void setVideoViewsEnabled(bool value) { videoViewsEnabled = value; }
     // The core's last accepted view map (empty: none), any thread. A change also raises takeGameGeometryChanged().
@@ -194,6 +199,10 @@ public:
     // The display's presentation deadline (how early a frame must be queued to show at a refresh);
     // a sleep-timer frame is stamped to show at its deadline + this + 1.5 ms. 0 = unknown: one frame. Any thread.
     void setPresentationDeadline(int64_t nanos) { presentationLeadMicros = nanos > 0 ? nanos / 1000 + 1500 : 0; }
+    // The game's frame rate (0 before a game runs), for the app to ask the display for a mode that fits it. Any thread.
+    double getContentFps() const { return contentFps.load(std::memory_order_relaxed); }
+    // The display switched refresh rate: the pacer is rebuilt for it at the next step. Any thread.
+    void setScreenRefreshRate(float rate) { pendingScreenRate.store(rate, std::memory_order_relaxed); }
 
     // Fast forward up to maxSpeed × the content's rate (0 = off), with or without its audio.
     // Separate from frameSpeed, which stays pause (0) / run (1): a pause and resume never drop FF. Not applied in
@@ -232,7 +241,6 @@ public:
     void achievementsLoadGame(const std::string& hash, uint32_t consoleId);
     void achievementsUnloadGame();
     std::vector<AchievementInfo> achievementsList();
-    AchievementSummary achievementsSummary();
 
     void setAudioEnabled(bool enabled);
 
@@ -244,8 +252,6 @@ public:
     void setPresetParameter(const std::string& id, float value);
     // The last chain build error, cleared on read. GL thread only.
     std::optional<std::string> takePresetError();
-
-    void setViewportAlignment(unsigned int viewportAlignment);
 
     void setScaleMode(unsigned int scaleMode);
 
@@ -259,6 +265,8 @@ public:
     void setScreenRegions(std::vector<ScreenRegion> regions);
     // The frame composed from the core's (Video::setComposition); width 0 clears it. Remembered like the regions. GL thread.
     void setComposition(int width, int height, std::vector<ScreenRegion> parts);
+    // The whole scale the core draws its screens at (Video::setShaderSourceScale). Remembered like the regions. GL thread.
+    void setShaderSourceScale(int scale, int frameHeight);
 
     // Regions drawn on a second surface (dst 0..1 of that whole surface). Remembered like setScreenRegions. GL thread.
     void setSecondaryRegions(std::vector<ScreenRegion> regions);
@@ -269,6 +277,12 @@ public:
     // The second surface drawn from inside the core's frame (hw cores): the view's hook runs right
     // after the main draw in handleVideoRefresh, while the frame is whole and the step holds the core lock, so no lock.
     void renderSecondaryInFrame(unsigned width, unsigned height);
+    // Part of the core's own frame as RGBA rows, top row first (Video::readFrame); empty without a frame. With
+    // [afterDraw] it is read after the next draw instead (a GL core while it runs) and nullopt comes back: takeFrameRead
+    // hands it over. GL thread; also while the view is paused (its context is made current for it).
+    std::optional<std::vector<uint8_t>> readFrame(float left, float top, float right, float bottom, unsigned width,
+                                                  unsigned height, bool afterDraw);
+    std::optional<std::vector<uint8_t>> takeFrameRead();
     // Set by the step's JNI call for its duration: runs after a hw core's frame is drawn (the view draws its second
     // surface then). Cleared after the step.
     void setFrameDrawnHook(std::function<void()> hook) { frameDrawnHook = std::move(hook); }
@@ -291,9 +305,11 @@ public:
     // before any frame and while frames are software. Any thread.
     bool isHardwareRendered() const;
 
+    // The running core's retro_system_info library_name and library_version, empty before the first create(). Any thread.
+    std::pair<std::string, std::string> getCoreIdentity();
+
     void resetGlobalVariables();
 
-    // Handle callbacks
     void handleVideoRefresh(const void *data, unsigned width, unsigned height, size_t pitch);
     void rethrowVideoCallbackError();
     size_t handleAudioCallback(const int16_t* data, size_t frames);
@@ -301,7 +317,6 @@ public:
     uintptr_t handleGetCurrentFrameBuffer();
 
 private:
-    void updateAudioSampleRateMultiplier();
     // GL thread: the audible-FF playback speed. Kept apart from frameSpeed's so a pause always wins.
     void updateFastForwardAudioSpeed();
     // GL thread, in step(): starts/stops the pacer and tells audio and the core (GET_FASTFORWARDING) on a change.
@@ -350,10 +365,14 @@ private:
     unsigned dsLinkVariablesSeen = 0;   // GL thread: the variables generation the DS link last read
     // UI thread writes it; a threaded core's audio callback reads it.
     std::atomic<bool> audioEnabled { true };
-    bool preferLowLatencyAudio = false;
     bool rumbleEnabled = false;
     bool preferVulkan = false;
     bool vulkanSwapchainFrames = false;
+    std::string vulkanDriverDir;
+    std::string vulkanDriverLibrary;
+    std::string vulkanDriverHookLibDir;
+    std::string vulkanDriverTmpDir;
+    bool vulkanDriverReader = false;
 
     ShaderManager::Config fragmentShaderConfig = ShaderManager::Config {
         ShaderManager::Type::SHADER_DEFAULT, { }
@@ -363,7 +382,6 @@ private:
     std::optional<std::string> presetError;
 
     Rect viewportRect = Rect(0.0F, 0.0F, 1.0F, 1.0F);
-    unsigned int viewportAlignment = V_ALIGN_CENTER;
 
     // Remembered so values set before the Video exists apply once it is created.
     unsigned int scaleMode = SCALE_MODE_FIT;
@@ -374,6 +392,8 @@ private:
     int compositionWidth = 0;
     int compositionHeight = 0;
     std::vector<ScreenRegion> compositionParts;
+    int shaderSourceScale = 1;
+    int shaderSourceFrameHeight = 0;
     std::vector<ScreenRegion> secondaryRegions;
 
     std::atomic<float> geometryWidth { 0.0F };
@@ -392,10 +412,6 @@ private:
     std::function<void()> frameDrawnHook;   // GL thread, for one step
     int64_t frameDeadlineNanos = 0;          // GL thread
     bool presentStamped = false;             // GL thread
-    int openglESVersion = 2;
-    bool skipDuplicateFrames = false;
-    bool immersiveModeEnabled = false;
-    ImmersiveMode::Config immersiveModeConfig {};
 
     float defaultAspectRatio = 1.0;
     bool dirtyVideo = false;
@@ -434,6 +450,9 @@ private:
     std::vector<int> threadsBeforeLoad;
     PerfHint perfHint;
     std::atomic<long> presentationLeadMicros { 0 };
+    std::atomic<double> contentFps { 0.0 };
+    unsigned videoCallbacks = 0;   // the core's video callbacks so far (GL thread): a step with none drew nothing
+    std::atomic<float> pendingScreenRate { 0.0f };
     unsigned perfHintSteps = 0;
     void updatePerfHint(std::chrono::steady_clock::time_point stepStart, unsigned runs);
     unsigned appliedFastForwardSpeed = 0;
@@ -487,6 +506,10 @@ private:
     std::atomic<bool> aspectRatioPending { false };
     // context_reset was called and context_destroy not yet. GL thread.
     bool hwContextLive = false;
+
+    std::mutex coreIdentityLock;
+    std::string coreName;
+    std::string coreVersion;
 
     // What the loaded game's retro_game_info points at, kept until retro_unload_game.
     std::string gamePath;

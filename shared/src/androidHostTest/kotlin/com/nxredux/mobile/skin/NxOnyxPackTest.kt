@@ -3,7 +3,6 @@ package com.nxredux.mobile.skin
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
@@ -13,7 +12,6 @@ import kotlin.test.assertTrue
  */
 class NxOnyxPackTest {
     private val skins = File("../androidApp/src/main/assets/skins")
-    private fun pack(id: String) = assertNotNull(SkinPackManifest.parse(File(skins, "$id/skin.json").readText()), id)
 
     @Test
     fun onyxHasCarbonsLayoutsAndItsOwnPictures() = sameAsCarbon("nx-onyx", "NX Onyx")
@@ -24,7 +22,7 @@ class NxOnyxPackTest {
     }
 
     private fun sameAsCarbon(id: String, name: String) {
-        val onyx = pack(id); val carbon = pack("nx-carbon")
+        val onyx = skinPack(id); val carbon = skinPack()
         assertEquals(id, onyx.id); assertEquals(name, onyx.name)
         assertEquals(carbon.layouts.map { it.id }, onyx.layouts.map { it.id })
         for ((o, c) in onyx.layouts.zip(carbon.layouts)) {

@@ -5,13 +5,10 @@
 #include "utils/jnistring.h"
 
 #include <cstdio>
-#include <cstdlib>
-#include <cstring>
 #include <string>
 #include <type_traits>
 
-static int failures = 0;
-static void check(bool ok, const char* what) { if (!ok) { std::printf("FAIL %s\n", what); failures++; } }
+#include "check.h"
 
 // The JDK and the NDK name the function table differently; the field's type works for both.
 using FunctionTable = std::remove_const_t<std::remove_pointer_t<decltype(JNIEnv::functions)>>;
@@ -43,9 +40,6 @@ int main() {
     {
         JniString s(&env, reinterpret_cast<jstring>(const_cast<char*>(text)));
         check(s.stdString() == "core_option", "a string reads back");
-        const char* copy = s.cString();
-        check(copy != nullptr && std::strcmp(copy, "core_option") == 0, "cString copies it");
-        std::free(const_cast<char*>(copy));
     }
     check(getCalls == 1 && releaseCalls == 1, "a string is got and released once");
 
@@ -53,9 +47,6 @@ int main() {
     {
         JniString s(&env, nullptr);
         check(s.stdString().empty(), "null reads as empty");
-        const char* copy = s.cString();
-        check(copy != nullptr && copy[0] == '\0', "null's cString is an empty copy");
-        std::free(const_cast<char*>(copy));
     }
     check(nullCalls == 0, "null is never handed to JNI");
     check(getCalls == 0 && releaseCalls == 0, "null is neither got nor released");

@@ -20,6 +20,7 @@ import android.os.Process
 import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import com.nxredux.mobile.canPostNotifications
 import com.nxredux.mobile.LaunchActivity
 import com.nxredux.mobile.NotificationIds
 import com.nxredux.mobile.launcher.TopScreenHost
@@ -104,6 +105,10 @@ object AndroidKids {
      * before it refuses to start a game while the stored state reads Locked. Any thread; false before any controller.
      */
     fun parentNow(): Boolean = controller?.mode?.value == KidsMode.Parent
+
+    /** For the game process: hide the game's settings from a kid ([kidsHidesGameSettings]). Any thread. */
+    fun gameSettingsHiddenNow(context: Context): Boolean =
+        kidsHidesGameSettings(controller?.mode?.value, com.nxredux.mobile.settings.AndroidAppSettings(context).kidsEnabled)
 
     /** Lock now (the lock alarm's own lock, [lockOnAlarm]); repeating it is safe (the game quits once, the menu moves once more). */
     fun lockNow(context: Context) {
@@ -259,9 +264,7 @@ object AndroidKids {
     }
 
     private fun postWarning(app: Context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(app, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) return
+        if (!canPostNotifications(app)) return
         val nm = app.getSystemService(NotificationManager::class.java) ?: return
         ensureChannel(nm)
         val notice = NotificationCompat.Builder(app, CHANNEL_ID)

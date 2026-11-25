@@ -7,7 +7,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** Fixtures from nx-redux workspace/all/common/tests/test_wiz_caps.c and wizard_net.c at 8f5a760b. */
+/** Fixtures from nx-redux workspace/all/common/tests/test_wiz_caps.c and wizard_net.c. */
 class WizardLinesTest {
     private val esc = "\u001f"
     private val kart = "Super${esc}Mario${esc}Kart${esc}(USA)"
@@ -73,6 +73,20 @@ class WizardLinesTest {
         val h = HelloCodec.parse("HELLO 2 $kart client caps=core=mgba,tag=MGBA,wl=poke")!!
         assertEquals("poke", h.wl)
         assertEquals(null, HelloCodec.parse("HELLO 2 $kart client caps=core=mgba,tag=MGBA")!!.wl)
+    }
+
+    @Test fun a_sega_side_adds_its_controller_type_last_and_drops_it_first() {
+        assertEquals("core=picodrive,tag=MD,auto=1,pad=6", Caps.of("picodrive", "MD", auto = true, pad = "6"))
+        assertEquals("core=genesis_plus_gx,tag=SEGACD,pad=auto", Caps.of("genesis_plus_gx", "SEGACD", pad = "auto"))
+        assertEquals("core=picodrive,tag=MD,auto=1,pad=6,nm=1", Caps.of("picodrive", "MD", auto = true, names = true, pad = "6"))
+        val tight = "x".repeat(37)   // 62 with pad, 67 with nm too: the name is left out before the pad
+        assertEquals("core=$tight,tag=MD,auto=1,pad=6", Caps.of(tight, "MD", auto = true, names = true, pad = "6"))
+        val long = "x".repeat(41)
+        assertEquals("core=$long,tag=MD,auto=1", Caps.of(long, "MD", auto = true, pad = "6"))   // 62 fit, 68 would not: pad dropped
+        assertEquals("6", HelloCodec.parse("HELLO 2 $kart host 2 caps=core=picodrive,tag=MD,pad=6")!!.pad)
+        assertEquals("auto", HelloCodec.parse("HELLO 2 $kart client caps=core=picodrive,tag=MD,pad=auto")!!.pad)
+        assertNull(HelloCodec.parse("HELLO 2 $kart host 2 caps=core=picodrive,tag=MD,pad=9")!!.pad)
+        assertNull(HelloCodec.parse("HELLO 2 $kart host 2 caps=core=picodrive,tag=MD")!!.pad)
     }
 
     @Test fun a_joiner_on_auto_adds_auto_1_when_it_fits() {

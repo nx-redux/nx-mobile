@@ -12,30 +12,30 @@ class ConsoleSettingsTest {
             listOf(
                 NdsOptions.LAYOUT_PORTRAIT, NdsOptions.LAYOUT_PORTRAIT_CONTROLLER, NdsOptions.LAYOUT_LANDSCAPE,
                 NdsOptions.MODE_3D, NdsOptions.MAX_SCALE_3D, NdsOptions.SCALE_3D,
-                NdsOptions.BIG_SCREEN, NdsOptions.PIP_CORNER, NdsOptions.PIP_SIZE, NdsOptions.PIP_OPACITY, NdsOptions.LOCAL_WIRELESS,
+                NdsOptions.BIG_SCREEN, NdsOptions.PIP_CORNER, NdsOptions.PIP_SIZE, NdsOptions.PIP_OPACITY, NdsOptions.SHADER_SCREENS, NdsOptions.LOCAL_WIRELESS,
             ),
             rows.map { it.key },
         )
         assertEquals(
             listOf(
                 "Layout (portrait)", "Layout (portrait, controller)", "Layout (landscape)",
-                "3D Resolution", "Max Scale", "Scale", "Big Screen", "Inset Corner", "Inset Size", "Inset Opacity", "Local Wireless",
+                "3D Resolution", "Max Scale", "Scale", "Big Screen", "Inset Corner", "Inset Size", "Inset Opacity", "Shader Screens", "Local Wireless",
             ),
             rows.map { it.label },
         )
         assertTrue(rows.none { it.label.startsWith("DS") })
-        assertEquals(NdsOptions.table + NdsOptions.localWirelessRow, rows)                  // one definition
+        assertEquals(NdsOptions.table + NdsOptions.shaderScreensRow + NdsOptions.localWirelessRow, rows)   // one definition
     }
 
-    @Test fun dc_offers_graphics_api_and_the_shared_controller_layout_row() {
-        assertEquals(listOf(GraphicsApiOptions.row, BottomScreenOptions.row, PadOptions.layoutRow) + SpeedOptions.table + AudioOptions.rows, ConsoleSettings.tableFor("DC"))
-        assertEquals(listOf("Graphics API", "Bottom screen", "Controller Layout") + SpeedOptions.table.map { it.label } + AudioOptions.rows.map { it.label }, ConsoleSettings.tableFor(" dc ").map { it.label })
+    @Test fun dc_offers_3d_resolution_graphics_api_and_the_shared_controller_layout_row() {
+        assertEquals(DcOptions.resolutionRows(null) + listOf(GraphicsApiOptions.row, BottomScreenOptions.row, PadOptions.layoutRow) + SpeedOptions.table + AudioOptions.rows, ConsoleSettings.tableFor("DC"))
+        assertEquals(listOf("3D Resolution", "Max Scale", "Scale", "Graphics API", "Bottom screen", "Controller Layout") + SpeedOptions.table.map { it.label } + AudioOptions.rows.map { it.label }, ConsoleSettings.tableFor(" dc ").map { it.label })
     }
 
-    @Test fun other_consoles_have_the_layout_row_only_and_n64_adds_graphics_api() {
+    @Test fun other_consoles_have_the_layout_row_only_and_n64_adds_3d_resolution_and_graphics_api() {
         assertEquals(listOf(BottomScreenOptions.row, PadOptions.layoutRow) + SpeedOptions.table + AudioOptions.rows, ConsoleSettings.tableFor("GBA"))
         assertEquals(listOf(BottomScreenOptions.row, PadOptions.layoutRow) + SpeedOptions.table + AudioOptions.rows, ConsoleSettings.tableFor(""))
-        assertEquals(listOf(GraphicsApiOptions.row, BottomScreenOptions.row, PadOptions.layoutRow) + SpeedOptions.table + AudioOptions.rows, ConsoleSettings.tableFor("N64"))
+        assertEquals(N64Options.resolutionRows(null) + listOf(GraphicsApiOptions.rowFor(autoVulkan = false, mali = false, drivers = false, n64 = true), BottomScreenOptions.row, PadOptions.layoutRow) + SpeedOptions.table + AudioOptions.rows, ConsoleSettings.tableFor("N64"))
         assertEquals(listOf(BottomScreenOptions.row, PadOptions.segaPadRow, PadOptions.layoutRow) + SpeedOptions.table + AudioOptions.rows, ConsoleSettings.tableFor("MD"))
     }
 
@@ -48,7 +48,7 @@ class ConsoleSettingsTest {
         val keys = ConsoleSettings.tableFor("3DS").map { it.key }
         val layout = N3dsOptions.layoutRows.map { it.key }
         val res = N3dsOptions.resolutionRows(null).map { it.key }
-        assertEquals(layout + res + N3dsOptions.NEW_CONTROLS, keys.take(layout.size + res.size + 1))
+        assertEquals(layout + res + NdsOptions.SHADER_SCREENS + N3dsOptions.NEW_CONTROLS, keys.take(layout.size + res.size + 2))
     }
 
     @Test fun threeDs_fitted_keeps_a_stored_scale_the_display_no_longer_reaches() {

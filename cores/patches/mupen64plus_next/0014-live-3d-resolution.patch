@@ -1,0 +1,207 @@
+# NX Redux: the app's N64 3D Resolution, live. GLideN64 draws at its 4:3 Resolution's window size (the app sets a
+# multiple of 320 x 240; a wide aspect keeps its Wide Resolution's shape at that height): a new value mid-game resizes the
+# window, which rebuilds GLideN64's frame buffers, and the geometry tells the frontend. ParaLLEl-RDP remakes its command
+# processor between frames when its upscaling changes, and reports room for 8x from the start so a raise isn't cropped.
+diff --git a/custom/GLideN64/mupenplus/Config_mupenplus.cpp b/custom/GLideN64/mupenplus/Config_mupenplus.cpp
+index fb51f34..8768bdf 100644
+--- a/custom/GLideN64/mupenplus/Config_mupenplus.cpp
++++ b/custom/GLideN64/mupenplus/Config_mupenplus.cpp
+@@ -232,3 +232,10 @@ extern "C" void Config_LoadConfig()
+ 
+ 	config.validate();
+ }
++
++/* NX Redux: the native resolution factor for a window resized mid-game (libretro.c); the frame buffers GLideN64 rebuilds
++ * on the resize take it. */
++extern "C" void nx_gln64_set_native_res_factor(unsigned factor)
++{
++	config.frameBufferEmulation.nativeResFactor = factor;
++}
+diff --git a/libretro/libretro.c b/libretro/libretro.c
+index 0ac4895..103453c 100644
+--- a/libretro/libretro.c
++++ b/libretro/libretro.c
+@@ -920,6 +920,57 @@ void update_controllers()
+     }
+ }
+ 
++/* NX Redux: the app sets the 3D Resolution through the 4:3 Resolution's height (a multiple of 240 lines), for any
++ * aspect: a wide picture keeps its Wide Resolution's shape at that height. The size GLideN64's window draws at. */
++static bool nx_screen_size(uint32_t *width, uint32_t *height)
++{
++    struct retro_variable var;
++    unsigned w = 0, h = 0, wide_w = 0, wide_h = 0;
++
++    var.key = CORE_NAME "-43screensize";
++    var.value = NULL;
++    if (!environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) || !var.value || sscanf(var.value, "%ux%u", &w, &h) != 2 || !w || !h)
++        return false;
++    if (AspectRatio != 1)
++    {
++        var.key = CORE_NAME "-169screensize";
++        var.value = NULL;
++        if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value && sscanf(var.value, "%ux%u", &wide_w, &wide_h) == 2 && wide_h)
++            w = ((unsigned)((float)h * (float)wide_w / (float)wide_h + 0.5f) + 1u) & ~1u;
++        else
++            w = ((h * 16u / 9u) + 1u) & ~1u;
++    }
++    *width = w;
++    *height = h;
++    return true;
++}
++
++extern void gln64ResizeVideoOutput(int width, int height);
++extern void nx_gln64_set_native_res_factor(unsigned factor);
++
++/* NX Redux: a new 3D Resolution mid-game. GLideN64 rebuilds its frame buffers at the window's new size on its next VI
++ * update; the frontend learns the new frame size from the geometry. The smallest size draws with a native resolution
++ * factor of 1, as at launch. */
++static void nx_resize_live(void)
++{
++    uint32_t w = 0, h = 0;
++    struct retro_system_av_info info;
++
++    if (!emu_initialized || current_rdp_type != RDP_PLUGIN_GLIDEN64 || !nx_screen_size(&w, &h))
++        return;
++    if (w == retro_screen_width && h == retro_screen_height)
++        return;
++    retro_screen_width = w;
++    retro_screen_height = h;
++    if (AspectRatio != 1)
++        retro_screen_aspect = (float)w / (float)h;
++    EnableNativeResFactor = (w == 320 && h == 240) ? 1 : 0;
++    nx_gln64_set_native_res_factor(EnableNativeResFactor);
++    gln64ResizeVideoOutput((int)w, (int)h);
++    retro_get_system_av_info(&info);
++    environ_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &info.geometry);
++}
++
+ static void update_variables(bool startup)
+ {
+     struct retro_variable var;
+@@ -1434,11 +1485,8 @@ static void update_variables(bool startup)
+          EnableNativeResFactor = atoi(var.value);
+        }
+ 
+-       var.key = screen_size_key;
+-       var.value = NULL;
+-       if (environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) && var.value)
++       if (nx_screen_size(&retro_screen_width, &retro_screen_height))
+        {
+-          sscanf(var.value, "%dx%d", &retro_screen_width, &retro_screen_height);
+           if (AspectRatio != 1) // Calculate the correct aspect ratio when using a ratio different than 4:3.
+           {
+              retro_screen_aspect = (float)retro_screen_width / (float)retro_screen_height;
+@@ -1779,6 +1827,9 @@ static void update_variables(bool startup)
+     }
+ #endif // HAVE_THR_AL
+ 
++    if (!startup)
++        nx_resize_live();
++
+     update_controllers();
+ 
+     // Hide irrelevant options
+diff --git a/mupen64plus-video-paraLLEl/parallel.cpp b/mupen64plus-video-paraLLEl/parallel.cpp
+index 3d408a1..43ed3a3 100644
+--- a/mupen64plus-video-paraLLEl/parallel.cpp
++++ b/mupen64plus-video-paraLLEl/parallel.cpp
+@@ -231,8 +231,9 @@ void parallel_get_geometry(struct retro_game_geometry *geom)
+ {
+ 	geom->base_width = 640;
+ 	geom->base_height = 480;
+-	geom->max_width = geom->base_width * RDP::upscaling;
+-	geom->max_height = geom->base_height * RDP::upscaling;
++	// NX Redux: room for the largest upscaling, which the app can pick mid-game.
++	geom->max_width = geom->base_width * 8;
++	geom->max_height = geom->base_height * 8;
+ 	geom->aspect_ratio = 4.0f / 3.0f;
+ }
+ }
+diff --git a/mupen64plus-video-paraLLEl/rdp.cpp b/mupen64plus-video-paraLLEl/rdp.cpp
+index 0131759..5781dad 100644
+--- a/mupen64plus-video-paraLLEl/rdp.cpp
++++ b/mupen64plus-video-paraLLEl/rdp.cpp
+@@ -26,6 +26,13 @@ static unique_ptr<Device> device;
+ static unique_ptr<Context> context;
+ static QueryPoolHandle begin_ts, end_ts;
+ 
++static uintptr_t frontend_rdram;
++static size_t frontend_offset;
++static unsigned frontend_rdram_size;
++/* NX Redux: the upscaling the command processor was made with; a new one (the app's 3D Resolution) remakes it. */
++static unsigned frontend_upscaling = 1;
++static bool create_frontend();
++
+ static vector<retro_vulkan_image> retro_images;
+ static vector<ImageHandle> retro_image_handles;
+ unsigned width, height;
+@@ -220,6 +227,22 @@ bool init()
+ 		return false;
+ 	}
+ 
++	frontend_rdram = aligned_rdram;
++	frontend_offset = offset;
++	frontend_rdram_size = rdram_size;
++	if (!create_frontend())
++		return false;
++
++	timeline_value = 0;
++	pending_timeline_value = 0;
++	width = 0;
++	height = 0;
++	return true;
++}
++
++/* NX Redux: the command processor at the current upscaling, over the RDRAM init found. */
++static bool create_frontend()
++{
+ 	CommandProcessorFlags flags = 0;
+ 	switch (upscaling)
+ 	{
+@@ -247,9 +270,10 @@ bool init()
+ 	if (super_sampled_dither)
+ 		flags |= COMMAND_PROCESSOR_FLAG_SUPER_SAMPLED_DITHER_BIT;
+ 
+-	log_cb(RETRO_LOG_INFO, "paraLLEl-RDP: Using RDRAM size of %u bytes.\n", rdram_size);
+-	frontend.reset(new CommandProcessor(*device, reinterpret_cast<void *>(aligned_rdram),
+-				offset, rdram_size, rdram_size / 2, flags));
++	log_cb(RETRO_LOG_INFO, "paraLLEl-RDP: Using RDRAM size of %u bytes.\n", frontend_rdram_size);
++	frontend.reset(new CommandProcessor(*device, reinterpret_cast<void *>(frontend_rdram),
++				frontend_offset, frontend_rdram_size, frontend_rdram_size / 2, flags));
++	frontend_upscaling = upscaling;
+ 
+ 	if (!frontend->device_is_supported())
+ 	{
+@@ -262,11 +286,6 @@ bool init()
+ 	quirks.set_native_texture_lod(native_texture_lod);
+ 	quirks.set_native_resolution_tex_rect(native_tex_rect);
+ 	frontend->set_quirks(quirks);
+-
+-	timeline_value = 0;
+-	pending_timeline_value = 0;
+-	width = 0;
+-	height = 0;
+ 	return true;
+ }
+ 
+@@ -426,6 +445,19 @@ void complete_frame()
+ 	begin_ts.reset();
+ 	end_ts.reset();
+ 
++	// NX Redux: a new upscaling mid-game, after this frame is out: the GPU finishes the old command processor's work,
++	// and the next frame draws at the new scale (reading RDRAM afresh).
++	if (upscaling != frontend_upscaling)
++	{
++		device->wait_idle();
++		frontend.reset();
++		if (!create_frontend())
++			return;
++		log_cb(RETRO_LOG_INFO, "paraLLEl-RDP: upscaling now %ux.\n", upscaling);
++		timeline_value = 0;
++		pending_timeline_value = 0;
++	}
++
+ 	RDP::Quirks quirks;
+ 	quirks.set_native_texture_lod(native_texture_lod);
+ 	quirks.set_native_resolution_tex_rect(native_tex_rect);

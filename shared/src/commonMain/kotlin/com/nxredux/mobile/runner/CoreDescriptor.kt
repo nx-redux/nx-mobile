@@ -13,7 +13,31 @@ data class VulkanSwitch(
     val swapchainFrames: Boolean = false,
     /** Process environment the core reads on Vulkan (set before it loads; cleared on any other launch). */
     val vulkanEnv: Map<String, String> = emptyMap(),
-)
+    /** More of it on an Adreno GPU running its own driver, not a custom one ([com.nxredux.mobile.options.GraphicsApiOptions.envFor]). */
+    val adrenoSystemDriverEnv: Map<String, String> = emptyMap(),
+    /**
+     * Graphics API "Auto" is Vulkan on an Arm Mali GPU, for a core its OpenGL ES driver runs slower than its Vulkan one
+     * (measured on a Mali-G76: PS2 far slower, Wii short of full speed). Not for a core that is as fast on either (N64,
+     * PSP, PS1, Dreamcast). The 3DS holds full speed on either there too; it takes Vulkan only with a custom driver.
+     */
+    val autoOnMali: Boolean = false,
+    /**
+     * [autoOnMali] only with a custom GPU driver in use. Dolphin on the stock Mali driver draws some games (Mario Kart:
+     * Double Dash!!) under a dark blue tint: Mali has no dual-source blending and the stock driver no framebuffer fetch,
+     * and Dolphin's Vulkan backend has no other way to blend them. Azahar on the stock driver loses the device in some
+     * games (Mario Kart 7, `DeviceLost` at any scale on a Mali-G76). malisx2 runs both; OpenGL ES is right on either.
+     */
+    val maliNeedsCustomDriver: Boolean = false,
+    /**
+     * Graphics API "Auto" is Vulkan on a Samsung Xclipse GPU, whose OpenGL ES is ANGLE over Vulkan: for a core it draws
+     * wrong (3DS geometry shaders, PS2's God of War II) or slower (GameCube), or as fast either way (PSP, PSX, Dreamcast).
+     * Not N64 or Wii, which run slower on Vulkan there (measured on the Tab S10 FE and Galaxy Z Flip 8).
+     */
+    val autoOnXclipse: Boolean = false,
+) {
+    /** Auto depends on the GPU: [autoIsVulkan][com.nxredux.mobile.options.GraphicsApiOptions.autoIsVulkan] needs its name. */
+    val followsGpu: Boolean get() = autoOnMali || autoOnXclipse
+}
 
 data class CoreDescriptor(
     /** minarch's core name (the handheld `.so` basename cut at its last `_`); keys the state/config dirs. */
@@ -52,7 +76,7 @@ data class CoreDescriptor(
     /**
      * Single values the app never offers, per option key: skipped when cycling the in-game Core Options page, and a stored
      * one in a `.cfg` is ignored ([com.nxredux.mobile.options.CoreConfig.resolve]'s `hidden`). Values are the core's exact strings.
-     * Every key needs a [defaultOptions] entry with a value that is not hidden, so the core's own default never slips through.
+     * A key needs a [defaultOptions] entry with a value that is not hidden, unless the core's own default is the one wanted.
      */
     val hiddenValues: Map<String, Set<String>> = emptyMap(),
     /**
@@ -87,7 +111,7 @@ data class CoreDescriptor(
     /** How the core switches API under Display → Graphics API; null = no Vulkan path, the console has no row. */
     val vulkan: VulkanSwitch? = null,
     /**
-     * Whether the core can rewind (libretro docs feature table, checked 2026-10-24). False for azahar, flycast, ppsspp and
+     * Whether the core can rewind (libretro docs feature table). False for azahar, flycast, ppsspp and
      * prboom, which don't support it, and Dolphin, whose states are too large to snapshot every frame on a phone.
      */
     val rewind: Boolean = true,

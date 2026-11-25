@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.tryOrAny
 import com.nxredux.mobile.scraper.ArtworkController
 import com.nxredux.mobile.scraper.JobPhase
 import com.nxredux.mobile.scraper.KeyResult
@@ -8,7 +9,6 @@ import com.nxredux.mobile.settings.AppSettings
 import com.nxredux.mobile.ui.nx.ListSelection
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxSettingEvent
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -21,13 +21,7 @@ internal const val ARTWORK_STORAGE_ERROR = "Couldn't save artwork data"
  * throw on the UI scope (which has no handler), as ContextMenuController.menuAction does.
  */
 internal suspend fun guardArtwork(error: MutableStateFlow<String?>, block: suspend () -> Unit) {
-    try {
-        block()
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Throwable) {
-        error.value = ARTWORK_STORAGE_ERROR
-    }
+    tryOrAny({ error.value = ARTWORK_STORAGE_ERROR }) { block() }
 }
 
 /**
@@ -117,15 +111,7 @@ internal class ArtworkAccountSettings(
         if (controller.tgdbAvailable) scope.launch { quietly { controller.tgdbAllowance() } }
     }
 
-    private suspend fun quietly(block: suspend () -> Unit) {
-        try {
-            block()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Throwable) {
-            Unit
-        }
-    }
+    private suspend fun quietly(block: suspend () -> Unit) = tryOrAny({}) { block() }
 
     /** Rebuilds the Settings rows in place (an open modal kept), the highlight kept on its row ([keepRow]). */
     fun refreshSettings() {
@@ -276,7 +262,6 @@ internal class ArtworkAccountSettings(
         val row = s.rows.getOrNull(selection.value.index)
         when (button) {
             NxButton.UP, NxButton.DOWN -> selection.value = selection.value.step(if (button == NxButton.UP) -1 else 1) { s.rows.getOrNull(it)?.selectable == true }
-            NxButton.LEFT, NxButton.RIGHT -> if (row?.enabled == true && row.kind.toggle) toggle(row.kind)
             NxButton.A -> if (row?.enabled == true) when (row.kind) {
                 ArtworkSettingKind.REPLACE, ArtworkSettingKind.BOX2D, ArtworkSettingKind.WHEEL, ArtworkSettingKind.MIX, ArtworkSettingKind.FETCH_INFO -> toggle(row.kind)
                 ArtworkSettingKind.SS_LOGIN ->

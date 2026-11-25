@@ -6,21 +6,22 @@ SRC := ../../../main/cpp/netplay
 CFLAGS := -std=c11 -Wall -Wextra -O1 -pthread -I$(SRC)
 NET := $(SRC)/np_net.c $(SRC)/np_tcp.c
 NET_H := $(SRC)/np_net.h $(SRC)/np_tcp.h
-all: $(OUT)/test_engine $(OUT)/test_link $(OUT)/test_tcp $(OUT)/test_ndl $(OUT)/test_psl
+TESTS := test_tcp test_engine test_link test_ndl test_psl
+all: $(TESTS:%=$(OUT)/%)
 $(OUT):
 	mkdir -p $(OUT)
-$(OUT)/test_engine: test_engine.c $(SRC)/np_engine.c $(NET) $(SRC)/np_engine.h $(NET_H) | $(OUT)
+$(OUT)/test_engine: test_engine.c test_util.h $(SRC)/np_engine.c $(NET) $(SRC)/np_engine.h $(NET_H) | $(OUT)
 	$(CC) $(CFLAGS) -o $@ test_engine.c $(SRC)/np_engine.c $(NET)
-$(OUT)/test_link: test_link.c $(SRC)/np_link.c $(NET) $(SRC)/np_link.h $(NET_H) | $(OUT)
+$(OUT)/test_link: test_link.c test_util.h $(SRC)/np_link.c $(NET) $(SRC)/np_link.h $(NET_H) | $(OUT)
 	$(CC) $(CFLAGS) -o $@ test_link.c $(SRC)/np_link.c $(NET)
-$(OUT)/test_tcp: test_tcp.c $(NET) $(NET_H) | $(OUT)
+$(OUT)/test_tcp: test_tcp.c test_util.h $(NET) $(NET_H) | $(OUT)
 	$(CC) $(CFLAGS) -o $@ test_tcp.c $(NET)
-$(OUT)/test_ndl: test_ndl.c $(SRC)/ndl_link.c $(NET) $(SRC)/ndl_link.h $(NET_H) | $(OUT)
+$(OUT)/test_ndl: test_ndl.c test_util.h $(SRC)/ndl_link.c $(NET) $(SRC)/ndl_link.h $(NET_H) | $(OUT)
 	$(CC) $(CFLAGS) -DNDL_TESTING -o $@ test_ndl.c $(SRC)/ndl_link.c $(NET)
 $(OUT)/test_psl: test_psl.c $(SRC)/psl_finder.c $(SRC)/psl_finder.h | $(OUT)
 	$(CC) $(CFLAGS) -o $@ test_psl.c $(SRC)/psl_finder.c
 test: all
-	sh run.sh
+	sh run.sh $(TESTS)
 clean:
 	rm -rf $(OUT)
 .PHONY: all test clean

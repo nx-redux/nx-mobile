@@ -5,7 +5,7 @@ import com.nxredux.mobile.library.Entry
 import com.nxredux.mobile.library.Names
 import com.nxredux.mobile.library.RomsSource
 import com.nxredux.mobile.runner.ContentRef
-import kotlinx.coroutines.CancellationException
+import com.nxredux.mobile.tryOrAny
 
 /**
  * A CD CHD's first data track, read through the platform's CHD decoder: [sectors] (relative to the track's start) as 2048
@@ -27,17 +27,12 @@ data class ProbeResult(val console: String?, val read: Boolean, val data: Entry?
  * needs [chd] (without it only a GD or DVD CHD is placed, by its metadata). Never throws.
  */
 class DiscProbe(private val source: RomsSource, private val chd: ChdSectors? = null) {
-    /** [file]'s console; [dir] is its folder's listing (a cue's, gdi's or m3u's files are found there). */
-    suspend fun identify(file: Entry, dir: List<Entry>): String? = probe(file, dir).console
-
-    /** [identify] with whether [file] (and the data file a sheet names) could be read. */
-    suspend fun probe(file: Entry, dir: List<Entry>): ProbeResult = try {
-        resultOf(file, dir, followM3u = true)
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Throwable) {
-        ProbeResult(null, read = false)
-    }
+    /**
+     * [file]'s console, with whether [file] (and the data file a sheet names) could be read; [dir] is its folder's
+     * listing (a cue's, gdi's or m3u's files are found there).
+     */
+    suspend fun probe(file: Entry, dir: List<Entry>): ProbeResult =
+        tryOrAny({ ProbeResult(null, read = false) }) { resultOf(file, dir, followM3u = true) }
 
     private suspend fun resultOf(file: Entry, dir: List<Entry>, followM3u: Boolean): ProbeResult = when (Names.extensionOf(file.name)) {
         "iso" -> {
@@ -89,6 +84,27 @@ class DiscProbe(private val source: RomsSource, private val chd: ChdSectors? = n
         val kind = DiscSignatures.identify(DataSectors(sector(0), sector(1), sector(16)))
         return if (failed && kind == null) UNREAD.copy(data = data) else ProbeResult(kind?.consoleId, read = true, data = data)
     }
+
+    /**
+     * The 2048 bytes of user data in sector 0 of [file]'s first data track (a disc's header: Sega CD's IP, with its
+     * region), as [probe] finds the track: a bare iso/bin/img, a cue's first data track, a CD CHD's, an m3u's first disc.
+     * Null when it cannot be read, has no data track, or is not a CD image. Never throws.
+     */
+    suspend fun firstDataSector(file: Entry, dir: List<Entry>): ByteArray? =
+        tryOrAny({ null }) { sector0(file, dir, followM3u = true) }
+
+    private suspend fun sector0(file: Entry, dir: List<Entry>, followM3u: Boolean): ByteArray? = when (Names.extensionOf(file.name)) {
+        "iso" -> sector0Of(file.ref, DiscImages.rawTrack(file.name, ByteArray(0)))
+        "bin", "img" -> source.readRange(file.ref, 0, 16)?.let { sector0Of(file.ref, DiscImages.rawTrack(file.name, it)) }
+        "cue" -> DiscSheet.readSheet(source, file.ref)?.let(DiscImages::cueTrack)?.let { t -> named(dir, t.file)?.let { sector0Of(it.ref, t) } }
+        "chd" -> source.readHead(file.ref, CHD_HEAD)?.takeIf { ChdHeader.media(it) == ChdMedia.CD }?.let { chd?.read(file.ref, listOf(0))?.firstOrNull() }
+        "m3u" -> if (!followM3u) null else DiscSheet.readSheet(source, file.ref)
+            ?.let { DiscSheet.references(file.name, it).firstOrNull() }?.let { named(dir, it) }?.let { sector0(it, dir, followM3u = false) }
+        else -> null
+    }
+
+    private suspend fun sector0Of(ref: ContentRef, t: DataTrack): ByteArray? =
+        source.readRange(ref, t.start + t.dataOffset, 2048)?.takeIf { it.size == 2048 }
 
     /** [name] in [dir] as a launch finds it ([DiscSheet.Listing]: any case, or another code page's spelling). */
     private fun named(dir: List<Entry>, name: String): Entry? = DiscSheet.Listing(dir.filter { !it.isDirectory }).find(name)

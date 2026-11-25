@@ -1,5 +1,8 @@
 package com.nxredux.mobile.ui
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
 import com.nxredux.mobile.ui.nx.LocalPortrait
 import com.nxredux.mobile.ui.nx.LocalPadBelow
@@ -41,13 +44,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import com.nxredux.mobile.ui.nx.NxSettingRow
 import org.jetbrains.compose.resources.DrawableResource
 import com.nxredux.mobile.ui.nx.Hint
+import com.nxredux.mobile.ui.nx.NX_EDIT_HINTS
+import com.nxredux.mobile.ui.nx.padAHint
 import com.nxredux.mobile.ui.nx.LocalNxHintBarStart
 import com.nxredux.mobile.ui.nx.NxButton
-import com.nxredux.mobile.ui.nx.NxButtonGlyph
+import com.nxredux.mobile.ui.nx.nxPadRings
+import com.nxredux.mobile.ui.nx.nxPadRing
+import com.nxredux.mobile.ui.nx.NxPadRingRoom
 import com.nxredux.mobile.ui.nx.NxSettingEvent
 import com.nxredux.mobile.ui.nx.NxSettingsList
 import com.nxredux.mobile.ui.nx.NxSignInPrompt
@@ -65,17 +72,19 @@ fun OnboardingScreen(
     onDraftUser: (String) -> Unit, onDraftPassword: (String) -> Unit, modifier: Modifier = Modifier,
     onSetting: (NxSettingEvent) -> Unit = {},
     onDraftKey: (String) -> Unit = {},
+    editing: Int = -1,   // the row the pad is changing ([AppState.rowEdit], [rowEditIndex]); -1 none
 ) {
-    // The last page: START finishes too, as Press Start does.
-    val hints = listOfNotNull(
-        if (screen.canGoBack) Hint(NxButton.B, "Back") else null, Hint(NxButton.A, "Choose"),
+    // A value row says what A does to it (Toggle, Choose, Change); the last page: START finishes too, as Press Start does.
+    val hints = if (editing >= 0) NX_EDIT_HINTS else listOfNotNull(
+        if (screen.canGoBack) Hint(NxButton.B, "Back") else null,
+        screen.touchRows?.getOrNull(selected)?.padAHint ?: Hint(NxButton.A, "Choose"),
         if (screen.step == OnboardingStep.DONE) Hint(NxButton.START, "Start") else null,
     )
     if (screen.step == OnboardingStep.WELCOME) {
         OnboardingWelcomePage(screen, onRow, modifier)
         return
     }
-    screen.touchRows?.let { rows ->
+    screen.touchRows?.mapIndexed { i, r -> if (i == editing) r.copy(editing = true) else r }?.let { rows ->
         val picture = when {
             screen.step == OnboardingStep.TITLE ->
                 chromePicture(title = screen.rows.getOrNull(0)?.secondary != "Hide", hints = screen.rows.getOrNull(1)?.secondary != "Hide")
@@ -103,17 +112,19 @@ fun OnboardingScreen(
  * A setup page (onboarding's steps, first setup's folder steps): the step group (the [counter], [headline], [lines] and
  * touch [rows], [picture] (a layout's) under the rows) and the last [buttons] rows (Continue, Skip, Pick folder; two for
  * a real choice: Add folder / Skip) as words pinned to the bottom ([SetupButtons]), in the same place on every step. The
- * rows keep the touch rows' selected plate; the buttons select by brightness alone. Either way
+ * rows keep the touch rows' selected plate; the buttons are a modal footer's ([SetupButtons]). Either way
  * up the group's top sits on a fixed line ([SETUP_LINE] of the body) and grows down, so the counter, title and rows are
  * level from step to step; a group that would come within [SETUP_BUTTON_GAP] of the button moves up instead, and past
  * the top its rows scroll under the rows block's fades.
- * [lineBreaks]: each line on its own (a list).
+ * [lineBreaks]: each line on its own (a list). [onMore]: an info icon after the first line, a tap on it this (the
+ * page's fuller text, in the app's message dialog). [pinButtons]: the buttons stay at the bottom over the menu pad too.
  */
 @Composable
 internal fun SetupBlockPage(
     counter: String, headline: String, lines: List<String>, rows: List<NxSettingRow>, buttons: Int,
     selected: Int, hints: List<Hint>, onSelect: (Int) -> Unit, onRow: (Int) -> Unit, onHint: (NxButton) -> Unit,
     modifier: Modifier = Modifier, onSetting: (NxSettingEvent) -> Unit = {}, picture: DrawableResource? = null, lineBreaks: Boolean = false,
+    onMore: (() -> Unit)? = null, pinButtons: Boolean = false,
 ) {
     val shown = buttons.coerceIn(0, rows.size)
     val list = rows.dropLast(shown)
@@ -128,10 +139,12 @@ internal fun SetupBlockPage(
     val listSelected = selected.takeIf { it < list.size } ?: -1
     // The menu pad under the page (setup's pad step) leaves a short body: the buttons go under the rows, scrolling with
     // them (the list keeps a selected one in view), so the head and the rows keep their room.
-    val scrollActions = LocalPadBelow.current && shown > 0 && list.isNotEmpty()
-    val actionsFooter = NxListFooter(height = { SETUP_SCROLLED_BUTTON_GAP + SETUP_BUTTON_TAP }) {
+    val scrollActions = !pinButtons && LocalPadBelow.current && shown > 0 && list.isNotEmpty()
+    // Bled out past the list's start by its side pad and the pad ring's room twice (the pill sits a ring's room left of its
+    // box, the ring round it another), so the list, which clips its footer to its own width, keeps the whole pill.
+    val actionsFooter = NxListFooter(bleedStart = NxOptionsSidePad + NxPadRingRoom * 2, height = { SETUP_SCROLLED_BUTTON_GAP + SETUP_BUTTON_TAP }) {
         // The word on the rows' text edge: the list's side pad back out ([nxListInset] is it plus the rows' own inset).
-        Box(Modifier.padding(top = SETUP_SCROLLED_BUTTON_GAP).offset(x = -NxOptionsSidePad)) {
+        Box(Modifier.padding(top = SETUP_SCROLLED_BUTTON_GAP, start = NxPadRingRoom * 2)) {
             SetupButtons(rows.takeLast(shown).map { it.label }, list.size, selected, word, onSelect, onRow)
         }
     }
@@ -149,7 +162,7 @@ internal fun SetupBlockPage(
                     // At most the Settings rows block's width ([SETTINGS_FRAME_MAX]), from the start gutter: the lines wrap in it and a
                     // row's control stays near its label; the button on the rows' left edge under it.
                     Column(
-                        Modifier.fillMaxHeight().padding(start = plateStart, end = gutter, top = SETTINGS_ROWS_TOP, bottom = SETTINGS_BLOCK_BOTTOM)
+                        Modifier.fillMaxHeight().padding(start = plateStart, end = gutter, top = SETTINGS_ROWS_TOP, bottom = settingsBlockBottom())
                             .widthIn(max = SETTINGS_FRAME_MAX).fillMaxWidth(),
                     ) {
                         SetupGroupRoom(line, if (shown > 0) (-gap).coerceAtLeast(0.dp) else 0.dp, Modifier.weight(1f).fillMaxWidth()) {
@@ -157,7 +170,7 @@ internal fun SetupBlockPage(
                                 SetupHeader(counter, headline)
                                 // The gaps as seen (glyph to glyph, or plate): the line boxes add ~16 dp under the title (the
                                 // lines drawn 4 dp up into it) and ~4 dp under the lines, so their spacers are that much less.
-                                if (lines.isNotEmpty()) Box(Modifier.offset(y = -4.dp)) { SettingsDetailLines(lines, separator = if (lineBreaks) "\n" else " ") }
+                                if (lines.isNotEmpty()) Box(Modifier.offset(y = -4.dp)) { SettingsDetailLines(lines, separator = if (lineBreaks) "\n" else " ", onMore = onMore) }
                                 if (list.isNotEmpty() || picture != null) {
                                     Spacer(Modifier.height(if (lines.isNotEmpty()) SETUP_ROWS_GAP - 16.dp else SETUP_ROWS_GAP - 12.dp))
                                     Box(Modifier.fillMaxWidth().weight(1f, fill = false)) {
@@ -174,14 +187,16 @@ internal fun SetupBlockPage(
                             // The word's line box on the block's bottom (SETTINGS_BLOCK_BOTTOM up, as Settings' section words),
                             // its tap target's room below it hanging into that inset.
                             // The words on the rows' text edge ([nxListInset] in): their pill boxes start at the block's edge, an inset before them.
-                            Box(Modifier.offset(y = extra)) {
+                            // On a narrow page edge (the Fold's panel between the pad's clusters) the pill and its pad ring would
+                            // reach past the page and be cut: the words step in by what is missing.
+                            Box(Modifier.offset(y = extra).padding(start = (NxPadRingRoom * 2 - plateStart).coerceAtLeast(0.dp))) {
                                 SetupButtons(rows.takeLast(shown).map { it.label }, list.size, selected, word, onSelect, onRow)
                             }
                         }
                     }
                 }
                 if (side && picture != null) BoxWithConstraints(
-                    Modifier.weight(1f).fillMaxHeight().padding(top = SETTINGS_ROWS_TOP, bottom = SETTINGS_BLOCK_BOTTOM, end = gutter),
+                    Modifier.weight(1f).fillMaxHeight().padding(top = SETTINGS_ROWS_TOP, bottom = settingsBlockBottom(), end = gutter),
                     contentAlignment = Alignment.Center,
                 ) { FramedPictureFit(picture, LAYOUT_PICTURE_AR, maxWidth, maxHeight) }
             }
@@ -191,52 +206,53 @@ internal fun SetupBlockPage(
 }
 
 /**
- * A setup page's buttons, as every action: the selected one ([first] + its place is [selected]) on the pill
- * ([nxHighlight], its on-pill text), the others the word alone in inkDim, with a pad or touch alike (the page opens on
- * its first action, lit). Each word stays on its text edge, the pill reaching [nxListInset] past it either side, so the words
- * keep their places and spacing whichever is lit; a tap target [SETUP_BUTTON_TAP] tall. A tap selects and opens it.
- * [rest]: the unlit words' ink, inkDim on a setup page; a modal's are the list text ([NxModal], [NxChoiceDialog]).
- * [outlined]: the word that keeps the pill's outline while unlit (a modal's first action, so it reads as a button with
- * the focus elsewhere); null: none. [keys]: a pad button's glyph before a word that has a button of its own (a typed
- * prompt's START and B), in [labels]' order; null or missing: the word alone.
+ * A setup page's buttons, in a modal footer's language ([NxModalAction]): the first is the page's main action on the
+ * accent pill ([nxHighlight], its on-pill text) whether or not the pad is on it (a lone Skip too: the page's only
+ * action), the others outlined. The pad's place ([first] + its place is
+ * [selected]) is the modal's white ring round the button ([nxPadRing], shown only where there is a pad). Each word
+ * stays on its text edge, the pill reaching [nxListInset] past it either side (the ring's room hangs outside it), so the
+ * words keep their places and spacing; a tap target [SETUP_BUTTON_TAP] tall. A tap selects and opens it.
  */
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 internal fun SetupButtons(
     labels: List<String>, first: Int, selected: Int, size: TextUnit, onSelect: (Int) -> Unit, onOpen: (Int) -> Unit,
-    rest: Color = LocalNxColors.current.inkDim,
-    outlined: Int? = null,
-    keys: List<NxButton?> = emptyList(),
 ) {
     val colors = LocalNxColors.current
     val inset = nxListInset()
     val pill = nxHighlight()
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    val rings = nxPadRings()
+    // A button that does not fit beside the one before it goes to the next line, rather than its word being cut.
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(SETUP_BUTTON_SPACE - inset * 2),
+        itemVerticalAlignment = Alignment.CenterVertically,
+    ) {
         labels.forEachIndexed { i, text ->
             val index = first + i
-            val lit = index == selected
+            val main = i == 0
+            // The main button gives way when the row runs out (a long folder name in the picker's Use …): it ends in "…",
+            // the others keep their whole words.
             Box(
-                Modifier.heightIn(min = SETUP_BUTTON_TAP).clickable { onSelect(index); onOpen(index) },
+                (if (main) Modifier.weight(1f, fill = false) else Modifier)
+                    .heightIn(min = SETUP_BUTTON_TAP).clickable { onSelect(index); onOpen(index) },
                 contentAlignment = Alignment.CenterStart,
             ) {
-                val ink = if (lit) colors.onAccent else rest
+                val ink = if (main) colors.onAccent else colors.listText
                 val shape = RoundedCornerShape(50)
-                val ground = when {
-                    lit -> Modifier.background(pill, shape)
-                    index == outlined -> Modifier.border(1.dp, colors.inkRing, shape)
-                    else -> Modifier
-                }
-                Row(ground.padding(horizontal = inset, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    keys.getOrNull(i)?.let { key ->
-                        NxButtonGlyph(key, with(LocalDensity.current) { size.toDp() }, tint = ink)
-                        Spacer(Modifier.width(6.dp))
-                    }
+                val ground = if (main) Modifier.background(pill, shape) else Modifier.border(1.dp, colors.inkRing, shape)
+                // The ring's room outside the pill, so the pill (and the word) keep the place they have without it.
+                Row(
+                    Modifier.offset(x = -NxPadRingRoom).nxPadRing(rings && index == selected).then(ground)
+                        .padding(horizontal = inset, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Text(
                         text, color = ink,
                         fontFamily = LocalNxFont.current, fontWeight = FontWeight.Bold, fontSize = size, lineHeight = size * SETUP_WORD_LINE, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
-            if (i < labels.lastIndex) Spacer(Modifier.width(SETUP_BUTTON_SPACE - inset * 2))
         }
     }
 }

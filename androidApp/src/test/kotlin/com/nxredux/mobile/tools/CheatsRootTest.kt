@@ -1,6 +1,7 @@
 package com.nxredux.mobile.tools
 
 import com.nxredux.mobile.cheats.db.CheatDbManifest
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -12,6 +13,8 @@ class CheatsRootTest {
     private val base = Files.createTempDirectory("cheats").toFile()
     private val private = File(base, "sd").apply { mkdirs() }
     private val home = File(base, "home").apply { mkdirs() }
+
+    @After fun cleanUp() { base.deleteRecursively() }
 
     private fun write(root: File, rel: String, text: String) = File(root, rel).apply { parentFile!!.mkdirs(); writeText(text) }
 

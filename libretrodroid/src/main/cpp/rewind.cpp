@@ -37,11 +37,11 @@ constexpr int KEYFRAME_EVERY = 60;
 constexpr size_t ENTRY_SIZE_HINT = 4096;
 // Well over a keyframe run: a full table drops its oldest entry, a keyframe, and the deltas after it go with it.
 constexpr int MIN_ENTRIES = 4 * KEYFRAME_EVERY;
-// A deeper pool for big states, whose serialize and compress take longer (the handheld's 3 / 4 at 2 MB).
+// A deeper pool for big states, whose serialize and compress take longer.
 constexpr size_t LARGE_STATE = 2 * MB;
 constexpr int POOL_SMALL = 3;
 constexpr int POOL_LARGE = 4;
-// The handheld's default: a little faster than LZ4's 1, for a slightly bigger entry.
+// A little faster than LZ4's 1, for a slightly bigger entry.
 constexpr int LZ4_ACCELERATION = 2;
 constexpr auto SLOT_WAIT = std::chrono::milliseconds(2);
 // A keyframe entry starts with the length of its compressed state (native order: the ring never leaves the process).

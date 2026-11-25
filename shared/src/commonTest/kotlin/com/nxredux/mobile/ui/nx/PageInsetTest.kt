@@ -22,12 +22,10 @@ class PageInsetTest {
     @Test fun a_shallow_cutout_sits_inside_the_inset() {
         val inset = pageInset(portrait = false)
         assertEquals(38f, pageInsetSide(inset, cutout = 20f))
-        assertEquals(38f, pageInsetSide(inset, cutout = 0f))
     }
 
     @Test fun upright_the_hole_is_in_the_status_bar() {
         val inset = pageInset(portrait = true)
-        assertEquals(30f, pageInsetSide(inset, cutout = 0f))
         assertEquals(30f, pageInsetSide(inset, cutout = 0f))
     }
 

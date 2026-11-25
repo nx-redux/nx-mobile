@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.nxredux.mobile.launcher.InstalledApp
 import com.nxredux.mobile.ui.nx.Hint
+import com.nxredux.mobile.ui.nx.padAHint
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxSettingEvent
 import com.nxredux.mobile.ui.nx.NxSettingRow
@@ -35,8 +36,8 @@ internal fun kidsSetupRows(s: Screen.KidsSetup): List<KidsSetupRow> = when (s.st
 internal fun kidsSetupText(s: Screen.KidsSetup): Pair<String, String> = when (s.step) {
     KidsSetupStep.PIN -> "Choose a PIN" to ""
     KidsSetupStep.APPS -> "Allowed apps" to
-        if (s.setup) "The apps your kid can open while games are closed. You can change them later in Settings. $KIDS_APPS_AVOID"
-        else "The apps your kid can open while games are closed. $KIDS_APPS_AVOID"
+        if (s.setup) "The apps your kid can open while games are closed. You can change them later in Settings."
+        else "The apps your kid can open while games are closed."
     KidsSetupStep.TIMES -> "Play times" to "Games open in these hours. Outside them, only the allowed apps can be opened."
     KidsSetupStep.USAGE -> "Usage access" to "It is how NX Redux sends your kid back from apps that aren't allowed."
     KidsSetupStep.ALARMS -> "Alarms & reminders" to "It lets the warning and the lock come on time. Without it they can come a few minutes late."
@@ -44,11 +45,11 @@ internal fun kidsSetupText(s: Screen.KidsSetup): Pair<String, String> = when (s.
         "Kids Mode needs NX Redux as the home app, so Home and the lock always bring your kid back here. Android asks next; Kids Mode turns on once NX Redux is home."
 }
 
-/** A step's lines under its headline: [kidsSetupText]'s, and on setup's Apps step with none picked [KIDS_PICK_ONE_APP]. */
-internal fun kidsSetupLines(s: Screen.KidsSetup): List<String> = buildList {
-    add(kidsSetupText(s).second)
-    if (s.setup && s.step == KidsSetupStep.APPS && s.allowed.isEmpty()) add(KIDS_PICK_ONE_APP)
-}
+/** A step's fuller text behind its info icon: the Apps step's apps never to allow ([KIDS_APPS_AVOID]). */
+internal fun kidsSetupMore(s: Screen.KidsSetup): String? = if (s.step == KidsSetupStep.APPS) KIDS_APPS_AVOID else null
+
+/** A step's lines under its headline ([kidsSetupText]'s); Continue with no app picked says so in a dialog instead. */
+internal fun kidsSetupLines(s: Screen.KidsSetup): List<String> = listOf(kidsSetupText(s).second)
 
 /** [row] as the setup page draws it: an app's switch (a game says so), a day's window, or a button. */
 internal fun kidsSetupTouchRow(row: KidsSetupRow, setup: Boolean): NxSettingRow = when (row) {
@@ -90,10 +91,19 @@ internal fun KidsSetupScreen(
         KidsSetupStep.APPS, KidsSetupStep.TIMES -> 1
         else -> 2
     }
-    val hints = listOf(Hint(NxButton.B, if (s.setup) "Cancel" else "Back"), Hint(NxButton.A, "Choose"))
+    val touchRows = rows.map { kidsSetupTouchRow(it, s.setup) }
+    // X: the Continue (Done) row from anywhere in the list ([KidsScreensController.onKidsSetupButton])
+    val next = if (KidsSetupRow.Next in rows) Hint(NxButton.X, if (s.setup) "Continue" else "Done") else null
+    val more = kidsSetupMore(s) != null
+    // An app's switch says Toggle: A flips it (LEFT / RIGHT leave it alone, as on every settings page).
+    val hints = listOfNotNull(
+        Hint(NxButton.B, if (s.setup) "Cancel" else "Back"), touchRows.getOrNull(selected)?.padAHint ?: Hint(NxButton.A, "Choose"),
+        next, if (more) Hint(NxButton.Y, "Info") else null,
+    )
     SetupBlockPage(
-        if (s.setup) "Kids Mode setup" else "Kids Mode", headline, kidsSetupLines(s), rows.map { kidsSetupTouchRow(it, s.setup) }, buttons,
+        if (s.setup) "Kids Mode setup" else "Kids Mode", headline, kidsSetupLines(s), touchRows, buttons,
         selected, hints, onSelect, onRow, onHint, modifier, onSetting = onSetting,
-        lineBreaks = true,   // the Apps step's "Pick at least one app" on its own line
+        onMore = if (more) { { onHint(NxButton.Y) } } else null,   // Y's: the step's fuller text in the app's message dialog
+        pinButtons = true,   // Continue stays in view at the bottom over the menu pad too; only the list scrolls
     )
 }

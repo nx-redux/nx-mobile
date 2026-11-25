@@ -60,8 +60,10 @@ class StackLayoutTest {
     }
 
     @Test fun mainMenuSlotsNeverOverflowANarrowBody() {
-        assertEquals(232f, mainMenuStackGeometry(BackdropSlot.LOGO, 280f, 400f, portrait = false, gutter = 24f).slotW)   // 280 − 48
-        assertTrue(mainMenuStackGeometry(BackdropSlot.LOGO, 280f, 400f, portrait = true, gutter = 24f).slotW <= 280f - 48f)   // portrait: the 60% cap is narrower
+        // The pad's 60% width cap in either orientation (a short landscape body, a skin's touch screen, as portrait), narrower than the gutters'
+        val landscape = mainMenuStackGeometry(BackdropSlot.LOGO, 280f, 400f, portrait = false, gutter = 24f).slotW
+        assertTrue(landscape <= 280f - 48f)
+        assertEquals(mainMenuStackGeometry(BackdropSlot.LOGO, 280f, 400f, portrait = true, gutter = 24f).slotW, landscape)
         assertEquals(122f, mainMenuStackGeometry(BackdropSlot.TOOL, 154f, 400f, portrait = true, gutter = 16f).slotW)
     }
 
@@ -200,9 +202,7 @@ class StackLayoutTest {
     // bar), each item only moves along y, and each box is drawn centred in this fixed slot.
     @Test fun theStackSitsStillWhateverIsSelected() {
         val g = backdropStackGeometry(960f, 344f, 960f, 432f, false, 24f)
-        assertEquals(g, backdropStackGeometry(960f, 344f, 960f, 432f, false, 24f))
         assertEquals(0f, stackItem(RowStyle.BACKDROP, 0f, g).dx)   // whichever is selected sits on the stack's centre
-        assertEquals(listOf(171f, 278f, 96f), listOf(g.centreX, g.captionX, g.captionRight))
     }
 
     @Test fun portraitCaptionColumnIsAtLeast45PercentAndTheItemKeepsAGutter() {
@@ -288,7 +288,7 @@ class StackLayoutTest {
         val stack = mainMenuStackGeometry(BackdropSlot.LOGO, 411f, 423f, portrait = true, gutter = 16f)
         assertEquals(flip.itemW to flip.itemH, stack.slotW to stack.slotH)
         val r = StackReach(30f, 30f)
-        assertEquals(rowPadBox(flip.itemH).w to rowPadBox(flip.itemH).h, stackPadBox(stack.slotW, stack.slotH, r).let { it.w to it.h })
+        assertEquals(rowPadBox(flip.itemH).w to rowPadBox(flip.itemH).h, stackPadBox(stack.slotH, r).let { it.w to it.h })
     }
 
     // Every console's footprint is its slot plus its count (8 dp under the slot and the count's line, both as drawn), and

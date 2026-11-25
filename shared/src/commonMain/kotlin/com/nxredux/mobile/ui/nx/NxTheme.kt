@@ -31,17 +31,14 @@ data class NxColors(
     val listText: Color = Color(0xFFD8D8D8),
     val listTextSelected: Color = Color(0xFF000000),
     val hint: Color = Color(0xFF999999),        // header title, hint labels, dim text
-    val secondarySelected: Color = Color(0x8C000000), // a row's secondary text on the white pill (listTextSelected at 55%)
-    val accent1: Color = Color(0xFFD8D8D8),
-    val accent2: Color = Color(0xFF9B9B9B),
     // NX Redux THEME_COLOR2 (NX teal, the Teal Secondary accent), where the Secondary accent does not reach (ToolAppsScreen's unlit
     // badge); NxOptionsRow's bar (the Settings value pages, the in-game menu) draws [secondaryAccent] instead.
     val optionBar: Color = Color(SecondaryPreset.TEAL.argb),
     val success: Color = Color(0xFF82DC82),     // a good state line (unlocked): NX Redux {130,220,130}
     val warning: Color = Color(0xFFFFC850),     // an attention state line (pending): NX Redux {255,200,80}
     // Darker so they read on the accent (every accent is light, its text black).
-    val successSelected: Color = Color(0xFF237A2E),   // [success] on the white pill: darker so it reads on white
-    val warningSelected: Color = Color(0xFF9A6500),   // [warning] on the white pill
+    val successOnAccent: Color = Color(0xFF237A2E),   // [success] on the accent
+    val warningOnAccent: Color = Color(0xFF9A6500),   // [warning] on the accent
     /**
      * The one colour of every selection mark: the NxList / NxRichList pill, the tab underline and tab-focus plate, a game
      * tile's ring, Home's lit cards, ToolAppsScreen's lit tile, NxOptionsRow's label rect (as NX Redux's
@@ -62,10 +59,8 @@ data class NxColors(
     val secondaryAccent: Color = Color(SecondaryPreset.TEAL.argb),
     val onSecondaryAccent: Color = Color(0xFF000000 or SECONDARY_TEXT.toLong()),
 ) {
-    // In the body, not constructor defaults: they follow [onAccent] and cannot drift from it.
-    val onAccentMuted: Color = onAccent.copy(alpha = 0.55f)   // a row's secondary text on the accent ([secondarySelected] on white)
-    val successOnAccent: Color = successSelected   // [success] on the accent
-    val warningOnAccent: Color = warningSelected   // [warning] on the accent
+    // In the body, not a constructor default: it follows [onAccent] and cannot drift from it.
+    val onAccentMuted: Color = onAccent.copy(alpha = 0.55f)   // a row's secondary text on the accent
 
     /** Unselected tab words, the top-right icons and an unselected Grid tile's name: the [main] ink at 38%. */
     val inkDim: Color = main.copy(alpha = 0.38f)

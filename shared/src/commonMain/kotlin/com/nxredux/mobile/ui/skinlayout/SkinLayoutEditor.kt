@@ -74,7 +74,7 @@ private val HandleHit = 28.dp   // a touch this near the handle resizes rather t
 /**
  * The skin layout editor over the whole window [state] was made for: the [backdrop] (the paused game's frame) fitted
  * into the main screen, or into the window when [bare] (the game runs full-screen there), else black; the skin from
- * [picture] / [parts] as [state] places it (only its buttons at [bareAlpha] when [bare], as the overlay draws them); the
+ * [picture] / [parts] as [state] places it (only its buttons when [bare], at full opacity so each is easy to make out); the
  * no-go zone tinted; the selected group outlined with its resize handle. A tap selects a group, a drag moves it, a drag
  * from the handle resizes it. The toolbar saves ([onSave] gets the state), resets the group or all, or cancels
  * ([onClose], after "Discard changes?" when something changed). The skin's buttons do not press here.
@@ -82,7 +82,7 @@ private val HandleHit = 28.dp   // a touch this near the handle resizes rather t
 @Composable
 fun SkinLayoutEditor(
     state: SkinEditorState, picture: ImageBitmap, parts: ImageBitmap?, bare: Boolean, backdrop: ImageBitmap?, title: String,
-    onSave: (SkinEditorState) -> Unit, onClose: () -> Unit, bareAlpha: Float = 0.6f,
+    onSave: (SkinEditorState) -> Unit, onClose: () -> Unit,
 ) {
     val colors = LocalNxColors.current
     val placed = state.placed()
@@ -103,10 +103,10 @@ fun SkinLayoutEditor(
                 )
             }
         }
-        if (bare) SkinArt(remember(placed) { placed.bare() }, picture, parts, Modifier.fillMaxSize().graphicsLayer(alpha = bareAlpha))
+        if (bare) SkinArt(remember(placed) { placed.bare() }, picture, parts, Modifier.fillMaxSize().graphicsLayer())
         else SkinArt(placed, picture, parts, Modifier.fillMaxSize().graphicsLayer())
         // the touch shortcut slots draw nothing until they have an action: dummy buttons, so the row can be seen and moved
-        StripPlaceholders(placed, Modifier.fillMaxSize().graphicsLayer(alpha = if (bare) bareAlpha else 1f))
+        StripPlaceholders(placed, Modifier.fillMaxSize())
         // the edit layer: takes every touch (taps select, drags move or resize)
         Canvas(
             Modifier.fillMaxSize()

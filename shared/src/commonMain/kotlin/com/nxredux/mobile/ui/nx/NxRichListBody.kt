@@ -1,14 +1,13 @@
 package com.nxredux.mobile.ui.nx
 
+import com.nxredux.mobile.ui.SETTINGS_ROWS_FADE
+import com.nxredux.mobile.ui.LocalSettingsRowsBottom
 import com.nxredux.mobile.ui.SettingsRowsBlock
 import com.nxredux.mobile.ui.LocalSettingsBlock
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -23,17 +22,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
 /**
- * A tool page around an [NxRichList]: the grey title, the list centred below it between its up and down scroll chevrons
- * (each in a strip of the same height, as far from the list), and the hint bar. [emptyText] replaces an empty list.
- * With a [sidePane], the list takes [listFraction] of the width and the pane fills the rest, between the title and the
- * hint bar.
+ * A tool page around an [NxRichList]: the grey title, the list centred below it, fading at an edge more rows scroll in
+ * from, and the hint bar. [emptyText] replaces an empty list.
  */
 @Composable
 fun NxRichListBody(
     title: String, rows: List<NxRichRow>, selectedIndex: Int, hints: List<Hint>,
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, modifier: Modifier = Modifier, onHint: ((NxButton) -> Unit)? = null,
     emptyText: String? = null,
-    sidePane: (@Composable BoxScope.() -> Unit)? = null, listFraction: Float = 0.45f,
     onLongPress: ((Int) -> Unit)? = null,
     titleSuffix: String? = null,   // a part of the title a cut never reaches (a count), drawn after it
 ) {
@@ -54,15 +50,18 @@ fun NxRichListBody(
                 icons != null -> ({ Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) { icons() } })
                 else -> null
             }
-            SettingsRowsBlock(block, listOfNotNull(title.takeIf { it.isNotEmpty() }, titleSuffix).joinToString(" "), Modifier.weight(1f), header) {
+            SettingsRowsBlock(block, listOfNotNull(title.takeIf { it.isNotEmpty() }, titleSuffix).joinToString(" "), Modifier.weight(1f), header, listBottom = rows.isNotEmpty()) {   // no rows, no list to end with the inset: the block keeps it
                 if (rows.isNotEmpty()) BoxWithConstraints(Modifier.fillMaxWidth()) {
                     val pitch = nxOptionsRowHeight(NxListPitch, LocalNxOptionText.current)
-                    val count = nxRichRowCountFor(maxHeight, pitch)
-                    val height = maxHeight / count * minOf(rows.size, count)
+                    // Rich rows at their own pitch (1.5 plain rows), as many as there are up to the room; past it the list
+                    // scrolls, the next row peeking under the block's thin fade.
+                    val rowPitch = pitch * RICH_ROW_OF_PITCH
+                    val bottom = LocalSettingsRowsBottom.current
+                    val height = minOf(maxHeight, rowPitch * rows.size + bottom)
                     NxRichList(
                         rows, selectedIndex, onSelect, onOpen,
-                        Modifier.fillMaxWidth().height(height).nxScrollFade(listState, height = RICH_LIST_FADE, strong = true),
-                        listState = listState, onLongPress = onLongPress, labelSize = nxListLabelSize(pitch), edgeMargin = 1,
+                        Modifier.fillMaxWidth().height(height).nxScrollFade(listState, height = SETTINGS_ROWS_FADE, strong = true),
+                        listState = listState, onLongPress = onLongPress, labelSize = nxListLabelSize(pitch), edgeMargin = 1, rowPitch = rowPitch, contentBottom = bottom,
                     )
                 }
             }
@@ -75,35 +74,28 @@ fun NxRichListBody(
         val label = nxListLabelSize(pitch)
         val inset = nxListInset()
         Column(Modifier.fillMaxSize()) {
-            // The body ends at the hint bar's top edge. Under the title row the list fades where more scrolls in (no
-            // arrows), a quarter of a plain row clear above the hints, as the main menu's. The rich rows tile the slot whole
+            // The body ends at the hint bar's top edge. Under the title row the list fades where more scrolls in, a
+            // quarter of a plain row clear above the hints, as the main menu's. The rich rows tile the slot whole
             // (NxRichList sizes them to it), and [NxTitledBody] centres the block by eye between the title and the hints.
             BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
                 val n = maxOf(2, nxRowCountFor(maxHeight, pitch))
                 val bottomGap = maxHeight / n / 4
                 NxTitledBody(title, Modifier.fillMaxSize(), titleSuffix, trailing = icons) {
                     Column(Modifier.fillMaxSize()) {
-                        Row(Modifier.weight(1f).fillMaxWidth()) {
-                            Column(if (sidePane == null) Modifier.fillMaxSize() else Modifier.weight(listFraction).fillMaxHeight()) {
-                                Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                                    if (rows.isEmpty() && emptyText != null) {
-                                        Text(emptyText, color = colors.hint, fontFamily = font, fontWeight = FontWeight.SemiBold, fontSize = label, textAlign = TextAlign.Center)
-                                    } else {
-                                        // The list starts so the thumbnail's left edge sits on the title's first letter (the inset); the
-                                        // capsule keeps its padding around it, so its edge lies that padding left of the image.
-                                        NxRichList(
-                                            rows, selectedIndex, onSelect, onOpen,
-                                            Modifier.fillMaxSize().nxScrollFade(listState, height = RICH_LIST_FADE, strong = true).padding(start = inset - NxRichThumbGap),
-                                            listState = listState, onLongPress = onLongPress, labelSize = label, edgeMargin = 1,
-                                        )
-                                    }
-                                }
-                                Spacer(Modifier.height(bottomGap))
-                            }
-                            if (sidePane != null) {
-                                Box(Modifier.weight(1f - listFraction).fillMaxHeight(), contentAlignment = Alignment.Center, content = sidePane)
+                        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                            if (rows.isEmpty() && emptyText != null) {
+                                Text(emptyText, color = colors.hint, fontFamily = font, fontWeight = FontWeight.SemiBold, fontSize = label, textAlign = TextAlign.Center)
+                            } else {
+                                // The list starts so the thumbnail's left edge sits on the title's first letter (the inset); the
+                                // capsule keeps its padding around it, so its edge lies that padding left of the image.
+                                NxRichList(
+                                    rows, selectedIndex, onSelect, onOpen,
+                                    Modifier.fillMaxSize().nxScrollFade(listState, height = RICH_LIST_FADE, strong = true).padding(start = inset - NxRichThumbGap),
+                                    listState = listState, onLongPress = onLongPress, labelSize = label, edgeMargin = 1,
+                                )
                             }
                         }
+                        Spacer(Modifier.height(bottomGap))
                     }
                 }
             }
@@ -114,3 +106,6 @@ fun NxRichListBody(
 
 /** The list's edge fade: a short fixed hint that more rows are there, not rows' worth (tall art rows would leave a dark band). */
 private val RICH_LIST_FADE = 24.dp
+
+/** A rich row's height in plain rows. */
+internal const val RICH_ROW_OF_PITCH = 1.5f

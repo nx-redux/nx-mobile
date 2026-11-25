@@ -174,8 +174,8 @@ internal fun NxMenuTile(
         )
     } else Modifier
     Box(modifier.then(ringMod)) {
-        // Drained: no ring, so a game's subtle edge, over everything, keeps its rounded shape off a dark picture's ground.
-        val edge = if (drained && tile is GridTile.Game) Modifier.border(NX_DRAIN_EDGE, LocalNxColors.current.inkEdge, RoundedCornerShape(NX_TILE_CORNER.dp)) else Modifier
+        // Drained: no ring, so a picture card's subtle edge, over everything, keeps its rounded shape off a dark ground.
+        val edge = if (drained && (tile is GridTile.Game || tile is GridTile.Tool && tile.backgroundUrl != null)) Modifier.border(NX_DRAIN_EDGE, LocalNxColors.current.inkEdge, RoundedCornerShape(NX_TILE_CORNER.dp)) else Modifier
         Box(Modifier.fillMaxSize().clip(RoundedCornerShape(NX_TILE_CORNER.dp)).then(edge)) {
             TileContent(tile, lit, caption, info, logoInset, portrait, toolSize, titleSize, titleLines, homeCaption, gameFade, subtitle, statsOnly, statsSize, captionAlways, drained, heroName)
         }
@@ -208,13 +208,28 @@ private fun TileContent(
         is GridTile.Collection -> Box(Modifier.fillMaxSize().then(plate), contentAlignment = Alignment.Center) {
             TileTitle(tile.name, content, 17.sp, maxLines = 3)
         }
-        is GridTile.Tool -> Column(
+        is GridTile.Tool -> if (tile.backgroundUrl != null) {
+            val litness = nxLitness(lit)
+            Box(Modifier.fillMaxSize().background(colors.background), contentAlignment = Alignment.Center) {
+                AsyncImage(
+                    model = tile.backgroundUrl, contentDescription = null, contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize().then(if (drained) Modifier.nxDrain(litness) else Modifier),
+                )
+                ToolIcon(
+                    tile.icon, tile.appId, colors.main,
+                    Modifier.fillMaxSize(APP_ICON_SHARE).then(if (drained) Modifier.graphicsLayer { alpha = nxDimInk(litness()) } else Modifier),
+                )
+            }
+        } else Column(
             Modifier.fillMaxSize().then(plate).padding(horizontal = 8.dp),
             verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            ToolIcon(tile.icon, tile.appId, content, Modifier.size(toolSize.iconDp.dp))
-            Spacer(Modifier.height(toolSize.gapDp.dp))
-            TileText(tile.lines.joinToString("\n"), content, toolSize.nameSp.sp, maxLines = 2)
+            val iconMod = if (tile.lines.isEmpty()) Modifier.fillMaxSize(APP_ICON_SHARE) else Modifier.size(toolSize.iconDp.dp)
+            ToolIcon(tile.icon, tile.appId, content, iconMod)
+            if (tile.lines.isNotEmpty()) {
+                Spacer(Modifier.height(toolSize.gapDp.dp))
+                TileText(tile.lines.joinToString("\n"), content, toolSize.nameSp.sp, maxLines = 2)
+            }
         }
         is GridTile.Game -> GameTile(tile, lit, caption, info, titleSize, titleLines, homeCaption, gameFade, subtitle, statsOnly, statsSize, captionAlways, drained, heroName)
     }
@@ -319,7 +334,11 @@ private fun GameTile(
             }
             // No screenshot: a plain title tile, so no hole in the grid; the ring still goes round it. On Home the name
             // takes the lines the tile holds, and lit with its info line it keeps clear of it (the bottom's caption room).
-            GameTileLayer.TITLE -> if (!homeCaption) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            GameTileLayer.TITLE -> if (!homeCaption) Column(
+                Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(TILE_BADGE_GAP, Alignment.CenterVertically),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                tile.badge?.let { TileBadge(it, colors.listText, statsSize) }
                 TileTitle(tile.title, colors.listText, titleSize, maxLines = titleLines)
             } else BoxWithConstraints(Modifier.fillMaxSize().then(if (drained) Modifier.graphicsLayer { alpha = nxDimInk(litness()) } else Modifier)) {
                 // The info line's room at its size ([nxCardStatsSize], the 11 sp line's room scaled to it).
@@ -353,7 +372,7 @@ private fun GameTile(
                 // it fits); on Home the info lines are a step under the title's 13 sp, at 11 sp on 14 dp lines.
                 // Home's cards: the info at the game list Carousel card's size, under Text size.
                 // A tile's name at [HOME_TILE_NAME] (half a step under the Carousel card's name, still over its info); the hero
-                // card's a step under the card's plus [HOME_HERO_NAME_PLUS], as before.
+                // card's a step under the card's plus [HOME_HERO_NAME_PLUS].
                 val homeName = if (heroName) (NxTextSizes.secondary(nxCardTitleSize()).value + HOME_HERO_NAME_PLUS).sp else HOME_TILE_NAME * nxTextScale()
                 val statsSp = if (homeCaption) nxCardStatsSize() else INFO_SP
                 val statsLine = if (homeCaption) HOME_INFO_LINE else LINE_HEIGHT
@@ -388,7 +407,10 @@ private fun GameTile(
                             tile.title, name, homeName, maxLines = homeLines, align = TextAlign.Start,
                             balanced = homeLines > 1, lineHeight = HOME_CAPTION_LINE, shadow = if (homeLines > 1) titleShadow() else null,
                         )
-                        else TileText(tile.title, name, titleSize, maxLines = 2, align = TextAlign.Start)
+                        else {
+                            tile.badge?.let { TileBadge(it, name, statsSize, Modifier.padding(bottom = TILE_BADGE_GAP)) }
+                            TileText(tile.title, name, titleSize, maxLines = 2, align = TextAlign.Start)
+                        }
                     }
                     if (subtitle != null) TileText(subtitle, sub, statsSp, maxLines = 1, align = TextAlign.Start, lineHeight = HOME_INFO_LINE)
                     if (homeCaption) for (row in homeRows) {
@@ -440,6 +462,27 @@ internal fun titleShadow(): Shadow {
     return Shadow(Color.Black.copy(alpha = 0.9f), Offset(0f, 1f * d), 6f * d)   // role: a text shadow
 }
 
+/** Between a tile's badge and its name. */
+private val TILE_BADGE_GAP = 3.dp
+
+/**
+ * A game tile's badge ([GridTile.Game.badge]) on its own row over the name: [word] in an outlined pill in [color] at
+ * [size], on the page's ground at half strength so it reads over a picture the caption fade has not reached.
+ */
+@Composable
+private fun TileBadge(word: String, color: Color, size: TextUnit, modifier: Modifier = Modifier) {
+    val ground = LocalNxColors.current.background.copy(alpha = 0.5f)   // role: a badge's ground over a picture
+    Box(
+        modifier.background(ground, RoundedCornerShape(50)).border(1.dp, color.copy(alpha = 0.7f), RoundedCornerShape(50))   // role: the badge's outline, a little under its word
+            .padding(horizontal = 6.dp, vertical = 1.dp),
+    ) {
+        Text(
+            word, color = color, maxLines = 1, softWrap = false,
+            style = TextStyle(fontFamily = LocalNxFont.current, fontWeight = FontWeight.Medium, fontSize = size, lineHeight = size * LINE_HEIGHT),
+        )
+    }
+}
+
 @Composable
 private fun TileText(
     text: String, color: Color, size: TextUnit, maxLines: Int,
@@ -454,11 +497,10 @@ private fun TileText(
     align: TextAlign = TextAlign.Center, modifier: Modifier = Modifier, balanced: Boolean = false,
     inlineContent: Map<String, InlineTextContent> = emptyMap(), lineHeight: Float = LINE_HEIGHT, shadow: Shadow? = null,
 ) {
-    val scaled = size
     Text(
         text, modifier, color = color, maxLines = maxLines, overflow = TextOverflow.Ellipsis, inlineContent = inlineContent,
         style = TextStyle(
-            fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = scaled, lineHeight = scaled * lineHeight,
+            fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = size, lineHeight = size * lineHeight,
             textAlign = align, lineBreak = if (balanced) LineBreak.Heading else LineBreak.Unspecified, shadow = shadow,
         ),
     )
@@ -472,7 +514,7 @@ internal const val NX_DRAIN_MS = 150
  * [DRAIN_NAME_ALPHA]), and an unselected art-less tile's ink.
  */
 private const val DRAIN_PICTURE_ALPHA = 0.45f   // role: Grid Home's unselected picture
-private const val DRAIN_NAME_ALPHA = 0.6f   // role: an unselected Grid tile's name, 4.5:1 or better on its picture
+internal const val DRAIN_NAME_ALPHA = 0.6f   // role: an unselected Grid tile's name, 4.5:1 or better on its picture
 private const val DRAIN_INK_ALPHA = 0.42f   // role: Grid Home's unselected icon or name
 
 /** A drained card's edge (no ring there): wide enough to show its rounded shape on a dark picture. */
@@ -488,7 +530,7 @@ internal fun nxLitness(lit: Boolean): () -> Float {
 /**
  * A Grid Home picture at [litness]: greyscale at [DRAIN_PICTURE_ALPHA] unlit, full colour and opacity lit, eased between.
  * The picture fills its card, so the layer clips itself to the card's rounded shape: a parent's rounded clip misses a
- * child layer drawn with alpha (the corners came out square). The opacity rides on the greying's own layer
+ * child layer drawn with alpha. The opacity rides on the greying's own layer
  * ([nxSaturation]), so an unlit tile takes one GPU surface, not two.
  */
 internal fun Modifier.nxDrain(litness: () -> Float): Modifier = graphicsLayer {
@@ -529,7 +571,7 @@ private const val DRAIN_BADGE_ALPHA = 0.3f   // role: an unselected Grid Home ti
 internal fun nxDimBadge(litness: Float): Float = DRAIN_BADGE_ALPHA + (1f - DRAIN_BADGE_ALPHA) * litness
 
 /** A Grid Home tile's name at Large, under Text size: between its info line (14.4 sp) and the Carousel card's name (18 sp). */
-private val HOME_TILE_NAME = 16.sp
+internal val HOME_TILE_NAME = 16.sp
 
 /** An unselected Grid tile's lines under its name: ink at this, about 4.5:1 on its tile. */
 private const val DRAIN_SUB_ALPHA = 0.5f   // role: an unselected Grid tile's under-name lines

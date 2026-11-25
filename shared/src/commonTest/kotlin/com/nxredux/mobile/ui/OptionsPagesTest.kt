@@ -4,9 +4,7 @@ import com.nxredux.mobile.library.GameEntry
 import com.nxredux.mobile.library.SystemFolder
 import com.nxredux.mobile.options.ConsoleRow
 import com.nxredux.mobile.options.NdsOptions
-import com.nxredux.mobile.options.CoreOption
 import com.nxredux.mobile.options.EmulatorPage
-import com.nxredux.mobile.options.PadOptions
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.ui.nx.Hint
@@ -48,7 +46,7 @@ class OptionsPagesTest {
         assertTrue(artworkSettingTouchRow(ArtworkSettingRow(ArtworkSettingKind.SECTION, "Accounts")).section)
         // Hints: a switch Toggle, the allowance Back only, the rest Select; X Info when asked.
         val back = Hint(NxButton.B, "Back")
-        assertEquals(listOf(back, Hint(NxButton.LEFT, "Change"), Hint(NxButton.A, "Toggle"), Hint(NxButton.X, "Info")), artworkSettingsHints(ArtworkSettingRow(ArtworkSettingKind.REPLACE, "Replace existing art", "Off"), replace, info = true))
+        assertEquals(listOf(back, Hint(NxButton.A, "Toggle"), Hint(NxButton.X, "Info")), artworkSettingsHints(ArtworkSettingRow(ArtworkSettingKind.REPLACE, "Replace existing art", "Off"), replace, info = true))
         assertEquals(listOf(back), artworkSettingsHints(ArtworkSettingRow(ArtworkSettingKind.TGDB_LEFT, "TheGamesDB", "9 left this month"), null, info = false))
         assertEquals(listOf(back, Hint(NxButton.A, "Select")), artworkSettingsHints(ArtworkSettingRow(ArtworkSettingKind.SS_LOGIN, "ScreenScraper login"), null, info = false))
     }
@@ -58,7 +56,7 @@ class OptionsPagesTest {
         assertEquals(NxRowKind.PILL, listRowKind(Screen.Systems(emptyList())))
         assertEquals(NxRowKind.PILL, listRowKind(Screen.EmulatorList(emptyList())))
         assertEquals(NxRowKind.PILL, listRowKind(Screen.EmulatorConsoles("gpsp", "gpSP", listOf("GBA"))))
-        assertEquals(NxRowKind.PILL, listRowKind(Screen.RetroAchievements()))
+        assertEquals(NxRowKind.PILL, listRowKind(Screen.RetroAchievements))
     }
 
     @Test fun emulatorListShowsEachHandheldTagOnce() {
@@ -73,9 +71,8 @@ class OptionsPagesTest {
 
     @Test fun settingsNavigationPagesUseTheListRows() {
         // Every row opens a page or runs an action: list rows at the list size, as the RetroAchievements page.
-        for (section in listOf(SettingsSection.EMULATORS)) {
-            assertEquals(NxRowKind.PILL, listRowKind(Screen.Settings(section, emptyList())), section.name)
-        }
+        val section = SettingsSection.EMULATORS
+        assertEquals(NxRowKind.PILL, listRowKind(Screen.Settings(section, emptyList())), section.name)
     }
 
     @Test fun settingsArrowsOnlyWhereLeftRightChangeTheValue() {
@@ -109,27 +106,14 @@ class OptionsPagesTest {
         assertTrue(raSettingsTouchRow(RaSettingsRow(RaSettingKind.GAP, "")).spacer)
         // Hints: a picker Choose, an action Select, a group label Back only; X Info when asked.
         val back = Hint(NxButton.B, "Back")
-        assertEquals(listOf(back, Hint(NxButton.LEFT, "Change"), Hint(NxButton.A, "Choose")), raSettingsHints(RaSettingsRow(RaSettingKind.NOTIFICATION_SECONDS, "Notification duration", "3 s", choices = seconds), duration))
+        assertEquals(listOf(back, Hint(NxButton.A, "Choose")), raSettingsHints(RaSettingsRow(RaSettingKind.NOTIFICATION_SECONDS, "Notification duration", "3 s", choices = seconds), duration))
         assertEquals(listOf(back, Hint(NxButton.A, "Select"), Hint(NxButton.X, "Info")), raSettingsHints(RaSettingsRow(RaSettingKind.RESET_ACCOUNT, "Reset account data"), null, info = true))
         assertEquals(listOf(back), raSettingsHints(RaSettingsRow(RaSettingKind.SECTION, "Account")))
-    }
-
-    @Test fun emulatorValueRowsCycle() {
-        val layout = ConsoleRow(PadOptions.all.first { it.key == PadOptions.LAYOUT }, PadOptions.AUTO)
-        val opt = CoreOption("opt_a", "x", label = "Option A", values = listOf("x", "y"), defaultValue = "x")
-        assertTrue(emulatorNxRow(EmulatorRow.Console(layout)).cycleable)
-        assertTrue(emulatorNxRow(EmulatorRow.Core(opt, inCategory = false)).cycleable)
-        assertFalse(emulatorNxRow(EmulatorRow.Category("video", "Video")).cycleable)
-        assertFalse(emulatorNxRow(EmulatorRow.Header("Console settings")).cycleable)
     }
 
     @Test fun aDisabledConsoleRowShowsItsNoteAndStaysSelectable() {
         val mode = ConsoleRow(NdsOptions.resolutionRows(null).first { it.key == NdsOptions.MODE_3D }, "auto", NdsOptions.SOFTWARE_NOTE)
         val row = EmulatorRow.Console(mode)
-        val nx = emulatorNxRow(row)
-        assertEquals(NdsOptions.SOFTWARE_NOTE, nx.secondary)
-        assertFalse(nx.enabled)
-        assertFalse(nx.cycleable)
         val touch = emulatorTouchRow(row)
         assertEquals(NdsOptions.SOFTWARE_NOTE, touch.info)
         assertFalse(touch.enabled)

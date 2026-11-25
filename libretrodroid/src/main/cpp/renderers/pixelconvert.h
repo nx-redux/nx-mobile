@@ -24,18 +24,14 @@
 
 namespace libretrodroid {
 
-// Software frames the GL formats can't take as they are, converted into a scratch buffer: the core's frame is const
-// (a core may keep it and hand it back as a duplicate frame, which an in-place conversion would convert twice). Both
-// read width x height pixels from rows pitch bytes apart and write them packed (row stride = width pixels), resizing
-// out as needed (it keeps its capacity across frames). They return out.data().
+// A software frame the GL formats can't take as it is, converted into a scratch buffer: the core's frame is const
+// (a core may keep it and hand it back as a duplicate frame, which an in-place conversion would convert twice). Reads
+// width x height pixels from rows pitch bytes apart and writes them packed (row stride = width pixels), resizing
+// out as needed (it keeps its capacity across frames). Returns out.data().
 
 // 0RGB1555 to RGB565: red and blue keep their 5 bits, green's 5 bits move up one (its low bit 0).
 const uint16_t* convert0RGB1555ToRGB565(
     const void* data, unsigned width, unsigned height, size_t pitch, std::vector<uint16_t>& out);
-
-// XRGB8888 (B, G, R, X bytes in memory on little-endian) to R, G, B, X bytes for GL_RGBA.
-const uint32_t* convertXRGB8888ToRGBA(
-    const void* data, unsigned width, unsigned height, size_t pitch, std::vector<uint32_t>& out);
 
 }
 

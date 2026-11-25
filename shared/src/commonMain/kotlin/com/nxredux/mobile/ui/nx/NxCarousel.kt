@@ -70,6 +70,7 @@ fun NxCarousel(
     tiles: List<GridTile>, selectedIndex: () -> Int,
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, onLongPress: ((Int) -> Unit)?,
     captionTitle: () -> String?, captionInfo: () -> List<InfoLine>,
+    captionBadge: () -> String? = { null },   // a pill after the caption's name (the game's badge, [com.nxredux.mobile.library.GameEntry.badge])
     modifier: Modifier = Modifier,
     layoutKey: Any? = null,
     titleRoom: Dp = 0.dp,
@@ -96,7 +97,7 @@ fun NxCarousel(
         // A game list's selected title follows Appearance → Text size (the room below follows it too).
         val nameSize = if (gameList) nxCardTitleSize() else CAROUSEL_TITLE_SP
         val nameStyle = TextStyle(fontFamily = font, fontWeight = FontWeight.SemiBold, fontSize = nameSize, textAlign = TextAlign.Center)
-        // A game list's details at 80% of its name, as the vertical stack's lines ([NxCarouselStack]'s infoShare).
+        // A game list's details at 80% of its name, as the vertical stack's lines ([StackCaption]).
         val infoStyle = TextStyle(fontFamily = font, fontSize = if (gameList) nameSize * STACK_INFO_SHARE else 14.sp, textAlign = TextAlign.Center)
         val room = rememberCaptionRoom(CAPTION_GAP, nameStyle, infoStyle, infoRows = if (gameList) 0 else CAROUSEL_INFO_ROWS).takeIf { cardInfo == null } ?: 0f
         // One size in both orientations, shrunk only so the tile and the caption room fit the body's height (the shown
@@ -106,11 +107,11 @@ fun NxCarousel(
         // show no details ([gameDetails] false), for the name alone. Where the box leaves that room already, nothing changes.
         val need = if (gameList) rememberCaptionNeed(nameStyle, infoStyle, gameDetails) else null
         val (g, top, capped) = carouselRowPlace(
-            maxHeight.value, titleRoom.value, room, portraitW = maxWidth.value.takeIf { portrait },   // portrait: the neighbours show
+            maxHeight.value, titleRoom.value, room, bodyW = maxWidth.value,   // held to a share of the width: the neighbours show
             maxItemH = need?.let { carouselItemHMax(maxHeight.value, it) },
         )
         // Capped, the tile and its caption keep the breathing room the cap reserved over and under them
-        // ([carouselMargins]); uncapped, today's margins, the tile placed as before.
+        // ([carouselMargins]).
         val margins = carouselMargins(maxHeight.value, g.itemH, need ?: 0f, capped)
         val captionMax = carouselCaptionMax(maxHeight.value, g.itemH, margins)
         if (g.itemW <= 1f || g.itemH <= 1f || tiles.isEmpty()) return@BoxWithConstraints
@@ -150,24 +151,21 @@ fun NxCarousel(
         val bandH = nbTop + g.itemH - bandTop
 
         val hasLongPress = onLongPress != null
-        // A game list's lines split by kind ([carouselGameLines]): the card's stats, the caption's details.
-        val stats = if (gameList) remember(captionInfo) { { carouselGameLines(captionInfo()).picture } } else null
-        val details = if (gameList) remember(captionInfo) { { carouselGameLines(captionInfo()).underTitle } } else captionInfo
         val logoInset = remember(g) { rowLogoInset(g) }
         val toolSize = carouselToolSize(g)
 
         // The window spans the target too, and the selection is lit while [lit] says so.
         NxRow(count, selectedIndex, pos, g, bandTop, bandH, onSelect, onOpen, onLongPress, litSelection = lit) { i, isLit, at, taps ->
-            CarouselItem(tiles[i], i, isLit, at, g, nbTop, bandTop, selTop, logoInset, toolSize, portrait, taps, hasLongPress, badge(i), cardInfo, stats, drained)
+            CarouselItem(tiles[i], i, isLit, at, g, nbTop, bandTop, selTop, logoInset, toolSize, portrait, taps, hasLongPress, badge(i), cardInfo, stats = null, drained)
         }
 
-        // A game list's details under the name as the stack's lines (a row each, [STACK_CAPTION_GAP] apart), only the
-        // whole rows that fit under the tile at its highest ([carouselCaptionMax]): the caption never reaches the bottom row.
+        // The selected item's name and info under the card (following Layouts → Game info: details or achievements),
+        // capped on game lists so the caption never reaches the bottom row.
         if (cardInfo == null) RowCaption(
-            captionTitle, details, glide, nameStyle, 2, infoStyle, inset, avail, availPx, spare,
+            captionTitle, captionInfo, glide, nameStyle, 2, infoStyle, inset, avail, availPx, spare,
             selTop, g.itemH + CAPTION_GAP, colors.accent,   // the selected game's name in the accent, as Home's cards
-            stackRows = gameList, rowGap = if (gameList) STACK_CAPTION_GAP else 0.dp,
-            maxDrawn = if (gameList) captionMax else Float.POSITIVE_INFINITY,
+            stackRows = false, rowGap = if (gameList) STACK_CAPTION_GAP else 0.dp,
+            maxDrawn = if (gameList) captionMax else Float.POSITIVE_INFINITY, captionBadge = captionBadge,
         )
     }
 }
@@ -206,8 +204,9 @@ private fun BoxScope.CarouselItem(
         )
         badge?.let { HomeBadge(it, portrait, Modifier.align(Alignment.TopStart), lit = lit || !drained) }
         // The neighbour's black layer, on the tile's own rounded shape (the ring outside stays bright). Drained, the
-        // greyscale dims the neighbours already.
-        if (!drained) Box(
+        // greyscale dims picture neighbours (games and abstract-art tools) already; plain tiles still take the dim layer.
+        val hasArt = tile is GridTile.Game || tile is GridTile.Tool && tile.backgroundUrl != null
+        if (!drained || !hasArt) Box(
             Modifier.fillMaxSize().clip(RoundedCornerShape(NX_TILE_CORNER.dp))
                 .graphicsLayer { alpha = rowItem(RowStyle.CAROUSEL, i - at(), g).dim }
                 .background(colors.background),
@@ -241,7 +240,7 @@ internal fun carouselGameLines(lines: List<InfoLine>): CarouselGameLines {
 
 /**
  * Whether a game list Carousel card keeps its shade and stats block: lit, only with stats to show ([picture], read only
- * then); an unlit card draws neither whatever this says, so it keeps its layers as before.
+ * then); an unlit card draws neither whatever this says.
  */
 internal fun carouselCardShaded(lit: Boolean, picture: () -> List<InfoLine>): Boolean = !lit || picture().isNotEmpty()
 
@@ -266,11 +265,11 @@ internal const val CAROUSEL_BOTTOM_BREATH = 12f
 internal const val CAPTION_NEED_SLACK = 1f
 
 /**
- * A game list Carousel's [CaptionMargins] in a box [areaDp] tall with tiles [itemH] tall. Uncapped (![capped]), today's:
+ * A game list Carousel's [CaptionMargins] in a box [areaDp] tall with tiles [itemH] tall. Uncapped (![capped]):
  * the ring's room at the top (or the neighbours' top if that is higher) and [CAPTION_SPARE_MARGIN] at the bottom.
  * Capped ([carouselItemHMax] reserved it), [CAROUSEL_TOP_BREATH] and [CAROUSEL_BOTTOM_BREATH]; at the
  * [CAROUSEL_MIN_HEIGHT_SHARE] floor, where the box is short of that room once the caption's [needDp] is under the tile,
- * the breathing room gives way first, both margins back towards today's in step, before [captionRowsWithin] cuts a row.
+ * the breathing room gives way first, both margins back towards the uncapped ones in step, before [captionRowsWithin] cuts a row.
  */
 internal fun carouselMargins(areaDp: Float, itemH: Float, needDp: Float, capped: Boolean): CaptionMargins {
     val tight = CaptionMargins(min(GRID_RING_ROOM, rowNeighbourTop(areaDp, itemH)), CAPTION_SPARE_MARGIN)
@@ -357,14 +356,16 @@ private fun rememberCaptionNeed(name: TextStyle, info: TextStyle, details: Boole
 @Composable
 internal fun rememberCaptionHeights(
     title: String?, name: TextStyle, nameLines: Int, fitted: List<CaptionInfoRow>, info: TextStyle, availPx: Int,
+    badged: BadgedTitle? = null,   // the name as drawn with its badge ([rememberBadgedTitle]): measured with the pill
 ): Pair<Float, List<Float>> {
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
-    return remember(title, name, nameLines, fitted, info, availPx, density) {
+    return remember(title, name, nameLines, fitted, info, availPx, density, badged) {
         if (title == null) return@remember 0f to emptyList()
         val c = Constraints(maxWidth = availPx.coerceAtLeast(0))
         with(density) {
-            val nameH = measurer.measure(title, name, TextOverflow.Ellipsis, maxLines = nameLines, constraints = c).size.height.toDp().value
+            val nameH = (if (badged != null) measurer.measure(badged.text, name, TextOverflow.Ellipsis, maxLines = nameLines, placeholders = badged.placeholders, constraints = c)
+                else measurer.measure(title, name, TextOverflow.Ellipsis, maxLines = nameLines, constraints = c)).size.height.toDp().value
             nameH to fitted.map { row ->
                 val text = row.lines.joinToString(INFO_SEPARATOR) { it.text }
                 measurer.measure(text, info, TextOverflow.Ellipsis, maxLines = row.maxLines, constraints = c).size.height.toDp().value

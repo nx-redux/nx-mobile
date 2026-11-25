@@ -41,6 +41,7 @@ import com.nxredux.mobile.ui.nx.NxBadge
 import com.nxredux.mobile.ui.nx.NxCountPill
 import com.nxredux.mobile.ui.nx.NxTextSizes
 import com.nxredux.mobile.ui.nx.nxListLabelSize
+import com.nxredux.mobile.ui.nx.nxPageInset
 import com.nxredux.mobile.ui.nx.nxScrollFade
 import com.nxredux.mobile.ui.nx.nxTextScale
 
@@ -54,16 +55,18 @@ internal fun raProfileUnlockLine(u: RaProfileUnlock, time: (Long) -> String): St
 /**
  * The player's summary beside the RetroAchievements page on a split window ([RaPageWithProfile]): three sums, the
  * latest unlocks and the games nearest to mastery. To read, not to move through: the pad stays on the page's words.
+ * [start]: from the pane's left edge (beside the page: a gap from its words; its own page: the page inset, as its title).
  */
 @Composable
-internal fun RaProfilePane(p: RaProfile, modifier: Modifier = Modifier, top: Dp = 28.dp) {
+internal fun RaProfilePane(p: RaProfile, modifier: Modifier = Modifier, top: Dp = 28.dp, start: Dp = 20.dp) {
     val colors = LocalNxColors.current
     val label = NxTextSizes.secondary(nxListLabelSize()) * nxTextScale()
     val small = NxTextSizes.secondary(label)
     val scroll = rememberScrollState()
     Column(
         modifier.fillMaxSize().nxScrollFade(scroll, height = 40.dp, strong = true).verticalScroll(scroll)
-            .padding(start = 20.dp, end = settingsPlateEnd(), top = top, bottom = 28.dp),
+            // the content edge on the right, as the words on the left (not a highlight's, a list inset further out)
+            .padding(start = start, end = nxPageInset().end, top = top, bottom = 28.dp),
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ProfileSum(groupThousands(p.achievements), if (p.achievements == 1) "Achievement" else "Achievements", colors.listText, label, small, Modifier.weight(1f))
@@ -104,7 +107,7 @@ internal fun RaProfileScreen(state: AppState, onHint: ((NxButton) -> Unit)? = nu
         NxPageTitle(toolPageTitleHead(Screen.RaProfile, split).orEmpty())
         Box(Modifier.weight(1f).fillMaxWidth()) {
             val p = profile
-            if (p != null) RaProfilePane(p, top = 8.dp)
+            if (p != null) RaProfilePane(p, top = 8.dp, start = if (split) 20.dp else nxPageInset().start)
             else Box(Modifier.fillMaxSize().padding(horizontal = 28.dp), contentAlignment = Alignment.Center) {
                 ProfileText(if (state.settings.raToken == null) "Sign in under Settings to see your profile." else "Reading your achievements…", colors.hint, NxTextSizes.secondary(nxListLabelSize()) * nxTextScale())
             }

@@ -50,12 +50,6 @@ val ListSource.base: ListSource get() = (this as? ListSource.Filtered)?.parent ?
 val ListSource.searchable: Boolean get() = base != ListSource.Hidden && base !is ListSource.Search && base != ListSource.AllGames
 
 /**
- * A game list's title row: the list's own name ([title]: "ColecoVision", "RPGs", "Recently Played"), not led by the tab
- * it was opened from.
- */
-fun listTitle(source: ListSource): String = source.title
-
-/**
  * A game with the system it launches under: mixed lists (recents, collections, hidden, a merged console) need it per row.
  * [label]: the row's text when it differs from the game's shown name (a name shared across a merged console's tags).
  */
@@ -77,8 +71,10 @@ sealed interface MainRow {
         override var shot: String? = null; private set
         constructor(entry: Listed, shot: String?) : this(entry) { this.shot = shot }
     }
-    /** Home on the large face: a game on a discovery shelf ([HomeShelf]); A launches it, as a pin. */
-    /** A shelf's game; [tag] its own badge (Most played: its play time), else the shelf's reason where it has one ([homeShelfBadge]). */
+    /**
+     * Home on the large face: a game on a discovery shelf ([HomeShelf]); A launches it, as a pin. [tag]: its own badge
+     * (Most played: its play time), else the shelf's reason where it has one ([homeShelfBadge]).
+     */
     data class Shelf(val entry: Listed, val shelf: HomeShelf, val tag: String? = null) : MainRow, HomeShot {
         override var shot: String? = null; private set
         constructor(entry: Listed, shelf: HomeShelf, tag: String?, shot: String?) : this(entry, shelf, tag) { this.shot = shot }

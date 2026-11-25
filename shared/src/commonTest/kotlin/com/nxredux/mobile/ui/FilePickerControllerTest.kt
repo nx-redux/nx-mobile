@@ -92,10 +92,10 @@ class FilePickerControllerTest {
 
     @Test fun folders_sort_case_insensitively_before_the_action_rows_and_dot_entries_hide() = runTest {
         val h = harness()
-        h.open(FilePickMode.ImportFolder)   // a pick the storage root still offers "Use this folder" for
+        h.open(FilePickMode.ImportFolder)   // a pick the storage root still offers the action for
         h.choose("Internal storage")
         assertEquals("Internal storage", h.page.title)
-        assertEquals(listOf("..", "Alpha", "beta", "NXRedux", "B.ZIP", "notes.txt", "saves.zip", "Use this folder", "New folder"), h.labels)
+        assertEquals(listOf("..", "Alpha", "beta", "NXRedux", "B.ZIP", "notes.txt", "saves.zip", "Use Internal storage", "New folder"), h.labels)
         assertEquals(ListSelection(1, 9), h.selection.value)   // the first folder, not "..", whose A would leave
     }
 
@@ -111,7 +111,7 @@ class FilePickerControllerTest {
         assertEquals(other, homeFolderStatus(listOf(LocalEntry("Tetris.gb", false))))
     }
 
-    // The home picker shows the folder it is in (the one "Use this folder" picks); other pickers show nothing.
+    // The home picker shows the folder it is in (the one the action picks); other pickers show nothing.
     @Test fun the_home_picker_shows_the_current_folders_status() = runTest {
         val h = harness()
         h.open(FilePickMode.Home)
@@ -147,7 +147,7 @@ class FilePickerControllerTest {
             open(FilePickMode.ImportFolder, home)
             assertEquals("$root/NXRedux", page.dir)
             assertEquals("Internal storage/NXRedux", page.title)
-            assertEquals(listOf("..", "Roms", "Use this folder", "New folder"), labels)
+            assertEquals(listOf("..", "Roms", "Use NXRedux", "New folder"), labels)
         }
         harness().apply { open(FilePickMode.Export("x.zip"), home); assertEquals("$root/NXRedux", page.dir) }
         harness().apply { open(FilePickMode.Home, FileRefs.of(root)); assertNull(page.dir) }   // a volume-root home has no parent on a volume
@@ -168,7 +168,7 @@ class FilePickerControllerTest {
         assertEquals(listOf<ContentRef?>(null), h.results)
     }
 
-    // ".." (below the action row) goes up as B does: to the parent on the folder it came from, then to the volumes.
+    // ".." goes up as B does: to the parent on the folder it came from, then to the volumes.
     @Test fun the_up_row_goes_up_like_b() = runTest {
         val h = harness()
         h.open(FilePickMode.ImportFolder, FileRefs.of("$root/NXRedux"))
@@ -200,7 +200,7 @@ class FilePickerControllerTest {
         val last = h.labels.indexOf("NXRedux")
         h.selection.value = h.selection.value.copy(index = last)
         h.press(NxButton.DOWN)
-        assertEquals(h.labels.indexOf("New folder"), h.selection.value.index)   // past the files to the actions (the storage root: no Use this folder)
+        assertEquals(h.labels.indexOf("New folder"), h.selection.value.index)   // past the files to the actions (the storage root: no Use action)
         h.press(NxButton.UP)
         assertEquals(last, h.selection.value.index)                       // and back over them
     }
@@ -220,11 +220,39 @@ class FilePickerControllerTest {
         assertEquals(beta, h.selection.value.index)
     }
 
+    // The two actions sit side by side: LEFT / RIGHT move between them and leave them for the entries at either end;
+    // UP / DOWN take them as one line (UP to the entry above, DOWN wrapping to the top).
+    @Test fun the_side_by_side_actions_are_one_line_for_the_pad() = runTest {
+        val h = harness()
+        h.open(FilePickMode.Extra)
+        h.choose("Internal storage"); h.choose("Alpha")
+        val use = h.labels.indexOf("Use Alpha")
+        val create = h.labels.indexOf("New folder")
+        val empty = h.labels.indexOf("Nothing here")
+        h.selection.value = h.selection.value.copy(index = empty)
+        h.press(NxButton.RIGHT)
+        assertEquals(use, h.selection.value.index)          // into the actions, on the first
+        h.press(NxButton.RIGHT)
+        assertEquals(create, h.selection.value.index)       // to the one beside it
+        h.press(NxButton.LEFT)
+        assertEquals(use, h.selection.value.index)          // and back
+        h.press(NxButton.LEFT)
+        assertEquals(empty, h.selection.value.index)        // past the first: back to the entry it left
+        h.press(NxButton.RIGHT); h.press(NxButton.RIGHT); h.press(NxButton.RIGHT)
+        assertEquals(empty, h.selection.value.index)        // past the last: back to the entries too
+        h.selection.value = h.selection.value.copy(index = create)
+        h.press(NxButton.UP)
+        assertEquals(empty, h.selection.value.index)        // UP from either action: the entry above them
+        h.selection.value = h.selection.value.copy(index = use)
+        h.press(NxButton.DOWN)
+        assertEquals(0, h.selection.value.index)            // DOWN from either action wraps to the top
+    }
+
     @Test fun an_empty_or_unreadable_folder_shows_nothing_here_above_the_action_rows() = runTest {
         val h = harness()
         h.open(FilePickMode.Extra)
         h.choose("Internal storage"); h.choose("Alpha")
-        assertEquals(listOf("..", "Nothing here", "Use this folder", "New folder"), h.labels)
+        assertEquals(listOf("..", "Nothing here", "Use Alpha", "New folder"), h.labels)
         h.choose("Nothing here")
         assertTrue(h.results.isEmpty())
         assertEquals("$root/Alpha", h.page.dir)
@@ -292,27 +320,27 @@ class FilePickerControllerTest {
         h.open(FilePickMode.Home)
         h.choose("Internal storage")
         assertEquals(INTERNAL_ROOT_STATUS, h.page.status)
-        assertFalse("Use this folder" in h.labels)                          // no pick there, only its folders
-        h.press(NxButton.B); h.choose("SD card"); h.choose("Use this folder")
+        assertFalse(h.labels.any { it.startsWith("Use ") })                          // no pick there, only its folders
+        h.press(NxButton.B); h.choose("SD card"); h.choose("Use SD card")
         assertEquals(listOf<ContentRef?>(FileRefs.of("/storage/1234-ABCD")), h.results)
         val e = harness()                                                    // an extra folder alike
         e.open(FilePickMode.Extra)
         e.choose("Internal storage")
-        assertFalse("Use this folder" in e.labels)
+        assertFalse(e.labels.any { it.startsWith("Use ") })
         e.choose("Alpha")
-        assertTrue("Use this folder" in e.labels)
+        assertTrue("Use Alpha" in e.labels)
     }
 
     @Test fun the_home_pick_refuses_a_folder_that_takes_no_writes() = runTest {
         val h = harness()
         h.files.unwritable += "$root/NXRedux"
         h.open(FilePickMode.Home)
-        h.choose("Internal storage"); h.choose("NXRedux"); h.choose("Use this folder")
+        h.choose("Internal storage"); h.choose("NXRedux"); h.choose("Use NXRedux")
         assertEquals("That folder can't be written to. Pick a folder on your phone's storage or SD card.", h.error.value)
         assertTrue(h.results.isEmpty())
         assertEquals("$root/NXRedux", h.page.dir)
         h.error.value = null
-        h.press(NxButton.B); h.choose("Alpha"); h.choose("Use this folder")
+        h.press(NxButton.B); h.choose("Alpha"); h.choose("Use Alpha")
         assertEquals(listOf<ContentRef?>(FileRefs.of("$root/Alpha")), h.results)
         assertSame(h.origin, h.screen.value)
     }
@@ -322,7 +350,7 @@ class FilePickerControllerTest {
             val h = harness()
             h.open(mode); h.choose("SD card"); h.choose("Games")
             assertEquals("SD card/Games", h.page.title)
-            h.choose("Use this folder")
+            h.choose("Use Games")
             assertEquals(listOf<ContentRef?>(FileRefs.of("/storage/1234-ABCD/Games")), h.results)
         }
     }
@@ -330,24 +358,23 @@ class FilePickerControllerTest {
     @Test fun export_asks_before_replacing_a_file_of_that_name() = runTest {
         val h = harness()
         h.open(FilePickMode.Export("SAVES.zip"))
-        h.choose("Internal storage"); h.choose("Save here")
+        h.choose("Internal storage"); h.choose("Save in Internal storage")
         assertEquals("$root/SAVES.zip", h.page.replace)                       // saves.zip is there in another case
         h.press(NxButton.B)
         assertNull(h.page.replace)
         assertTrue(h.results.isEmpty())
-        h.choose("Save here"); h.press(NxButton.A)                            // Replace
+        h.choose("Save in Internal storage"); h.press(NxButton.A)                            // Replace
         assertEquals(listOf<ContentRef?>(FileRefs.of("$root/SAVES.zip")), h.results)
         val fresh = harness()
         fresh.open(FilePickMode.Export("SAVES.zip"))
-        fresh.choose("Internal storage"); fresh.choose("Alpha"); fresh.choose("Save here")
+        fresh.choose("Internal storage"); fresh.choose("Alpha"); fresh.choose("Save in Alpha")
         assertEquals(listOf<ContentRef?>(FileRefs.of("$root/Alpha/SAVES.zip")), fresh.results)   // nothing to replace: no question
     }
 
-    // Folders and volumes open like folders: they carry the folder icon; the action, a zip and the empty line do not.
-    // An action is a word, no icon; folders and storages carry the folder icon, ".." the up arrow.
+    // Folders and storages carry the folder icon, ".." the up arrow, a file its own; an action is a word, no icon.
     @Test fun folder_and_volume_rows_carry_the_folder_icon() {
         val rows = pickerListRows(listOf(
-            PickerRow.Action("Use this folder"), PickerRow.NewFolder, PickerRow.Up, PickerRow.Volume(internal), PickerRow.Folder("Roms"), PickerRow.Zip("a.zip"),
+            PickerRow.Action("Use Roms"), PickerRow.NewFolder, PickerRow.Up, PickerRow.Volume(internal), PickerRow.Folder("Roms"), PickerRow.Zip("a.zip"),
             PickerRow.File("a.gba"), PickerRow.Empty,
         ))
         assertEquals(
@@ -365,17 +392,38 @@ class FilePickerControllerTest {
         fun a(label: String) = filePickerHints(h.page, h.labels.indexOf(label)).first { it.button == NxButton.A }.label
         assertEquals("Open", a("Roms"))
         assertEquals("Open", a(".."))
-        assertEquals("Use folder", a("Use this folder"))
+        assertEquals("Use folder", a("Use NXRedux"))
         assertEquals("Create", a("New folder"))
         val e = harness()
         e.open(FilePickMode.Export("x.zip"))
         e.choose("Internal storage")
-        assertEquals("Save", filePickerHints(e.page, e.labels.indexOf("Save here")).first { it.button == NxButton.A }.label)
+        assertEquals("Save", filePickerHints(e.page, e.labels.indexOf("Save in Internal storage")).first { it.button == NxButton.A }.label)
     }
 
-    // The action rows stay pinned above the list (a gap between): Use this folder and New folder, none in Import a zip.
+    // The action names the folder it takes (the one shown, not the highlighted entry); a storage's root by the storage's name.
+    @Test fun the_action_names_the_folder_shown() = runTest {
+        val h = harness()
+        h.open(FilePickMode.ImportFolder)
+        h.choose("SD card")
+        assertTrue("Use SD card" in h.labels)
+        h.choose("Games")
+        assertEquals(listOf("..", "Nothing here", "Use Games", "New folder"), h.labels)
+        val e = harness()
+        e.open(FilePickMode.Export("x.zip"))
+        e.choose("Internal storage"); e.choose("NXRedux")
+        assertTrue("Save in NXRedux" in e.labels)
+    }
+
+    // The label carries the whole name: a long one is cut where it is drawn, by the room the row has.
+    @Test fun the_action_label_keeps_the_whole_folder_name() {
+        assertEquals("Use Retro Games Big Collection", pickActionLabel(FilePickMode.Extra, "Retro Games Big Collection"))
+        assertEquals("Save in Retro Games Big Collection", pickActionLabel(FilePickMode.Export("x.zip"), "Retro Games Big Collection"))
+        assertNull(pickActionLabel(FilePickMode.ImportZip, "Games"))
+    }
+
+    // The action rows stay pinned under the list: Use <folder> and New folder, none in Import a zip.
     @Test fun the_action_rows_are_pinned() {
-        assertEquals(2, pickerPinnedRows(listOf(PickerRow.Up, PickerRow.Folder("A"), PickerRow.Action("Use this folder"), PickerRow.NewFolder)))
+        assertEquals(2, pickerPinnedRows(listOf(PickerRow.Up, PickerRow.Folder("A"), PickerRow.Action("Use Roms"), PickerRow.NewFolder)))
         assertEquals(0, pickerPinnedRows(listOf(PickerRow.Up, PickerRow.Folder("A"), PickerRow.Zip("a.zip"))))
         assertEquals(0, pickerPinnedRows(listOf(PickerRow.Volume(internal))))
     }

@@ -3,7 +3,7 @@ package com.nxredux.mobile.settings
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-/** Appearance → Pad theme: the pad skins only (the drawn Charcoal / Retro / Black themes are gone). */
+/** Appearance → Pad theme: the pad skins only. */
 class PadThemeTest {
     @Test fun nxCarbonIsTheDefaultThemeAndFirst() {
         assertEquals(PadTheme.NX_CARBON, PadTheme.DEFAULT)

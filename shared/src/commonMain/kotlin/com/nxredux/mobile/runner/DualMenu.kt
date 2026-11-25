@@ -8,9 +8,14 @@ enum class MenuHost { PICTURE, PANEL }
 /**
  * Where the open menu was put: on the second display or here ([onSecond]), in the panel or over the picture
  * ([inPanel]), and the second display's window then ([secondWindow], compared by identity): a window made again while
- * the menu is open has nothing on it yet, so the same flags on a new window are a new placement.
+ * the menu is open has nothing on it yet, so the same flags on a new window are a new placement. On a skin's two-screen
+ * board, its bottom screen's glass the menu sits in ([bottomGlass]) and its top one under the pause cover ([topGlass]):
+ * a skin laid out again (a turn, a fold) moves them, or takes the board away.
  */
-data class MenuPlacement(val onSecond: Boolean, val inPanel: Boolean, val secondWindow: Any?)
+data class MenuPlacement(
+    val onSecond: Boolean, val inPanel: Boolean, val secondWindow: Any?,
+    val bottomGlass: PxRect? = null, val topGlass: PxRect? = null,
+)
 
 /**
  * The in-game menu on dual screen. The bottom screen is where you act and the top one only informs: with the panel on

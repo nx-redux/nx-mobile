@@ -5,7 +5,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-/** Nintendo 3DS on Azahar: a real path, the GL renderer by default, the user dir kept under the save dir, no BIOS. */
+/** Nintendo 3DS on Azahar: loaded through the VFS, the GL renderer by default, the user dir kept under the save dir, no BIOS. */
 class CoreRegistry3dsTest {
     private val n3ds get() = CoreRegistry.forTag("3DS")!!
 

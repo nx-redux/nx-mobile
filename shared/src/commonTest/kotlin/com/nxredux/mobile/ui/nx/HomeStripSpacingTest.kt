@@ -13,7 +13,7 @@ class HomeStripSpacingTest {
     // stopping at the card's full size.
     @Test fun carouselRowsAreOneCentredGroup() {
         val above = 6f
-        val max = homeCarouselMaxH(400f, portrait = true)
+        val max = homeCarouselMaxH(400f)
         val p = homeCarouselPlace(bodyH = 700f, above = above, stripInkH = 30f, dockH = 42f, maxBoxH = max)
         val itemH = max - GRID_RING_ROOM - NX_TILE_RING
         val cardTop = p.boxTop + rowSelectedTop(p.boxH, itemH, 0f, 0f)
@@ -46,11 +46,11 @@ class HomeStripSpacingTest {
         near(p.boxTop + above, 400f - (p.dockTop + 60f), "as much room above the group as below")
     }
 
-    // The box's full size follows the card: the 300 dp cap's height, smaller in portrait on a narrow body (60% wide).
+    // The box's full size follows the card: the 300 dp cap's height, smaller on a narrow body (60% wide).
     @Test fun theBoxFollowsTheCardsSize() {
         val ring = GRID_RING_ROOM + NX_TILE_RING
-        near(300f * 240f / 340f + ring, homeCarouselMaxH(1200f, portrait = false))
-        near(0.6f * 360f * 240f / 340f + ring, homeCarouselMaxH(360f, portrait = true))
+        near(300f * 240f / 340f + ring, homeCarouselMaxH(1200f))
+        near(0.6f * 360f * 240f / 340f + ring, homeCarouselMaxH(360f))
     }
 
     @Test fun listStripCentresBetweenTheUnderlineAndTheFirstPill() {

@@ -16,13 +16,15 @@ data class LooseFile(
     val tag: String?,
     val lookupFolder: ContentRef = folder,
     val lookupDir: String = relativeDir,
+    /** A pill by its name ([IndexedGame.badge]), or null. */
+    val badge: String? = null,
 )
 
 /**
  * Walks an extra tree and resolves every candidate file with [Resolution]. Hidden names, `.media` and files a sibling disc
  * sheet loads are skipped. A subfolder `D/` holding `D.m3u` (else `D.cue`, else `D.gdi`, any case; see
  * [DiscSheet.folderSheet]) that a core runs is NX Redux's disc folder: one game, its sheet, with art and name from the
- * folder around it; nothing else in `D/` is listed.
+ * folder around it; nothing else in `D/` is listed. An MSU pack's folder ([MsuSets.folderRom]) is one game the same way.
  */
 class LooseResolver internal constructor(
     private val source: RomsSource,
@@ -33,8 +35,6 @@ class LooseResolver internal constructor(
     /** The sheet and zip head reads, reused across scans while a file is unchanged ([HeadReads]). */
     private val heads: HeadReads = HeadReads(source, emptyList()),
 ) {
-    constructor(source: RomsSource, sidecars: Sidecars, defaultTag: (Console) -> String) : this(source, ScanReads(source, sidecars, null), defaultTag)
-
     /** [skipTop]: lowercase names of folders at [tree]'s root that are not walked (a home's `Roms`, `Bios` ...). */
     suspend fun scan(tree: ContentRef, sourceId: String, skipTop: Set<String> = emptySet()): List<LooseFile> {
         val out = ArrayList<LooseFile>()
@@ -50,15 +50,17 @@ class LooseResolver internal constructor(
         val sidecar = reads.sidecars.read(sourceId, relativeDir, children)
         val folder = Resolution.FolderHints.of(ancestors, defaultTag)
         // A bin/cue or m3u set shows once, as its sheet.
-        val hidden = DiscSheet.hiddenNamed(children.filter { !it.isDirectory && !Names.isHidden(it.name) }, heads::sheetNames)
+        val files = children.filter { !it.isDirectory && !Names.isHidden(it.name) }
+        val hidden = DiscSheet.hiddenNamed(files, heads::sheetNames) + MsuSets.hiddenSheets(files)
+        val sets = MsuSets.Folder(files.map { it.name })
         for (c in children) {
             if (Names.isHidden(c.name)) continue
             if (c.isDirectory) {
                 if (c.name.lowercase() in skip) continue   // only the root's: deeper walks get none
                 val childDir = if (relativeDir.isEmpty()) c.name else "$relativeDir/${c.name}"
                 val childAncestors = listOf(c.name) + ancestors
-                val disc = discFolder(c, reads.list(c.ref), sourceId, childDir, childAncestors, dir, relativeDir)
-                if (disc != null) out += disc else walk(c.ref, sourceId, childDir, childAncestors, out)
+                val game = gameFolder(c, reads.list(c.ref), sourceId, childDir, childAncestors, dir, relativeDir)
+                if (game != null) out += game else walk(c.ref, sourceId, childDir, childAncestors, out)
                 continue
             }
             if (c.name.lowercase() in hidden) continue
@@ -70,7 +72,7 @@ class LooseResolver internal constructor(
             val tag = Resolution.resolve(c.name, sidecar[c.name], folder, defaultTag) { heads.zipEntry(c) }
                 ?: probed(c, children)
             if (tag == null && !candidate) continue
-            out += LooseFile(c, dir, relativeDir, tag)
+            out += LooseFile(c, dir, relativeDir, tag, badge = sets.kind(c.name))
         }
     }
 
@@ -82,17 +84,21 @@ class LooseResolver internal constructor(
     }
 
     /**
-     * [dir] (listed as [children]) as a disc folder: its [DiscSheet.folderSheet] resolved as a file in [dir] would
-     * be, listed from [dir] with [parent]'s lookups. Null when it holds neither sheet or nothing runs it, so it is walked as
-     * any folder.
+     * [dir] (listed as [children]) as one game: an MSU pack (its only ROM with its set beside it, [MsuSets.folderRom],
+     * checked first: a pack's cue would read as a sheet), else a disc folder (its [DiscSheet.folderSheet]). The file is
+     * resolved as a file in [dir] would be and listed from [dir] with [parent]'s lookups. Null when it is neither or
+     * nothing runs it, so it is walked as any folder.
      */
-    private suspend fun discFolder(
+    private suspend fun gameFolder(
         dir: Entry, children: List<Entry>, sourceId: String, relativeDir: String, ancestors: List<String>, parent: ContentRef, parentDir: String,
     ): LooseFile? {
-        val sheet = DiscSheet.folderSheet(dir.name, children) ?: return null
+        val pack = MsuSets.folderRom(children)
+        val file = pack ?: DiscSheet.folderSheet(dir.name, children) ?: return null
         val sidecar = reads.sidecars.read(sourceId, relativeDir, children)
-        val tag = Resolution.resolve(sheet.name, sidecar[sheet.name], ancestors, null, defaultTag) ?: probed(sheet, children) ?: return null
-        return LooseFile(sheet, dir.ref, relativeDir, tag, lookupFolder = parent, lookupDir = parentDir)
+        val tag = Resolution.resolve(file.name, sidecar[file.name], ancestors, null, defaultTag)
+            ?: (if (pack == null) probed(file, children) else null) ?: return null
+        val badge = pack?.let { MsuSets.Folder(children.map { c -> c.name }).kind(it.name) }
+        return LooseFile(file, dir.ref, relativeDir, tag, lookupFolder = parent, lookupDir = parentDir, badge = badge)
     }
 }
 

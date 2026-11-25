@@ -7,11 +7,18 @@ import com.nxredux.mobile.ui.nx.NxButton
 internal data class SettingText(val line: String, val detail: String = "")
 
 /** A compact row: no line, [text] (or a fuller [detail]) behind the info icon only. */
-private fun quiet(text: String, detail: String = "") = SettingText("", detail.ifEmpty { text })
+internal fun quiet(text: String, detail: String = "") = SettingText("", detail.ifEmpty { text })
+
+/**
+ * What Appearance's Reset to defaults puts back: the pad's settings only while their rows show ([padShown]; a controller
+ * hides them, and a reset leaves them alone). The reset row carries it as its note.
+ */
+internal fun appearanceResetScope(padShown: Boolean): String =
+    if (padShown) "Pad theme, Pad buttons, Accent, Secondary accent, Text size and Button layout" else "Accent, Secondary accent and Text size"
 
 /** Reset to defaults' line on each page that has one, and the fuller text behind its info icon. */
-private fun resetText(section: SettingsSection?): SettingText = when (section) {
-    SettingsSection.APPEARANCE -> SettingText("Resets every setting on this page", "Put Pad theme, Pad buttons, Accent, Secondary accent, Text size and Button layout back")
+private fun resetText(section: SettingsSection?, scope: String?): SettingText = when (section) {
+    SettingsSection.APPEARANCE -> SettingText("Resets every setting on this page", "Put ${scope ?: appearanceResetScope(true)} back")
     SettingsSection.MAIN_MENU -> SettingText("Resets every setting on this page", "Put every Layouts group and Extra info back to their defaults")
     SettingsSection.CONTROLS -> SettingText("Resets every setting on this page", "Put Pad vibration and Game rumble back to their defaults")
     SettingsSection.SHORTCUTS -> SettingText("Sets every shortcut to None", "Unbind every action and take both touch buttons off the pad")
@@ -43,6 +50,19 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
             "after 10 minutes the screens turn off on your phone's screen timeout. Press anything or touch a screen to bring " +
             "them back.",
     )
+    SettingsKind.SAVE_ON_QUIT -> quiet(
+        "Keep your place when you leave a game",
+        "Saves a hidden save state when you quit or leave a game, so it carries on where you left off. Turn it off and " +
+            "games start fresh: Quit just quits, and the Game Switcher, Continue and the shelf start games from the " +
+            "beginning. Your in-game saves and save slots are kept either way.",
+    )
+    SettingsKind.A_RESUMES -> quiet(
+        "Pressing A on a game continues from its save",
+        "Pressing A on a game with a save state continues from it. Turn it off and A starts games fresh; MENU → Resume " +
+            "still continues from the save.",
+    )
+    SettingsKind.GPU_DRIVER -> SettingText("Replaces the phone's Vulkan driver in games set to Vulkan", GPU_DRIVER_INFO)
+    SettingsKind.GPU_DRIVER_ADD -> SettingText("Install a driver from a zip file")
     SettingsKind.DEFAULT_TAG -> SettingText("")   // a single-emulator console says nothing: its emulator name is all there is
     // Library's Saves row, then the Saves page.
     SettingsKind.SAVES -> quiet("Save file formats, and export or import your saves")
@@ -63,6 +83,7 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
     )
     SettingsKind.EXPORT_SAVES -> quiet("Write one zip of your saves, states and slot pictures")
     SettingsKind.IMPORT_SAVES -> quiet("Copy saves in from a folder, a zip file or RetroArch")
+    SettingsKind.IMPORT_BIOS -> quiet("Copy BIOS in from a folder, files or a zip. You can also put them in Bios/ yourself.")
     // Second screen.
     SettingsKind.SECOND_SCREEN_ENABLE -> SettingText(
         "Off leaves it free for another app",
@@ -104,7 +125,7 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
             "tab names and the hint bar. Small is three quarters of Large, with more rows per screen. The text also " +
             "follows Android's own font size setting.",
     )
-    SettingsKind.RESET_DEFAULTS -> resetText(section)
+    SettingsKind.RESET_DEFAULTS -> resetText(section, row.note)
     // Layouts' group rows: no text on the row (their pages' rows say what each group holds).
     SettingsKind.LAYOUT_HOME, SettingsKind.LAYOUT_GAMES_TAB, SettingsKind.LAYOUT_CONSOLES, SettingsKind.LAYOUT_COLLECTIONS, SettingsKind.LAYOUT_TOOLS,
     SettingsKind.LAYOUT_GAME_LISTS, SettingsKind.LAYOUT_TITLE_HINTS, SettingsKind.LAYOUT_SWITCHER -> SettingText("")
@@ -159,8 +180,8 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
             "header and the Game Switcher's box.",
     )
     SettingsKind.LAYOUT_OPTIONS -> SettingText(
-        "The Layout icon in game list titles",
-        "The Layout icon opens a dropdown of every game list layout; picking one sets the game lists' rows here. Hidden, " +
+        "The Layout icon on menu tabs and game lists",
+        "The Layout icon opens a dropdown of every layout for the current tab or game list; picking one updates Settings → Layouts. Hidden, " +
             "change the layout here instead.",
     )
     SettingsKind.ACHIEVEMENTS_PANEL -> SettingText(
@@ -209,6 +230,11 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
         "Regular 3DS or New 3DS buttons",
         "Regular 3DS and New 3DS buttons each have their own layout. New 3DS adds ZL, ZR and the C-stick; a game uses it " +
             "when its New 3DS Controls setting turns them on.",
+    )
+    SettingsKind.BUTTON_LAYOUT_SEGA_PAD -> quiet(
+        "6-button or 3-button pad",
+        "The 6-button and 3-button pads each have their own layout. A game gets the one its Controller Type setting " +
+            "picks; on Auto, the one the game asks for.",
     )
     SettingsKind.BUTTON_LAYOUT_ORIENTATION -> quiet("Edit the buttons for this orientation")
     SettingsKind.BUTTON_LAYOUT_RESET -> SettingText("Resets this console's buttons", "Put the chosen console's buttons back where the skin puts them")
@@ -263,6 +289,13 @@ internal fun settingsInfo(row: SettingsRow, section: SettingsSection? = null): S
         "How many frames a button press waits in a Cable Link over Wi-Fi session, the same on both phones. Auto starts " +
             "at 2 and rises when the network stalls; a number holds it there, for trying a game at a fixed delay. It " +
             "applies from the next session.",
+    )
+    SettingsKind.GAME_BADGE -> quiet(
+        "The word shown by this game's name",
+        "The word shown by this game's name in the lists. Auto takes it from the file name: (Hack) or [h1] shows Hack, " +
+            "(Translated) or [T+Eng] Translated, (Proto) Proto, (Beta) Beta, (Demo) or (Sample) Demo, (Homebrew) or (PD) " +
+            "Homebrew, and a game with its MSU set beside it shows MSU-1 or MSU-MD. None shows no word; any other choice " +
+            "shows that word whatever the file name says.",
     )
     SettingsKind.CABLE_LINK_DELAY_OVERLAY -> quiet("Show the current input delay in a Cable Link over Wi-Fi session")
     SettingsKind.DEBUG_LOG -> quiet(

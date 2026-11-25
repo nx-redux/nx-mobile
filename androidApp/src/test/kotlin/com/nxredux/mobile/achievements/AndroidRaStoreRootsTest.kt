@@ -29,6 +29,22 @@ class AndroidRaStoreRootsTest {
         assertTrue(runCatching { store.writeAtomic("${RaPaths.ACCOUNT}/../../shared/x", byteArrayOf(1)) }.exceptionOrNull() is RaStoreException)
     }
 
+    @Test fun anUnreadableFolderIsAReadFailureAndAnAbsentOneEmpty() = runBlocking {
+        val private = tmp.newFolder("sd")
+        val home = tmp.newFolder("home")
+        val store = AndroidRaStore({ private }, { home })
+        assertEquals(emptyList<String>(), store.list(RaPaths.GAMES))
+
+        store.writeAtomic("${RaPaths.GAMES}/0123456789abcdef0123456789abcdef/sets.json", byteArrayOf(1))
+        val games = File(home, "${RaPaths.ROOT}/${RaPaths.GAMES}")
+        assertTrue(games.setReadable(false))
+        try {
+            assertTrue(runCatching { store.list(RaPaths.GAMES) }.exceptionOrNull() is RaStoreException)
+        } finally {
+            games.setReadable(true)
+        }
+    }
+
     @Test fun sharedPathsFollowTheHome() = runBlocking {
         val private = tmp.newFolder("sd")
         val first = tmp.newFolder("first")

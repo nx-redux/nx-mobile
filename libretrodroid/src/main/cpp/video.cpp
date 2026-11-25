@@ -34,7 +34,6 @@
 #include "renderers/es3/ahbrenderer.h"
 #include <unistd.h>
 #include "renderers/es3/imagerendereres3.h"
-#include "renderers/es2/imagerendereres2.h"
 
 namespace libretrodroid {
 
@@ -177,13 +176,8 @@ Video::ShaderChainEntry Video::createShaderChainEntry(const ShaderManager::Pass&
 }
 
 void Video::setPresetChain(std::optional<PresetChain> chain) {
-    if (!presetSupported) {
-        if (chain) LOGW("Preset chains need OpenGL ES 3");
-        return;
-    }
     requestedPreset = std::move(chain);
     presetDirty = true;
-    isDirty = true;
 }
 
 void Video::setPresetParameter(const std::string& id, float value) {
@@ -191,7 +185,6 @@ void Video::setPresetParameter(const std::string& id, float value) {
     if (requestedPreset) requestedPreset->params[id] = value;
     if (presetRenderer) presetRenderer->setParameter(id, value);
     if (secondaryPresetRenderer) secondaryPresetRenderer->setParameter(id, value);
-    isDirty = true;
 }
 
 std::optional<std::string> Video::takePresetError() {
@@ -208,7 +201,7 @@ void Video::updatePresetRenderer() {
     secondaryPresetFailed = false;
     if (!requestedPreset) return;
     try {
-        presetRenderer = std::make_unique<PresetChainRenderer>(*requestedPreset);
+        presetRenderer = makeChainRenderer(*requestedPreset);
         presetRenderer->setPreserveTextureBindings(hasCoreGlState());
     } catch (const std::exception& e) {
         LOGE("Preset chain failed: %s", e.what());
@@ -296,30 +289,139 @@ private:
 };
 
 unsigned Video::sampledTextureUnits() const {
-    // The built-in shaders and immersive mode sample units 0 and 1.
+    // The built-in chain samples units 0 and 1.
     unsigned units = 2;
-    // The chain is (re)built inside this draw, after the guard; it will sample what PresetChainRenderer::textureUnits
-    // counts (one LUT texture per lut, one output per pass). A held picture keeps it pending and the current chains
-    // alive (the second surface still draws with them), so both count.
-    if (presetDirty && requestedPreset) {
-        units = std::max(units, 2 + (unsigned) requestedPreset->luts.size() + (unsigned) requestedPreset->passes.size());
-    }
+    // The chain is (re)built inside this draw, after the guard; it will sample what chainTextureUnits counts. A held
+    // picture keeps it pending and the current chains alive (the second surface still draws with them), so both count.
+    if (presetDirty && requestedPreset) units = std::max(units, chainTextureUnits(*requestedPreset));
     // The second surface's chain, when not built yet, is built from the main one's preset: the same units.
     if (presetRenderer) units = std::max(units, presetRenderer->textureUnits());
     if (secondaryPresetRenderer) units = std::max(units, secondaryPresetRenderer->textureUnits());
     return units;
 }
 
-void Video::renderFrame(bool force) {
-    // Same for the paused redraw.
+void Video::renderFrame() {
     CoreGlStateGuard guard(hasCoreGlState(), sampledTextureUnits());
-    drawFrame(force);
+    drawFrame();
+    if (pendingFrameRead) {
+        const auto r = *pendingFrameRead;
+        pendingFrameRead.reset();
+        frameReadResult = readFrame(r.left, r.top, r.right, r.bottom, r.width, r.height);
+    }
 }
 
-void Video::drawFrame(bool force) {
-    if (skipDuplicateFrames && !isDirty && !force) return;
-    isDirty = false;
+void Video::readFrameAfterDraw(float srcLeft, float srcTop, float srcRight, float srcBottom, unsigned width, unsigned height) {
+    frameReadResult.reset();
+    pendingFrameRead = FrameReadRequest { srcLeft, srcTop, srcRight, srcBottom, width, height };
+}
 
+std::optional<std::vector<uint8_t>> Video::takeFrameRead() {
+    auto result = std::move(frameReadResult);
+    frameReadResult.reset();
+    return result;
+}
+
+std::vector<uint8_t> Video::readFrame(float srcLeft, float srcTop, float srcRight, float srcBottom, unsigned width,
+                                      unsigned height) {
+    // A newer read replaces one still waiting for its draw.
+    pendingFrameRead.reset();
+    const auto texture = (GLuint) renderer->getTexture();
+    const auto [storageW, storageH] = renderer->getTextureSize();
+    const auto [frameW, frameH] = renderer->lastFrameSize;
+    if (texture == 0 || storageW <= 0 || storageH <= 0 || frameW <= 0 || frameH <= 0 || width == 0 || height == 0) return {};
+    if (srcRight <= srcLeft || srcBottom <= srcTop) return {};
+
+    CoreGlStateGuard guard(hasCoreGlState(), 1);
+    // A GL core may leave a pixel pack buffer bound (glReadPixels would write into it) or its own pack layout.
+    GLint packBuffer = 0, rowLength = 0, skipRows = 0, skipPixels = 0, alignment = 4;
+    glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING, &packBuffer);
+    glGetIntegerv(GL_PACK_ROW_LENGTH, &rowLength);
+    glGetIntegerv(GL_PACK_SKIP_ROWS, &skipRows);
+    glGetIntegerv(GL_PACK_SKIP_PIXELS, &skipPixels);
+    glGetIntegerv(GL_PACK_ALIGNMENT, &alignment);
+
+    GLuint target = 0, framebuffer = 0;
+    glGenTextures(1, &target);
+    glBindTexture(GL_TEXTURE_2D, target);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, (GLsizei) width, (GLsizei) height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glGenFramebuffers(1, &framebuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, target, 0);
+
+    std::vector<uint8_t> pixels;
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE) {
+        // The frame sits in the bottom-left lastFrameSize texels of its storage; a GL core's rows run bottom up.
+        const float scaleX = std::min(1.0F, (float) frameW / (float) storageW);
+        const float scaleY = std::min(1.0F, (float) frameH / (float) storageH);
+        const bool bottomLeft = videoLayout.isBottomLeftOrigin();
+        auto texV = [&](float y) { return (bottomLeft ? 1.0F - y : y) * scaleY; };
+        const float u0 = srcLeft * scaleX, u1 = srcRight * scaleX, vTop = texV(srcTop), vBottom = texV(srcBottom);
+        // The picture's top row at clip y -1: glReadPixels starts at the bottom row, so the rows come out top first.
+        const std::array<float, 12> vertices = { -1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1 };
+        const std::array<float, 12> coordinates = { u0, vTop, u1, vTop, u0, vBottom, u0, vBottom, u1, vTop, u1, vBottom };
+
+        // Shrunk: bilinear; enlarged: sharp bilinear, even pixels at a fractional scale; same size: texel for texel.
+        const float texelsW = (srcRight - srcLeft) * (float) frameW;
+        const float texelsH = (srcBottom - srcTop) * (float) frameH;
+        const bool shrinks = texelsW > (float) width + 0.5F || texelsH > (float) height + 0.5F;
+        const bool grows = !shrinks && ((float) width > texelsW + 0.5F || (float) height > texelsH + 0.5F);
+        const auto& s = grows ? ensurePlainSharpShader() : ensurePlainShader();
+
+        glDisable(GL_DEPTH_TEST);
+        glViewport(0, 0, (GLsizei) width, (GLsizei) height);
+        glClearColor(0.0F, 0.0F, 0.0F, 1.0F);
+        glClear(GL_COLOR_BUFFER_BIT);
+        // Alpha stays the clear's 1: a frame's padding byte (XRGB8888) is no transparency.
+        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_FALSE);
+        glUseProgram(s.gProgram);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, texture);
+        const GLint filter = shrinks || grows ? GL_LINEAR : GL_NEAREST;
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
+        glUniform1i(s.gTextureHandle, 0);
+        glUniform2f(s.gTextureSizeHandle, (float) storageW, (float) storageH);
+        glUniform1f(s.gScreenDensityHandle, std::min((float) width / texelsW, (float) height / texelsH));
+        glVertexAttribPointer(s.gvPositionHandle, 2, GL_FLOAT, GL_FALSE, 0, vertices.data());
+        glEnableVertexAttribArray(s.gvPositionHandle);
+        glVertexAttribPointer(s.gvCoordinateHandle, 2, GL_FLOAT, GL_FALSE, 0, coordinates.data());
+        glEnableVertexAttribArray(s.gvCoordinateHandle);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+        glDisableVertexAttribArray(s.gvPositionHandle);
+        glDisableVertexAttribArray(s.gvCoordinateHandle);
+        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+        glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+        glPixelStorei(GL_PACK_SKIP_ROWS, 0);
+        glPixelStorei(GL_PACK_SKIP_PIXELS, 0);
+        glPixelStorei(GL_PACK_ALIGNMENT, 4);
+        pixels.resize((size_t) width * height * 4);
+        // Only this read's own error counts, not one a core left unread.
+        for (int i = 0; i < 16 && glGetError() != GL_NO_ERROR; ++i) {}
+        glReadPixels(0, 0, (GLsizei) width, (GLsizei) height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+        if (glGetError() != GL_NO_ERROR) pixels.clear();
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, (GLuint) packBuffer);
+        glPixelStorei(GL_PACK_ROW_LENGTH, rowLength);
+        glPixelStorei(GL_PACK_SKIP_ROWS, skipRows);
+        glPixelStorei(GL_PACK_SKIP_PIXELS, skipPixels);
+        glPixelStorei(GL_PACK_ALIGNMENT, alignment);
+    } else {
+        LOGE("Frame read: framebuffer %d x %d incomplete", width, height);
+    }
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glUseProgram(0);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glDeleteFramebuffers(1, &framebuffer);
+    glDeleteTextures(1, &target);
+    glViewport(0, 0, videoLayout.getScreenWidth(), videoLayout.getScreenHeight());
+    // The frame texture's filter was set here: the next draw sets its own again.
+    frameFilter.invalidate();
+    return pixels;
+}
+
+void Video::drawFrame() {
     glDisable(GL_DEPTH_TEST);
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -329,37 +431,28 @@ void Video::drawFrame(bool force) {
     // Composed even while held: the second display draws the composed frame with main covered.
     composeFrame();
 
-    // Not placed yet: black, as the surface was, rather than the picture somewhere it is about to leave.
-    if (pictureHeld) return;
-
-    // Immersive mode's blurred background samples the whole texture, not the frame's sub-rectangle (frameCoordinates).
-    if (immersiveModeEnabled) {
-        immersiveMode.renderBackground(
-            videoLayout.getScreenWidth(),
-            videoLayout.getScreenHeight(),
-            videoLayout.getBackgroundVertices(),
-            videoLayout.getRelativeForegroundBounds(),
-            videoLayout.getFramebufferVertices().data(),
-            frameTexture()
-        );
-    }
-
+    // Built even while held: the second display draws with these programs, and a shader picked from the menu must
+    // reach it while main stays covered.
     updateProgram();
     updatePresetRenderer();
+
+    // Not placed yet: black, as the surface was, rather than the picture somewhere it is about to leave.
+    if (pictureHeld) return;
     // Set per draw, not only when a renderer (re)creates its texture: a paused frame and a GL core's
     // framebuffer keep their texture, and a sharpness change must still show on them.
     // Bind on unit 0: a GL core may leave another unit active with its own texture bound, and it caches
     // those bindings. Unit 0 is rebound and cleared by the pass loop below anyway.
     GLint filter = linearTexture ? GL_LINEAR : GL_NEAREST;
     frameFilter.invalidate();
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, frameTexture());
-    applyFrameFilter(filter);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    setFrameFilter(filter);
 
+    drawPicture();
+    frameCount++;
+}
+
+void Video::drawPicture() {
     if (!videoLayout.getRegionQuads().empty()) {
         renderRegions(videoLayout, presetRenderer.get(), mainCrops);
-        frameCount++;
         return;
     }
 
@@ -368,7 +461,14 @@ void Video::drawFrame(bool force) {
         quadScratch.clear();
         appendComposition(whole, quadScratch);
         renderQuads(quadScratch, videoLayout, presetRenderer.get(), mainCrops);
-        frameCount++;
+        return;
+    }
+
+    // A picture drawn above native size (setShaderSourceScale) goes the regions' way, which shrinks it for the preset.
+    if (presetRenderer && sourceScale() > 1) {
+        quadScratch.clear();
+        quadScratch.push_back(RegionQuad{ videoLayout.getForegroundVertices(), videoLayout.getTextureCoordinates(), true, 1.0F, 1.0F, 1.0F });
+        renderQuads(quadScratch, videoLayout, presetRenderer.get(), mainCrops);
         return;
     }
 
@@ -378,17 +478,15 @@ void Video::drawFrame(bool force) {
             (unsigned) getTextureWidth(), (unsigned) getTextureHeight(),
             frameCoordinates(videoLayout.getTextureCoordinates()), videoLayout.getForegroundVertices(),
             videoLayout.getFramebufferVertices(), videoLayout.getScreenWidth(), videoLayout.getScreenHeight(),
-            linearTexture, frameCount);
-        frameCount++;
+            linearTexture, frameCount, videoLayout.isBottomLeftOrigin(), 0);
         return;
     }
 
     drawBuiltInChain(videoLayout.getForegroundVertices(), frameCoordinates(videoLayout.getTextureCoordinates()),
                      videoLayout.getScreenWidth(), videoLayout.getScreenHeight());
-    frameCount++;
 }
 
-void Video::renderRegions(VideoLayout& layout, PresetChainRenderer* preset, std::vector<RegionCrop>& crops) {
+void Video::renderRegions(VideoLayout& layout, ChainRenderer* preset, std::vector<RegionCrop>& crops) {
     quadScratch.clear();
     for (const auto& quad : layout.getRegionQuads()) {
         if (quad.shaded && preset && composing() && quad.srcWidth > 0.999F && quad.srcHeight > 0.999F) {
@@ -440,7 +538,7 @@ void Video::appendComposition(const RegionQuad& whole, std::vector<RegionQuad>& 
     }
 }
 
-void Video::renderQuads(const std::vector<RegionQuad>& quads, VideoLayout& layout, PresetChainRenderer* preset,
+void Video::renderQuads(const std::vector<RegionQuad>& quads, VideoLayout& layout, ChainRenderer* preset,
                         std::vector<RegionCrop>& crops) {
     auto screenW = (unsigned) layout.getScreenWidth();
     auto screenH = (unsigned) layout.getScreenHeight();
@@ -452,14 +550,21 @@ void Video::renderQuads(const std::vector<RegionQuad>& quads, VideoLayout& layou
         if (!quad.shaded) {
             drawPlain(quad, screenW, screenH);
         } else if (preset) {
-            // One chain serves every shaded region in turn: it keeps no frame history. A region that is part of the
-            // frame (one DS / 3DS screen) is copied into its own texture first: presets place their effect from
+            // One chain serves every shaded region in turn, each under its own slot (a slang chain keeps every
+            // region's past frames apart). A region that is part of the frame (one DS / 3DS screen) is copied into its
+            // own texture first: presets place their effect from
             // texture coordinate 0 (crt-geom's curvature, a mask's edges) and later passes sample Original whole, so
             // each screen gets the effect as if it were the frame.
             auto frameW = (unsigned) std::lround(quad.srcWidth * (float) texW);
             auto frameH = (unsigned) std::lround(quad.srcHeight * (float) texH);
+            const auto scale = (unsigned) sourceScale();
+            const bool shrink = scale > 1 && frameW >= scale && frameH >= scale;
+            if (shrink) {
+                frameW = (unsigned) std::lround((float) frameW / (float) scale);
+                frameH = (unsigned) std::lround((float) frameH / (float) scale);
+            }
             auto coordinates = frameCoordinates(quad.coordinates);
-            if (frameW > 0 && frameH > 0 && (quad.srcWidth < 0.999F || quad.srcHeight < 0.999F)) {
+            if (frameW > 0 && frameH > 0 && (shrink || quad.srcWidth < 0.999F || quad.srcHeight < 0.999F)) {
                 GLuint cropped = cropRegion(crops[index], coordinates, frameW, frameH);
                 const auto [u0, u1, v0, v1] = uvBounds(coordinates);
                 for (size_t i = 0; i < coordinates.size(); i += 2) {
@@ -467,28 +572,31 @@ void Video::renderQuads(const std::vector<RegionQuad>& quads, VideoLayout& layou
                     coordinates[i + 1] = v1 > v0 ? (coordinates[i + 1] - v0) / (v1 - v0) : 0.0F;
                 }
                 preset->render(cropped, frameW, frameH, frameW, frameH, coordinates, quad.vertices,
-                               layout.getFramebufferVertices(), (int) screenW, (int) screenH, linearTexture, frameCount);
+                               layout.getFramebufferVertices(), (int) screenW, (int) screenH, linearTexture, frameCount,
+                               videoLayout.isBottomLeftOrigin(), (unsigned) index);
             } else {
                 preset->render(
                     frameTexture(), (unsigned) getTextureStorageWidth(), (unsigned) getTextureStorageHeight(),
                     frameW, frameH, coordinates, quad.vertices, layout.getFramebufferVertices(),
-                    (int) screenW, (int) screenH, linearTexture, frameCount);
+                    (int) screenW, (int) screenH, linearTexture, frameCount,
+                    videoLayout.isBottomLeftOrigin(), (unsigned) index);
                 frameFilter.invalidate();   // its first pass sets the filter of the texture it samples
             }
         } else {
-            // Built-in shaders: single-pass ones (the app only uses SHADER_DEFAULT) draw each region exactly; the
+            // Built-in shaders: single-pass ones (all the app uses) draw each region exactly; the
             // multi-pass upscalers are not region-aware.
             // A downscaled region samples linearly whatever the sharpness; put back after, as drawPlain does.
             bool down = regionDownscales(quad, (float) texW, (float) texH, (float) screenW, (float) screenH);
             GLint filter = (linearTexture || down) ? GL_LINEAR : GL_NEAREST;
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, frameTexture());
-            applyFrameFilter(filter);
-            glBindTexture(GL_TEXTURE_2D, 0);
+            setFrameFilter(filter);
             drawBuiltInChain(quad.vertices, frameCoordinates(quad.coordinates), screenW, screenH);
         }
     }
     GLint filter = linearTexture ? GL_LINEAR : GL_NEAREST;
+    setFrameFilter(filter);
+}
+
+void Video::setFrameFilter(GLint filter) {
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, frameTexture());
     applyFrameFilter(filter);
@@ -585,7 +693,10 @@ GLuint Video::cropRegion(RegionCrop& crop, const std::array<float, 12>& coordina
     glUseProgram(s.gProgram);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, frameTexture());
-    applyFrameFilter(GL_NEAREST);
+    // Shrunk to native (setShaderSourceScale): linear, so at 2x each native pixel is the mean of its four.
+    const float srcW = (u1 - u0) * (float) getTextureStorageWidth();
+    const float srcH = (v1 - v0) * (float) getTextureStorageHeight();
+    applyFrameFilter(srcW > (float) width + 0.5F || srcH > (float) height + 0.5F ? GL_LINEAR : GL_NEAREST);
     glUniform1i(s.gTextureHandle, 0);
     glUniform2f(s.gTextureSizeHandle, (float) getTextureStorageWidth(), (float) getTextureStorageHeight());
     glUniform1f(s.gScreenDensityHandle, 1.0F);
@@ -620,8 +731,19 @@ const Video::ShaderChainEntry& Video::ensurePlainShader() {
     return *plainShader;
 }
 
+const Video::ShaderChainEntry& Video::ensurePlainSharpShader() {
+    if (!plainSharpShader) {
+        auto chain = ShaderManager::getShader({ ShaderManager::Type::SHADER_SHARP, { } });
+        plainSharpShader = createShaderChainEntry(chain.passes.front());
+    }
+    return *plainSharpShader;
+}
+
 void Video::drawPlain(const RegionQuad& quad, unsigned screenWidth, unsigned screenHeight) {
-    const auto& s = ensurePlainShader();
+    bool down = regionDownscales(quad, getTextureWidth(), getTextureHeight(), (float) screenWidth, (float) screenHeight);
+    // Upscaled while the view's shader is Sharp: sharp bilinear too, so a fractional scale draws even pixels.
+    bool sharp = !down && loadedShaderType.has_value() && loadedShaderType->type == ShaderManager::Type::SHADER_SHARP;
+    const auto& s = sharp ? ensurePlainSharpShader() : ensurePlainShader();
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glViewport(0, 0, (GLsizei) screenWidth, (GLsizei) screenHeight);
@@ -633,12 +755,11 @@ void Video::drawPlain(const RegionQuad& quad, unsigned screenWidth, unsigned scr
     glVertexAttribPointer(s.gvCoordinateHandle, 2, GL_FLOAT, GL_FALSE, 0, coordinates.data());
     glEnableVertexAttribArray(s.gvCoordinateHandle);
 
-    // The unshaded (inset) screen samples nearest, or linearly when it is downscaled; the sharpness the other regions
-    // use is put back afterwards.
+    // The unshaded screen samples nearest, or linearly when it is downscaled or drawn sharp bilinear; the sharpness
+    // the other regions use is put back afterwards.
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, frameTexture());
-    GLint plainFilter = regionDownscales(quad, getTextureWidth(), getTextureHeight(),
-                                         (float) screenWidth, (float) screenHeight) ? GL_LINEAR : GL_NEAREST;
+    GLint plainFilter = (down || sharp) ? GL_LINEAR : GL_NEAREST;
     applyFrameFilter(plainFilter);
     glUniform1i(s.gTextureHandle, 0);
     glUniform2f(s.gTextureSizeHandle, getTextureStorageWidth(), getTextureStorageHeight());
@@ -684,18 +805,16 @@ void Video::drawPlain(const RegionQuad& quad, unsigned screenWidth, unsigned scr
 
 void Video::updateScreenRegions(std::vector<ScreenRegion> regions) {
     videoLayout.updateScreenRegions(std::move(regions));
-    isDirty = true;
 }
 
 void Video::updateSecondaryRegions(std::vector<ScreenRegion> regions) {
-    // Not isDirty: the main output is unchanged; the second surface is redrawn every frame anyway.
     secondaryLayout.updateScreenRegions(std::move(regions));
 }
 
 void Video::updateSecondaryPresetRenderer() {
     if (!presetRenderer || secondaryPresetRenderer || secondaryPresetFailed || !requestedPreset) return;
     try {
-        secondaryPresetRenderer = std::make_unique<PresetChainRenderer>(*requestedPreset);
+        secondaryPresetRenderer = makeChainRenderer(*requestedPreset);
         secondaryPresetRenderer->setPreserveTextureBindings(hasCoreGlState());
     } catch (const std::exception& e) {
         // The main chain built from the same source, so this is unexpected; the second surface then draws its shaded
@@ -740,7 +859,6 @@ void Video::setComposition(int width, int height, std::vector<ScreenRegion> part
         videoLayout.updateContentSize(coreContentWidth, coreContentHeight);
         if (coreAspectRatio > 0.0F) videoLayout.updateAspectRatio(coreAspectRatio);
     }
-    isDirty = true;
 }
 
 std::pair<float, float> Video::mapCompositionPoint(float x, float y) const {
@@ -826,10 +944,6 @@ void Video::composeFrame() {
     glViewport(0, 0, videoLayout.getScreenWidth(), videoLayout.getScreenHeight());
 }
 
-void Video::renderPausedFrame() {
-    renderFrame(true);
-}
-
 float Video::pictureDensity(const std::array<float, 12>& vertices, const std::array<float, 12>& coordinates,
                            unsigned screenWidth, unsigned screenHeight) {
     auto box = foregroundRect(vertices, (int) screenWidth, (int) screenHeight);
@@ -842,6 +956,13 @@ float Video::pictureDensity(const std::array<float, 12>& vertices, const std::ar
 
 float Video::getScreenDensity(float screenWidth, float screenHeight) {
     return std::min(screenWidth / getTextureWidth(), screenHeight / getTextureHeight());
+}
+
+int Video::sourceScale() {
+    const auto frameHeight = (int) renderer->lastFrameSize.second;
+    if (shaderSourceFrameHeight <= 0 || frameHeight <= 0 || frameHeight == shaderSourceFrameHeight) return shaderSourceScale;
+    const auto scale = (int) std::lround((double) shaderSourceScale * frameHeight / shaderSourceFrameHeight);
+    return scale < 1 ? 1 : scale;
 }
 
 float Video::getTextureWidth() {
@@ -884,16 +1005,20 @@ std::array<float, 12> Video::frameCoordinates(const std::array<float, 12>& coord
 void Video::onNewFrame(const void *data, unsigned width, unsigned height, size_t pitch) {
     if (data != nullptr) {
         renderer->onNewFrame(data, width, height, pitch);
-        isDirty = true;
     }
 }
 
-void Video::setExternalFrame(AHardwareBuffer* buffer, uint64_t id, unsigned width, unsigned height, int syncFd) {
+void Video::setExternalFrame(AHardwareBuffer* buffer, uint64_t id, unsigned width, unsigned height, int syncFd,
+                             unsigned liveBuffers, uint64_t oldestLiveId) {
     if (ahbRenderer == nullptr) {
         if (syncFd >= 0) close(syncFd);
         return;
     }
-    ahbRenderer->setFrame(buffer, id, width, height, syncFd);
+    ahbRenderer->setFrame(buffer, id, width, height, syncFd, liveBuffers, oldestLiveId);
+}
+
+bool Video::takeExternalImportFailure() {
+    return ahbRenderer != nullptr && ahbRenderer->takeImportFailure();
 }
 
 void Video::updateScreenSize(unsigned width, unsigned height) {
@@ -904,16 +1029,10 @@ void Video::updateViewportSize(Rect viewportRect) {
     videoLayout.updateViewportSize(viewportRect);
 }
 
-void Video::updateViewportAlignment(unsigned int viewportAlignment) {
-    videoLayout.updateViewportAlignment(viewportAlignment);
-}
-
 void Video::updateRendererSize(unsigned int width, unsigned int height) {
     LOGD("Updating renderer size: %d x %d", width, height);
     renderer->updateRenderedResolution(width, height);
-    coreContentWidth = width;
-    coreContentHeight = height;
-    if (!composing()) videoLayout.updateContentSize(width, height);
+    updateContentSize(width, height);
 }
 
 void Video::updateScaleMode(unsigned int scaleMode) {
@@ -923,7 +1042,6 @@ void Video::updateScaleMode(unsigned int scaleMode) {
 void Video::setPictureHeld(bool held) {
     if (pictureHeld == held) return;
     pictureHeld = held;
-    isDirty = true;   // released while paused or with duplicate frames skipped: draw the picture now
 }
 
 void Video::updateScreenOffset(float x, float y) {
@@ -946,18 +1064,11 @@ Video::Video(
     ShaderManager::Config shaderConfig,
     bool bottomLeftOrigin,
     float rotation,
-    bool skipDuplicateFrames,
-    bool immersiveModeEnabled,
-    Rect viewportRect,
-    ImmersiveMode::Config immersiveModeConfig,
-    unsigned int viewportAlignment
+    Rect viewportRect
 ) :
     requestedShaderConfig(std::move(shaderConfig)),
-    skipDuplicateFrames(skipDuplicateFrames),
-    immersiveModeEnabled(immersiveModeEnabled),
-    immersiveMode(immersiveModeConfig),
-    videoLayout(bottomLeftOrigin, rotation, viewportRect, viewportAlignment),
-    secondaryLayout(bottomLeftOrigin, rotation, Rect(0.0F, 0.0F, 1.0F, 1.0F), V_ALIGN_CENTER) {
+    videoLayout(bottomLeftOrigin, rotation, viewportRect),
+    secondaryLayout(bottomLeftOrigin, rotation, Rect(0.0F, 0.0F, 1.0F, 1.0F)) {
 
     glContext = eglGetCurrentContext();
 
@@ -980,7 +1091,7 @@ Video::~Video() {
     if (glContext != EGL_NO_CONTEXT && eglGetCurrentContext() == glContext) {
         for (const auto& entry : shadersChain) glDeleteProgram(entry.gProgram);
         if (plainShader) glDeleteProgram(plainShader->gProgram);
-        immersiveMode.releaseGlObjects();
+        if (plainSharpShader) glDeleteProgram(plainSharpShader->gProgram);
         if (renderer) renderer->releaseGlObjects();
         releaseComposition();
         releaseCrops();
@@ -1013,15 +1124,8 @@ void Video::initializeRenderer(RenderingOptions renderingOptions) {
             std::move(shaders)
         );
     } else {
-        if (renderingOptions.openglESVersion >= 3) {
-            renderer = std::make_unique<ImageRendererES3>();
-        } else {
-            renderer = std::make_unique<ImageRendererES2>();
-        }
+        renderer = std::make_unique<ImageRendererES3>();
     }
-
-    // Preset chains render through ES3 framebuffers.
-    presetSupported = renderingOptions.openglESVersion >= 3;
 
     renderer->setPixelFormat(renderingOptions.pixelFormat);
     updateProgram();

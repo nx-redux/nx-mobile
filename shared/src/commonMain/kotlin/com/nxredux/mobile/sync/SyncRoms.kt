@@ -7,17 +7,19 @@ import com.nxredux.mobile.runner.CoreRegistry
 
 /** One side of a ROM run: where a path is rooted. */
 sealed interface RomEnd {
+    val path: String
+
     /** Below this phone's home `Roms/`. */
-    data class Home(val path: String) : RomEnd
+    data class Home(override val path: String) : RomEnd
 
     /** Below this phone's extra folder [extra]. */
-    data class Extra(val extra: Int, val path: String) : RomEnd
+    data class Extra(val extra: Int, override val path: String) : RomEnd
 
     /** Below the peer daemon's [module]. */
-    data class Peer(val module: String, val path: String) : RomEnd
+    data class Peer(val module: String, override val path: String) : RomEnd
 
     /** Below this phone's home `Bios/`. */
-    data class Bios(val path: String) : RomEnd
+    data class Bios(override val path: String) : RomEnd
 }
 
 /**
@@ -252,12 +254,7 @@ object SyncRoms {
         p: ConsolePair, own: ExtrasManifest, peer: ExtrasManifest, homeNames: Map<String, Set<String>>,
         remoteNames: Map<String, Set<String>> = emptyMap(), peerFolders: List<String>? = null, mapped: Boolean = false,
     ): PairUnits {
-        fun siblings(folder: String, all: List<String>): List<String> {
-            val named = SyncConsoles.siblings(folder, all)
-            if (!mapped) return named
-            val console = SyncMap.consoleOf(folder)?.id ?: return named
-            return (named + all.filter { it != folder && !it.startsWith(".") && SyncMap.consoleOf(it)?.id == console }).distinct()
-        }
+        fun siblings(folder: String, all: List<String>): List<String> = SyncConsoles.siblings(folder, all, mapped)
         val home = homeNames[p.local].orEmpty()
         val homeLower = home.mapTo(HashSet()) { it.lowercase() }
         val inRemote = remoteNames[p.remote].orEmpty().mapTo(HashSet()) { it.lowercase() }
@@ -335,7 +332,7 @@ object SyncRoms {
             for (r in there) pullPairs += target to r
         }
         val bare = biosPlan(mine.filter { CoreRegistry.consoleOf(it) == null }, theirs.filter { CoreRegistry.consoleOf(it) == null })
-            .filter { it.step == SyncStep.SEND_BIOS }.map { it.console to (it.to as RomEnd.Peer).path }
+            .filter { it.step == SyncStep.SEND_BIOS }.map { it.console to it.to.path }
         pairs += bare; pullPairs += bare
         return pairs.map { (l, r) -> RomRun(SyncStep.SEND_BIOS, l, RomEnd.Bios(l), RomEnd.Peer("bios", r), ignoreExisting = true, pair = "$l\u0000$r") } +
             pullPairs.map { (l, r) -> RomRun(SyncStep.RECEIVE_BIOS, l, RomEnd.Peer("bios", r), RomEnd.Bios(l), ignoreExisting = true, pair = "$l\u0000$r") }

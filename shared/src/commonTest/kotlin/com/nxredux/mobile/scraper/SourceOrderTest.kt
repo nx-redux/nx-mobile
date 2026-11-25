@@ -30,18 +30,17 @@ class SourceOrderTest {
     private val box = ArtSlot.BOX_2D
     private val shot = ArtSlot.SCREENSHOT
 
-    private fun png(b: Int) = HttpResult(200, byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, b.toByte()))
 
     @Test fun boxFromFirstSourceThatHasIt() = runTest {
         val a = FakeSource("a").apply { offer("Tetris.gb", box, "https://a/box") }
         val b = FakeSource("b").apply { offer("Tetris.gb", box, "https://b/box"); offer("Tetris.gb", shot, "https://b/shot") }
         val rig = Rig(a, b)
-        rig.http.on("https://a/", png(1))
-        rig.http.on("https://b/", png(2))
+        rig.http.on("https://a/", Scrape.png(1))
+        rig.http.on("https://b/", Scrape.png(2))
         val end = rig.run(listOf(tetris))
         assertEquals(ItemStatus.DONE, end.items.single().status)
-        assertContentEquals(png(1).body, rig.fs.bytesAt("Home/Roms/GB/.media/boxart2d/Tetris.png"))
-        assertContentEquals(png(2).body, rig.fs.bytesAt("Home/Roms/GB/.media/screenshot/Tetris.png"))
+        assertContentEquals(Scrape.png(1).body, rig.fs.bytesAt("Home/Roms/GB/.media/boxart2d/Tetris.png"))
+        assertContentEquals(Scrape.png(2).body, rig.fs.bytesAt("Home/Roms/GB/.media/screenshot/Tetris.png"))
         assertEquals(listOf("https://a/box", "https://b/shot"), rig.downloads)
         assertEquals(
             listOf<Pair<String, ArtOrigin?>>("Roms/GB/.media/boxart2d/Tetris.png" to ArtOrigin("a", "Tetris.gb", "https://a/box"), "Roms/GB/.media/screenshot/Tetris.png" to ArtOrigin("b", "Tetris.gb", "https://b/shot")),

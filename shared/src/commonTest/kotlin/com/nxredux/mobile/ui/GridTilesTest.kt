@@ -101,6 +101,13 @@ class GridTilesTest {
         assertEquals(listOf("Game Tracker"), toolDisplayLines("Game Tracker"))
     }
 
+    @Test fun toolAbstractArtUsesPinKeyOrIconlessAppArt() {
+        val builtIn = ToolRow(ToolKind.RETRO_ACHIEVEMENTS, "RetroAchievements", null)
+        val app = ToolRow(ToolKind.APP, "YouTube", null, appId = "com.google.android.youtube")
+        assertEquals(abstractArtUrl("TOOL", builtIn.pinKey), toolAbstractArtUrl(builtIn))
+        assertEquals(abstractAppArtUrl("com.google.android.youtube", icon = false), toolAbstractArtUrl(app))
+    }
+
     @Test fun backdropGamesTakeBoxartScreenshotAndShownTitle() {
         val games = backdropGames(listOf(listed("Zelda", shot = "s/zelda.png", box = "b/zelda.png", label = "Zelda (GBA)"), listed("Kirby")))
         assertEquals(BackdropGame("b/zelda.png", "s/zelda.png", "Zelda (GBA)", "GBA", abstractUrl = abstractArtUrl("GBA", "Zelda.gba")), games[0])
@@ -301,7 +308,7 @@ class GridTilesTest {
     }
 
     // A game list Grid with the stats line under its title ([gameListTopStats]): the stats there, the details in the
-    // selected tile, whatever Layouts → Game info says; without that line, the tile its details over its stats as before.
+    // selected tile, whatever Layouts → Game info says; without that line, the tile has its count-only stats then its details.
     @Test fun aGridsDetailsGoInTheTileAndItsStatsInTheHeader() {
         val statsOnly = listed("Kirby")
         val detailsOnly = listed("Zelda")
@@ -334,7 +341,7 @@ class GridTilesTest {
             assertEquals(details, tile(2, true), "always=$always")
             assertEquals(emptyList(), header(3, true), "always=$always")
             assertEquals(emptyList(), tile(3, true), "always=$always")
-            // No stats line (Page title hidden): the tile as before, its count-only stats then its details.
+            // No stats line (Page title hidden): the tile's count-only stats then its details.
             assertEquals(listOf(InfoKind.TIME, InfoKind.ACHIEVEMENTS), tile(0, false), "always=$always")
             assertEquals(details, tile(1, false), "always=$always")
             assertEquals(listOf(InfoKind.TIME, InfoKind.ACHIEVEMENTS) + details, tile(2, false), "always=$always")
@@ -345,10 +352,9 @@ class GridTilesTest {
             assertEquals(emptyList(), gridTileInfo(topStats, entryTileInfo(games, emptyMap(), now, GameMeta.NONE))(2))
             assertEquals(emptyList(), gridHeaderInfo(topStats, gameListInfo(MenuStyle.GRID, MenuOrientation.HORIZONTAL, emptyMap(), now, both.game, GameMeta.NONE)))
         }
-        // Every other style's info is as it was: a horizontal Carousel both apart, the rest as Game info says.
+        // Every non-Grid style follows Layouts → Game info (both horizontal and vertical Carousel included).
         val meta = GameMeta(stored, always = true, shown = true)
-        assertEquals(gameInfoApart(info, now, both.game, meta), gameListInfo(MenuStyle.CAROUSEL, MenuOrientation.HORIZONTAL, info, now, both.game, meta))
-        for (style in listOf(MenuStyle.LIST, MenuStyle.MINIMAL, MenuStyle.BACKDROP)) {
+        for (style in listOf(MenuStyle.CAROUSEL, MenuStyle.LIST, MenuStyle.MINIMAL, MenuStyle.BACKDROP)) {
             assertEquals(gameInfoFor(info, now, both.game, full = true, meta), gameListInfo(style, MenuOrientation.HORIZONTAL, info, now, both.game, meta))
         }
         assertEquals(gameInfoFor(info, now, both.game, full = true, meta), gameListInfo(MenuStyle.CAROUSEL, MenuOrientation.VERTICAL, info, now, both.game, meta))

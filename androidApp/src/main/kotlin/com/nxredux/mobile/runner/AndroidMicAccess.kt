@@ -36,6 +36,6 @@ class AndroidMicAccess(private val activity: Activity, private val askedInGame: 
     private companion object {
         const val PERMISSION = android.Manifest.permission.RECORD_AUDIO
         const val PREFS = "mic_access"
-        const val ASKED = "asked_from_settings"   // not AppSettings.micAsked: that one gates only the in-game ask
+        const val ASKED = "asked_from_settings"
     }
 }

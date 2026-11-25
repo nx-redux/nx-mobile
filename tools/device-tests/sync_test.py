@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """Device Sync scenarios between a phone (NX Redux mobile, debug build) and a TrimUI Brick, over Wi-Fi.
 
-Design: docs/superpowers/specs/2026-10-16-device-test-automation-design.md, "Device Sync scenarios".
-
   1. handheld saves of a GBA-folder and an MGBA-folder game reach the phone's Saves/GBA
   2. changed phone saves go back to each game's own handheld folder
   3. a second unchanged sync moves no save (odd-second mtimes vs FAT's 2 s rounding)
@@ -18,13 +16,14 @@ usage: sync_test.py [--fold SERIAL] [--brick SERIAL] [--out FILE] [--skip-roms |
 """
 
 import argparse
+import hashlib
 import os
 import sys
 import tempfile
 import time
 
-from brick import SDCARD, Brick, BrickGone, q
-from fold import PRIV, ROMS as PHONE_ROMS, TERMINAL_SYNC, TEST_DIR, Fold
+from brick import DEFAULT_SERIAL as BRICK_SERIAL, SDCARD, Brick, BrickGone, q
+from fold import DEFAULT_SERIAL as FOLD_SERIAL, PRIV, ROMS as PHONE_ROMS, TERMINAL_SYNC, TEST_DIR, Fold
 
 B_ROMS = SDCARD + "/Roms"
 B_SAVES = SDCARD + "/Saves"
@@ -61,7 +60,6 @@ def write_local(tmp, name, data):
 
 
 def md5_bytes(data):
-    import hashlib
     return hashlib.md5(data).hexdigest()
 
 
@@ -166,9 +164,7 @@ class Runner:
         return md5_bytes(data)
 
 
-def run(args, res):
-    f = Fold(args.fold)
-    b = Brick(args.brick)
+def run(args, res, f, b):
     f.require_present()
     b.require_present()
     if f.game_running():
@@ -190,7 +186,6 @@ def run(args, res):
         res.add("5. ROMs on", False, ["skipped (--skip-roms)"])
     else:
         roms_scenario(r, f, b, res)
-    return f, b
 
 
 def saves_scenarios(r, f, b, res, tmp):
@@ -370,8 +365,8 @@ def write_report(path, res, cleanup):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--fold", default="adb-R5GL66XJS2F-uwbsP9._adb-tls-connect._tcp")
-    ap.add_argument("--brick", default="5c000c8997414781d1d")
+    ap.add_argument("--fold", default=FOLD_SERIAL)
+    ap.add_argument("--brick", default=BRICK_SERIAL)
     ap.add_argument("--out", default=os.path.join(os.getcwd(), ".local/device-tests/sync-test-%s.md"
                                                   % time.strftime("%Y-%m-%d")))
     ap.add_argument("--skip-roms", action="store_true")
@@ -381,7 +376,7 @@ def main():
     res = Results()
     f, b = Fold(args.fold), Brick(args.brick)
     try:
-        run(args, res)
+        run(args, res, f, b)
     except BrickGone as e:
         res.notes.append("STOP: %s" % e)
         print("STOP: %s" % e)

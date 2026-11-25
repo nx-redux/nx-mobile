@@ -18,6 +18,9 @@ enum class ShortcutAction(val label: String, val key: String, val rewind: Boolea
     SAVE_AND_QUIT("Save & Quit", "save_and_quit", false, touch = false),
     TOGGLE_MIC("Toggle mic", "toggle_mic", rewind = false, mic = true, touch = false);
 
+    /** The shown name: without Save on quit, Save & Quit only quits, so it says so. */
+    fun label(saveOnQuit: Boolean): String = if (this == SAVE_AND_QUIT && !saveOnQuit) "Quit" else label
+
     companion object {
         fun fromKey(key: String): ShortcutAction? = entries.firstOrNull { it.key == key }
     }

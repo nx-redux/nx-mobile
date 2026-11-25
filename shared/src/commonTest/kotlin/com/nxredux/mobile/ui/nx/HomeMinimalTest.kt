@@ -6,7 +6,7 @@ import kotlin.test.assertEquals
 class HomeMinimalTest {
     // Only Continue keeps its tag in Minimal: no shelf or tool tags.
     @Test fun only_continue_wears_a_tag() {
-        val rows = homeMinimalRows(listOf(com.nxredux.mobile.ui.MainRow.PickAGame, com.nxredux.mobile.ui.MainRow.PinnedTool(com.nxredux.mobile.ui.ToolRow(com.nxredux.mobile.ui.ToolKind.SETTINGS, "Settings", null))))
+        val rows = homeListRows(listOf(com.nxredux.mobile.ui.MainRow.PickAGame, com.nxredux.mobile.ui.MainRow.PinnedTool(com.nxredux.mobile.ui.ToolRow(com.nxredux.mobile.ui.ToolKind.SETTINGS, "Settings", null))))
         assertEquals(listOf(null, null), rows.map { it.tag })
         assertEquals("Settings", rows[1].label)
     }

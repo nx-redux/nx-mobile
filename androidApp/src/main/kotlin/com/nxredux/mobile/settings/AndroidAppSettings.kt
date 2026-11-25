@@ -5,6 +5,7 @@ import com.nxredux.mobile.kids.KidsPin
 import android.content.Context
 import androidx.core.content.edit
 import com.nxredux.mobile.BuildConfig
+import com.nxredux.mobile.gpudriver.GpuDriverChoice
 import com.nxredux.mobile.options.VulkanFallback
 import com.nxredux.mobile.achievements.RaSortOrder
 import com.nxredux.mobile.runner.BottomScreen
@@ -13,10 +14,32 @@ import com.nxredux.mobile.storage.SaveFormat
 import com.nxredux.mobile.storage.StateFormat
 import com.nxredux.mobile.DebugLogFile
 import com.swordfish.libretrodroid.NxLog
+import kotlin.properties.ReadWriteProperty
+import kotlin.reflect.KProperty
 
 class AndroidAppSettings(context: Context) : AppSettings {
     private val app = context.applicationContext
     private val prefs = Prefs.open(context, PREFS_NAME)
+
+    private fun bool(key: String, default: Boolean): ReadWriteProperty<Any?, Boolean> = object : ReadWriteProperty<Any?, Boolean> {
+        override fun getValue(thisRef: Any?, property: KProperty<*>): Boolean = prefs.getBoolean(key, default)
+        override fun setValue(thisRef: Any?, property: KProperty<*>, value: Boolean) = prefs.edit { putBoolean(key, value) }
+    }
+
+    /** Null removes the key. */
+    private fun nullableString(key: String): ReadWriteProperty<Any?, String?> = object : ReadWriteProperty<Any?, String?> {
+        override fun getValue(thisRef: Any?, property: KProperty<*>): String? = prefs.getString(key, null)
+        override fun setValue(thisRef: Any?, property: KProperty<*>, value: String?) =
+            prefs.edit { if (value == null) remove(key) else putString(key, value) }
+    }
+
+    /** One entry a line; blank lines are dropped on read. */
+    private fun lines(key: String): ReadWriteProperty<Any?, List<String>> = object : ReadWriteProperty<Any?, List<String>> {
+        override fun getValue(thisRef: Any?, property: KProperty<*>): List<String> =
+            prefs.getString(key, "")!!.lineSequence().filter { it.isNotBlank() }.toList()
+        override fun setValue(thisRef: Any?, property: KProperty<*>, value: List<String>) =
+            prefs.edit { putString(key, value.joinToString("\n")) }
+    }
 
     override var treeRef: ContentRef?
         get() = prefs.getString(KEY_TREE, null)?.let(::ContentRef)
@@ -34,9 +57,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
             .toMap()
         set(value) = prefs.edit { putString(KEY_DEFAULT_TAGS, value.entries.joinToString("\n") { "${it.key}\t${it.value}" }) }
 
-    override var padSkin: Boolean
-        get() = prefs.getBoolean(KEY_PAD_SKIN, true)
-        set(value) = prefs.edit { putBoolean(KEY_PAD_SKIN, value) }
+    override var padSkin: Boolean by bool(KEY_PAD_SKIN, true)
 
     override var padTheme: PadTheme
         get() = prefs.getString(KEY_PAD_THEME, null)?.let { runCatching { PadTheme.valueOf(it) }.getOrNull() } ?: PadTheme.DEFAULT
@@ -62,55 +83,38 @@ class AndroidAppSettings(context: Context) : AppSettings {
         get() = prefs.getString(KEY_GAME_LIST_VERTICAL_ALIGNMENT, null)?.let { runCatching { VerticalListAlignment.valueOf(it) }.getOrNull() } ?: VerticalListAlignment.DEFAULT
         set(value) = prefs.edit { putString(KEY_GAME_LIST_VERTICAL_ALIGNMENT, value.name) }
 
-    override var toolApps: List<String>
-        get() = prefs.getString(KEY_TOOL_APPS, "")!!.lineSequence().filter { it.isNotBlank() }.toList()
-        set(value) = prefs.edit { putString(KEY_TOOL_APPS, value.joinToString("\n")) }
+    override var toolApps: List<String> by lines(KEY_TOOL_APPS)
 
-    override var androidConsoleApps: List<String>
-        get() = prefs.getString(KEY_ANDROID_CONSOLE_APPS, "")!!.lineSequence().filter { it.isNotBlank() }.toList()
-        set(value) = prefs.edit { putString(KEY_ANDROID_CONSOLE_APPS, value.joinToString("\n")) }
+    override var androidConsoleApps: List<String> by lines(KEY_ANDROID_CONSOLE_APPS)
 
-    override var androidGamesAsked: Boolean
-        get() = prefs.getBoolean(KEY_ANDROID_GAMES_ASKED, false)
-        set(value) = prefs.edit { putBoolean(KEY_ANDROID_GAMES_ASKED, value) }
-    override var micAsked: Boolean
-        get() = prefs.getBoolean(KEY_MIC_ASKED, false)
-        set(value) = prefs.edit { putBoolean(KEY_MIC_ASKED, value) }
-    override var layoutTipHidden: Boolean
-        get() = prefs.getBoolean(KEY_LAYOUT_TIP_HIDDEN, false)
-        set(value) = prefs.edit { putBoolean(KEY_LAYOUT_TIP_HIDDEN, value) }
+    override var mainMenuTipHidden: Boolean by bool(KEY_MAIN_MENU_TIP_HIDDEN, false)
 
-    override var allFilesAsked: Boolean
-        get() = prefs.getBoolean(KEY_ALL_FILES_ASKED, false)
-        set(value) = prefs.edit { putBoolean(KEY_ALL_FILES_ASKED, value) }
+    override var gameListTipHidden: Boolean by bool(KEY_GAME_LIST_TIP_HIDDEN, false)
+
+    override var androidGamesAsked: Boolean by bool(KEY_ANDROID_GAMES_ASKED, false)
+    override var micAsked: Boolean by bool(KEY_MIC_ASKED, false)
+    override var micButtonShown: Boolean by bool(KEY_MIC_BUTTON_SHOWN, false)
+    override var layoutTipHidden: Boolean by bool(KEY_LAYOUT_TIP_HIDDEN, false)
+
+    override var allFilesAsked: Boolean by bool(KEY_ALL_FILES_ASKED, false)
 
     override var onboardingDone: Boolean?
         get() = if (prefs.contains(KEY_ONBOARDING_DONE)) prefs.getBoolean(KEY_ONBOARDING_DONE, false) else null
         set(value) = prefs.edit { if (value == null) remove(KEY_ONBOARDING_DONE) else putBoolean(KEY_ONBOARDING_DONE, value) }
 
-    override var onboardingStep: String?
-        get() = prefs.getString(KEY_ONBOARDING_STEP, null)
-        set(value) = prefs.edit { if (value == null) remove(KEY_ONBOARDING_STEP) else putString(KEY_ONBOARDING_STEP, value) }
+    override var onboardingStep: String? by nullableString(KEY_ONBOARDING_STEP)
 
-    override var androidPins: List<String>
-        get() = prefs.getString(KEY_ANDROID_PINS, "")!!.lineSequence().filter { it.isNotBlank() }.toList()
-        set(value) = prefs.edit { putString(KEY_ANDROID_PINS, value.joinToString("\n")) }
+    override var androidPins: List<String> by lines(KEY_ANDROID_PINS)
 
-    override var raEnabled: Boolean
-        get() = prefs.getBoolean(KEY_RA_ENABLED, false)
-        set(value) = prefs.edit { putBoolean(KEY_RA_ENABLED, value) }
+    override var raEnabled: Boolean by bool(KEY_RA_ENABLED, false)
 
     override var raUsername: String
         get() = prefs.getString(KEY_RA_USERNAME, "") ?: ""
         set(value) = prefs.edit { putString(KEY_RA_USERNAME, value) }
 
-    override var raToken: String?
-        get() = prefs.getString(KEY_RA_TOKEN, null)
-        set(value) = prefs.edit { if (value == null) remove(KEY_RA_TOKEN) else putString(KEY_RA_TOKEN, value) }
+    override var raToken: String? by nullableString(KEY_RA_TOKEN)
 
-    override var raShowNotifications: Boolean
-        get() = prefs.getBoolean(KEY_RA_NOTIFICATIONS, true)
-        set(value) = prefs.edit { putBoolean(KEY_RA_NOTIFICATIONS, value) }
+    override var raShowNotifications: Boolean by bool(KEY_RA_NOTIFICATIONS, true)
 
     override var raNotificationSeconds: Int
         get() = prefs.getInt(KEY_RA_NOTIFICATION_SECONDS, 3).coerceIn(1, 5)
@@ -120,13 +124,9 @@ class AndroidAppSettings(context: Context) : AppSettings {
         get() = prefs.getInt(KEY_RA_PROGRESS_SECONDS, 1).coerceIn(0, 5)
         set(value) = prefs.edit { putInt(KEY_RA_PROGRESS_SECONDS, value) }
 
-    override var raUnlockSound: Boolean
-        get() = prefs.getBoolean(KEY_RA_UNLOCK_SOUND, true)
-        set(value) = prefs.edit { putBoolean(KEY_RA_UNLOCK_SOUND, value) }
+    override var raUnlockSound: Boolean by bool(KEY_RA_UNLOCK_SOUND, true)
 
-    override var raUnlockScreenshot: Boolean
-        get() = prefs.getBoolean(KEY_RA_UNLOCK_SCREENSHOT, false)
-        set(value) = prefs.edit { putBoolean(KEY_RA_UNLOCK_SCREENSHOT, value) }
+    override var raUnlockScreenshot: Boolean by bool(KEY_RA_UNLOCK_SCREENSHOT, false)
 
     override var raSortOrder: RaSortOrder
         get() = prefs.getString(KEY_RA_SORT_ORDER, null)?.let { runCatching { RaSortOrder.valueOf(it) }.getOrNull() } ?: RaSortOrder.DEFAULT
@@ -136,63 +136,27 @@ class AndroidAppSettings(context: Context) : AppSettings {
         get() = prefs.getString(KEY_SS_USERNAME, "") ?: ""
         set(value) = prefs.edit { putString(KEY_SS_USERNAME, value) }
 
-    override var ssPassword: String?
-        get() = prefs.getString(KEY_SS_PASSWORD, null)
-        set(value) = prefs.edit { if (value == null) remove(KEY_SS_PASSWORD) else putString(KEY_SS_PASSWORD, value) }
+    override var ssPassword: String? by nullableString(KEY_SS_PASSWORD)
 
-    override var sgdbApiKey: String?
-        get() = prefs.getString(KEY_SGDB_KEY, null)
-        set(value) = prefs.edit { if (value == null) remove(KEY_SGDB_KEY) else putString(KEY_SGDB_KEY, value) }
-    override var tgdbApiKey: String?
-        get() = prefs.getString(KEY_TGDB_KEY, null)
-        set(value) = prefs.edit { if (value == null) remove(KEY_TGDB_KEY) else putString(KEY_TGDB_KEY, value) }
+    override var sgdbApiKey: String? by nullableString(KEY_SGDB_KEY)
+    override var tgdbApiKey: String? by nullableString(KEY_TGDB_KEY)
 
-    override var artReplaceExisting: Boolean
-        get() = prefs.getBoolean(KEY_ART_REPLACE, false)
-        set(value) = prefs.edit { putBoolean(KEY_ART_REPLACE, value) }
-    override var artBox2d: Boolean
-        get() = prefs.getBoolean(KEY_ART_BOX2D, false)
-        set(value) = prefs.edit { putBoolean(KEY_ART_BOX2D, value) }
-    override var artWheel: Boolean
-        get() = prefs.getBoolean(KEY_ART_WHEEL, false)
-        set(value) = prefs.edit { putBoolean(KEY_ART_WHEEL, value) }
-    override var artMix: Boolean
-        get() = prefs.getBoolean(KEY_ART_MIX, false)
-        set(value) = prefs.edit { putBoolean(KEY_ART_MIX, value) }
-    override var fetchGameInfo: Boolean
-        get() = prefs.getBoolean(KEY_FETCH_GAME_INFO, true)
-        set(value) = prefs.edit { putBoolean(KEY_FETCH_GAME_INFO, value) }
-    override var artWheelMigrated: Boolean
-        get() = prefs.getBoolean(KEY_ART_WHEEL_MIGRATED, false)
-        set(value) = prefs.edit { putBoolean(KEY_ART_WHEEL_MIGRATED, value) }
+    override var artReplaceExisting: Boolean by bool(KEY_ART_REPLACE, false)
+    override var artBox2d: Boolean by bool(KEY_ART_BOX2D, false)
+    override var artWheel: Boolean by bool(KEY_ART_WHEEL, false)
+    override var artMix: Boolean by bool(KEY_ART_MIX, false)
+    override var fetchGameInfo: Boolean by bool(KEY_FETCH_GAME_INFO, true)
+    override var artWheelMigrated: Boolean by bool(KEY_ART_WHEEL_MIGRATED, false)
 
-    override var showHomeTab: Boolean
-        get() = prefs.getBoolean(KEY_SHOW_HOME_TAB, MenuStyles.DEFAULT_TAB_SHOWN)
-        set(value) = prefs.edit { putBoolean(KEY_SHOW_HOME_TAB, value) }
-    override var showConsolesTab: Boolean
-        get() = prefs.getBoolean(KEY_SHOW_CONSOLES_TAB, MenuStyles.DEFAULT_TAB_SHOWN)
-        set(value) = prefs.edit { putBoolean(KEY_SHOW_CONSOLES_TAB, value) }
-    override var showGamesTab: Boolean
-        get() = prefs.getBoolean(KEY_SHOW_GAMES_TAB, MenuStyles.DEFAULT_TAB_SHOWN)
-        set(value) = prefs.edit { putBoolean(KEY_SHOW_GAMES_TAB, value) }
-    override var showCollectionsTab: Boolean
-        get() = prefs.getBoolean(KEY_SHOW_COLLECTIONS_TAB, MenuStyles.DEFAULT_TAB_SHOWN)
-        set(value) = prefs.edit { putBoolean(KEY_SHOW_COLLECTIONS_TAB, value) }
-    override var showToolsTab: Boolean
-        get() = prefs.getBoolean(KEY_SHOW_TOOLS_TAB, MenuStyles.DEFAULT_TAB_SHOWN)
-        set(value) = prefs.edit { putBoolean(KEY_SHOW_TOOLS_TAB, value) }
-    override var showNewShelf: Boolean
-        get() = prefs.getBoolean(KEY_SHOW_NEW_SHELF, true)
-        set(value) = prefs.edit { putBoolean(KEY_SHOW_NEW_SHELF, value) }
-    override var showNotStartedShelf: Boolean
-        get() = prefs.getBoolean(KEY_SHOW_NOT_STARTED_SHELF, true)
-        set(value) = prefs.edit { putBoolean(KEY_SHOW_NOT_STARTED_SHELF, value) }
-    override var showMostPlayedShelf: Boolean
-        get() = prefs.getBoolean(KEY_SHOW_MOST_PLAYED_SHELF, true)
-        set(value) = prefs.edit { putBoolean(KEY_SHOW_MOST_PLAYED_SHELF, value) }
-    override var showNetplayHint: Boolean
-        get() = prefs.getBoolean(KEY_SHOW_NETPLAY_HINT, true)
-        set(value) = prefs.edit { putBoolean(KEY_SHOW_NETPLAY_HINT, value) }
+    override var showHomeTab: Boolean by bool(KEY_SHOW_HOME_TAB, MenuStyles.DEFAULT_TAB_SHOWN)
+    override var showConsolesTab: Boolean by bool(KEY_SHOW_CONSOLES_TAB, MenuStyles.DEFAULT_TAB_SHOWN)
+    override var showGamesTab: Boolean by bool(KEY_SHOW_GAMES_TAB, MenuStyles.DEFAULT_TAB_SHOWN)
+    override var showCollectionsTab: Boolean by bool(KEY_SHOW_COLLECTIONS_TAB, MenuStyles.DEFAULT_TAB_SHOWN)
+    override var showToolsTab: Boolean by bool(KEY_SHOW_TOOLS_TAB, MenuStyles.DEFAULT_TAB_SHOWN)
+    override var showNewShelf: Boolean by bool(KEY_SHOW_NEW_SHELF, true)
+    override var showNotStartedShelf: Boolean by bool(KEY_SHOW_NOT_STARTED_SHELF, true)
+    override var showMostPlayedShelf: Boolean by bool(KEY_SHOW_MOST_PLAYED_SHELF, true)
+    override var showNetplayHint: Boolean by bool(KEY_SHOW_NETPLAY_HINT, true)
 
     override var consoleArt: ConsoleArt
         get() = ConsoleArt.fromStored(prefs.getString(KEY_CONSOLE_ART, null))
@@ -210,26 +174,14 @@ class AndroidAppSettings(context: Context) : AppSettings {
         get() = OptionTextSize.fromStored(prefs.getString(KEY_OPTION_TEXT_SIZE, null))
         set(value) = prefs.edit { putString(KEY_OPTION_TEXT_SIZE, value.name) }
 
-    override var menuPageTitle: Boolean
-        get() = prefs.getBoolean(KEY_MENU_PAGE_TITLE, MenuStyles.DEFAULT_PAGE_TITLE)
-        set(value) = prefs.edit { putBoolean(KEY_MENU_PAGE_TITLE, value) }
+    override var menuPageTitle: Boolean by bool(KEY_MENU_PAGE_TITLE, MenuStyles.DEFAULT_PAGE_TITLE)
 
-    override var menuButtonHints: Boolean
-        get() = prefs.getBoolean(KEY_MENU_BUTTON_HINTS, MenuStyles.DEFAULT_BUTTON_HINTS)
-        set(value) = prefs.edit { putBoolean(KEY_MENU_BUTTON_HINTS, value) }
+    override var menuButtonHints: Boolean by bool(KEY_MENU_BUTTON_HINTS, MenuStyles.DEFAULT_BUTTON_HINTS)
 
-    override var menuExtraInfo: Boolean
-        get() = prefs.getBoolean(KEY_MENU_EXTRA_INFO, MenuStyles.DEFAULT_EXTRA_INFO)
-        set(value) = prefs.edit { putBoolean(KEY_MENU_EXTRA_INFO, value) }
-    override var menuHomeStats: Boolean
-        get() = prefs.getBoolean(KEY_MENU_HOME_STATS, MenuStyles.DEFAULT_HOME_STATS)
-        set(value) = prefs.edit { putBoolean(KEY_MENU_HOME_STATS, value) }
-    override var gameListLayoutOptions: Boolean
-        get() = prefs.getBoolean(KEY_GAME_LIST_LAYOUT_OPTIONS, true)
-        set(value) = prefs.edit { putBoolean(KEY_GAME_LIST_LAYOUT_OPTIONS, value) }
-    override var gameListAchievementsPanel: Boolean
-        get() = prefs.getBoolean(KEY_GAME_LIST_ACHIEVEMENTS_PANEL, true)
-        set(value) = prefs.edit { putBoolean(KEY_GAME_LIST_ACHIEVEMENTS_PANEL, value) }
+    override var menuExtraInfo: Boolean by bool(KEY_MENU_EXTRA_INFO, MenuStyles.DEFAULT_EXTRA_INFO)
+    override var menuHomeStats: Boolean by bool(KEY_MENU_HOME_STATS, MenuStyles.DEFAULT_HOME_STATS)
+    override var gameListLayoutOptions: Boolean by bool(KEY_GAME_LIST_LAYOUT_OPTIONS, true)
+    override var gameListAchievementsPanel: Boolean by bool(KEY_GAME_LIST_ACHIEVEMENTS_PANEL, true)
 
     override var padVibration: PadVibration
         get() = PadVibration.fromStored(prefs.getString(KEY_PAD_VIBRATION, null))
@@ -256,11 +208,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
         get() = GameRumble.fromStored(prefs.getString(KEY_GAME_RUMBLE, null))
         set(value) = prefs.edit { putString(KEY_GAME_RUMBLE, value.name) }
 
-    override var secondScreen: Boolean
-        get() = prefs.getBoolean(KEY_SECOND_SCREEN, true)
-        set(value) {
-            prefs.edit { putBoolean(KEY_SECOND_SCREEN, value) }
-        }
+    override var secondScreen: Boolean by bool(KEY_SECOND_SCREEN, true)
 
     override var bottomScreen: BottomScreen
         get() = BottomScreen.parse(prefs.getString(KEY_BOTTOM_SCREEN, null))
@@ -268,21 +216,15 @@ class AndroidAppSettings(context: Context) : AppSettings {
             prefs.edit { putString(KEY_BOTTOM_SCREEN, value.value) }
         }
 
-    override var pauseWhenUnfocused: Boolean
-        get() = prefs.getBoolean(KEY_PAUSE_UNFOCUSED, true)
-        set(value) {
-            prefs.edit { putBoolean(KEY_PAUSE_UNFOCUSED, value) }
-        }
+    override var pauseWhenUnfocused: Boolean by bool(KEY_PAUSE_UNFOCUSED, true)
 
-    override var menuInfoAchievements: Boolean
-        get() = prefs.getBoolean(KEY_MENU_INFO_ACHIEVEMENTS, false)
-        set(value) = prefs.edit { putBoolean(KEY_MENU_INFO_ACHIEVEMENTS, value) }
+    override var menuInfoAchievements: Boolean by bool(KEY_MENU_INFO_ACHIEVEMENTS, MenuStyles.DEFAULT_INFO_ACHIEVEMENTS)
 
-    override var screenCare: Boolean
-        get() = prefs.getBoolean(KEY_SCREEN_CARE, true)
-        set(value) {
-            prefs.edit { putBoolean(KEY_SCREEN_CARE, value) }
-        }
+    override var screenCare: Boolean by bool(KEY_SCREEN_CARE, true)
+
+    override var saveOnQuit: Boolean by bool(KEY_SAVE_ON_QUIT, true)
+
+    override var aResumes: Boolean by bool(KEY_A_RESUMES, true)
 
     override var playerName: String
         get() = prefs.getString(KEY_PLAYER_NAME, "").orEmpty()
@@ -305,21 +247,13 @@ class AndroidAppSettings(context: Context) : AppSettings {
         get() = prefs.getInt(KEY_CABLE_LINK_DELAY, NetplayCores.CABLE_LINK_DELAY_DEFAULT).coerceIn(0, NetplayCores.CABLE_LINK_DELAY_MAX)
         set(value) = prefs.edit { putInt(KEY_CABLE_LINK_DELAY, value.coerceIn(0, NetplayCores.CABLE_LINK_DELAY_MAX)) }
 
-    override var cableLinkDelayOverlay: Boolean
-        get() = prefs.getBoolean(KEY_CABLE_LINK_DELAY_OVERLAY, false)
-        set(value) = prefs.edit { putBoolean(KEY_CABLE_LINK_DELAY_OVERLAY, value) }
+    override var cableLinkDelayOverlay: Boolean by bool(KEY_CABLE_LINK_DELAY_OVERLAY, false)
 
-    override var androidKeyboard: Boolean
-        get() = prefs.getBoolean(KEY_ANDROID_KEYBOARD, false)
-        set(value) = prefs.edit { putBoolean(KEY_ANDROID_KEYBOARD, value) }
+    override var androidKeyboard: Boolean by bool(KEY_ANDROID_KEYBOARD, false)
 
-    override var kidsEnabled: Boolean
-        get() = prefs.getBoolean(KEY_KIDS_ENABLED, false)
-        set(value) = prefs.edit { putBoolean(KEY_KIDS_ENABLED, value) }
+    override var kidsEnabled: Boolean by bool(KEY_KIDS_ENABLED, false)
 
-    override var kidsSchedule: String?
-        get() = prefs.getString(KEY_KIDS_SCHEDULE, null)
-        set(value) = prefs.edit { if (value == null) remove(KEY_KIDS_SCHEDULE) else putString(KEY_KIDS_SCHEDULE, value) }
+    override var kidsSchedule: String? by nullableString(KEY_KIDS_SCHEDULE)
 
     override var kidsAllowedApps: Set<String>
         get() = prefs.getStringSet(KEY_KIDS_APPS, null)?.toSet() ?: emptySet()
@@ -329,9 +263,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
         get() = prefs.getLong(KEY_KIDS_UNLOCK_UNTIL, 0L)
         set(value) = prefs.edit { putLong(KEY_KIDS_UNLOCK_UNTIL, value) }
 
-    override var kidsFlagHome: String?
-        get() = prefs.getString(KEY_KIDS_FLAG_HOME, null)
-        set(value) = prefs.edit { if (value == null) remove(KEY_KIDS_FLAG_HOME) else putString(KEY_KIDS_FLAG_HOME, value) }
+    override var kidsFlagHome: String? by nullableString(KEY_KIDS_FLAG_HOME)
 
     override var kidsOnWhenHome: Boolean
         get() = prefs.getBoolean(KEY_KIDS_ON_WHEN_HOME, false)
@@ -353,9 +285,28 @@ class AndroidAppSettings(context: Context) : AppSettings {
         get() = StateFormat.fromStored(prefs.getInt(KEY_STATE_FORMAT, -1))
         set(value) = prefs.edit { putInt(KEY_STATE_FORMAT, value.stored) }
 
-    override var useExtractedFileName: Boolean
-        get() = prefs.getBoolean(KEY_USE_EXTRACTED_FILE_NAME, false)
-        set(value) = prefs.edit { putBoolean(KEY_USE_EXTRACTED_FILE_NAME, value) }
+    override var useExtractedFileName: Boolean by bool(KEY_USE_EXTRACTED_FILE_NAME, false)
+
+    override var gpuDriver: String
+        get() = prefs.getString(KEY_GPU_DRIVER, null) ?: GpuDriverChoice.SYSTEM
+        set(value) = prefs.edit { putString(KEY_GPU_DRIVER, value) }
+
+    /**
+     * A marker is committed, not applied: it must be on disk before the launch it guards can kill the process. In the
+     * game process that is [ProviderPreferences]' commit, which waits until the menu process has committed it to its
+     * file (and every apply queued before it); blocking, so never on the main thread. A clear is applied: a marker left
+     * behind only costs a crash record when that process is gone, and the game process's end waits for its sends.
+     */
+    override var gpuDriverMarker: String?
+        get() = prefs.getString(KEY_GPU_DRIVER_MARKER, null)
+        set(value) {
+            if (value == null) prefs.edit { remove(KEY_GPU_DRIVER_MARKER) }
+            else if (!prefs.edit().putString(KEY_GPU_DRIVER_MARKER, value).commit()) NxLog.w("NXAPP", "the GPU driver launch marker could not be saved")
+        }
+
+    override var gpuDriverCrashes: String? by nullableString(KEY_GPU_DRIVER_CRASHES)
+
+    override var lastLaunchMaliSystemVulkan: Boolean by bool(KEY_LAST_LAUNCH_MALI_SYSTEM_VULKAN, false)
 
     /** The cores Vulkan failed on for this phone ([VulkanFallback]), kept per build (its version name and commit). */
     override val vulkanFailedCores: Set<String>
@@ -397,6 +348,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_ANDROID_GAMES_ASKED = "android_games_asked"
         private const val KEY_ALL_FILES_ASKED = "all_files_asked"
         private const val KEY_MIC_ASKED = "mic_asked"
+        private const val KEY_MIC_BUTTON_SHOWN = "mic_button_shown"
         private const val KEY_LAYOUT_TIP_HIDDEN = "layout_tip_hidden"
         private const val KEY_ONBOARDING_DONE = "onboarding_done"
         private const val KEY_ONBOARDING_STEP = "onboarding_step"
@@ -438,6 +390,8 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_MENU_HOME_STATS = "menu_home_stats"
         private const val KEY_GAME_LIST_LAYOUT_OPTIONS = "game_list_layout_options"
         private const val KEY_GAME_LIST_ACHIEVEMENTS_PANEL = "game_list_achievements_panel"
+        private const val KEY_MAIN_MENU_TIP_HIDDEN = "main_menu_tip_hidden"
+        private const val KEY_GAME_LIST_TIP_HIDDEN = "game_list_tip_hidden"
         private const val KEY_PAD_VIBRATION = "pad_vibration"
         private const val KEY_SHORTCUTS = "shortcuts"
         private const val KEY_SYSTEM_BUTTONS = "system_buttons"
@@ -461,11 +415,17 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_BOTTOM_SCREEN = "bottom_screen"
         private const val KEY_PAUSE_UNFOCUSED = "pause_unfocused"
         private const val KEY_SCREEN_CARE = "screen_care"
+        private const val KEY_SAVE_ON_QUIT = "save_on_quit"
+        private const val KEY_A_RESUMES = "a_resumes"
         private const val KEY_MENU_INFO_ACHIEVEMENTS = "menu_info_achievements"
         private const val KEY_SAVE_FORMAT = "save_format"
         private const val KEY_STATE_FORMAT = "state_format"
         private const val KEY_USE_EXTRACTED_FILE_NAME = "use_extracted_file_name"
         private const val KEY_VULKAN_FAILURES = "vulkan_failures"
+        private const val KEY_GPU_DRIVER = "gpu_driver"
+        private const val KEY_GPU_DRIVER_MARKER = "gpu_driver_marker"
+        private const val KEY_GPU_DRIVER_CRASHES = "gpu_driver_crashes"
+        private const val KEY_LAST_LAUNCH_MALI_SYSTEM_VULKAN = "last_launch_mali_system_vulkan"
         /** The build a Vulkan failure is recorded for: a new release, or a new debug build, tries Vulkan again. */
         private const val APP_VERSION = BuildConfig.VERSION_NAME + "-" + BuildConfig.GIT_COMMIT
         private const val KEY_MENU_ACCENT = "menu_accent"

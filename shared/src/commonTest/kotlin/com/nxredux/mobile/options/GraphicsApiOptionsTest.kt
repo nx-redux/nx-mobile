@@ -7,10 +7,25 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class GraphicsApiOptionsTest {
+    // N64's ParaLLEl-RDP: its general shader only on an Adreno's own driver, whose compiler fails the specialised ones.
+    @Test fun parallelTakesItsGeneralShaderOnlyOnAnAdrenosOwnDriver() {
+        val switch = CoreRegistry.forTag("N64")!!.vulkan!!
+        val vulkan = GraphicsApiOptions.resolve(GraphicsApiOptions.VULKAN, switch, { true })
+        val gles = GraphicsApiOptions.resolve(GraphicsApiOptions.AUTO, switch, { true })
+        val adreno = "Adreno (TM) 740"
+        fun uber(launch: GraphicsApiLaunch, customDriver: Boolean, gpu: String?) =
+            GraphicsApiOptions.envFor(launch, switch, customDriver, gpu).let { it.containsKey("PARALLEL_RDP_UBERSHADER") to it["PARALLEL_RDP_UBERSHADER"] }
+        assertEquals(true to "1", uber(vulkan, customDriver = false, adreno))
+        assertEquals(true to null, uber(vulkan, customDriver = true, adreno))   // Turnip compiles the specialised ones
+        assertEquals(true to null, uber(vulkan, customDriver = false, "Mali-G76 MC4"))
+        assertEquals(true to null, uber(gles, customDriver = false, adreno))   // unset after a Vulkan launch
+        assertEquals("0", GraphicsApiOptions.envFor(vulkan, switch, false, adreno)["PARALLEL_RDP_SMALL_TYPES"])
+    }
+
     @Test fun wii_and_gamecube_offer_the_graphics_api_row() {
-        assertEquals(WiiOptions.table + GraphicsApiOptions.row, ConsoleSettings.tableFor("WII").filter { it !in PadOptions.all && it != BottomScreenOptions.row && it !in (SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.row) })
+        assertEquals(WiiOptions.table + DolphinOptions.wiiResolutionRows(null) + GraphicsApiOptions.row, ConsoleSettings.tableFor("WII").filter { it !in PadOptions.all && it != BottomScreenOptions.row && it !in (SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.row) })
         assertTrue(WiiOptions.screenRow in WiiOptions.table)
-        assertEquals(listOf(GraphicsApiOptions.row), ConsoleSettings.tableFor(" gc ").filter { it !in PadOptions.all && it != BottomScreenOptions.row && it !in (SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.row) })
+        assertEquals(DolphinOptions.resolutionRows(null) + GraphicsApiOptions.row, ConsoleSettings.tableFor(" gc ").filter { it !in PadOptions.all && it != BottomScreenOptions.row && it !in (SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.row) })
         assertEquals(listOf("Auto", "OpenGL ES", "Vulkan"), GraphicsApiOptions.row.values.map(GraphicsApiOptions.row::labelOf))
         assertEquals(GraphicsApiOptions.AUTO, GraphicsApiOptions.row.default)
     }
@@ -19,7 +34,7 @@ class GraphicsApiOptionsTest {
         listOf("WII", "GC", "PSP", "PSX", "N64", "DC", "3DS").forEach { assertTrue(GraphicsApiOptions.appliesTo(it), it) }
         listOf("PS", "GBA", "NDS", "SNES", "").forEach { assertFalse(GraphicsApiOptions.appliesTo(it), it) }
         assertTrue(ConsoleSettings.tableFor("PSX").any { it.key == GraphicsApiOptions.KEY })
-        assertEquals(N3dsOptions.layoutRows + N3dsOptions.resolutionRows(null) + listOf(N3dsOptions.newControlsRow, N3dsOptions.localWirelessRow, GraphicsApiOptions.row), ConsoleSettings.tableFor("3DS").filter { it !in PadOptions.all && it != BottomScreenOptions.row && it !in (SpeedOptions.table + AudioOptions.rows) })
+        assertEquals(N3dsOptions.layoutRows + N3dsOptions.resolutionRows(null) + listOf(NdsOptions.shaderScreensRow, N3dsOptions.newControlsRow, N3dsOptions.localWirelessRow, GraphicsApiOptions.row), ConsoleSettings.tableFor("3DS").filter { it !in PadOptions.all && it != BottomScreenOptions.row && it !in (SpeedOptions.table + AudioOptions.rows) })
         assertTrue(ConsoleSettings.tableFor("PS").none { it.key == GraphicsApiOptions.KEY })
     }
 
@@ -27,7 +42,7 @@ class GraphicsApiOptionsTest {
     @Test fun exactly_the_rows_read_at_launch_are_marked() {
         val all = listOf("WII", "GC", "N64", "PSP", "PSX", "DC", "3DS", "NDS", "MD", "GBA").flatMap(ConsoleSettings::tableFor).distinct()
         assertEquals(
-            setOf(GraphicsApiOptions.KEY, WiiOptions.SCREEN, WiiOptions.POINTER_WIDTH, WiiOptions.POINTER_HEIGHT, WiiOptions.POINTER_OFFSET, AudioOptions.BUFFER, N3dsOptions.LOCAL_WIRELESS, NdsOptions.LOCAL_WIRELESS, PspOptions.LOCAL_WIRELESS),
+            setOf(GraphicsApiOptions.KEY, WiiOptions.SCREEN, WiiOptions.POINTER_WIDTH, WiiOptions.POINTER_HEIGHT, WiiOptions.POINTER_OFFSET, AudioOptions.BUFFER, PspOptions.LOCAL_WIRELESS),
             all.filter { it.atLaunch }.map { it.key }.toSet(),
         )
     }
@@ -100,5 +115,105 @@ class GraphicsApiOptionsTest {
         assertTrue(FrontendOptions.isFrontendKey(GraphicsApiOptions.KEY))
         assertEquals(GraphicsApiOptions.row, FrontendOptions.option(GraphicsApiOptions.KEY))
         assertEquals(GraphicsApiOptions.AUTO, FrontendOptions.defaults("GC")[GraphicsApiOptions.KEY])
+    }
+
+    private val ps2 = CoreRegistry.forTag("PS2")!!.vulkan
+
+    @Test fun auto_is_vulkan_for_ps2_on_a_mali_gpu() {
+        for (v in listOf(GraphicsApiOptions.AUTO, null)) {
+            assertEquals(GraphicsApiOptions.VULKAN, GraphicsApiOptions.effective(v, ps2) { "Mali-G76 MC4" }, "$v")
+            assertEquals(v, GraphicsApiOptions.effective(v, ps2) { "Adreno (TM) 740" }, "$v")
+            assertEquals(v, GraphicsApiOptions.effective(v, ps2) { null }, "$v")
+        }
+        assertTrue(GraphicsApiOptions.resolve(GraphicsApiOptions.effective(GraphicsApiOptions.AUTO, ps2) { "Mali-G76 MC4" }, ps2, { true }).preferVulkan)
+    }
+
+    @Test fun a_picked_api_is_kept_on_a_mali_gpu_and_the_gpu_is_not_asked() {
+        for (v in listOf(GraphicsApiOptions.GLES, GraphicsApiOptions.VULKAN)) {
+            assertEquals(v, GraphicsApiOptions.effective(v, ps2) { error("asked") })
+        }
+    }
+
+    @Test fun auto_is_vulkan_on_an_xclipse_gpu_except_n64_and_wii() {
+        val xclipse = "ANGLE ((Samsung Xclipse 540) on Vulkan 1.3.279)"
+        val onXclipse = listOf("3DS", "PS2", "GC", "PSP", "PSX", "DC")
+        for (tag in onXclipse + listOf("N64", "WII")) {
+            val switch = CoreRegistry.forTag(tag)!!.vulkan
+            for (v in listOf(GraphicsApiOptions.AUTO, null)) {
+                val expected = if (tag in onXclipse) GraphicsApiOptions.VULKAN else v
+                assertEquals(expected, GraphicsApiOptions.effective(v, switch) { xclipse }, "$tag $v")
+            }
+        }
+        val n3ds = CoreRegistry.forTag("3DS")!!.vulkan
+        for (v in listOf(GraphicsApiOptions.AUTO, null)) {
+            assertEquals(v, GraphicsApiOptions.effective(v, n3ds) { "Mali-G76 MC4" }, "$v")
+            assertEquals(GraphicsApiOptions.VULKAN, GraphicsApiOptions.effective(v, n3ds, customDriver = true) { "Mali-G76 MC4" }, "$v")
+            assertEquals(v, GraphicsApiOptions.effective(v, n3ds) { "Adreno (TM) 740" }, "$v")
+        }
+        assertEquals(GraphicsApiOptions.GLES, GraphicsApiOptions.effective(GraphicsApiOptions.GLES, n3ds) { error("asked") })
+    }
+
+    @Test fun only_ps2_dolphin_psp_and_3ds_follow_the_mali_gpu_on_auto() {
+        assertEquals(setOf("armsx2", "dolphin", "ppsspp", "azahar"), CoreRegistry.all.filter { it.vulkan?.autoOnMali == true }.map { it.id }.toSet())
+        // Dolphin and the 3DS follow the Mali GPU only with a custom driver (the stock driver tints or loses the device); PS2 and PSP always.
+        val wii = CoreRegistry.forTag("WII")!!.vulkan
+        assertEquals(GraphicsApiOptions.AUTO, GraphicsApiOptions.effective(GraphicsApiOptions.AUTO, wii) { "Mali-G76 MC4" })
+        assertEquals(GraphicsApiOptions.VULKAN, GraphicsApiOptions.effective(GraphicsApiOptions.AUTO, wii, customDriver = true) { "Mali-G76 MC4" })
+        assertEquals(GraphicsApiOptions.AUTO, GraphicsApiOptions.effective(GraphicsApiOptions.AUTO, CoreRegistry.forTag("GC")!!.vulkan, customDriver = true) { "Adreno (TM) 740" })
+        assertEquals(GraphicsApiOptions.VULKAN, GraphicsApiOptions.effective(GraphicsApiOptions.AUTO, CoreRegistry.forTag("PS2")!!.vulkan) { "Mali-G76 MC4" })
+        assertEquals(GraphicsApiOptions.VULKAN, GraphicsApiOptions.effective(GraphicsApiOptions.AUTO, CoreRegistry.forTag("PSP")!!.vulkan) { "Mali-G76 MC4" })
+        assertEquals(GraphicsApiOptions.AUTO, GraphicsApiOptions.effective(GraphicsApiOptions.AUTO, CoreRegistry.forTag("3DS")!!.vulkan) { "Mali-G76 MC4" })
+        assertEquals(GraphicsApiOptions.VULKAN, GraphicsApiOptions.effective(GraphicsApiOptions.AUTO, CoreRegistry.forTag("3DS")!!.vulkan, customDriver = true) { "Mali-G76 MC4" })
+        assertEquals(setOf("azahar", "dolphin"), CoreRegistry.all.filter { it.vulkan?.maliNeedsCustomDriver == true }.map { it.id }.toSet())
+        assertEquals(GraphicsApiOptions.AUTO, GraphicsApiOptions.effective(GraphicsApiOptions.AUTO, CoreRegistry.forTag("GC")!!.vulkan) { "Adreno (TM) 740" })
+        assertEquals(GraphicsApiOptions.AUTO, GraphicsApiOptions.effective(GraphicsApiOptions.AUTO, n64) { error("asked") })
+        assertEquals(GraphicsApiOptions.AUTO, GraphicsApiOptions.effective(GraphicsApiOptions.AUTO, null) { error("asked") })
+    }
+
+    @Test fun where_auto_is_vulkan_the_rows_say_so_and_the_gpu_driver_row_shows_on_auto() {
+        val drivers = listOf(com.nxredux.mobile.gpudriver.GpuDriver("d", "Driver", "1", "a", "d", "libvulkan_d.so", 28))
+        val plain = ConsoleSettings.tableFor("PS2", gpuDrivers = drivers)
+        assertEquals(GraphicsApiOptions.row, plain.single { it.key == GraphicsApiOptions.KEY })
+        assertTrue(plain.shownFor(emptyMap()).none { it.key == GpuDriverOptions.KEY })
+        val mali = ConsoleSettings.tableFor("PS2", gpuDrivers = drivers, autoVulkan = true)
+        val api = mali.single { it.key == GraphicsApiOptions.KEY }
+        assertEquals("Applies next launch. Auto is Vulkan", api.brief)
+        assertTrue("Auto uses Vulkan" in api.info)
+        assertTrue(mali.shownFor(emptyMap()).any { it.key == GpuDriverOptions.KEY })
+        assertTrue(mali.shownFor(mapOf(GraphicsApiOptions.KEY to GraphicsApiOptions.GLES)).none { it.key == GpuDriverOptions.KEY })
+    }
+
+    @Test fun on_mali_the_gpu_driver_row_stays_on_auto_where_the_driver_decides_auto() {
+        val drivers = listOf(com.nxredux.mobile.gpudriver.GpuDriver("d", "Driver", "1", "a", "d", "libvulkan_d.so", 28))
+        val auto = emptyMap<String, String>()
+        for (tag in listOf("3DS", "GC", "WII")) {
+            // The system driver picked: Auto is OpenGL ES, yet the row stays so a custom driver can be picked again.
+            assertTrue(ConsoleSettings.tableFor(tag, gpuDrivers = drivers, mali = true).shownFor(auto).any { it.key == GpuDriverOptions.KEY }, tag)
+            assertTrue(ConsoleSettings.tableFor(tag, gpuDrivers = drivers).shownFor(auto).none { it.key == GpuDriverOptions.KEY }, tag)
+        }
+        assertTrue(ConsoleSettings.tableFor("N64", gpuDrivers = drivers, mali = true).shownFor(auto).none { it.key == GpuDriverOptions.KEY })
+    }
+
+    @Test fun on_a_mali_gpu_the_info_says_the_system_driver_can_crash_and_names_the_fix() {
+        val drivers = listOf(com.nxredux.mobile.gpudriver.GpuDriver("d", "Driver", "1", "a", "d", "libvulkan_d.so", 28))
+        fun api(tag: String, mali: Boolean, autoVulkan: Boolean = false, gpuDrivers: List<com.nxredux.mobile.gpudriver.GpuDriver>? = drivers) =
+            ConsoleSettings.tableFor(tag, gpuDrivers = gpuDrivers, autoVulkan = autoVulkan, mali = mali).single { it.key == GraphicsApiOptions.KEY }
+        assertEquals(GraphicsApiOptions.row, api("3DS", mali = false))
+        assertEquals(GraphicsApiOptions.row.info + "\n" + GraphicsApiOptions.MALI_NOTE, api("3DS", mali = true).info)
+        assertEquals(GraphicsApiOptions.row.brief, api("3DS", mali = true).brief)
+        assertEquals(GraphicsApiOptions.rowAutoVulkan.info + "\n" + GraphicsApiOptions.MALI_NOTE, api("PS2", mali = true, autoVulkan = true).info)
+        // No custom drivers on this phone: no GPU driver row to point at, so OpenGL ES is the way out.
+        assertEquals(GraphicsApiOptions.row.info + "\n" + GraphicsApiOptions.MALI_NOTE_NO_DRIVERS, api("3DS", mali = true, gpuDrivers = null).info)
+        assertTrue("GPU driver" in GraphicsApiOptions.MALI_NOTE)
+        assertFalse("GPU driver" in GraphicsApiOptions.MALI_NOTE_NO_DRIVERS)
+    }
+
+    @Test fun the_parallel_rdp_line_shows_on_n64_only() {
+        val n64 = ConsoleSettings.tableFor("N64").single { it.key == GraphicsApiOptions.KEY }
+        assertTrue(GraphicsApiOptions.N64_NOTE in n64.info)
+        for (tag in listOf("3DS", "PSP", "GC", "PS2", "DC")) {
+            assertTrue(GraphicsApiOptions.N64_NOTE !in ConsoleSettings.tableFor(tag).single { it.key == GraphicsApiOptions.KEY }.info, tag)
+        }
+        assertTrue("ParaLLEl" !in GraphicsApiOptions.row.info)
     }
 }

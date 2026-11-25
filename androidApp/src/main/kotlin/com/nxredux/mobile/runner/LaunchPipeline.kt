@@ -1,5 +1,6 @@
 package com.nxredux.mobile.runner
 
+import com.nxredux.mobile.layout.DeviceTraits
 import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
@@ -13,14 +14,20 @@ import com.nxredux.mobile.BuildConfig
 import com.nxredux.mobile.DebugLogFile
 import com.nxredux.mobile.R
 import com.nxredux.mobile.lowLatencyWifiLock
+import com.nxredux.mobile.cheats.CheatFolders
 import com.nxredux.mobile.cheats.CheatSet
 import com.nxredux.mobile.cheats.DolphinCheats
 import com.nxredux.mobile.gametime.GameTimeRecorder
 import com.nxredux.mobile.gametime.GameTimeService
 import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.library.ArcadeCompanions
+import com.nxredux.mobile.library.Entry
+import com.nxredux.mobile.library.MsuSets
 import com.nxredux.mobile.library.Names
 import com.nxredux.mobile.library.NaomiSets
+import com.nxredux.mobile.library.disc.DiscProbe
+import com.nxredux.mobile.netplay.DcNetplaySaves
+import com.nxredux.mobile.netplay.GgpoSession
 import com.nxredux.mobile.netplay.NetplayCores
 import com.nxredux.mobile.netplay.NetplayLinkKind
 import com.nxredux.mobile.netplay.NetplayLinkOptions
@@ -34,6 +41,15 @@ import com.nxredux.mobile.options.CoreConfig
 import com.nxredux.mobile.options.FrontendOptions
 import com.nxredux.mobile.options.FrontendSettings
 import com.nxredux.mobile.options.GraphicsApiOptions
+import com.nxredux.mobile.options.GpuDriverOptions
+import com.nxredux.mobile.gpudriver.AndroidGpuDrivers
+import com.nxredux.mobile.gpudriver.GpuDriver
+import com.nxredux.mobile.gpudriver.GameCrashNotice
+import com.nxredux.mobile.gpudriver.GpuDriverChoice
+import com.nxredux.mobile.gpudriver.GpuDriverCrash
+import com.nxredux.mobile.gpudriver.GpuDriverCrashSettle
+import android.os.Build
+import android.os.Process
 import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.OverlayResolver
@@ -75,8 +91,9 @@ import com.nxredux.mobile.storage.AndroidHomeLocator
 import com.nxredux.mobile.storage.AndroidRefs
 import com.nxredux.mobile.storage.AndroidRomsSources
 import com.nxredux.mobile.storage.DataRoot
+import com.nxredux.mobile.storage.FileRefs
+import com.nxredux.mobile.storage.LibchdrSectors
 import com.nxredux.mobile.storage.NdsDsvSave
-import com.nxredux.mobile.storage.NdsResumeCleanup
 import com.nxredux.mobile.storage.NxPaths
 import com.nxredux.mobile.test.NxTestResults
 import com.nxredux.mobile.tools.CheatsRoot
@@ -84,6 +101,7 @@ import com.nxredux.mobile.ui.nx.InGameMenuModel
 import com.swordfish.libretrodroid.GLRetroView
 import com.swordfish.libretrodroid.GLRetroViewData
 import com.swordfish.libretrodroid.LibretroDroid
+import com.swordfish.libretrodroid.LibretroNetplay
 import com.swordfish.libretrodroid.NxLog
 import com.swordfish.libretrodroid.Variable
 import com.swordfish.libretrodroid.VirtualFile
@@ -152,6 +170,8 @@ internal interface LaunchHost : GameScreenHost {
     var ndsRenderMode: String?
     var ndsFellBack: Boolean
     var launchedOnVulkan: Boolean
+    /** The custom GPU driver this launch loads; null: the system driver, or not on Vulkan. */
+    var launchedDriver: GpuDriver?
     var launchEnv: Map<String, String?>
     var graphicsForcedOptions: Set<String>
     var frontendValues: Map<String, String>
@@ -181,7 +201,19 @@ internal interface LaunchHost : GameScreenHost {
     fun startGameTime(rec: GameTimeRecorder)
 
     fun fail(message: String, title: String = GameActivity.START_FAILED)
-    fun relaunchOnGles()
+    /** [record] false: the core's Vulkan failure is not recorded (a custom driver failed); [notice]: the toast. */
+    fun relaunchOnGles(record: Boolean = true, notice: String = VulkanFallback.NOTICE)
+    /** The custom driver could not start: the same launch again on the system driver ([GameActivity.EXTRA_FORCE_SYSTEM_DRIVER]). */
+    fun relaunchOnSystemDriver()
+    /** The first frame is up: the crash marker goes after [GpuDriverCrash.CLEAR_AFTER_MS]. */
+    fun clearDriverMarkerLater()
+    /**
+     * Writes the custom-driver crash marker ([GpuDriverCrash.encode]), blocking until it is on disk: off the main thread.
+     * Nothing once the screen is destroyed; a write in flight then is cleared by it ([GpuDriverMarkerGuard]).
+     */
+    fun markDriverLaunch(marker: String): Boolean
+    /** Clears the marker [markDriverLaunch] wrote (blocking, off the main thread): the driver failed its preflight. */
+    fun clearDriverLaunchMarker()
     fun quitGame(chosen: Boolean, autoState: Boolean)
     fun isLandscape(): Boolean
     fun screenClass(): ScreenClass
@@ -237,7 +269,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             private var current: Network? = null
             override fun onAvailable(network: Network) {
                 current = network
-                com.swordfish.libretrodroid.LibretroNetplay.dsSetNetwork(network.networkHandle)
+                LibretroNetplay.dsSetNetwork(network.networkHandle)
                 pspAddressChanged(cm, network)
             }
             override fun onLinkPropertiesChanged(network: Network, linkProperties: android.net.LinkProperties) {
@@ -246,7 +278,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             override fun onLost(network: Network) {
                 if (network != current) return
                 current = null
-                com.swordfish.libretrodroid.LibretroNetplay.dsSetNetwork(0L)
+                LibretroNetplay.dsSetNetwork(0L)
                 if (pspWatched) host.activity.runOnUiThread { pspWifi = null }
             }
         }
@@ -370,8 +402,29 @@ internal class LaunchPipeline(private val host: LaunchHost) {
     /** A PSP launch's Local Wireless option, a sheet session's included: its Disconnect falls back to the automatic route on it. */
     private var pspLocalWireless = false
 
-    /** The same for a DS or 3DS launch (the console's own option). */
+    /** The same for a DS or 3DS launch (the console's own option), as switched in the game since ([localWirelessSwitched]). */
     private var dsLocalWireless = false
+
+    /** The DS or 3DS core whose link this launch runs outside a sheet session or may fall back to; null for any other. */
+    private var dsLinkCore: String? = null
+
+    /** The Wi-Fi network's broadcast address now, for a room search; null when it has none. */
+    private fun wifiBroadcast(): String? =
+        WifiNetworks.broadcast(WifiNetworks.address(host.activity.getSystemService(ConnectivityManager::class.java)))?.hostAddress
+
+    /**
+     * The console's Local Wireless switched in the game to [on]: the link variables to send for a DS or 3DS game on the
+     * automatic route, the Wi-Fi's broadcast address read again for a search. Empty otherwise: a sheet session keeps its
+     * room (its Disconnect reads the new value), and other consoles read the option at launch. Main thread.
+     */
+    fun localWirelessSwitched(on: Boolean): Map<String, String> {
+        val core = dsLinkCore ?: return emptyMap()
+        dsLocalWireless = on
+        if (!dsAutoRoute) return emptyMap()
+        val broadcastKey = if (core == "azahar") NetplayLinkOptions.N3DS_BROADCAST else NetplayLinkOptions.NDS_BROADCAST
+        val broadcast = if (on) wifiBroadcast() else null
+        return NetplayLinkOptions.soloLocalWireless(core, on) + listOfNotNull(broadcast?.let { broadcastKey to it })
+    }
 
     /** A DS, 3DS or PSP launch's [NetplayCores.cableAuto], for the automatic route a sheet session may fall back to. */
     private var dsCableCore = false
@@ -384,12 +437,11 @@ internal class LaunchPipeline(private val host: LaunchHost) {
     fun leaveLinkSession(kind: NetplayLinkKind): Map<String, String> {
         if (kind == NetplayLinkKind.PSPLINK) return leavePspSession()
         // Read now: the Wi-Fi may have changed since launch, and a session never read it.
-        val broadcast = if (!dsLocalWireless) null else
-            WifiNetworks.broadcast(WifiNetworks.address(host.activity.getSystemService(ConnectivityManager::class.java)))?.hostAddress
+        val broadcast = if (!dsLocalWireless) null else wifiBroadcast()
         val left = NetplayLinkOptions.dsSessionLeft(kind, dsLocalWireless, broadcast)
-        if ((left[NetplayLinkOptions.NDS_MODE] ?: left[NetplayLinkOptions.N3DS_MODE]) == NetplayLinkOptions.N3DS_AUTO) {
-            // The session held the broadcasts lock from launch; the automatic route holds it only while the game's
-            // wireless is on, and the link stays out until the game turns it on again ([dsWirelessChanged] takes it then).
+        if (left.isNotEmpty()) {
+            // The automatic route from here. The session held the broadcasts lock from launch; the automatic route holds
+            // it only while the game's wireless is on ([dsWirelessChanged]).
             dropBroadcasts()
             dsCableAuto = dsCableCore
             dsAutoRoute = true
@@ -430,13 +482,17 @@ internal class LaunchPipeline(private val host: LaunchHost) {
         broadcasts = runCatching { wifi?.createMulticastLock("nx-3ds-wireless")?.apply { setReferenceCounted(false); acquire() } }.getOrNull()
     }
     companion object {
-        /** Cores that send a video view map (melonds-ds#335, azahar#2718 in our patches). */
+        /** Cores that send a video view map (our core patches add it). */
         private val VIDEO_VIEW_CORES = setOf("melondsds", "azahar")
         private const val KEY_FCEUMM_TURBO_SINCE = "fceumm_turbo_since"
         private const val SIMULATE_VULKAN_FAIL = "simulate_vulkan_fail"   // debug builds only: see attachView
         private const val MUPEN64PLUS_NEXT_ID = "mupen64plus_next"
         /** Beside a real-path cache copy: what it was copied from ([realPathCopyStamp]). */
         private const val REAL_PATH_STAMP = ".nxstamp"
+        /** The consoles a Sega CD disc lists under: its own, and the Mega Drive's (a cue in a Genesis folder runs too). */
+        private val SEGA_CD_CONSOLES = setOf("segacd", "md")
+        /** flycast's log lines from a Dreamcast session's start (the GGPO patch's "NX GGPO: ..."). */
+        private const val GGPO_LOG = "NX GGPO"
     }
 
     /** What [resolveConfig] settled that the later stages read. */
@@ -462,7 +518,9 @@ internal class LaunchPipeline(private val host: LaunchHost) {
         val options: List<Variable>,
         val linkOptions: Map<String, String>,
         val frontend: FrontendSettings,
-    )
+    ) {
+        fun option(key: String): String? = options.firstOrNull { it.key == key }?.value
+    }
 
     /** What [prepareContent] found that the view's data and the load-failure message read. */
     private class PreparedContent(
@@ -491,9 +549,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
         attachView(cfg, prepared, data)
     }
 
-    private fun refuse(message: String): Nothing? { host.fail(message); return null }
-
-    private fun refuse(message: String, title: String): Nothing? { host.fail(message, title); return null }
+    private fun refuse(message: String, title: String = GameActivity.START_FAILED): Nothing? { host.fail(message, title); return null }
 
     private suspend fun resolveConfig(): LaunchConfig? {
         with(host) {
@@ -534,12 +590,12 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             } ?: return refuse("The game's storage could not be reached. Try again.")
             privateRoot = DataRoot.private(activity)
             shaderRoots = Shaders.Roots.of(privateRoot, dataRoot)
-            cheatsFolder = Cheats.folder(tag, romFileName)
+            cheatsFolder = CheatFolders.primary(tag, romFileName)
             // The battery-save, clock and state names follow the handheld's save settings. The save setup waits
             // for the unpack (after the inner-file check below), since Use extracted file name names them after the
             // archive's inner file; the config and marker names never depend on the settings.
             paths = NxPaths(tag, coreId, romFileName, settings.saveNaming)
-            showResumeCover()   // the screenshot's name depends on the tag and ROM name only: up long before the core loads
+            showResumeCover(tag)   // the screenshot's name depends on the tag and ROM name only: up long before the core loads
             val home = AndroidHomeLocator(activity).current()   // a SAF tree or a file ref (the media home without access): BiosImport picks the tree
             // netplay: a session on a copy never touches the real saves: its session folder is its own.
             val sessionDir = if (np?.onCopy == true) NetplaySessionDir.dir(activity.filesDir) else null
@@ -560,8 +616,13 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             descriptorDefaults = optionExtras(activity.intent.getStringArrayExtra(EXTRA_OPTIONS) ?: emptyArray())
             // melonDS DS: GPU where the device has GLES 3.2, as a lowest-priority default; a stored value wins, none is written.
             if (coreId == NdsRenderer.CORE_ID_MELONDSDS) {
-                val gles = (activity.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager).deviceConfigurationInfo.reqGlEsVersion
+                val gles = (activity.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager).deviceConfigurationInfo.reqGlEsVersion
                 descriptorDefaults = NdsRenderer.defaults(gles) + descriptorDefaults
+            }
+            // Before the frontend values are read: a core that follows the GPU has defaults that do too (Res3dConsole.defaultCap),
+            // and so may the options its 3D Resolution sets (Res3dConsole.followsGpu).
+            if (descriptor?.vulkan?.followsGpu == true || Res3dConsole.forTag(tag)?.takeIf { it.coreId == coreId }?.followsGpu == true) {
+                DeviceTraits.gpu = AndroidDeviceInfo.gpu()
             }
             val store = CoreConfigStore(File(dataRoot, paths.consoleConfig), File(dataRoot, paths.gameConfig)).also { configStore = it }
             val resolved = withContext(Dispatchers.IO) {
@@ -576,7 +637,6 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             ndsRenderMode = resolved.values[NdsRenderer.RENDER_MODE]
             input.n3dsCoreValues(resolved.values)
             val savedCheats = CheatSet.savedFrom(resolved.values, resolved.source)
-            // The file Dolphin loads, once known: an archive's unpacked disc names its built-in cheats (completed below).
             val dolphinContent = CompletableDeferred<String>()
             // Off the critical path: the menu shows the set once it lands, the first-frame apply waits for it.
             val loadCheats = { lifecycleScope.launch {
@@ -617,13 +677,14 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             renderer.ndsSplit = ndsAtStart
             // nx_* (and legacy minarch_*) keys are frontend settings: never passed to the core.
             frontendValues = FrontendOptions.fromConfig(resolved.values, tag)
-            // netplay: both devices run the console's default Sega pad (Auto), whatever this device's console or game setting;
-            // the core then gets the handheld pak's pad for this tag and core (NetplayPads).
-            if (np != null && PadMap.isSegaPadTag(tag)) frontendValues = frontendValues + (PadOptions.SEGA_PAD to SegaPadType.AUTO)
+            // netplay: both devices run the host's Controller Type when both sides sent theirs (NetplaySession.segaPad), the
+            // single-player path then picks the pad; else Auto here and the handheld pak's fixed pad (NetplayPads).
+            val sessionPad = np?.segaPad?.takeIf { PadMap.isSegaPadTag(tag) }
+            if (np != null && PadMap.isSegaPadTag(tag)) frontendValues = frontendValues + (PadOptions.SEGA_PAD to (sessionPad ?: SegaPadType.AUTO))
             canRewind = descriptor?.rewind == true
             speed.setSession(netplay = np != null)   // first: the touch buttons [ShortcutsMicController.launch] builds follow the session
             shortcuts.launch(microphone = descriptor?.microphone == true, netplay = np != null, tag, Shortcuts.fromConfig(resolved.values))
-            val netplayPad = if (np != null) NetplayPads.forSession(tag, descriptor?.id) else null
+            val netplayPad = if (np != null) NetplayPads.forSession(tag, descriptor?.id, sessionPad) else null
             renderer.shaderValues = ShaderOptions.fromConfig(resolved.values)
             renderer.presetNames = withContext(Dispatchers.IO) { Shaders.presets(shaderRoots) }
             // 3DS with a second display: Azahar starts in the split's fixed layout, which replaces the rows' values below; launched
@@ -664,26 +725,31 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 renderer.n3dsProportion = n3dsProportion()
                 renderer.n3dsComposeLayout = N3dsOptions.coreLayoutFor(frontendValues, isLandscape(), renderer.ndsControllerMode(), screenClass(), n3dsSkinStack())
             }
+            // The options the DS / 3DS screens are laid out by are known: the resume cover can go where its screen will be.
+            renderer.layoutOptionsKnown = true
+            resumeCover?.place()
             // netplay link: gambatte and Azahar get their link options; a GBA link engine starts now, before the core loads, so
             // a joiner learns the host's gpsp_serial or mgba_link_mode from its READY and runs with it (the handheld reloads instead).
             // Outside a session mGBA gets the real cable (NetplayLinkOptions.forSolo). Cable Link: the pair core's variables
             // (both GBAs on this phone, NetplayLinkOptions.forPair), session-only like the others.
             val linkKind = np?.linkKind
             // 3DS: the player's name in Azahar's room. Outside a session the game's local wireless finds other devices
-            // itself unless the console's Local Wireless option is off ([N3dsOptions.LOCAL_WIRELESS]).
+            // itself while the console's Local Wireless option is on ([N3dsOptions.LOCAL_WIRELESS]); the link's variables
+            // go either way, so the option can be switched in the game.
             val isPsp = coreId == "ppsspp"
-            if (coreId == "azahar" || coreId == "melondsds" || isPsp) playerName = PlayerName.resolve(AndroidAppSettings(activity).playerName, AndroidDeviceInfo.deviceName(activity))
+            if (coreId == "azahar" || coreId == "melondsds" || isPsp) playerName = PlayerName.resolve(settings.playerName, AndroidDeviceInfo.deviceName(activity))
             val n3dsRoomName = if (coreId != "azahar" && coreId != "melondsds") null else NetplayLinkOptions.n3dsRoomName(playerName, kotlin.random.Random.nextInt(10000))
-            val n3dsAuto = n3dsRoomName?.takeIf { if (coreId == "melondsds") NdsOptions.localWireless(frontendValues) else N3dsOptions.localWireless(frontendValues) }
-            dsLocalWireless = n3dsAuto != null
+            dsLinkCore = coreId.takeIf { n3dsRoomName != null }
+            dsLocalWireless = n3dsRoomName != null &&
+                if (coreId == "melondsds") NdsOptions.localWireless(frontendValues) else N3dsOptions.localWireless(frontendValues)
             dsCableCore = NetplayCores.cableAuto(coreId)
             dsCableWithGame = NetplayCores.cableWithGame(coreId)
             // A room answers other devices' searches, which arrive as broadcasts: Android drops those without this lock.
             // A DS or 3DS game outside a session takes it when its wireless goes on ([dsWirelessChanged]), a PSP one at launch (below).
             if (linkKind == NetplayLinkKind.N3DSLINK || linkKind == NetplayLinkKind.NDSLINK || linkKind == NetplayLinkKind.PSPLINK) holdBroadcasts()
-            val n3dsBroadcast = n3dsAuto?.let { WifiNetworks.broadcast(WifiNetworks.address(activity.getSystemService(ConnectivityManager::class.java)))?.hostAddress }
+            val n3dsBroadcast = n3dsRoomName?.let { wifiBroadcast() }
             // A DS room runs under its own MAC (a seed kept per install) so rooms tell its members apart.
-            val ndsMac = if (coreId == "melondsds" && (n3dsAuto != null || linkKind == NetplayLinkKind.NDSLINK)) NetplayLinkOptions.ndsMac(AndroidAppSettings(activity).ndsMacSeed) else null
+            val ndsMac = if (coreId == "melondsds" && (np == null || linkKind == NetplayLinkKind.NDSLINK)) NetplayLinkOptions.ndsMac(settings.ndsMacSeed) else null
             // PSP: the ad hoc link runs in a sheet session, or outside one while Local Wireless is on, with or without a Wi-Fi
             // address (without one it plays over the cable only; [NetplayLinkOptions.forPsp]); WLAN is never on without the
             // link variables.
@@ -693,7 +759,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             val pspOptions = if (!isPsp) emptyMap() else NetplayLinkOptions.forPsp(
                 sessionOptions = np?.takeIf { linkKind == NetplayLinkKind.PSPLINK }?.let { NetplayLinkOptions.forSession(it, null) },
                 localWireless = np == null && PspOptions.localWireless(frontendValues),
-                self = pspSelf, broadcast = pspBroadcast, macSeed = AndroidAppSettings(activity).ndsMacSeed,
+                self = pspSelf, broadcast = pspBroadcast, macSeed = settings.ndsMacSeed,
             )
             if (isPsp) pspLocalWireless = PspOptions.localWireless(frontendValues)
             val pspLinked = NetplayLinkOptions.PSP_MODE in pspOptions
@@ -707,17 +773,17 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 broadcastsFromLaunch = true
                 holdBroadcasts()
             }
-            dsLinked = ndsMac != null || (coreId == "azahar" && (n3dsAuto != null || linkKind == NetplayLinkKind.N3DSLINK)) || pspLinked
+            dsLinked = ndsMac != null || (coreId == "azahar" && (np == null || linkKind == NetplayLinkKind.N3DSLINK)) || pspLinked
             if (dsLinked) {
-                com.swordfish.libretrodroid.LibretroNetplay.dsSetNetwork(WifiNetworks.network(activity.getSystemService(ConnectivityManager::class.java))?.networkHandle ?: 0L)
+                LibretroNetplay.dsSetNetwork(WifiNetworks.network(activity.getSystemService(ConnectivityManager::class.java))?.networkHandle ?: 0L)
                 watchWifi()
                 // A sheet session on the USB cable has no cable watcher of its own (the sheet brought the cable up): the
                 // link is told here, so its sockets leave the Wi-Fi for the cable's addresses.
-                if (np != null && NetplayCores.cableAuto(coreId)) com.swordfish.libretrodroid.LibretroNetplay.dsSetCable(if (np.overUsb) 2 else 0)
+                if (np != null && dsCableCore) LibretroNetplay.dsSetCable(if (np.overUsb) 2 else 0)
             }
             dsAutoRoute = dsLinked && np == null
-            dsCableAuto = dsAutoRoute && NetplayCores.cableAuto(coreId)
-            val linkOptions: Map<String, String> = (if (np == null) NetplayLinkOptions.forSolo(coreId, n3dsAuto, n3dsBroadcast, ndsMac) else when (linkKind) {
+            dsCableAuto = dsAutoRoute && dsCableCore
+            val linkOptions: Map<String, String> = (if (np == null) NetplayLinkOptions.forSolo(coreId, n3dsRoomName, n3dsBroadcast, ndsMac, dsLocalWireless) else when (linkKind) {
                 null -> NetplayLinkOptions.forPair(np)
                 NetplayLinkKind.GBLINK -> NetplayLinkOptions.forSession(np, null)
                 NetplayLinkKind.N3DSLINK -> NetplayLinkOptions.forSession(np, null, n3dsRoomName)
@@ -750,7 +816,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             val archiveAsIs = CoreRegistry.loadsArchive(cfg.tag, cfg.romFileName, naomiSets)
             val naomiBios = if (archiveAsIs) naomiSets.biosFor(Names.stripExtension(cfg.romFileName)) else null
             // The files this launch needs, looked up by name when a Bios folder will not list.
-            val biosNames = CoreRegistry.requiredBios(cfg.tag).flatMap { it.anyOf } +
+            val requiredBios = CoreRegistry.requiredBios(cfg.tag, cfg::option)
+            val biosNames = requiredBios.flatMap { it.anyOf } +
                 (systemSets + listOfNotNull(naomiBios)).flatMap { listOf("$it.zip", "$it.7z") }
             // Usually a stamp check: MainActivity pre-warms the copy after an update; if it is still running, this waits on its lock.
             val systemDir = withContext(Dispatchers.IO) { SystemFiles.ensure(host.activity) }
@@ -782,7 +849,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             }
             val inner: File? = unpacked?.file
             val unpackedEntry = unpacked?.entryName
-            cfg.dolphinContent.complete(inner?.name ?: cfg.romFileName)   // Dolphin names its cheat file after the inner disc, not the archive
+            val loadedName = inner?.name ?: cfg.romFileName
+            cfg.dolphinContent.complete(loadedName)   // Dolphin names its cheat file after the inner disc, not the archive
             if (inner != null && cfg.descriptor != null && Names.extensionOf(inner.name) !in cfg.descriptor.extensions) {
                 // Name a tag of the same console whose core runs the file only when one exists; otherwise the file is in the wrong folder.
                 val alt = CoreRegistry.consoleOf(cfg.tag)?.tags?.firstOrNull { t ->
@@ -793,11 +861,11 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                         if (alt != null) "Pick ${CoreRegistry.handheldTag(alt)} from the game's Emulator menu." else "Move it to the folder of the console it belongs to.",
                 )
             }
-            // minarch names saves after the unpacked file when Use extracted file name is on (ma_game.c:75-76): known only now.
+            // minarch names saves after the unpacked file when Use extracted file name is on (ma_game.c): known only now.
             paths = paths.withInner(inner?.let { unpackedEntry })
             saves.open(if (cfg.np == null) SaveStates(dataRoot, paths) else null)   // netplay: no save states, no auto-resume
-            dropStaleNdsResume(cfg.tag, cfg.coreId, cfg.romFileName)
-            saves.refreshSlots()   // warm for the first menu open; after the cleanup, so it never lists a deleted state
+            if (!settings.saveOnQuit) saves.unlinkAuto()
+            saves.refreshSlots()   // warm for the first menu open
             cfg.np?.let { gameNetplay.prepareSaves(it, cfg.tag, cfg.romFileName, dataRoot, paths) }
             // netplay: on a copy the battery save is the session folder's (read only: writeBatterySave skips it), under the
             // default names (the folder is mobile's own), with no clock file.
@@ -834,10 +902,9 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // Sega Controller Type (Console Settings): the cart header's I/O field under Auto, else the forced pad.
             val segaSetting = if (PadMap.isSegaPadTag(cfg.tag)) frontendValues[PadOptions.SEGA_PAD] ?: SegaPadType.AUTO else null
             if (segaSetting != null) {
-                val headerName = inner?.name ?: cfg.romFileName
-                val header = if (!SegaHeader.readable(headerName)) null else withContext(Dispatchers.IO) {
+                val header = if (!SegaHeader.readable(loadedName)) null else withContext(Dispatchers.IO) {
                     runCatching {
-                        (inner?.inputStream() ?: refs.openInput(cfg.content))?.use { SegaHeader.padType(readUpTo(it, SegaHeader.READ_LENGTH)) }
+                        (inner?.inputStream() ?: refs.openInput(cfg.content))?.use { SegaHeader.padType(it.readUpTo(SegaHeader.READ_LENGTH)) }
                     }.getOrNull()
                 }
                 segaHeader = header
@@ -847,8 +914,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             }
             // New 3DS Controls (Console Settings): Auto reads the title from the file's NCSD / NCCH header, off the main thread.
             if (N3dsOptions.appliesTo(cfg.tag)) {
-                val headerName = inner?.name ?: cfg.romFileName
-                n3dsTitle = if (!N3dsTitle.readable(headerName)) null else withContext(Dispatchers.IO) {
+                n3dsTitle = if (!N3dsTitle.readable(loadedName)) null else withContext(Dispatchers.IO) {
                     runCatching { (inner?.inputStream() ?: refs.openInput(cfg.content))?.use(::readN3dsTitle) }
                         .onFailure { NxLog.w(TAG_LOG, "reading the 3DS header failed", it) }
                         .getOrNull()
@@ -863,23 +929,45 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 }
             }
             // Wii Controller and Motion Controls (Console Settings): Auto reads the disc ID and looks it up in GameTDB's table.
-            val wiiDisc = if (!WiiOptions.appliesTo(cfg.tag) || !WiiDiscId.readable(inner?.name ?: cfg.romFileName)) null else withContext(Dispatchers.IO) {
+            val wiiDisc = if (!WiiOptions.appliesTo(cfg.tag) || !WiiDiscId.readable(loadedName)) null else withContext(Dispatchers.IO) {
                 inner?.let(WiiDiscIdReader::read) ?: WiiDiscIdReader.read(refs, cfg.content, cfg.romFileName)
             }
             wii.resolveAtLaunch(cfg.tag, wiiDisc)
             padMap = if (isDc) PadMap.IDENTITY else PadMap.forTag(cfg.tag, segaPad)
             // Only 3-button draws differently from the six the pad was composed with in onCreate: recompose it.
             if (segaPad == SegaPad.THREE) relayoutPad()
-            val contentExtension = Names.extensionOf(inner?.name ?: cfg.romFileName)
+            val contentExtension = Names.extensionOf(loadedName)
             // A missing required BIOS: say which file goes where instead of letting the core fail silently.
             val present = withContext(Dispatchers.IO) { systemDir.list()?.toSet() ?: emptySet() }
             val biosPresent = if (biosDir == systemDir) present else withContext(Dispatchers.IO) { biosDir.list()?.toSet() ?: emptySet() }
-            BiosCheck.missing(CoreRegistry.requiredBios(cfg.tag), contentExtension, biosPresent).firstOrNull()?.let {
+            // An MSU-MD set plays its music from a Sega CD: Genesis Plus GX needs that console's BIOS for it, as for a disc
+            // (PicoDrive fakes the one check the MSU-MD driver makes).
+            val msuMd = inner == null && msuMdSheet(cfg) != null && cfg.descriptor?.id == SegaPadType.GPGX
+            val biosExtension = if (msuMd) "cue" else contentExtension
+            // A Sega CD disc boots with its own region's BIOS only (an MSU-MD cartridge with its own region's): when its
+            // header is read, that file is checked (under any name the core takes) in place of "any of the three". It is
+            // read with every region's BIOS there too: the checksum check below judges only the region's file.
+            val discRegion = if (msuMd) msuMdRegion(cfg) else segaCdRegion(cfg, inner, contentExtension)
+            val needs = requiredBios.filterNot { discRegion != null && SegaCdBios.isSegaCdNeed(it) }
+            BiosCheck.missing(needs, biosExtension, biosPresent).firstOrNull()?.let {
                 return refuse(BiosCheck.message(cfg.tag, it))
+            }
+            discRegion?.let { region ->
+                val core = cfg.descriptor?.id.orEmpty()
+                SegaCdBios.missing(core, region, biosPresent)?.let { file ->
+                    val folders = withContext(Dispatchers.IO) { biosFolderOf(cfg) }
+                    return refuse(SegaCdBios.message(cfg.tag, core, region, file, biosPresent, folders::get, cartridge = msuMd))
+                }
+            }
+            // A BIOS that is there but no known good dump: refused when the core cannot run with it, else said and launched.
+            biosChecksumProblem(cfg, requiredBios, biosExtension, biosPresent, biosDir, discRegion)?.let { problem ->
+                val folders = withContext(Dispatchers.IO) { biosFolderOf(cfg) }
+                val message = BiosChecksum.message(problem, "Bios/${folders[problem.file.name] ?: CoreRegistry.consoleTag(cfg.tag)}/")
+                NxLog.w(TAG_LOG, "BIOS checksum: $message")
+                if (problem.refuses) return refuse(message) else toast(message)
             }
             // A NAOMI/Atomiswave set's BIOS archive (flycast opens <system>/dc/<bios>.zip or .7z); an unknown set is not checked.
             if (archiveAsIs) naomiSets.missingBios(cfg.romFileName, biosPresent)?.let { return refuse(NaomiSets.biosMessage(cfg.title, it)) }
-            // A missing arcade BIOS set (systemSets, read above) is refused here.
             if (systemSets.isNotEmpty()) {
                 val fbneoFiles = withContext(Dispatchers.IO) { File(systemDir, "fbneo").list()?.toSet() ?: emptySet() }
                 ArcadeCompanions.missing(systemSets, present, fbneoFiles)?.let { set ->
@@ -887,10 +975,30 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 }
             }
             val savesDir = (cfg.sessionDir ?: File(dataRoot, paths.savesDir)).apply { mkdirs() }
+            // A Dreamcast session on a copy: flycast's console settings (dc_nvmem) are the host's, so the core gets the copy's
+            // own system folder with this device's BIOS files beside them (the real BIOS only when both sides boot it).
+            val launchSystemDir = if (cfg.np?.ggpo == true && cfg.sessionDir != null) {
+                withContext(Dispatchers.IO) { ggpoSystemDir(cfg.sessionDir, biosDir, cfg.np.dcHle) }
+            } else systemDir
             // netplay: a link session's game is the player's own, so it gets achievements as a normal launch; lockstep has none.
             if (cfg.np == null || cfg.np.allowsAchievements) prepareAchievements(cfg.tag, cfg.romFileName, cfg.content, inner)
-            return PreparedContent(inner, systemDir, savesDir, sram, rtc, segaSetting, biosPresent, archiveAsIs, naomiSets, naomiBios)
+            return PreparedContent(inner, launchSystemDir, savesDir, sram, rtc, segaSetting, biosPresent, archiveAsIs, naomiSets, naomiBios)
         }
+    }
+
+    /**
+     * A Dreamcast session copy's system folder, `<copy>/system/`, whose `dc/` already holds the host's console settings
+     * (the sink put them there): this device's arcade BIOS sets and, unless the session boots the HLE BIOS ([hle]), its
+     * Dreamcast BIOS are copied in from [biosDir] (flycast's `dc/` in the real system folder), as the handheld does.
+     */
+    private fun ggpoSystemDir(sessionDir: File, biosDir: File, hle: Boolean): File {
+        val system = File(sessionDir, DcNetplaySaves.SESSION_SYSTEM)
+        val dc = File(system, DcNetplaySaves.BIOS_SUBDIR).apply { mkdirs() }
+        biosDir.listFiles().orEmpty().filter { it.isFile }.forEach { f ->
+            val arcade = Names.isArchive(f.name)
+            if (arcade || (!hle && f.name == DcNetplaySaves.BIOS_FILE)) f.copyTo(File(dc, f.name), overwrite = true)
+        }
+        return system
     }
 
     private suspend fun buildViewData(cfg: LaunchConfig, prepared: PreparedContent): GLRetroViewData? {
@@ -908,17 +1016,78 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             val ps2BiosOption = if (Ps2Options.appliesTo(cfg.tag)) {
                 Ps2Options.biosOption(frontendValues[Ps2Options.BIOS], prepared.biosPresent.filter { it.endsWith(".bin", ignoreCase = true) })
             } else emptyMap()
+            var driverCrashNotice: String? = null   // GpuDriverCrashSettle's, toasted once the launch is read
+            var preflightNotice: String? = null   // a custom driver that failed its preflight (GpuDriverChoice.afterPreflight)
             val data = try {
                 withContext(Dispatchers.IO) {
                     // The name the core sees: an arcade zip in lowercase (fbneo matches the driver name case-sensitively).
                     val fileName = CoreRegistry.contentName(cfg.tag, cfg.romFileName)
                     // Display → Graphics API: the core options for the API and whether the runner offers Vulkan.
                     // Vulkan that could not start here before, or this is the relaunch after it did: OpenGL ES (VulkanFallback).
-                    val vulkanFailed = activity.intent.getBooleanExtra(EXTRA_FORCE_GLES, false) ||
-                        cfg.descriptor?.id in settings.vulkanFailedCores || (cfg.np != null && NetplayCores.forcesGles(cfg.descriptor?.id))
-                    val graphics = GraphicsApiOptions.resolve(frontendValues[GraphicsApiOptions.KEY], cfg.descriptor?.vulkan, { LibretroDroid.isVulkanSupported() }, vulkanFailed)
+                    // On Vulkan, a custom GPU driver may load instead of the system one (GpuDriverChoice); the relaunch after
+                    // it could not start forces the system driver.
+                    // Auto is Vulkan for a core that follows the GPU on a Mali phone; the driver rows below then apply as on Vulkan.
+                    val gamePath = activity.intent.getStringExtra(EXTRA_GAME_PATH)
+                    // No library path, no crash record to keep: such a launch stays on the system driver.
+                    val driversAvailable = gamePath != null && AndroidGpuDrivers.unavailableReason(Build.VERSION.SDK_INT) == null
+                    // A core whose Auto wants Vulkan on Mali only with a custom driver (Dolphin) asks which one the game would load.
+                    val customDriver = driversAvailable && cfg.descriptor?.vulkan?.maliNeedsCustomDriver == true &&
+                        GpuDriverChoice.resolve(
+                            frontendValues[GpuDriverOptions.KEY], settings.gpuDriver,
+                            AndroidGpuDrivers(AndroidGpuDrivers.root(activity.filesDir), Build.VERSION.SDK_INT).installed().mapTo(HashSet()) { it.id },
+                            GpuDriverCrash.crashed(settings.gpuDriverCrashes, gamePath.orEmpty()),
+                        ) != null
+                    val apiValue = GraphicsApiOptions.effective(frontendValues[GraphicsApiOptions.KEY], cfg.descriptor?.vulkan, customDriver) { AndroidDeviceInfo.gpu() }
+                    val mayLoadDriver = driversAvailable && apiValue == GraphicsApiOptions.VULKAN
+                    // An earlier custom-driver launch whose process died (the menu has not seen it yet): recorded first, so
+                    // a crash in this very game already counts below.
+                    if (mayLoadDriver) driverCrashNotice = GpuDriverCrashSettle.settle(settings, setOf(Process.myPid()))
+                    val driverStore = AndroidGpuDrivers(AndroidGpuDrivers.root(activity.filesDir), Build.VERSION.SDK_INT)
+                    val drivers = if (mayLoadDriver) driverStore.installed() else emptyList()
+                    // The driver's frames go through a swapchain on an image reader: what its preflight found it can do.
+                    var driverReader = false
+                    var launch = GpuDriverChoice.launch(
+                        apiValue, frontendValues[GpuDriverOptions.KEY], settings.gpuDriver, drivers.mapTo(HashSet()) { it.id },
+                        GpuDriverCrash.crashed(settings.gpuDriverCrashes, gamePath.orEmpty()), available = driversAvailable,
+                        forceGles = activity.intent.getBooleanExtra(EXTRA_FORCE_GLES, false),
+                        forceSystem = activity.intent.getBooleanExtra(GameActivity.EXTRA_FORCE_SYSTEM_DRIVER, false),
+                        coreFailedOnSystem = cfg.descriptor?.id in settings.vulkanFailedCores,
+                        netplayForcesGles = cfg.np != null && NetplayCores.forcesGles(cfg.descriptor?.id),
+                    )
+                    var graphics = GraphicsApiOptions.resolve(apiValue, cfg.descriptor?.vulkan, { LibretroDroid.isVulkanSupported() }, launch.vulkanFailed)
+                    var driver = if (graphics.preferVulkan) drivers.firstOrNull { it.id == launch.driverId } else null
+                    if (driver != null && gamePath != null) {
+                        NxLog.i(TAG_LOG, "GPU driver: ${driver.name} (${driver.id}, ${driver.libraryName})")
+                        // Committed before the view exists: on disk before this driver can take the process down. Also
+                        // before the preflight below, so a driver that crashes the preflight is recorded like one that
+                        // crashes its first frames.
+                        markDriverLaunch(GpuDriverCrash.encode(GpuDriverCrash.Marker(Process.myPid(), gamePath, cfg.title, driver.id, driver.name)))
+                        // Before any core is loaded: a driver that cannot start the bridge is caught here, and this same
+                        // launch goes on without it (a core torn down after a failed start can crash: PPSSPP, mupen64plus).
+                        // Retried on every launch. The in-process relaunch stays for what the preflight cannot see.
+                        val handoff = GLRetroView.probeVulkanDriver(activity, driverStore.directory(driver.id).absolutePath + "/", driver.libraryName)
+                        val ok = handoff != LibretroDroid.VULKAN_HANDOFF_NONE
+                        driverReader = handoff == LibretroDroid.VULKAN_HANDOFF_READER
+                        val after = GpuDriverChoice.afterPreflight(launch, ok, driver.name, cfg.descriptor?.id in settings.vulkanFailedCores)
+                        if (after.clearMarker) clearDriverLaunchMarker()
+                        if (after.launch != launch) {
+                            NxLog.w(TAG_LOG, "the GPU driver ${driver.name} failed its preflight: this launch goes on without it")
+                            launch = after.launch
+                            graphics = GraphicsApiOptions.resolve(apiValue, cfg.descriptor?.vulkan, { LibretroDroid.isVulkanSupported() }, launch.vulkanFailed)
+                            driver = null
+                        }
+                        preflightNotice = after.notice
+                    }
                     launchedOnVulkan = graphics.preferVulkan
-                    launchEnv = graphics.env
+                    launchedDriver = driver
+                    val launchGpu = if (graphics.preferVulkan) AndroidDeviceInfo.gpu() else null
+                    // Overwritten by every launch: a crash's notice then speaks of the game that ended.
+                    settings.lastLaunchMaliSystemVulkan = GameCrashNotice.onMaliSystemVulkan(graphics.preferVulkan, driver != null, launchGpu)
+                    // A Dreamcast session's GGPO setup for flycast (GgpoSession), read by the core at load.
+                    launchEnv = GraphicsApiOptions.envFor(graphics, cfg.descriptor?.vulkan, customDriver = driver != null, gpu = launchGpu) +
+                        GgpoSession.env(cfg.descriptor?.id, cfg.np)
+                    // ParaLLEl-RDP's upscaling follows the driver just picked (Auto stays native on the Adreno's own one).
+                    val res3dAlso = res3d.launchAlsoSet(customDriver = driver != null, gpu = launchGpu ?: DeviceTraits.gpu)
                     // netplay link: the link options are this launch's too (a session's port, mode and peer; a solo mGBA's cable): never saved.
                     graphicsForcedOptions = graphics.forcedOptions.keys + cfg.linkOptions.keys
                     GLRetroViewData(host.activity).apply {
@@ -930,14 +1099,13 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                         // N64: Max High-Res VRAM Limit's Auto becomes a number for this device's memory (N64HiresPack.vramLimit).
                         val n64Vram = if (cfg.descriptor?.id == MUPEN64PLUS_NEXT_ID) {
                             val total = ActivityManager.MemoryInfo().also { activity.getSystemService(ActivityManager::class.java).getMemoryInfo(it) }.totalMem
-                            val limit = N64HiresPack.vramLimit(cfg.options.firstOrNull { it.key == N64HiresPack.VRAM_KEY }?.value, total)
+                            val limit = N64HiresPack.vramLimit(cfg.option(N64HiresPack.VRAM_KEY), total)
                             NxLog.i(TAG_LOG, "N64 hi-res VRAM limit: $limit MB (device ${total / (1024 * 1024)} MB)")
                             mapOf(N64HiresPack.VRAM_KEY to limit)
                         } else emptyMap()
-                        val forced = cfg.netplayPad?.options.orEmpty() + cfg.linkOptions + wii.screenOption() + nds3dLaunch + ps2BiosOption + n64Vram + graphics.forcedOptions
+                        val forced = cfg.netplayPad?.options.orEmpty() + cfg.linkOptions + wii.screenOption() + nds3dLaunch + res3dAlso + ps2BiosOption + n64Vram + graphics.forcedOptions
                         variables = withForced(cfg.options, forced).toTypedArray()
                         rumbleEventsEnabled = gameRumble != GameRumble.OFF   // Game rumble Off: the runner does not even read the core's state
-                        preferLowLatencyAudio = true
                         // DS / 3DS: the frontend feeds the core's mic ([ShortcutsMicController.applyMic] picks silence, the phone mic or noise).
                         enableMicrophone = shortcuts.canMic
                         // GL driver messages and a frame probe to tag NXGL, with Settings → System → Debug log on at
@@ -946,6 +1114,11 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                         // Display → Graphics API ([graphics]): Vulkan frames are bridged into the GLES presentation.
                         preferVulkan = graphics.preferVulkan
                         vulkanSwapchainFrames = graphics.swapchainFrames
+                        if (driver != null) {
+                            vulkanDriverDir = driverStore.directory(driver.id).absolutePath + "/"
+                            vulkanDriverLibrary = driver.libraryName
+                            vulkanDriverReader = driverReader
+                        }
                         // DS / 3DS: the core reports where each screen sits in its frame (video views), the layouts read it.
                         videoViews = gameCoreId in VIDEO_VIEW_CORES
                         // gpsp: never unload the core between games, so its recompiler cache stays mapped near it.
@@ -964,6 +1137,9 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                         if (cfg.descriptor?.id == SegaPadType.GPGX) SegaPadType.gpgxPorts(launchSega, cfg.players)?.let { controllerPorts = it }
                         if (cfg.descriptor?.id == SegaPadType.PICODRIVE && launchSega != null) controllerPorts = SegaPadType.picodrivePorts(launchSega, launchSegaPad, cfg.players)
                         cfg.netplayPad?.ports?.takeIf { it.isNotEmpty() }?.let { controllerPorts = controllerPorts + it }   // netplay: the pak's ports 0-1
+                        if (BuildConfig.DEBUG && launchSega != null) NxTestResults.write(host.activity, "pad",
+                            "session" to cfg.np?.segaPad, "setting" to launchSega, "drawn" to launchSegaPad?.name,
+                            "port0" to controllerPorts[0], "port1" to controllerPorts[1])
                         if (prepared.inner != null) {
                             gameFilePath = prepared.inner.absolutePath
                         } else if (cfg.realPath) {
@@ -971,20 +1147,19 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                             // a SAF game is copied: a disc set's files go next to its sheet in the cache, under the names the sheet uses.
                             val inPlace = RealPathLaunch.inPlace(cfg.content, fileName, cfg.companions)
                                 ?.takeIf { p -> File(p).canRead() && cfg.companions.all { (name, _) -> File(File(p).parentFile, name).canRead() } }
-                            if (inPlace != null) {
-                                gameFilePath = inPlace
+                            gameFilePath = if (inPlace != null) {
+                                inPlace
                             } else {
                                 for ((name, ref) in cfg.companions) copyToCache(ref, name)
-                                gameFilePath = copyToCache(cfg.content, fileName).absolutePath
+                                copyToCache(cfg.content, fileName).absolutePath
                             }
                         } else {
-                            // With more than one virtual file the runner serves the core through its VFS (libretrodroid.cpp:391),
-                            // so the core opens /rom/<track>.bin by the name its cue gives.
-                            val opened = ArrayList<VirtualFile>(cfg.companions.size + 1)
+                            // With more than one virtual file the runner serves the core through its VFS (libretrodroid.cpp),
+                            // so the core opens /rom/<track>.bin by the name its cue gives. The first file is the one loaded.
+                            val files = vfsFiles(cfg, fileName)
+                            val opened = ArrayList<VirtualFile>(files.size)
                             try {
-                                val pfd = refs.openFd(cfg.content, "r") ?: throw IOException("Cannot open file descriptor")
-                                opened += VirtualFile("/rom/$fileName", pfd)
-                                for ((name, ref) in cfg.companions) {
+                                for ((name, ref) in files) {
                                     opened += VirtualFile("/rom/$name", refs.openFd(ref, "r") ?: throw IOException("Cannot open $name"))
                                 }
                             } catch (e: Exception) {
@@ -1008,8 +1183,105 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 copying?.cancel()
                 copyToast?.cancel()
             }
+            driverCrashNotice?.let { toast(it) }
+            preflightNotice?.let { toast(it) }
             return data
         }
+    }
+
+    /**
+     * The region whose Sega CD BIOS [cfg]'s disc boots with, under PicoDrive or Genesis Plus GX: Genesis Plus GX's forced
+     * region ([SegaCdBios.GPGX_REGION_KEY]), else the disc's header ([SegaCdBios.regionOf], read from its first data
+     * sector through the launch's files: the unpacked [inner] disc, or the content and the tracks it was handed). The
+     * header is read first, so a Mega Drive cartridge named `.bin` is never taken for a disc. Null for any other game, a
+     * header that cannot be read (the generic check then stands).
+     */
+    private suspend fun segaCdRegion(cfg: LaunchConfig, inner: File?, contentExtension: String): DiscRegion? {
+        val core = cfg.descriptor?.id ?: return null
+        if (core != SegaPadType.PICODRIVE && core != SegaPadType.GPGX) return null
+        if (CoreRegistry.consoleOf(cfg.tag)?.id !in SEGA_CD_CONSOLES || contentExtension !in SegaCdBios.DISC_EXTENSIONS) return null
+        val disc = withContext(Dispatchers.IO) {
+            val (file, dir) = if (inner != null) {
+                val files = inner.parentFile?.listFiles().orEmpty().filter { it.isFile }.map { Entry(FileRefs.of(it.absolutePath), it.name, false, it.length()) }
+                (files.firstOrNull { it.name == inner.name } ?: return@withContext null) to files
+            } else {
+                val content = Entry(cfg.content, cfg.romFileName, false, null)
+                content to (listOf(content) + cfg.companions.map { (name, ref) -> Entry(ref, name, false, null) })
+            }
+            DiscProbe(AndroidRomsSources.of(host.activity), LibchdrSectors(host.activity.contentResolver)).firstDataSector(file, dir)
+        }?.let(SegaCdBios::regionOf) ?: return null
+        val forced = if (core == SegaPadType.GPGX) SegaCdBios.gpgxForced(cfg.option(SegaCdBios.GPGX_REGION_KEY)) else null
+        return forced ?: disc
+    }
+
+    /**
+     * The region whose Sega CD BIOS Genesis Plus GX loads for [cfg]'s MSU-MD cartridge: its forced region, else the
+     * cartridge header's ([SegaCdBios.cartridgeRegion]). Null when the header cannot be read.
+     */
+    private suspend fun msuMdRegion(cfg: LaunchConfig): DiscRegion? {
+        SegaCdBios.gpgxForced(cfg.option(SegaCdBios.GPGX_REGION_KEY))?.let { return it }
+        val refs = host.refs
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val size = refs.size(cfg.content) ?: return@runCatching null
+                refs.openInput(cfg.content)?.use { SegaCdBios.cartridgeRegion(it.readUpTo(SegaCdBios.CARTRIDGE_HEAD), size) }
+            }.getOrNull()
+        }
+    }
+
+    /**
+     * Each BIOS file name in the home's `Bios/` folders [cfg]'s launch gathers from ([BiosFolders.forTag]), with the folder
+     * it is in (the last, in that order: the copy [BiosImport] keeps on a name clash); empty without a home or on a read
+     * failure. Only read for a refusal's message.
+     */
+    private suspend fun biosFolderOf(cfg: LaunchConfig): Map<String, String> = try {
+        val source = AndroidRomsSources.of(host.activity)
+        val bios = cfg.home?.let { source.child(it, "Bios") }?.takeIf { it.isDirectory }
+        val out = LinkedHashMap<String, String>()
+        if (bios != null) for (folder in BiosFolders.forTag(cfg.tag)) {
+            val dir = source.child(bios.ref, folder)?.takeIf { it.isDirectory } ?: continue
+            for (e in source.listChildren(dir.ref)) if (!e.isDirectory) out[e.name] = folder
+        }
+        out
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        emptyMap()
+    }
+
+    /**
+     * The checksum problem of the required BIOS in [biosDir] that [needs] asks for ([BiosChecksum]), hashed off the main
+     * thread and cached ([BiosHashes]); null when every file the core may load is a good dump or one the table does not know.
+     */
+    private suspend fun biosChecksumProblem(
+        cfg: LaunchConfig, needs: List<BiosNeed>, ext: String, present: Set<String>, biosDir: File, region: DiscRegion?,
+    ): BiosProblem? {
+        val pick = if (Ps2Options.appliesTo(cfg.tag)) host.frontendValues[Ps2Options.BIOS] else null
+        return withContext(Dispatchers.IO) { checksumProblem(cfg, needs, ext, present, biosDir, region, pick) }
+    }
+
+    private fun checksumProblem(
+        cfg: LaunchConfig, needs: List<BiosNeed>, ext: String, present: Set<String>, biosDir: File, region: DiscRegion?, pick: String?,
+    ): BiosProblem? {
+        val known = KnownBiosAsset.get(host.activity)
+        val groups = BiosChecksum.toCheck(known, cfg.tag, needs, ext, present, cfg.descriptor?.id.orEmpty(), region, pick)
+        if (groups.isEmpty()) return null
+        val files = BiosHashes.files(host.activity, biosDir, groups.flatten().mapTo(LinkedHashSet()) { it.name })
+        return BiosChecksum.problem(known, groups, files::get)
+    }
+
+    /** The cue of [cfg]'s MSU-MD set, under the name it was handed to the core by; null when the game is none. */
+    private fun msuMdSheet(cfg: LaunchConfig): String? =
+        if (CoreRegistry.consoleOf(cfg.tag)?.id != "md") null else MsuSets.Folder(cfg.companions.map { it.first }).mdSheet(cfg.romFileName)
+
+    /**
+     * The files [cfg]'s launch serves under `/rom/`, by name, the loaded one first: the game as [fileName], then its
+     * companions; PicoDrive's MSU-MD set from its cue ([MsuSets.picodriveOrder]).
+     */
+    private fun vfsFiles(cfg: LaunchConfig, fileName: String): List<Pair<String, ContentRef>> {
+        val plain = listOf(fileName to cfg.content) + cfg.companions
+        if (cfg.descriptor?.id != SegaPadType.PICODRIVE || CoreRegistry.consoleOf(cfg.tag)?.id != "md") return plain
+        return MsuSets.picodriveOrder(fileName, cfg.content, cfg.companions) ?: plain
     }
 
     private suspend fun attachView(cfg: LaunchConfig, prepared: PreparedContent, data: GLRetroViewData) {
@@ -1017,7 +1289,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // Graphics API's process environment for the core (ParaLLEl-RDP's switches), before it loads; unset otherwise.
             launchEnv.forEach { (k, v) ->
                 runCatching { if (v != null) android.system.Os.setenv(k, v, true) else android.system.Os.unsetenv(k) }
-                    .onFailure { NxLog.w("GameActivity", "could not set $k", it) }
+                    .onFailure { NxLog.w(TAG_LOG, "could not set $k", it) }
             }
             if (isN3ds) wii.offerN3dsMotion()
             val view = GLRetroView(activity, data)
@@ -1038,10 +1310,13 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // without a resume state, since the game has stopped itself by then. The resume point is HOME's ([WiiDolphinController.pressHome]).
             lifecycleScope.launch {
                 view.getShutdownRequests().first()
+                // A Dreamcast session's core stops itself when the other device is gone: the session is over. After this
+                // side's Leave the quit is under way already.
+                if (cfg.np?.ggpo == true) { gameNetplay.ggpoEnded(); return@launch }
                 wii.endedByCore = true   // before the drop suspends: no slot 9 may queue behind it
                 // Left without HOME this session (a game's own "Wii Menu", a channel launch): the resume point on disk is an
                 // older session's, behind the game's own save on the NAND. Dropped, so the next launch boots fresh.
-                if (!wii.homeSaved) saves.dropAutoInOrder()
+                if (WiiDolphinController.dropsResumePointOnCoreEnd(wii.homeSaved, settings.saveOnQuit)) saves.dropAutoInOrder()
                 quitGame(chosen = true, autoState = false)
             }
             // Subscribed before the login (startSession, after the first frame): events are not replayed.
@@ -1100,7 +1375,11 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // A refused game: the core's own reason (flycast names the NAOMI/Atomiswave BIOS or ROM file it could not find).
             val naomiParent = if (prepared.archiveAsIs) prepared.naomiSets.parent(Names.stripExtension(cfg.romFileName)) else null
             observeErrors(view, cfg.coreFile) { lines ->
-                LoadFailure.message(cfg.title, lines, cfg.romFileName.takeIf { prepared.archiveAsIs }, prepared.naomiBios, naomiParent)
+                // A Dreamcast session's load waits for the other device: refused, it never came (or the two did not agree).
+                if (cfg.np?.ggpo == true && (lines.isEmpty() || lines.any { GGPO_LOG in it })) {
+                    NetplayText.FAILED_CONNECT to NetplayText.FAILED
+                } else LoadFailure.message(cfg.title, lines, cfg.romFileName.takeIf { prepared.archiveAsIs }, prepared.naomiBios, naomiParent)
+                    ?.let { it to GameActivity.START_FAILED }
             }
             // Debug builds: a file named simulate_vulkan_fail in the app's files dir makes a Vulkan launch take the fallback
             // as a failed bridge setup would (no phone at hand fails it): `adb shell run-as <package> touch files/simulate_vulkan_fail`.
@@ -1132,6 +1411,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 val now = frontendValues[PadOptions.SEGA_PAD] ?: SegaPadType.AUTO
                 if (now != launched) sendSegaPad(now)
             }
+            clearDriverMarkerLater()   // a custom driver that keeps presenting is not blamed for a later crash
             wii.onFirstFrame(view)
             dual.pushSecondSurface()   // a presentation shown before the view ran
             if (dual.panelShown()) dual.refreshDiscs()   // a panel up before the game ran asked too early
@@ -1176,32 +1456,11 @@ internal class LaunchPipeline(private val host: LaunchHost) {
     }
 
     /**
-     * NDS moved from melonds to melonDS DS: a resume marker left pointing at an old-core state (which melonDS DS can't
-     * load) is deleted with its thumbnails, and this launch boots fresh instead of toasting "Resume failed". Once per
-     * game, since the marker is gone afterwards; the old core's states stay untouched.
-     */
-    private suspend fun dropStaleNdsResume(tag: String, coreId: String, romFileName: String) {
-        if (tag != NdsResumeCleanup.TAG || coreId != NdsResumeCleanup.CORE_ID) return
-        val dataRoot = host.dataRoot
-        val paths = host.paths
-        val dropped = withContext(Dispatchers.IO) {
-            SaveSession.awaitAutoWrites()   // a Home write of this game's auto state may still be landing
-            runCatching {
-                val marker = File(dataRoot, paths.lastSlot).takeIf { it.exists() }?.readText()
-                val victims = NdsResumeCleanup.victims(tag, coreId, romFileName, marker, paths.naming, paths.innerFileName) { File(dataRoot, it).exists() }
-                victims.forEach { File(dataRoot, it).delete() }
-                victims.isNotEmpty()
-            }.onFailure { NxLog.w("GameActivity", "stale NDS resume cleanup failed", it) }.getOrDefault(false)
-        }
-        if (dropped) host.saves.dropResume()
-    }
-
-    /**
      * The resume slot's screenshot over the game container from as soon as its name is known, while the core loads and
      * boots, until the resumed state's frame ([dropResumeCover]), as minarch shows it from its window's first moment.
      * Decoded off the main thread; nothing when the slot has none, or the resume already landed.
      */
-    private fun showResumeCover() {
+    private fun showResumeCover(tag: String) {
         val saves = host.saves
         val slot = saves.resumeSlot?.takeIf { saves.resumePending && it != 8 } ?: return   // slot 8 has no screenshot in minarch's scheme
         val file = File(host.dataRoot, host.paths.thumb(slot))
@@ -1211,8 +1470,20 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // Where the picture is drawn: as last laid out, else (before the game view, or a DS / 3DS before its first
             // frame) the pad skin's glass for the picture the screenshot holds.
             val picture = { host.renderer.thumbnailPicture() ?: host.padLayout.takeIf { it.skinShown }?.skinPlacement()?.let(::coverGlass) }
-            resumeCover = ResumeCover(host.activity, host.activity.findViewById(R.id.gameContainer), picture).also { cover ->
+            val twoScreens = NdsOptions.appliesTo(tag) || N3dsOptions.appliesTo(tag)
+            val dual = host.dual
+            // A DS / 3DS split with the picture on the second display: the screenshot's screen is drawn there.
+            val spot: () -> CoverSpot? = if (!twoScreens) { { CoverSpot(ThumbnailDisplay.MAIN, picture()) } } else { {
+                twoScreenCoverSpot(
+                    pending = dual.dualSettling(),
+                    onSecond = dual.dualMode == DualMode.SPLIT && dual.pictureOn == PictureOn.SECOND,
+                    second = dual.splitPictureScreens(),
+                    main = picture(),
+                )
+            } }
+            resumeCover = ResumeCover(host.activity, host.activity.findViewById(R.id.gameContainer), twoScreens, spot, dual::coverLayer).also { cover ->
                 host.renderer.onPictureLaidOut = { resumeCover?.place() }
+                dual.onSecondChanged = { resumeCover?.place() }
                 cover.show(bmp)
                 host.retroView?.let(cover::follow)   // the game view came first
             }
@@ -1242,7 +1513,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
         }
     }
 
-    private fun observeErrors(view: GLRetroView, coreFile: String, loadFailure: (List<String>) -> String?) {
+    private fun observeErrors(view: GLRetroView, coreFile: String, loadFailure: (List<String>) -> Pair<String, String>?) {
         host.lifecycleScope.launch {
             view.getGLRetroErrors().flowWithLifecycle(host.lifecycle, Lifecycle.State.STARTED).collect { code ->
                 if (code == GLRetroView.ERROR_LOAD_LIBRARY) {
@@ -1260,17 +1531,28 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 if (code == GLRetroView.ERROR_LOAD_GAME) {
                     val lines = runCatching { view.getRecentCoreErrors() }.getOrDefault(emptyList())
                     lines.forEach { NxLog.i(TAG_LOG, "core said: $it") }
-                    loadFailure(lines)?.let { host.fail(it); return@collect }
+                    loadFailure(lines)?.let { (message, title) -> host.fail(message, title); return@collect }
                 }
-                if (code == GLRetroView.ERROR_GL_NOT_COMPATIBLE && VulkanFallback.relaunchOnGles(host.launchedOnVulkan)) {
+                if (code == GLRetroView.ERROR_GL_NOT_COMPATIBLE) {
                     // netplay: a relaunch would start without the session (it is gone), so the dialog says what to do. An
                     // ended link session's relaunch ([GameNetplay.local]) is a plain launch, which relaunches as any other.
-                    if (host.activity.intent.hasExtra(GameActivity.EXTRA_NETPLAY_ROLE) && !host.gameNetplay.local) {
-                        host.fail("Vulkan could not start for this game on this device. Set Display → Graphics API to OpenGL ES.")
-                    } else {
-                        host.relaunchOnGles()
+                    val netplaySession = host.activity.intent.hasExtra(GameActivity.EXTRA_NETPLAY_ROLE) && !host.gameNetplay.local
+                    // A custom driver failed (to load, to create its device, or to share its frames): the system driver
+                    // next, unless that failed here already; the system driver failed: OpenGL ES.
+                    val driver = host.launchedDriver
+                    val next = GpuDriverChoice.afterStartFailure(host.launchedOnVulkan, driver?.id, host.gameCoreId in host.settings.vulkanFailedCores, netplaySession)
+                    when (next) {
+                        GpuDriverChoice.Next.SYSTEM_DRIVER -> host.relaunchOnSystemDriver()
+                        GpuDriverChoice.Next.GLES_NO_RECORD ->
+                            host.relaunchOnGles(record = false, notice = GpuDriverChoice.named(GpuDriverChoice.GLES_NOTICE, driver?.name.orEmpty()))
+                        GpuDriverChoice.Next.GLES_RECORD -> host.relaunchOnGles()
+                        GpuDriverChoice.Next.FAIL_MESSAGE -> host.fail(
+                            if (driver != null) GpuDriverChoice.named(GpuDriverChoice.NETPLAY_FAIL, driver.name)
+                            else "Vulkan could not start for this game on this device. Set Display → Graphics API to OpenGL ES."
+                        )
+                        GpuDriverChoice.Next.SHOW_ERROR -> Unit
                     }
-                    return@collect
+                    if (next != GpuDriverChoice.Next.SHOW_ERROR) return@collect
                 }
                 host.fail("The core reported $name")
             }
@@ -1279,6 +1561,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
 
     /** onDestroy: the RomCache holds this game took go, and one taken later (an unpack or copy that outlived the screen) at once. */
     fun onDestroy() {
+        resumeCover?.remove()   // a quit before the resumed frame: nothing of it stays on either display
+        resumeCover = null
         unwatchWifi()
         dropBroadcasts()
         dsWifi?.let { runCatching { if (it.isHeld) it.release() } }
@@ -1332,7 +1616,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 if (!part.renameTo(target)) throw IOException("Cannot move ${part.name} into place")
                 // An unknown size never matches (reuseRealPathCopy), so its stamp is not worth writing.
                 if (size >= 0) runCatching { stampFile.writeAtomically(stamp.encodeToByteArray()) }
-                    .onFailure { NxLog.w("GameActivity", "could not stamp the cache copy of $fileName", it) }
+                    .onFailure { NxLog.w(TAG_LOG, "could not stamp the cache copy of $fileName", it) }
             } finally {
                 part.delete()
                 RomCache.release(host.activity, part.name)
@@ -1350,7 +1634,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
     private suspend fun n64HiresPack(values: Map<String, String>, onVulkan: Boolean, content: ContentRef, inner: File?, home: ContentRef?): List<VirtualFile> {
         if (!N64HiresPack.wanted(values, onVulkan)) return emptyList()
         val refs = host.refs
-        val head = runCatching { (inner?.inputStream() ?: refs.openInput(content))?.use { readUpTo(it, N64HiresPack.HEADER_BYTES) } }.getOrNull()
+        val head = runCatching { (inner?.inputStream() ?: refs.openInput(content))?.use { it.readUpTo(N64HiresPack.HEADER_BYTES) } }.getOrNull()
         val name = head?.let(N64HiresPack::headerName)
             ?: return emptyList<VirtualFile>().also { NxLog.w(TAG_LOG, "N64 hi-res pack: no ROM header name") }
         val source = AndroidRomsSources.of(host.activity)
@@ -1382,23 +1666,16 @@ internal class LaunchPipeline(private val host: LaunchHost) {
     }
 }
 
-private fun readUpTo(input: java.io.InputStream, max: Int): ByteArray {
-    val buf = ByteArray(max)
-    var n = 0
-    while (n < max) { val r = input.read(buf, n, max - n); if (r < 0) break; n += r }
-    return buf.copyOf(n)
-}
-
 /**
  * The 3DS title from the start of [s] ([N3dsTitle.parse]): the first header, and for a cart image (NCSD) on to its
  * partition 0's NCCH header (0x4000 on dumped carts), a few KB in all.
  */
 private fun readN3dsTitle(s: java.io.InputStream): N3dsTitle? {
-    val head = readUpTo(s, N3dsTitle.HEADER)
+    val head = s.readUpTo(N3dsTitle.HEADER)
     if (head.size < N3dsTitle.HEADER) return null
     val offset = N3dsTitle.ncchOffset(head) ?: return N3dsTitle.parse(head)
     // On to the end of the NCCH header at [offset], which starts at or past the NCSD header's end.
-    return N3dsTitle.parse(head + readUpTo(s, offset.toInt()))
+    return N3dsTitle.parse(head + s.readUpTo(offset.toInt()))
 }
 
 /**

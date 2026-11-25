@@ -9,6 +9,8 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class AppReleaseTest {
+    private fun parseLatestRelease(json: String, dev: Boolean): AppRelease? =
+        (readLatestRelease(json, dev) as? LatestRelease.Found)?.release
 
     private fun releaseJson(
         tag: String = "v0.3.0",

@@ -3,43 +3,25 @@ package com.nxredux.mobile.ui
 import com.nxredux.mobile.library.LocalRomFinder
 import com.nxredux.mobile.netplay.cablelink.LinkRomCache
 import com.nxredux.mobile.tryOr
+import com.nxredux.mobile.tryOrAny
 import com.nxredux.mobile.tryOrNull
 import com.nxredux.mobile.tryQuietly
-import com.nxredux.mobile.sync.SyncLink
 import com.nxredux.mobile.kids.KidsController
 import com.nxredux.mobile.kids.KidsMode
-import com.nxredux.mobile.kids.KidsSchedule
-import com.nxredux.mobile.kids.PlayWindow
 import com.nxredux.mobile.kids.LocalNow
-import com.nxredux.mobile.kids.PinPurpose
 import com.nxredux.mobile.kids.UnlockChip
-import com.nxredux.mobile.scraper.SignInResult
-import com.nxredux.mobile.scraper.KeyResult
-import com.nxredux.mobile.shortcuts.CaptureResult
-import com.nxredux.mobile.shortcuts.KeyCodes
-import com.nxredux.mobile.shortcuts.KeyLabels
 import com.nxredux.mobile.shortcuts.PadModel
 import com.nxredux.mobile.shortcuts.ShortcutAction
-import com.nxredux.mobile.shortcuts.ShortcutBinding
-import com.nxredux.mobile.shortcuts.ShortcutCapture
 import com.nxredux.mobile.shortcuts.ShortcutSet
-import com.nxredux.mobile.shortcuts.Shortcuts
-import com.nxredux.mobile.shortcuts.SystemButtons
-import com.nxredux.mobile.shortcuts.SystemRole
-import com.nxredux.mobile.shortcuts.PhysicalKey
 import com.nxredux.mobile.shortcuts.TouchSlot
 import com.nxredux.mobile.update.AppRelease
 import com.nxredux.mobile.update.UpdateController
 import com.nxredux.mobile.update.UpdateState
-import com.nxredux.mobile.library.unassignedHint
 import com.nxredux.mobile.library.folderSummary
-import com.nxredux.mobile.library.MoveResult
 import com.nxredux.mobile.achievements.RaController
-import com.nxredux.mobile.achievements.RaGameView
 import com.nxredux.mobile.achievements.RaMessage
 import com.nxredux.mobile.achievements.RaProgress
 import com.nxredux.mobile.achievements.RaState
-import com.nxredux.mobile.achievements.RaStatus
 import com.nxredux.mobile.cheats.db.CheatDbController
 import com.nxredux.mobile.cheats.db.CheatDbMessage
 import com.nxredux.mobile.sync.DeviceSyncController
@@ -54,10 +36,8 @@ import com.nxredux.mobile.launcher.AppLauncher
 import com.nxredux.mobile.launcher.InstalledApp
 import com.nxredux.mobile.library.ArcadeSets
 import com.nxredux.mobile.library.ArtRefs
-import com.nxredux.mobile.library.CollectionCountCache
 import com.nxredux.mobile.achievements.RaGamesCache
 import com.nxredux.mobile.library.Collections
-import com.nxredux.mobile.library.CountStamps
 import com.nxredux.mobile.library.GameEntry
 import com.nxredux.mobile.library.LibraryIndex
 import com.nxredux.mobile.library.LibraryIndexCodec
@@ -71,58 +51,41 @@ import com.nxredux.mobile.library.Sidecars
 import com.nxredux.mobile.library.Skeleton
 import com.nxredux.mobile.library.SystemFolder
 import com.nxredux.mobile.library.fits
-import com.nxredux.mobile.library.matches
 import com.nxredux.mobile.library.move
 import com.nxredux.mobile.library.path
 import com.nxredux.mobile.library.withArt
 import com.nxredux.mobile.library.rename
+import com.nxredux.mobile.library.setBadgeChoice
 import com.nxredux.mobile.library.playableSystems
 import com.nxredux.mobile.library.withFirstSeen
 import com.nxredux.mobile.options.CoreOptionSource
 import com.nxredux.mobile.options.EmulatorPage
 import com.nxredux.mobile.options.NoCoreOptions
-import com.nxredux.mobile.netplay.NetplayCores
 import com.nxredux.mobile.netplay.NetplaySession
-import com.nxredux.mobile.runner.BottomScreen
 import com.nxredux.mobile.runner.Console
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.runner.EmulatorRunner
-import com.nxredux.mobile.runner.GameSession
 import com.nxredux.mobile.scraper.AndroidArtStore
-import com.nxredux.mobile.scraper.ArtSlot
 import com.nxredux.mobile.scraper.ArtHave
 import com.nxredux.mobile.scraper.ArtworkController
 import com.nxredux.mobile.scraper.ArtworkHost
 import com.nxredux.mobile.scraper.LegacyArtMove
 import com.nxredux.mobile.scraper.LibraryGameRef
-import com.nxredux.mobile.settings.AccentPreset
-import com.nxredux.mobile.storage.ImportSummary
-import com.nxredux.mobile.storage.SaveFormat
-import com.nxredux.mobile.storage.StateFormat
 import com.nxredux.mobile.settings.migrateMixWheel
-import com.nxredux.mobile.settings.SecondaryAccent
-import com.nxredux.mobile.settings.OptionTextSize
 import com.nxredux.mobile.settings.AppSettings
+import com.nxredux.mobile.gpudriver.GpuDriverCrash
+import com.nxredux.mobile.gpudriver.GpuDriverStore
 import com.nxredux.mobile.settings.PlayerName
 import com.nxredux.mobile.settings.ImportResult
 import com.nxredux.mobile.settings.ImportSource
 import com.nxredux.mobile.settings.SaveTransfer
-import com.nxredux.mobile.settings.BackdropArt
-import com.nxredux.mobile.settings.SwitcherLayout
-import com.nxredux.mobile.settings.ConsoleArt
-import com.nxredux.mobile.settings.GameListArt
 import com.nxredux.mobile.settings.MenuCategory
 import com.nxredux.mobile.settings.MenuOrientation
 import com.nxredux.mobile.settings.MenuStyle
 import com.nxredux.mobile.settings.MenuStyles
 import com.nxredux.mobile.runner.WiiPad
-import com.nxredux.mobile.skin.SkinTweaks
-import com.nxredux.mobile.settings.PadTheme
-import com.nxredux.mobile.settings.PadVibration
 import com.nxredux.mobile.settings.GameRumble
-import com.nxredux.mobile.settings.VerticalListAlignment
-import com.nxredux.mobile.settings.stepFrom
 import com.nxredux.mobile.settings.ExtraFolder
 import com.nxredux.mobile.settings.FolderPicker
 import com.nxredux.mobile.settings.Sources
@@ -149,14 +112,7 @@ import com.nxredux.mobile.storage.Recent
 import com.nxredux.mobile.storage.Recents
 import com.nxredux.mobile.storage.RecentsRecorder
 import com.nxredux.mobile.storage.ResumeInfo
-import com.nxredux.mobile.ui.nx.TopDetails
-import com.nxredux.mobile.scraper.StoredGameInfo
-import com.nxredux.mobile.ui.nx.TopStats
-import com.nxredux.mobile.ui.nx.collectionStats
-import com.nxredux.mobile.ui.nx.consoleStats
 import com.nxredux.mobile.ui.nx.statsKey
-import com.nxredux.mobile.ui.nx.detailsRaFor
-import com.nxredux.mobile.ui.nx.detailsBody
 import com.nxredux.mobile.storage.Shortcut
 import com.nxredux.mobile.storage.SidecarStore
 import com.nxredux.mobile.storage.ToolPins
@@ -171,18 +127,14 @@ import com.nxredux.mobile.ui.nx.HomeShelf
 import com.nxredux.mobile.ui.nx.FooterMode
 import com.nxredux.mobile.ui.nx.LauncherChrome
 import com.nxredux.mobile.ui.nx.ListSelection
-import com.nxredux.mobile.ui.nx.NxRow
 import com.nxredux.mobile.ui.nx.NxSettingControl
-import com.nxredux.mobile.ui.nx.NxPadA
 import com.nxredux.mobile.ui.nx.NxSettingEvent
-import com.nxredux.mobile.ui.nx.NxSettingRow
 import com.nxredux.mobile.ui.nx.control
 import com.nxredux.mobile.ui.nx.launcherChromeFor
 import com.nxredux.mobile.ui.nx.DialogFocus
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.gridAtTop
 import com.nxredux.mobile.ui.nx.gridStep
-import com.nxredux.mobile.ui.nx.homeClamp
 import com.nxredux.mobile.ui.nx.rowStep
 import com.nxredux.mobile.ui.nx.stackStep
 import kotlinx.coroutines.CancellationException
@@ -190,7 +142,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -208,6 +159,9 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.ContinuationInterceptor
 import kotlin.coroutines.CoroutineContext
+import com.nxredux.mobile.ui.nx.TopDetails
+import com.nxredux.mobile.ui.nx.TopStats
+import com.nxredux.mobile.scraper.StoredGameInfo
 
 class AppDeps(
     val settings: AppSettings,
@@ -272,10 +226,17 @@ class AppDeps(
     val windowPx: () -> Pair<Int, Int>? = { null },
     /** The ".bin" names in Bios/PS2/ (Emulator Settings' PS2 BIOS row); blocking, called off the main thread. */
     val ps2BiosFiles: () -> List<String> = { emptyList() },
+    /**
+     * The device turns its screen for an app that asks (Android's auto-rotate on). Off, Button layout offers only the
+     * window's current orientation: a display that keeps its rotation leaves the other one's editor with nothing drawn.
+     */
+    val screenRotates: () -> Boolean = { true },
     /** Opens the skin's button layout editor (Android: its own activity); it saves to the settings and ends with [AppState.onSkinLayoutEdited]. Null: no editor. */
     val skinEditor: SkinEditorLauncher? = null,
     /** Settings → Library → Saves: Export and Import (null: rows do nothing). */
     val saveTransfer: SaveTransfer? = null,
+    /** Settings → Library → Import BIOS (null: no row). */
+    val biosIntake: com.nxredux.mobile.bios.BiosIntake? = null,
     /** Tools → Device Sync (null: a platform without it, so no Tools row). */
     val deviceSync: DeviceSyncController? = null,
     /** All files access (a sideloaded Android 11+ build); null: none (SAF only, no setup step, no Settings row). */
@@ -320,342 +281,20 @@ class AppDeps(
     val promptOnSecondDisplay: () -> Boolean = { false },
     /** A diagnostic line (Android: NxLog, so only with Settings → System → Debug log on). */
     val log: (String) -> Unit = {},
+    /** Settings → Emulation → GPU driver and the consoles' GPU driver rows; null: a platform without custom drivers (no row). */
+    val gpuDrivers: GpuDriverStore? = null,
 )
 
 /**
  * Appearance → Button layout → Portrait or Landscape: edit [consoleId]'s pad skin buttons in that orientation, on this
  * screen. [wiiPad]: the Wii controller whose layout is edited (null for every other console). [n3dsNew]: the 3DS's New
- * 3DS controls layout (ZL / ZR, the C-stick), else the regular 3DS's.
+ * 3DS controls layout (ZL / ZR, the C-stick), else the regular 3DS's. [segaThree]: the Sega pad's 3-button layout, else
+ * the 6-button one.
  */
-data class SkinEditRequest(val consoleId: String, val landscape: Boolean, val wiiPad: WiiPad?, val n3dsNew: Boolean = false)
+data class SkinEditRequest(val consoleId: String, val landscape: Boolean, val wiiPad: WiiPad?, val n3dsNew: Boolean = false, val segaThree: Boolean = false)
 
 /** Opens the button layout editor for a [SkinEditRequest], [title] naming it there. */
 interface SkinEditorLauncher { fun open(request: SkinEditRequest, title: String) }
-
-sealed interface Screen {
-    /** First setup's first step, before the home pick, where All files access is declared and not granted. */
-    /**
-     * First setup's Permissions page, before the home pick: each permission this device uses, as granted (true), not yet
-     * (false) or not used here (null). A row asks for its permission; Continue goes on.
-     */
-    data class PermissionsStep(val allFiles: Boolean?, val notifications: Boolean?) : Screen
-    /**
-     * The list-style picker for [mode], in [dir] (null: the volume list), titled [title]. [prompt]: New folder's
-     * text while its prompt is open; [replace]: Export's target path while "Replace …?" is open.
-     */
-    data class FilePicker(
-        val mode: FilePickMode, val dir: String?, val title: String, val rows: List<PickerRow>,
-        val prompt: String? = null, val replace: String? = null,
-        /** The home pick: what the folder it is in would be as a home ([homeFolderStatus]); null elsewhere. */
-        val status: String? = null,
-    ) : Screen
-    data object PickFolder : Screen
-    /**
-     * An onboarding step ([OnboardingStep]): its page [title] (the step count), [details] (the step's headline, then its
-     * lines) and [rows], drawn as a tool page. [prompt]: the RetroAchievements sign-in prompt is up over it, with its drafts.
-     * [accent]: the accent the page shows, so a previewed accent makes a new screen (App reads the colours per screen).
-     * [canGoBack]: B goes somewhere (anywhere but WELCOME), so its hint shows.
-     */
-    data class Onboarding(
-        val step: OnboardingStep, val title: String, val details: List<String>, val rows: List<NxRow>,
-        val prompt: Boolean = false, val draftUser: String = "", val draftPassword: String = "",
-        val accent: AccentPreset? = null, val padTheme: PadTheme? = null, val canGoBack: Boolean = true,
-        val shot: LayoutShot? = null,   // a layout page's picture of the layout in use
-        val touchRows: List<NxSettingRow>? = null,   // its rows as Settings' touch rows, drawn as the Settings rows block (null: WELCOME)
-        // The artwork step's prompts over it: ScreenScraper's sign-in (its drafts [draftUser] / [draftPassword]) or a source's key.
-        val artSignIn: Boolean = false, val artKey: ArtKeyFor? = null, val draftKey: String = "",
-    ) : Screen
-    /** First setup only: offer an existing ROMs folder as an extra source. */
-    data object AddFirstExtra : Screen
-    /**
-     * The one-time storage upgrade (installs from v0.3.0 and earlier, without a full-access home; remove after v1.0): its
-     * [stage]. [folder]: the media home's path (`Android/media/<package>/`), which DECLINED names. [error]: the move did
-     * not finish; the page says so and OK goes on to the library (the screen shows again on the next start).
-     */
-    data class StorageUpgrade(val stage: Stage, val folder: String = "", val error: String? = null) : Screen {
-        enum class Stage { EXPLAIN, PICK, DECLINED }
-    }
-    /**
-     * A home change in Settings with All files access: copy the data (saves, states, settings) of the old home [from]
-     * into the new one [to]? Copy or Keep separate; [busy] while the copy runs, [error] when it did not finish.
-     */
-    data class CopySaves(val from: ContentRef, val to: ContentRef, val busy: Boolean = false, val error: String? = null) : Screen
-    /** First setup's last step, after the ROM folders: "Add N Android games to Consoles?" (A Yes, B Not now). */
-    data class AndroidGamesStep(val ask: AndroidGamesAsk) : Screen
-
-    /**
-     * First setup, after a ROMs folder was added: what its scan found ([summary]), whether to [move] its placed games into
-     * the home's Roms (off until chosen), the move's [progress] (done, total) while it runs and its [result] after.
-     * [confirmMove]: Continue with Move on asks first ([folderMoveAsk]); A moves, B goes back to the page.
-     */
-    data class FolderSummary(
-        val extraId: String, val name: String, val home: String,
-        val summary: com.nxredux.mobile.library.FolderSummary,
-        val move: Boolean = false, val progress: Pair<Int, Int>? = null, val result: MoveResult? = null,
-        val confirmMove: Boolean = false,
-    ) : Screen
-    data object Loading : Screen
-    /** Kids Mode while Locked: the big tiles screen of the allowed apps, in place of the main menu. */
-    data object KidsHome : Screen
-    /**
-     * Kids Mode's PIN prompt for [purpose]: the digits [typed] so far, the [wrong] tries in a row and, after the fifth,
-     * [waitUntil] (epoch ms) before another try counts.
-     */
-    data class KidsPin(
-        val purpose: PinPurpose, val typed: String = "", val wrong: Int = 0, val waitUntil: Long = 0,
-        /** A line under the dots until a digit is typed (setup's "PINs didn't match"). */
-        val message: String? = null,
-    ) : Screen {
-        /** The generated form, but the digits typed never reach a log or an assertion message. */
-        override fun toString(): String =
-            "KidsPin(purpose=$purpose, typed=${"*".repeat(typed.length)}, wrong=$wrong, waitUntil=$waitUntil, message=$message)"
-    }
-    /** After the right PIN on the tiles screen: Let them play's chips, Open full menu and Kids Mode settings. */
-    data object KidsUnlock : Screen
-    /**
-     * Kids Mode's first switch-on, one [step] at a time ([KidsSetupStep]; its PIN step is [KidsPin]), or, not [setup],
-     * Settings → Kids Mode → Allowed apps (the APPS step alone, Done back to the page). [apps]: the installed apps (APPS;
-     * empty until listed), [allowed] the kid's, [schedule] the week's play times (TIMES).
-     */
-    data class KidsSetup(
-        val step: KidsSetupStep, val setup: Boolean = true, val apps: List<InstalledApp> = emptyList(), val allowed: Set<String> = emptySet(),
-        val schedule: KidsSchedule = KidsSchedule.DEFAULT,
-    ) : Screen
-    /**
-     * One day's play time ([day], ISO): [window] null when it is locked; [kept] the window Locked off brings back. [setup]:
-     * opened from setup's TIMES step (B returns there), else from the Kids Mode page.
-     */
-    data class KidsDayEdit(val day: Int, val window: PlayWindow?, val kept: PlayWindow, val setup: Boolean = false) : Screen
-    /**
-     * The main menu: [tabs] (see [buildMenuTabs]) on [tab]. [menu]: a game's or a tool's menu is open over its row.
-     * [search]: START's search prompt is open with this text as typed. [pushed]: a tab Layouts hides, opened over the
-     * menu from MENU ([AppState.openHiddenTab]): [tabs] holds that one tab, titled with its label; B returns. [hidden]: the
-     * tabs Layouts hides that have content (MENU's and the long press's items); none while [pushed].
-     */
-    data class Systems(val tabs: List<MenuTab>, val tab: Int = 0, val menu: ContextMenu? = null, val search: String? = null, val pushed: Boolean = false, val hidden: List<MenuCategory> = emptyList()) : Screen {
-        /** The current tab's items: what the selection indexes. */
-        val rows: List<MainRow> get() = tabs.getOrNull(tab)?.rows.orEmpty()
-        val category: MenuCategory? get() = tabs.getOrNull(tab)?.category
-    }
-    /**
-     * A game list from [source]; each entry carries its system. [menu]: the context menu is open over the list.
-     * [search]: the list's own search prompt is up (its draft); [layoutMenu]: the Layout dropdown is open, on that
-     * choice of [GameListLayouts.choices]. [tabBar]: this list is a main menu tab (the Games tab, [isTab]), drawn under
-     * the tab row; null for every other list.
-     */
-    data class Games(val source: ListSource, val entries: List<Listed>, val menu: ContextMenu? = null, val search: String? = null, val layoutMenu: Int? = null, val tabBar: TabBar? = null) : Screen
-    /**
-     * [confirmRemove]: the "remove from recents?" dialog is open over the entry at [index]. [list]: Layouts → Game
-     * Switcher layout is List (read on opening): a game list's List, UP/DOWN in place of LEFT/RIGHT.
-     */
-    data class Switcher(val entries: List<SwitcherEntry>, val index: Int, val confirmRemove: Boolean = false, val list: Boolean = false) : Screen
-    /**
-     * [confirmRemove]: the "remove this ROM folder?" dialog is open for that extra. [details]: the lines above the rows
-     * (Library: games and consoles, last scan; Default emulators: its explanation); empty elsewhere.
-     */
-    /** [shot]: a Layouts group's picture of its values (null: none, as a hidden tab's). [banner]: a note under the title, above the rows. */
-    data class Settings(
-        val section: SettingsSection, val rows: List<SettingsRow>, val confirmRemove: ExtraFolder? = null, val details: List<String> = emptyList(),
-        val shot: LayoutShot? = null, val banner: String? = null,
-        /** Each row's values for its touch control ([SettingChoices]), in [rows]' order; null for a row that holds none. */
-        val choices: List<SettingChoices?> = emptyList(),
-        /** The selected reset row (Reset to defaults, Clear all, Reset console) asks first ([settingsResetAsk]): A resets, B keeps. */
-        val confirmReset: Boolean = false,
-        /** System → Player name's prompt is up (its draft): A saves it, B keeps the old name. */
-        val nameDraft: String? = null,
-    ) : Screen
-    /** Tools -> Settings: one row per section. */
-    data class SettingsMenu(val sections: List<SettingsSection>) : Screen
-    /**
-     * [pick] TOOLS: the app drawer (Tools → Apps), every launchable app but the Android games console's; A opens one,
-     * [menu] adds it to Tools or pins it on Home, [ToolAppRow.shown] is "in Tools". GAMES: Settings -> Library ->
-     * Android games, detected games first, then every other app; [ToolAppRow.shown] is "in the Android games console",
-     * and A puts one in or takes it out.
-     */
-    data class ToolApps(val apps: List<ToolAppRow>, val pick: AppPick = AppPick.TOOLS, val menu: ContextMenu? = null) : Screen
-    /** [confirmRemove]: the "remove Cheats & Patches?" dialog is open. */
-    data class CheatDb(val confirmRemove: Boolean = false) : Screen
-    /** Tools → Device Sync: no list selection here; its page (and the link choice) live in [AppDeps.deviceSync]. */
-    data object DeviceSync : Screen
-    /** The RetroAchievements tool page; [confirm]: a destructive action's dialog is open. */
-    data class RetroAchievements(val confirm: RaConfirm? = null) : Screen
-    /** Tools -> RetroAchievements -> the game data download's progress ([RaController.download]); [confirmCancel]: "Cancel download?" is open. */
-    data class RaDownload(val confirmCancel: Boolean = false) : Screen
-    /** Tools -> RetroAchievements -> Profile: the signed-in player's summary ([AppState.raProfile]), to read; B goes back. */
-    data object RaProfile : Screen
-    /** Tools -> RetroAchievements -> Achievements: the consoles of the cached games. */
-    data class RaConsoles(val consoles: List<com.nxredux.mobile.achievements.RaConsoleView>) : Screen
-    /** A console's cached games, opened from [RaConsoles]; [console] is its name (the page's title). */
-    data class RaGames(val console: String, val games: List<RaGameView>) : Screen
-    /** One game's achievements, in the chosen sort order; [lockedOnly] hides unlocked and pending ones. */
-    data class RaGame(val game: RaGameView, val achievements: List<com.nxredux.mobile.achievements.RaAchievement>, val lockedOnly: Boolean = false, val badges: Map<String, String> = emptyMap()) : Screen
-    data class RaAchievement(val game: RaGameView, val achievement: com.nxredux.mobile.achievements.RaAchievement, val badges: Map<String, String> = emptyMap()) : Screen
-    /**
-     * The RetroAchievements settings page; [signingIn]: the sign-in modal is open with [draftUser] / [draftPassword] as typed,
-     * [confirm]: a destructive action's dialog.
-     */
-    data class RaSettings(
-        val rows: List<RaSettingsRow>, val signingIn: Boolean = false, val confirm: RaConfirm? = null,
-        val draftUser: String = "", val draftPassword: String = "",
-    ) : Screen {
-        /** The generated form, but the typed password never reaches a log or an assertion message. */
-        override fun toString(): String =
-            "RaSettings(rows=$rows, signingIn=$signingIn, confirm=$confirm, draftUser=$draftUser, draftPassword=***)"
-    }
-    /** Settings -> Emulation -> Default settings: one row per core with games. */
-    data class EmulatorList(val rows: List<EmulatorListRow>) : Screen
-    /** The console picker of a core serving several tags with games. */
-    data class EmulatorConsoles(val coreId: String, val emulator: String, val tags: List<String>) : Screen
-    /**
-     * One tag's emulator settings page, or a game's (Game Settings, [game] set). [category]: the open category (null =
-     * top level).
-     */
-    data class EmulatorOptions(
-        val page: EmulatorPage, val rows: List<EmulatorRow>, val category: String? = null, val game: Listed? = null,
-    ) : Screen
-    /** Tools -> Game Tracker: play time per game group, most played first; [modal]: an options / pick / confirm modal is open. */
-    data class GameTime(val rows: List<GameTimeRow>, val grandTotalMs: Long, val modal: GameTimeModal? = null, val loading: Boolean = false) : Screen
-    /** Game Tracker -> a game: its group's sessions, newest first; [canMerge]: another game to merge into (Merge shows). */
-    data class GameTimeSessions(val game: com.nxredux.mobile.gametime.GameTotal, val sessions: com.nxredux.mobile.gametime.GameSessions, val canMerge: Boolean = false) : Screen
-    /** Tools -> Artwork: the counts, account and job lines, then the rows ([ArtworkScreenController]). */
-    data class Artwork(val details: List<String>, val rows: List<ArtworkRow>) : Screen
-    /** Artwork -> Fetch by console: one row per main-menu console group with a supported game. */
-    data class ArtworkConsoles(val rows: List<ArtworkConsole>) : Screen
-    /**
-     * The art fetch job, one row per game; [confirmCancel]: the "Cancel art fetch?" dialog is open; [starting]: a fetch
-     * was asked for and its job is not there yet ([job] empty, never the last job's rows).
-     */
-    data class ArtworkProgress(
-        val job: com.nxredux.mobile.scraper.ScrapeState, val confirmCancel: Boolean = false, val starting: Boolean = false,
-    ) : Screen
-    /**
-     * Artwork -> Settings: Replace existing art, the art sources' accounts and Reset artwork; [signingIn]: the ScreenScraper
-     * sign-in modal is open with [draftUser] / [draftPassword] as typed; [editingKey]: the [keyFor] key prompt
-     * (SteamGridDB or TheGamesDB) is open with [draftKey]; [confirmLogout]: the "Log out of ScreenScraper?" dialog is open;
-     * [confirmClearCache]: the "Clear unused images" dialog is open.
-     */
-    data class ArtworkSettings(
-        val rows: List<ArtworkSettingRow>, val signingIn: Boolean = false, val draftUser: String = "", val draftPassword: String = "",
-        val editingKey: Boolean = false, val draftKey: String = "", val keyFor: ArtKeyFor = ArtKeyFor.SGDB,
-        val confirmLogout: Boolean = false, val confirmClearCache: Boolean = false,
-    ) : Screen {
-        /** A prompt or dialog is open over the rows: it takes every input. */
-        val dialogOpen: Boolean get() = signingIn || editingKey || confirmLogout || confirmClearCache
-
-        /** The typed password and key never reach a log or an assertion message. */
-        override fun toString(): String =
-            "ArtworkSettings(rows=$rows, signingIn=$signingIn, draftUser=$draftUser, draftPassword=***, editingKey=$editingKey, draftKey=***, keyFor=$keyFor, confirmLogout=$confirmLogout, confirmClearCache=$confirmClearCache)"
-    }
-    /** Settings -> Reset artwork: All or a console; [confirm]: the delete dialog for that scope. */
-    data class ArtworkReset(val scopes: List<ResetScope>, val confirm: ResetScope? = null) : Screen
-}
-
-/** This game list is the main menu's Games tab: every game, under the tab row ([Screen.Games.tabBar]). */
-val Screen.Games.isTab: Boolean get() = source == ListSource.AllGames
-
-/** The main menu: a [Screen.Systems], or the Games tab ([isTab]) while it is the tab shown (the app's dual-screen rule too). */
-val Screen.isMainMenu: Boolean get() = this is Screen.Systems || (this is Screen.Games && isTab)
-
-/** The tab the main menu shows ([isMainMenu]); null on any other screen (or a menu with no tab). */
-internal val Screen.menuTab: MenuCategory?
-    get() = when (this) {
-        is Screen.Systems -> category
-        is Screen.Games -> tabBar?.let { it.categories.getOrNull(it.index) }
-        else -> null
-    }
-
-/** The main menu shows a hidden tab opened over it from MENU ([AppState.openHiddenTab]). */
-internal val Screen.menuPushed: Boolean
-    get() = when (this) {
-        is Screen.Systems -> pushed
-        is Screen.Games -> tabBar?.pushed == true
-        else -> false
-    }
-
-/** Kids Mode's first switch-on, in order (the spec's): PIN, allowed apps, play times, then the two permissions and home. */
-enum class KidsSetupStep { PIN, APPS, TIMES, USAGE, ALARMS, HOME }
-
-enum class SettingsKind { PLAYER_NAME, HOME, ADD_EXTRA, EXTRA, RESCAN, HIDDEN, UNASSIGNED, EMULATORS, DEFAULTS, DEFAULT_TAG, PAD_SKIN, PAD_THEME, MENU_STYLE, GAME_LIST_STYLE, MENU_ORIENTATION, GAME_LIST_ORIENTATION, GAME_LIST_VERTICAL_ALIGNMENT, CONTROLLER_ART, TAB_SHOWN, SHELF_SHOWN, HINT_SHOWN, LIST_ART, BACKDROP_ART, LAYOUT_OPTIONS, ACHIEVEMENTS_PANEL, PAGE_TITLE, BUTTON_HINTS, EXTRA_INFO, GAME_INFO, HOME_STATS, SWITCHER_LAYOUT, PAD_VIBRATION, GAME_RUMBLE, ACCENT, SECONDARY_ACCENT, INFO, HOME_SCREEN, ANDROID_GAMES, COPY_INFO, BUTTON_LAYOUT, BUTTON_LAYOUT_CONSOLE, BUTTON_LAYOUT_ORIENTATION, BUTTON_LAYOUT_WII_PAD, BUTTON_LAYOUT_N3DS_PAD, BUTTON_LAYOUT_RESET, DEBUG_LOG, CLEAR_LINK_ROMS, CABLE_LINK_DELAY, CABLE_LINK_DELAY_OVERLAY, SECOND_SCREEN_ENABLE, BOTTOM_SCREEN, PAUSE_UNFOCUSED, SCREEN_CARE, SAVES, SAVE_FORMAT, STATE_FORMAT, EXTRACTED_NAME, EXPORT_SAVES, IMPORT_SAVES, IMPORT_FOLDER, IMPORT_ZIP, IMPORT_RETROARCH, IMPORT_DONE, RESET_DEFAULTS, ALL_FILES, MIC_ACCESS, APP_UPDATE, KEYBOARD,
-    // Controls -> Shortcuts: its opener, an action's press-to-bind row, a touch button's action.
-    SHORTCUTS, SHORTCUT_BIND, SHORTCUT_TOUCH,
-    // Controls -> System buttons: its opener and a role's press-to-bind row (SELECT, START, MENU).
-    SYSTEM_BUTTONS, SYSTEM_BUTTON_BIND,
-    LAYOUT_HOME, LAYOUT_GAMES_TAB, LAYOUT_CONSOLES, LAYOUT_COLLECTIONS, LAYOUT_TOOLS, LAYOUT_GAME_LISTS, LAYOUT_TITLE_HINTS, LAYOUT_SWITCHER, TEXT_SIZE,
-    // A group's label and the space before it (System's General, Launcher, Developer, About, Licenses): never selected.
-    SECTION, GAP,
-    // System's Licenses group: a paragraph (never selected) and the row that opens the website's full list.
-    TEXT, LICENSES_LINK,
-    // Settings -> Kids Mode: the page itself, On / Off, Change PIN, a day's play time, Allowed apps, the two missing
-    // permissions' warnings and Forgot PIN?.
-    KIDS_MODE, KIDS_ENABLE, KIDS_PIN, KIDS_DAY, KIDS_APPS, KIDS_GUARD, KIDS_ALARMS, KIDS_HOME, KIDS_FORGOT }
-
-/**
- * A Settings page. [parent] null: a section of the Tools -> Settings menu, in this order; else a sub-page of that
- * section, opened from its [opener] row, B going back there. Layouts ([MAIN_MENU]) is a section of its own right after
- * Appearance, as NX Redux's main page category.
- */
-enum class SettingsSection(val label: String, val parent: SettingsSection? = null, val opener: SettingsKind? = null) {
-    LIBRARY("Library"), EMULATORS("Emulation"), APPEARANCE("Appearance"), MAIN_MENU("Layouts"), CONTROLS("Controls"),
-    // Only while a second screen is connected: Enable and Bottom screen.
-    SECOND_SCREEN("Second screen"),
-    // General, Launcher (with a launcher), Developer and About groups on one page; the last category.
-    SYSTEM("System"),
-    // Kids Mode: only where the platform has it ([AppState.settingsSections]); a parent's page (Off or Parent mode).
-    KIDS("Kids Mode", opener = SettingsKind.KIDS_MODE),
-    DEFAULT_EMULATORS("Default emulators", EMULATORS, SettingsKind.DEFAULTS),
-    BUTTON_LAYOUT("Button layout", APPEARANCE, SettingsKind.BUTTON_LAYOUT), SAVES("Saves", LIBRARY, SettingsKind.SAVES),
-    SHORTCUTS("Shortcuts", CONTROLS, SettingsKind.SHORTCUTS),
-    SYSTEM_BUTTONS("System buttons", CONTROLS, SettingsKind.SYSTEM_BUTTONS),
-    IMPORT_SAVES("Import saves", SAVES, SettingsKind.IMPORT_SAVES),
-    // An import's results; Done and B go back to Saves ([AppState.leaveSubPage]), past Import saves.
-    IMPORT_RESULT("Import results", IMPORT_SAVES),
-    // Layouts' groups: a tab's options, the game lists', the page title's and hints', the Game Switcher's.
-    LAYOUT_HOME("Home", MAIN_MENU, SettingsKind.LAYOUT_HOME), LAYOUT_GAMES_TAB("Games", MAIN_MENU, SettingsKind.LAYOUT_GAMES_TAB),
-    LAYOUT_CONSOLES("Consoles", MAIN_MENU, SettingsKind.LAYOUT_CONSOLES),
-    LAYOUT_COLLECTIONS("Collections", MAIN_MENU, SettingsKind.LAYOUT_COLLECTIONS), LAYOUT_TOOLS("Tools", MAIN_MENU, SettingsKind.LAYOUT_TOOLS),
-    LAYOUT_GAME_LISTS("Game lists", MAIN_MENU, SettingsKind.LAYOUT_GAME_LISTS), LAYOUT_TITLE_HINTS("Title and hints", MAIN_MENU, SettingsKind.LAYOUT_TITLE_HINTS),
-    LAYOUT_SWITCHER("Game Switcher", MAIN_MENU, SettingsKind.LAYOUT_SWITCHER);
-
-    /** A Layouts group: its value rows above a picture of them ([Screen.Settings.shot]); B goes back. */
-    val layoutGroup: Boolean get() = parent == MAIN_MENU
-
-    /** A Layouts group's tab (Home, Consoles, Collections, Tools); null for the others. */
-    val tab: MenuCategory? get() = when (this) {
-        LAYOUT_HOME -> MenuCategory.HOME
-        LAYOUT_GAMES_TAB -> MenuCategory.GAMES
-        LAYOUT_CONSOLES -> MenuCategory.CONSOLES
-        LAYOUT_COLLECTIONS -> MenuCategory.COLLECTIONS
-        LAYOUT_TOOLS -> MenuCategory.TOOLS
-        else -> null
-    }
-
-    /** Library or one of its sub-pages: the pages whose rows follow the index. */
-    val library: Boolean get() = this == LIBRARY || parent == LIBRARY
-
-    /** Emulators or one of its sub-pages (Default emulators): a changed default tag leaves the index stale. */
-    val emulators: Boolean get() = this == EMULATORS || parent == EMULATORS
-
-    /** Leaving it may reload the library (the index stale): Library, Emulators and their sub-pages. */
-    val reloads: Boolean get() = library || emulators
-
-    /** Drawn with the detail lines above its rows: Library (its counts and last scan) and Default emulators; not Saves (its banner). */
-    val detailed: Boolean get() = this == LIBRARY || this == DEFAULT_EMULATORS
-
-    /**
-     * Every row opens a page or runs an action (a count or state as its secondary), none holds a value: drawn as list
-     * rows at the list size, as the RetroAchievements page: Emulators. A page with a value row
-     * (a toggle or a cycled setting, About's read-only values) keeps the options rows for all its rows, the navigation
-     * ones too (System's Use as home screen), so one page never mixes the two sizes.
-     */
-    val navigation: Boolean get() = this == EMULATORS
-}
-
-/** The last row of Appearance, Layouts and Controls (NX Redux's label; its description has no place on a Settings page here). */
-internal const val RESET_DEFAULTS_LABEL = "Reset to defaults"
-
-/** The Wii's and the 3DS's console ids: Button layout's Controller row is theirs. */
-private const val WII_CONSOLE = "wii"
-private const val N3DS_CONSOLE = "3ds"
 
 /** The global Shortcuts page's note on Toggle mic, which does nothing outside DS / 3DS. */
 internal const val MIC_ROW_NOTE = "DS / 3DS only"
@@ -663,11 +302,11 @@ internal const val MIC_ROW_NOTE = "DS / 3DS only"
 /** A Shortcuts bind row's value while it waits for a press. */
 internal const val SHORTCUT_PROMPT = "Press a button…"
 
-/** Both Shortcuts pages' line in place of the bind rows while no controller is connected (the on-screen pad binds nothing). */
 /** Controls → System buttons without a pad connected. */
 internal const val SYSTEM_BUTTONS_NO_CONTROLLER = "Connect a controller to set its SELECT, START and MENU buttons."
 /** A System buttons row waiting for its press. */
 internal const val SYSTEM_BUTTON_PROMPT = "Press a button…"
+/** Both Shortcuts pages' line in place of the bind rows while no controller is connected (the on-screen pad binds nothing). */
 internal const val SHORTCUTS_NO_CONTROLLER = "Connect a controller to bind buttons. On the on-screen pad, use Touch button 1 and 2 instead."
 
 /** How long a notice stays before it clears itself. */
@@ -705,168 +344,12 @@ private const val LISTING_HIDDEN_NO_INDEX = "Storage did not list the library fo
 /** "1 game" / "<n> games" for the Library page and the rescan notice. */
 internal fun gamesLabel(n: Int): String = if (n == 1) "1 game" else "$n games"
 
-/** Onboarding's layout pages: a layout row above one picture of it. */
-internal val ONBOARDING_LAYOUT_STEPS = setOf(
-    OnboardingStep.TAB_HOME, OnboardingStep.TAB_CONSOLES, OnboardingStep.TAB_COLLECTIONS, OnboardingStep.TAB_TOOLS, OnboardingStep.GAME_LISTS,
-)
-/** Onboarding's tab layout steps and the tab each sets. */
-internal val ONBOARDING_TAB_STEPS = mapOf(
-    OnboardingStep.TAB_HOME to MenuCategory.HOME, OnboardingStep.TAB_CONSOLES to MenuCategory.CONSOLES,
-    OnboardingStep.TAB_COLLECTIONS to MenuCategory.COLLECTIONS, OnboardingStep.TAB_TOOLS to MenuCategory.TOOLS,
-)
-/** The artwork step's rows: the sources' accounts, then its two buttons. */
-private const val ART_SCREENSCRAPER = "ScreenScraper"
-private const val ART_SGDB_KEY = "SteamGridDB key"
-private const val ART_TGDB_KEY = "TheGamesDB key"
-private const val ART_FETCH_NOW = "Fetch now"
-private const val ART_SKIP = "Skip"
-
-/** Onboarding's value pages and the Settings value each row steps, top to bottom (Continue below them). */
-private val ONBOARDING_VALUE_KINDS = mapOf(
-    OnboardingStep.TEXT_SIZE to listOf(SettingsKind.TEXT_SIZE),
-    OnboardingStep.SAVE_FORMATS to listOf(SettingsKind.SAVE_FORMAT, SettingsKind.STATE_FORMAT, SettingsKind.EXTRACTED_NAME),
-    OnboardingStep.PAD to listOf(SettingsKind.PAD_SKIN, SettingsKind.PAD_THEME),
-    OnboardingStep.TITLE to listOf(SettingsKind.PAGE_TITLE, SettingsKind.BUTTON_HINTS),
-    OnboardingStep.ACCENT to listOf(SettingsKind.ACCENT, SettingsKind.SECONDARY_ACCENT),
-)
-
 /** "None" / "1 game" / "<n> games": Library's "Android games" count. */
 internal fun gamesCountLabel(n: Int): String = if (n == 0) "None" else gamesLabel(n)
 
-/** The Android games console's tag: no folder, core or registry console has it. */
-const val ANDROID_TAG = com.nxredux.mobile.scraper.ANDROID_CONSOLE_TAG
-
-/** Which apps grid this is: the app drawer (its marks: the apps in Tools), or the Android games console's picker. */
-enum class AppPick { TOOLS, GAMES }
-
-/**
- * The Android games console's apps: the [installed] apps whose ids are in [ids] (the user's list, [AppSettings.androidConsoleApps];
- * one not installed is skipped), by label, case-insensitive. Detection never adds one.
- */
-internal fun androidConsoleMembers(installed: List<InstalledApp>, ids: List<String>): List<InstalledApp> {
-    val members = ids.toSet()
-    return installed.filter { it.id in members }.sortedBy { it.label.lowercase() }
-}
-
-/** The games picker's order: the detected games, then every other app, each group by label, case-insensitive. */
-internal fun androidGamesPickOrder(installed: List<InstalledApp>): List<InstalledApp> {
-    val (games, rest) = installed.sortedBy { it.label.lowercase() }.partition { it.game }
-    return games + rest
-}
-
-/**
- * The "Add N Android games to Consoles?" question (first setup's step, or a dialog over the main menu): the detected
- * games' [ids] and their [labels], listed under it. Yes adds them all; either answer means it is never asked again.
- * At most [MAX_LINES] lines list them (the last one "and N more" when they do not all fit), so neither page overflows.
- */
-data class AndroidGamesAsk(val ids: List<String>, val labels: List<String>) {
-    companion object { const val MAX_LINES = 6 }
-
-    val title: String get() = "Android games"
-    val question: String get() = "Add ${ids.size} Android game${if (ids.size == 1) "" else "s"} to Consoles?"
-    /** The labels, at most [max] lines: past it the last line says how many more. */
-    fun shown(max: Int = MAX_LINES): List<String> = if (labels.size <= max) labels else labels.take(max - 1) + "and ${labels.size - (max - 1)} more"
-    val text: String get() = "$question\n\n" + shown().joinToString("\n")
-}
-
-/** The question for [installed]'s detected games, by label; null when none is detected (nothing is asked). */
-internal fun androidGamesAskFor(installed: List<InstalledApp>): AndroidGamesAsk? {
-    val games = installed.filter { it.game }.sortedBy { it.label.lowercase() }.ifEmpty { return null }
-    return AndroidGamesAsk(games.map { it.id }, games.map { it.label })
-}
-
-/** The Android games console's game entries' source id: no ROM tree has it (their paths are never written anywhere). */
-internal const val ANDROID_SOURCE = "android"
-
-/**
- * The Android games console for [apps] (the console's members, [androidConsoleMembers]): a synthetic [SystemFolder] with no core,
- * each app a [GameEntry] whose file name is the app id and whose shown name is its label, its screenshot, 2D box,
- * wheel and app-built mix from [store] ([AndroidArtStore.art]; a hero screenshot marked); no 3D box. Null with no app: the console is
- * hidden.
- */
-internal fun androidConsoleOf(apps: List<InstalledApp>, store: AndroidArtStore?): SystemFolder? {
-    if (apps.isEmpty()) return null
-    val games = apps.map { a ->
-        GameEntry(
-            ref = ContentRef("app:${a.id}"), fileName = a.id, shownName = a.label,
-            screenshotRef = store?.art(a.id, ArtSlot.SCREENSHOT), box2dRef = store?.art(a.id, ArtSlot.BOX_2D),
-            wheelRef = store?.art(a.id, ArtSlot.WHEEL), mixRef = store?.art(a.id, ArtSlot.MIX), heroShot = store?.heroShot(a.id) == true,
-            folder = ContentRef("app:"), sourceId = ANDROID_SOURCE, relativeDir = "",
-        )
-    }
-    return SystemFolder("Android", ANDROID_TAG, null, games, android = true)
-}
-
-/** The Consoles rows with [console] (the Android one) placed among them by display name, ignoring case; [rows] as they are without it. */
-internal fun withAndroidConsole(rows: List<MainRow.System>, console: SystemFolder?): List<MainRow.System> {
-    if (console == null || console.games.isEmpty()) return rows
-    val name = console.displayName.lowercase()
-    val at = rows.indexOfFirst { it.system.displayName.lowercase() > name }.takeIf { it >= 0 } ?: rows.size
-    return rows.toMutableList().apply { add(at, MainRow.System(console)) }
-}
-
-/** A main menu tab's or the game list's style, as the Appearance rows show it. */
-internal fun menuStyleLabel(style: MenuStyle): String = when (style) {
-    MenuStyle.LIST -> "List"
-    MenuStyle.GRID -> "Grid"
-    MenuStyle.CAROUSEL -> "Carousel"
-    MenuStyle.BACKDROP -> "Backdrop"
-    MenuStyle.MINIMAL -> "Minimal"
-}
-
-/** A Carousel's or a Backdrop's orientation, as its Orientation row shows it. */
-internal fun orientationLabel(o: MenuOrientation): String = when (o) {
-    MenuOrientation.HORIZONTAL -> "Horizontal"
-    MenuOrientation.VERTICAL -> "Vertical"
-}
-
-internal fun verticalAlignmentLabel(a: VerticalListAlignment): String = when (a) {
-    VerticalListAlignment.LEFT -> "Left"
-    VerticalListAlignment.RIGHT -> "Right"
-}
-
-/** [enabled] false: dimmed and A does nothing (a default emulator of a one-tag console). [category]: a MENU_STYLE row's tab. */
-/**
- * A touch value row's picker ([AppState.chooser], the in-game menu's look): the row's [title], every value's [labels],
- * the d-pad cursor [selected] and the value set [current] (-1: none).
- */
-data class ValueChooser(val title: String, val labels: List<String>, val selected: Int, val current: Int = -1)
-
-/** Use as home screen's values: it is not a [SettingValue] (Android answers it). */
-internal val ON_OFF = listOf("Off", "On")
-
-/** A Settings value row's values as its touch control shows them: every value's [labels] in LEFT / RIGHT order, the current [index]. */
-data class SettingChoices(val labels: List<String>, val index: Int)
-
-/** A Settings row's full description over the page ([AppState.settingInfo]); [scrollSeq] / [scrollDir] count UP/DOWN steps. */
-data class SettingInfoPopup(val title: String, val text: String, val scrollSeq: Int = 0, val scrollDir: Int = 0)
-
-/**
- * [warning]: its secondary is a problem (a folder not available), drawn in the warning colour. [shortcut] / [touchSlot]:
- * the action or touch button of a Shortcuts row; [note] on a bind row: it is waiting for a press, and what to do.
- */
-data class SettingsRow(val kind: SettingsKind, val label: String, val secondary: String? = null, val extra: ExtraFolder? = null, val consoleId: String? = null, val enabled: Boolean = true, val category: MenuCategory? = null, val shelf: HomeShelf? = null, val hint: NxButton? = null, val landscape: Boolean? = null, val warning: Boolean = false, val note: String? = null, val shortcut: ShortcutAction? = null, val touchSlot: TouchSlot? = null, val systemRole: SystemRole? = null,
-    /** A Kids Mode play-time row's ISO day. */
-    val day: Int? = null)
-
-/** A row the selection lands on: not a group label, the space before one, or a paragraph. */
-val SettingsRow.selectable: Boolean get() = kind != SettingsKind.SECTION && kind != SettingsKind.GAP && kind != SettingsKind.TEXT
-
-/**
- * Settings -> Emulation -> Default emulators: every console with several tags (cycled, so one can be set before it has
- * games) and every other console [systems] hold games for (Unassigned left out), as a dimmed read-only row. The value
- * names the emulator behind the tag, "mGBA (MGBA)", so two tags on one core would still differ by tag. A stored pick
- * that is not one of the console's tags is ignored. Sorted by console name.
- */
-internal fun defaultEmulatorRows(systems: List<SystemFolder>, defaultTags: Map<String, String>): List<SettingsRow> {
-    val withGames = systems.filter { !it.unassigned && it.gameCount > 0 }.mapNotNullTo(HashSet()) { CoreRegistry.consoleOf(it.tag)?.id }
-    // The consoles with a choice first (more than one emulator), then the single-emulator ones, each A to Z.
-    return CoreRegistry.consoles.filter { it.tags.size > 1 || it.id in withGames }
-        .sortedWith(compareBy({ it.tags.size <= 1 }, { it.displayName.lowercase() })).map { c ->
-        val tag = c.defaultTagFor(defaultTags[c.id])
-        SettingsRow(SettingsKind.DEFAULT_TAG, c.displayName, CoreRegistry.emulatorLabel(tag), consoleId = c.id, enabled = c.tags.size > 1)
-    }
-}
+/** Where the game at [path] is in the list; null when it is not there (or no path is given). */
+private fun List<Listed>.indexOfPath(path: String?): Int? =
+    path?.let { p -> indexOfFirst { it.game.path == p } }?.takeIf { it >= 0 }
 
 data class SwitcherEntry(val system: SystemFolder, val game: GameEntry, val resume: ResumeInfo)
 
@@ -902,17 +385,34 @@ class AppState(
         deps.source, sidecars, deps.arcadeSets, deps.naomiSets, compute = deps.compute, chdSectors = deps.chdSectors,
         picks = { artworkController?.picks().orEmpty() },               // a picked extra game slot keeps its mirror file
         heroShots = { artworkController?.heroShots().orEmpty() },       // a SteamGridDB hero screenshot keeps hero drawing
+        badgeChoices = { deps.userData.readBadges() },                   // a game's own badge choice wins over its tags
         legacyMove = { legacyArtMove },                                  // old grid/ and hero/ files move once
     )
-    /** Controls -> Shortcuts as edited since it opened; null: closed (or untouched), [AppSettings.shortcuts] is all there is. */
-    private var shortcutDraft: ShortcutSet? = null
 
-    /** Press to bind's raw keys ([captureKey]); Controls -> Shortcuts' bind rows start it. */
-    private val capture = ShortcutCapture()
-
-    private val _capturingShortcut = MutableStateFlow<ShortcutAction?>(null)
+    /** The Shortcuts and System buttons pages' state and raw keys. Before [_screen]: its watcher reports to it. */
+    private val controlBindings = ControlBindingsController(
+        deps,
+        host = object : ControlBindingsHost {
+            override fun openSection(): SettingsSection? = (_screen.value as? Screen.Settings)?.section
+            override fun refreshSettings() = settingsUi.refreshSettings()
+            override fun refreshSettingsOn(vararg sections: SettingsSection) = this@AppState.refreshSettingsOn(*sections)
+            override fun showNotice(text: String) = this@AppState.showNotice(text)
+        },
+    )
     /** The action a Shortcuts bind row is waiting on a press for; while set the platform hands raw keys to [captureKey] first. */
-    val capturingShortcut: StateFlow<ShortcutAction?> = _capturingShortcut.asStateFlow()
+    val capturingShortcut: StateFlow<ShortcutAction?> get() = controlBindings.capturingShortcut
+    /** A raw key from the platform, before it maps to an [NxButton]: true when press to bind took it. */
+    fun captureKey(keyCode: Int, down: Boolean): Boolean = controlBindings.captureKey(keyCode, down)
+    /** Every key from a physical device, before anything else sees it: true when System buttons used it. */
+    fun systemButtonKey(model: PadModel?, source: String?, keyCode: Int, scanCode: Int, down: Boolean, repeat: Boolean): Boolean =
+        controlBindings.systemButtonKey(model, source, keyCode, scanCode, down, repeat)
+    /** The UI reports whether a controller is connected. */
+    fun onControllerConnected(connected: Boolean) {
+        controlBindings.onControllerConnected(connected)
+        if (settingsContent.controllerConnected == connected) return
+        settingsContent.controllerConnected = connected
+        refreshSettingsOn(SettingsSection.APPEARANCE)
+    }
 
     private val _rowEdit = MutableStateFlow<RowEdit?>(null)
     /** The row the pad is changing ([NxPadA.EDIT], [onRowEditButton]); another page drops it. */
@@ -925,13 +425,15 @@ class AppState(
      */
     private val _screen: MutableStateFlow<Screen> = WatchedStateFlow(MutableStateFlow(Screen.Loading)) { s ->
         if (_rowEdit.value?.key != rowEditKey(s)) _rowEdit.value = null
-        if ((s as? Screen.Settings)?.section != SettingsSection.SHORTCUTS && (shortcutDraft != null || _capturingShortcut.value != null)) closeShortcuts()
-        if ((s as? Screen.Settings)?.section != SettingsSection.SYSTEM_BUTTONS) systemButtonWaiting = null
+        controlBindings.onScreen(s)
         keyboard.sync()   // a prompt opened, closed or changed
     }
     val screen: StateFlow<Screen> = _screen.asStateFlow()
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
+    /** A page's own message (its title, its text) in an info dialog: A or B closes it. */
+    private val _message = MutableStateFlow<Pair<String, String>?>(null)
+    val message: StateFlow<Pair<String, String>?> = _message.asStateFlow()
     private val loader = ScreenLoader(scope)
     /** A screen load has run past its grace period: the loading overlay shows (B cancels, [ScreenLoader]). */
     val loading: StateFlow<Boolean> = loader.visible
@@ -967,12 +469,19 @@ class AppState(
     /** The pinned tools, in pin order: [ToolPins.FILE] in [AppDeps.privateFiles] as last read or written (never shortcuts.txt). */
     var toolPins: List<String> = emptyList()
         private set
-    private var collectionNames: List<String> = emptyList() // Collections/ as last listed against the tree
-    private val collectionCounts = HashMap<String, Int?>()   // each collection's game count, by name; null: its file would not read
-    private var countsGeneration = 0                          // bumped when counts go stale, so a pass begun before it is dropped
-    private var countsJob: Job? = null
-    private val countCache = CollectionCountCache(deps.privateFiles, scope, deps.compute)   // the counts between runs, app-private
-    private var libraryStampOf: Pair<List<SystemFolder>, String>? = null   // [CountStamps.library] of the systems it was taken for
+    /** The Collections tab's names and counts. */
+    private val collectionCounter = CollectionCountsController(
+        scope, deps, collections,
+        host = object : CollectionCountsHost {
+            override fun home(): ContentRef? = this@AppState.home()
+            override fun systems(): List<SystemFolder> = systemsCache
+            override suspend fun playableOffMain(systems: List<SystemFolder>): Map<GameRef, Listed> = this@AppState.playableOffMain(systems)
+            override suspend fun buildMainRowsMerged() = this@AppState.buildMainRowsMerged()
+            override fun swapMainRows() = this@AppState.swapMainRows()
+            override suspend fun refreshMainRows() = this@AppState.refreshMainRows()
+            override fun invalidateStats(stale: String?) = topScreen.invalidateStats(stale)
+        },
+    )
     private val rowsLock = Mutex()                            // one main-row rebuild at a time: an older one never writes last
     private var menuCategory: MenuCategory = MenuCategory.HOME   // the tab last shown (the menu opens on Home); a gone one resolves to the next visible tab
     private var pushedTab: MenuCategory? = null   // a hidden tab opened over the menu ([openHiddenTab]); [menuCategory] stays the tab under it
@@ -992,6 +501,13 @@ class AppState(
     /** An installed library's "Add N Android games to Consoles?" dialog over the main menu (A Yes, B Not now); null when not showing. */
     val androidGamesAsk: StateFlow<AndroidGamesAsk?> = _androidGamesAsk.asStateFlow()
     private var androidAskGuard: Job? = null   // active for [ANDROID_ASK_GUARD_MILLIS] after the dialog shows: its answers are ignored
+
+    private val _firstTip = MutableStateFlow<FirstTip?>(null)
+    /** The first-launch tip showing ([FirstTip]): a dialog over the main menu or a game list; null for none. */
+    val firstTip: StateFlow<FirstTip?> = _firstTip.asStateFlow()
+    /** The tips shown this launch: Got it closes one until the next launch. */
+    private val tipsShown = HashSet<FirstTip>()
+    private var tipGuard: Job? = null   // as [androidAskGuard]: a button held from before the tip doesn't answer it
     /**
      * A game list's panel is open (the achievements panel or the art panel): on the Games tab the menu is then not free
      * ([menuFree]). Declared before its readers; it follows the panels from where they are built ([artPanel]).
@@ -1023,17 +539,6 @@ class AppState(
     internal val updateLabel: StateFlow<String?> = _updateLabel.asStateFlow()   // the two-pane preview of About redraws on it, as on [gpu]
     /** First-launch onboarding and Settings → Run setup again ([OnboardingController]). */
     val onboarding = OnboardingController()
-    private var allFilesStepShown = false   // this run showed the All files step: it counts in the step numbers
-    private var androidStepShown = false   // likewise the Android games step
-    private var addedExtraId: String? = null   // the ROMs folder first setup added: its summary step counts in the step numbers
-    private var welcomeDone = false   // the welcome was answered this run: a load without a home goes to the folder steps
-    private var mediaHomeTaken = false   // first setup went on with the media home (no All files access): no pick to wait for
-    private var onboardingSync = false   // Device Sync was opened from the sync offer: leaving it returns there
-    private var onboardingSigningIn = false   // onboarding's RetroAchievements sign-in is running: its end moves the step on
-    private var onboardingSynced: String? = null   // the sync offer's last result ("done", "failed", "stopped"; "" left before one ended)
-    private var onboardingImporting: String? = null   // the save import step's running import: its progress text
-    private var onboardingImported: ImportResult? = null   // the save import step's last result, cleared when the step is left
-    private var firstSetup = false   // a first home pick is on its folder steps: the menu's dialog waits (the setup asks as a step)
     private var afterAndroidStep: (() -> Unit)? = null   // what first setup's Android games step goes on to (a load or the extra's scan)
     /** Android apps' icons for the session (Tools tiles, Home pins, the picker); null without a launcher. */
     val appIcons: AppIcons? = deps.launcher?.let { AppIcons(it, scope) }
@@ -1090,6 +595,7 @@ class AppState(
         scope, _screen, _selection, deps.settings, deps.launcher, kids, onboarding,
         host = object : KidsHost {
             override fun showNotice(text: String) = this@AppState.showNotice(text)
+            override fun showMessage(title: String, text: String) { _message.value = title to text }
             override fun showSystemsNow(category: MenuCategory?) = this@AppState.showSystemsNow(category)
             override fun clearMenuTop() { pushedTab = null }
             override fun select(index: Int) = this@AppState.select(index)
@@ -1103,10 +609,10 @@ class AppState(
             override fun rebuildHomeTab() = this@AppState.rebuildHomeTab()
             override fun openPicker(title: String, labels: List<String>, current: Int, apply: (Int) -> Unit) =
                 settingsUi.openPicker(title, labels, current, apply)
-            override fun onboardingNext() = this@AppState.onboardingNext()
-            override fun showOnboarding() = this@AppState.showOnboarding()
+            override fun onboardingNext() = onboardingUi.onboardingNext()
+            override fun showOnboarding() = onboardingUi.showOnboarding()
             override val installedApps: List<InstalledApp>? get() = installedCache
-            override fun menuWaits(): Boolean = allMenuTabs.isEmpty() || firstSetup
+            override fun menuWaits(): Boolean = allMenuTabs.isEmpty() || onboardingUi.firstSetup
         },
     )
 
@@ -1157,142 +663,9 @@ class AppState(
         // A game list's layout choices and Layouts' game list rows differ on two screens.
         (_screen.value as? Screen.Games)?.takeIf { it.layoutMenu != null }?.let { _screen.value = it.copy(layoutMenu = null) }
         if (_screen.value is Screen.Settings) settingsUi.refreshSettings()
-        followTopDetails()
-        followTopStats()
+        topScreen.followTopDetails()
+        topScreen.followTopStats()
     }
-
-    /** What one [topStats] computation was started for: the [target] (as [key]), the library and the play time it read. */
-    private class StatsInputs(val key: String, val target: TopContent, val systems: List<SystemFolder>, val info: Map<String, GameInfo>)
-
-    /** [a] and [b] are one stats target built from the same folders (a rescan gives the row new ones under the same tags). */
-    private fun sameStatsTarget(a: TopContent, b: TopContent): Boolean = when {
-        a is TopContent.ConsoleStats && b is TopContent.ConsoleStats -> a.systems.size == b.systems.size && a.systems.indices.all { a.systems[it] === b.systems[it] }
-        else -> a == b
-    }
-
-    /**
-     * [topStats] on the console or collection [DualMenu.top] shows while the menu is on two screens, else null. Stats
-     * built from the same library and play time show again at once ([statsCache]); else they are computed off the main
-     * thread, the page shown staying while its own target is recomputed (new play time, a rescan). The next move cancels
-     * that computation, and one that ends anyway writes only while it is still the latest ([topStatsFor]).
-     */
-    private fun followTopStats() {
-        val top = if (_dualMenu.value) DualMenu.top(_screen.value, _selection.value.index) else TopContent.Backdrop
-        val key = statsKey(top)
-        if (key == null) {
-            topStatsJob?.cancel(); topStatsJob = null; topStatsFor = null
-            _topStats.value = null
-            return
-        }
-        val systems = systemsCache
-        val info = _gameInfo.value
-        topStatsFor?.let { if (it.key == key && sameStatsTarget(it.target, top) && it.systems === systems && it.info === info) return }   // computing or shown already
-        if (statsCacheOf?.let { it.first === systems && it.second === info } != true) {
-            statsCache.clear(); statsCacheOf = systems to info
-        }
-        if (consoleBiosLibrary !== systems) { consoleBios.clear(); consoleBiosLibrary = systems }
-        topStatsJob?.cancel(); topStatsJob = null
-        val inputs = StatsInputs(key, top, systems, info)
-        topStatsFor = inputs
-        statsCache[key]?.takeIf { sameStatsTarget(it.first, top) }?.let { _topStats.value = it.second; return }
-        if (_topStats.value?.key != key) _topStats.value = null   // never another target's page meanwhile
-        // Built here: consoleEntries' cache belongs to the main thread.
-        val console = (top as? TopContent.ConsoleStats)?.let { it.systems to consoleEntries(it.systems) }
-        topStatsJob = scope.launch {
-            val base = if (console != null) {
-                val (group, entries) = console
-                val stats = withContext(deps.compute) { consoleStats(group, entries, info) }
-                val bios = if (consoleBios.containsKey(key)) consoleBios[key] else readConsoleBios(group).also { if (consoleBiosLibrary === systems) consoleBios[key] = it }
-                stats.copy(bios = bios)
-            } else {
-                val name = (top as TopContent.CollectionStats).name
-                val entries = tryOr({ emptyList() }) { entriesFor(ListSource.Collection(name)) }
-                withContext(deps.compute) { collectionStats(name, entries, info) }
-            }
-            val stats = base.copy(shelf = base.shelf.map { it.copy(resume = shelfResume(it.entry)) })
-            // A read that ended after a move (one that ignored the cancel) must not paint over the target now shown.
-            if (topStatsFor !== inputs) return@launch
-            if (statsCacheOf?.let { it.first === systems && it.second === info } == true) statsCache[key] = top to stats
-            _topStats.value = stats
-        }
-    }
-
-    /** [group]'s BIOS state (required missing on any of its tags wins); none for the Android console. */
-    private suspend fun readConsoleBios(group: List<SystemFolder>): BiosMissing? {
-        val facts = deps.topFacts ?: return null
-        if (group.any { it.android || it.unassigned }) return null
-        val bios = group.map { s -> tryOrNull { facts.biosMissing(s.tag) } }
-        return bios.firstOrNull { it == BiosMissing.REQUIRED } ?: bios.firstOrNull { it != null }
-    }
-
-    /** [entry]'s resume picture for a shelf tile, read only when it has no scraped screenshot (that one is shown first). */
-    private suspend fun shelfResume(entry: Listed): String? {
-        if (entry.game.screenshotRef != null || entry.system.android || entry.system.unassigned) return null
-        return tryOrNull { deps.userData.resumeInfo(entry.system.tag, entry.game.fileName).previewPath }
-    }
-
-    /**
-     * [topDetails] on the game [DualMenu.top] shows while the menu is on two screens, else null. A move publishes the new
-     * game's page at once from what is in memory, then its resume save once read; the next move cancels that read, so a
-     * slow one never paints over the game now highlighted. [reread]: the same game's read again (its play time moved:
-     * back from a game).
-     */
-    private fun followTopDetails(reread: Boolean = false) {
-        val entry = (if (_dualMenu.value) DualMenu.top(_screen.value, _selection.value.index) as? TopContent.GameDetails else null)?.entry
-        ra.followRaDetails(entry)
-        if (entry == null) {
-            topDetailsJob?.cancel(); topDetailsJob = null
-            _topDetails.value = null
-            return
-        }
-        val shown = _topDetails.value?.takeIf { sameGame(it.entry, entry) }
-        val path = entry.game.path
-        _topDetails.value = TopDetails(
-            entry, _gameInfo.value[path], shown?.resume ?: ResumeInfo.NONE,
-            detailsBody(detailsRaFor(entry, ra.detailsRa.value)), shown?.scraped,
-        )
-        if (shown != null && !reread) return   // its reads ran or are running
-        val ref = infoRef(entry)
-        topDetailsJob?.cancel()
-        topDetailsJob = scope.launch {
-            val saves = !entry.system.android && !entry.system.unassigned
-            val resume = if (saves) tryOr({ ResumeInfo.NONE }) { deps.userData.resumeInfo(entry.system.tag, entry.game.fileName) } else ResumeInfo.NONE
-            val scraped = ref?.let { r -> gameInfoStore?.read(r) }
-            val now = _topDetails.value?.takeIf { sameGame(it.entry, entry) } ?: return@launch
-            _topDetails.value = now.copy(resume = resume, scraped = scraped)
-        }
-    }
-
-    /**
-     * The highlighted game's stored ScreenScraper info into [gameMeta], for its caption, and the info fetch on it
-     * ([InfoFetcher.follow]: a game rested on with none stored is looked up). On one screen or two: the game is the one
-     * the top screen's details would show ([DualMenu.top]).
-     */
-    private fun followGameMeta() {
-        val entry = (DualMenu.top(_screen.value, _selection.value.index) as? TopContent.GameDetails)?.entry
-        val ref = entry?.let(::infoRef)
-        val path = ref?.gamePath
-        if (path == metaFor) return
-        metaFor = path
-        infoFetcher?.follow(ref)
-        if (ref == null || path == null || path in _gameMeta.value) return
-        scope.launch { gameInfoStore?.read(ref)?.let { _gameMeta.value += path to it } }
-    }
-
-    /** [entry] as the info fetch and store name it; null for an Android or Unassigned game (no ScreenScraper info). */
-    private fun infoRef(entry: Listed): LibraryGameRef? =
-        if (entry.system.android || entry.system.unassigned) null else artworkRef(entry.system.tag, entry.game)
-
-    /** [path]'s info was just fetched: the details page shows it when that game is still on it. */
-    private suspend fun showFetchedInfo(path: String) {
-        val entry = (DualMenu.top(_screen.value, _selection.value.index) as? TopContent.GameDetails)?.entry?.takeIf { it.game.path == path } ?: return
-        val scraped = infoRef(entry)?.let { r -> gameInfoStore?.read(r) } ?: return
-        _gameMeta.value += path to scraped
-        _topDetails.value = _topDetails.value?.takeIf { sameGame(it.entry, entry) }?.copy(scraped = scraped)
-    }
-
-    /** Whether [a] and [b] are one game: a rebuilt list gives new [Listed]s for the same files. */
-    private fun sameGame(a: Listed, b: Listed): Boolean = a.system.tag == b.system.tag && a.game.path == b.game.path
 
     /** The drawer's apps: every installed app but the Android games console's, marked when it is in Tools. */
     private fun drawerRows(apps: List<InstalledApp>): List<ToolAppRow> {
@@ -1327,10 +700,6 @@ class AppState(
     /** Every game's play time and RetroAchievements progress by library path (menus show the selected one's). */
     val gameInfo: StateFlow<Map<String, GameInfo>> = _gameInfo.asStateFlow()
 
-    private val _gameMeta = MutableStateFlow<Map<String, StoredGameInfo>>(emptyMap())
-    /** Stored ScreenScraper info by game path, for the games highlighted so far ([followGameMeta]): a caption's genre and release. */
-    val gameMeta: StateFlow<Map<String, StoredGameInfo>> = _gameMeta.asStateFlow()
-    private var metaFor: String? = null   // the game path [followGameMeta] last followed
     private var gameInfoJob: Job? = null
     /** The RetroAchievements panel and screens; it reaches back into this state only through [RaScreenHost]. */
     private val ra = RaScreenController(
@@ -1352,19 +721,24 @@ class AppState(
     val raPanel: StateFlow<RaPanel?> = ra.raPanel
     /** The signed-in player's summary beside the RetroAchievements page ([RaScreenController.raProfile]). */
     val raProfile: StateFlow<com.nxredux.mobile.achievements.RaProfile?> = ra.raProfile
-    private val _topDetails = MutableStateFlow<TopDetails?>(null)
-    /** The top screen's game details page ([followTopDetails]); null while the top screen shows no game. */
-    val topDetails: StateFlow<TopDetails?> = _topDetails.asStateFlow()
-    private var topDetailsJob: Job? = null
-    private val _topStats = MutableStateFlow<TopStats?>(null)
-    /** The top screen's console or collection stats page ([followTopStats]); null while the top screen shows neither. */
-    val topStats: StateFlow<TopStats?> = _topStats.asStateFlow()
-    private var topStatsJob: Job? = null
-    private var topStatsFor: StatsInputs? = null   // the latest computation's inputs: only it writes [topStats]
-    private val statsCache = HashMap<String, Pair<TopContent, TopStats>>()   // by [TopStats.key] with its target, for [statsCacheOf]'s library and play time
-    private var statsCacheOf: Pair<List<SystemFolder>, Map<String, GameInfo>>? = null
-    private val consoleBios = HashMap<String, BiosMissing?>()   // by console key: file reads, kept per library ([readConsoleBios])
-    private var consoleBiosLibrary: List<SystemFolder>? = null
+    /** The top screen's details and stats pages and the highlighted game's info. Before [init]: its collectors call it. */
+    private val topScreen = TopScreenController(
+        scope, _screen, _selection, _dualMenu, _gameInfo, deps, ra,
+        host = object : TopScreenHost {
+            override fun systems(): List<SystemFolder> = systemsCache
+            override fun consoleEntries(systems: List<SystemFolder>): List<Listed> = this@AppState.consoleEntries(systems)
+            override suspend fun entriesFor(source: ListSource): List<Listed> = this@AppState.entriesFor(source)
+            override fun gameInfoStore(): com.nxredux.mobile.scraper.GameInfoStore? = gameInfoStore
+            override fun infoFetcher(): InfoFetcher? = infoFetcher
+            override fun artworkRef(tag: String, g: GameEntry): LibraryGameRef = this@AppState.artworkRef(tag, g)
+        },
+    )
+    /** The top screen's game details page; null while the top screen shows no game. */
+    val topDetails: StateFlow<TopDetails?> get() = topScreen.topDetails
+    /** The top screen's console or collection stats page; null while the top screen shows neither. */
+    val topStats: StateFlow<TopStats?> get() = topScreen.topStats
+    /** Stored ScreenScraper info by game path, for the games highlighted so far: a caption's genre and release. */
+    val gameMeta: StateFlow<Map<String, StoredGameInfo>> get() = topScreen.gameMeta
     private var gameInfoDirty = false   // a refresh was asked for while one ran: it runs once more
     private val shelvesCache = HomeShelvesCache()   // Home's shelves while their inputs hold ([shelvesFor])
     private var gameInfoRead = false    // a [refreshGameInfo] pass has read play time: the shelves can go by play time
@@ -1377,7 +751,7 @@ class AppState(
             override fun kidsLocked(): Boolean = kidsUi.kidsLocked
             override fun navStep(motion: NavMotion) = this@AppState.navStep(motion)
             override fun resolveOne(path: String): Listed? = this@AppState.resolveOne(path)
-            override fun launch(entry: Listed, resumeSlot: Int?, fromSwitcher: Boolean): Job? = launches.launch(entry, resumeSlot, fromSwitcher = fromSwitcher)
+            override fun launch(entry: Listed, resumeSlot: Int?, fromSwitcher: Boolean, fresh: Boolean): Job? = launches.launch(entry, resumeSlot, fromSwitcher = fromSwitcher, fresh = fresh, continuing = !fresh)
             override fun menuWithItsRow(): Pair<Screen, ListSelection> =
                 menuScreen().let { m -> m to menuRowOf(m) }
             override fun publishHomeView() = homeTab.publishHomeView()
@@ -1413,10 +787,48 @@ class AppState(
     private var foregroundJob: Job? = null            // onForeground's check (and the scan it starts)
     private var homeCheck: Job? = null                // the index start's home probe in flight (shared, see afterIndexStart)
     private var homeCheckFor: ContentRef? = null
-    /** The library changed since the last [load] (folders added or removed, games hidden, unhidden or reassigned): leaving Library reloads. */
+    /** Settings' rows and values, and the pages with state of their own (Button layout, About's GPU, GPU driver). */
+    private val settingsContent: SettingsRows = SettingsRows(
+        scope, _screen, _error, _dualMenu, deps, kids,
+        host = object : SettingsRowsHost {
+            override fun home(): ContentRef? = this@AppState.home()
+            override fun dataMoved(): Boolean = this@AppState.dataMoved()
+            override fun mediaPath(media: ContentRef): String = this@AppState.mediaPath(media)
+            override fun systems(): List<SystemFolder> = systemsCache
+            override fun indexSnapshot(): LibraryIndex? = libraryIndex.snapshot
+            override fun offlineHome(): ContentRef? = offlineHomeSaid
+            override fun lateMount(): List<String> = lateMountHere
+            override fun fileAccessOff(ref: ContentRef): Boolean = this@AppState.fileAccessOff(ref)
+            override fun androidGames(): List<InstalledApp>? = installedCache?.let { this@AppState.androidGames(it) }
+            override fun unassignedSystem(): SystemFolder? = this@AppState.unassignedSystem()
+            override fun hiddenPaths(): List<String> = hiddenPaths
+            override fun updateLabel(): String? = _updateLabel.value
+            override fun kidsRows(): List<SettingsRow> = kidsUi.kidsRows()
+            override fun kidsSetEnabled(on: Boolean) = kidsUi.kidsSetEnabled(on)
+            override fun shortcutRows(): List<SettingsRow> = controlBindings.shortcutRows()
+            override fun systemButtonRows(): List<SettingsRow> = controlBindings.systemButtonRows()
+            override fun shortcutSet(): ShortcutSet = controlBindings.shortcutSet()
+            override fun setTouch(slot: TouchSlot, action: ShortcutAction?) = controlBindings.setTouch(slot, action)
+            override fun rebuildHomeTab() = this@AppState.rebuildHomeTab()
+            override suspend fun refreshMainRows() = this@AppState.refreshMainRows()
+            override fun gameListLayout(): Pair<MenuStyle, MenuOrientation> = this@AppState.gameListLayout()
+            override fun gameListTurns(style: MenuStyle): Boolean = this@AppState.gameListTurns(style)
+            override fun netplayAvailable(): Boolean = netplay != null
+            override fun showNotice(text: String) = this@AppState.showNotice(text)
+            override fun refreshSettings() = settingsUi.refreshSettings()
+            override fun refreshSettingsOn(vararg sections: SettingsSection) = this@AppState.refreshSettingsOn(*sections)
+            override fun showSettingsOn(section: SettingsSection, kind: SettingsKind) = settingsUi.showSettingsOn(section, kind)
+            override fun openPicker(title: String, labels: List<String>, current: Int, apply: (Int) -> Unit) =
+                settingsUi.openPicker(title, labels, current, apply)
+        },
+    )
+    /** About's GPU name once its query answered; null before. */
+    internal val gpu: StateFlow<String?> get() = settingsContent.gpu
+    /** The button layout editor saved or left. */
+    fun onSkinLayoutEdited() = settingsContent.onSkinLayoutEdited()
     /** Settings' pages, the chooser, a row's info popup and the row edit. */
     private val settingsUi: SettingsController = SettingsController(
-        _screen, _selection, _rowEdit, deps, kidsAvailable = kids != null,
+        _screen, _selection, _rowEdit, deps, kidsAvailable = kids != null, content = settingsContent,
         host = object : SettingsHost {
             override fun kidsToolsAllowed(): Boolean = kidsUi.kidsToolsAllowed
             override fun loaderActive(): Boolean = loader.active
@@ -1427,18 +839,10 @@ class AppState(
             override fun back(): Boolean = this@AppState.back()
             override fun rememberMenuSelection() = this@AppState.rememberMenuSelection()
             override fun refreshInstalled() = this@AppState.refreshInstalled()
-            override fun settingsRows(section: SettingsSection): List<SettingsRow> = this@AppState.settingsRows(section)
-            override fun settingValue(row: SettingsRow): SettingValue<*>? = this@AppState.settingValue(row)
-            override fun settingsDetails(section: SettingsSection): List<String> = this@AppState.settingsDetails(section)
-            override fun layoutShot(section: SettingsSection): LayoutShot? = this@AppState.layoutShot(section)
-            override fun settingsBanner(section: SettingsSection): String? = this@AppState.settingsBanner(section)
             override fun syncArtLayout() = this@AppState.syncArtLayout()
             override fun rebuildHomeTab() = this@AppState.rebuildHomeTab()
-            override fun clearShortcuts() { shortcutDraft = ShortcutSet.EMPTY }
-            override fun resetSystemButtons() {
-                currentPad()?.let { pad -> deps.settings.systemButtons = SystemButtons.encode(SystemButtons.reset(systemButtonMap(), pad.key)) }
-            }
-            override fun resetButtonLayoutConsole() = this@AppState.resetButtonLayoutConsole()
+            override fun clearShortcuts() = controlBindings.clearShortcuts()
+            override fun resetSystemButtons() = controlBindings.resetSystemButtons()
         },
     )
     val chooser: StateFlow<ValueChooser?> get() = settingsUi.chooser
@@ -1455,10 +859,54 @@ class AppState(
     internal fun settingsSections(): List<SettingsSection> = settingsUi.settingsSections()
     fun openSettings(section: SettingsSection) = settingsUi.openSettings(section)
     fun onSettingsSplit(split: Boolean) = settingsUi.onSettingsSplit(split)
-    fun settingsPreview(section: SettingsSection): Screen.Settings = settingsUi.settingsPreview(section)
+    /** [section]'s page as the unfocused right pane shows it while its category is highlighted on the left. */
+    fun settingsPreview(section: SettingsSection): Screen.Settings = settingsUi.settingsPage(section)
     fun settingsCategoryTap(index: Int) = settingsUi.settingsCategoryTap(index)
     fun settingsPreviewTap(row: Int) = settingsUi.settingsPreviewTap(row)
 
+    /** Onboarding's pages, first setup's step count and the run's flags. Before [init]: a load in it reads them. */
+    private val onboardingUi: OnboardingScreensController = OnboardingScreensController(
+        scope, _screen, _selection, _error, deps, onboarding, kids, loader, settingsContent, settingsUi, kidsUi,
+        host = object : OnboardingHost {
+            override fun select(index: Int) = this@AppState.select(index)
+            override fun showNotice(text: String) = this@AppState.showNotice(text)
+            override fun showPickFolder() = this@AppState.showPickFolder()
+            override fun showAddFirstExtra() = this@AppState.showAddFirstExtra()
+            override fun showPermissions() = this@AppState.showPermissions()
+            override fun homePickShown(): Boolean = this@AppState.homePickShown()
+            override fun homePageShown(): Boolean = folders.homePage != null
+            override fun resetFolderSummaries() = folders.reset()
+            override fun showDeviceSync(sync: DeviceSyncController) = this@AppState.showDeviceSync(sync)
+            override fun clearSyncSetup() { _syncSetup.value = null }
+            override fun rescanArrivedRoms(): Boolean = if (romsPending) { romsPending = false; rescan(); true } else false
+            override fun rebuildHomeTab() = this@AppState.rebuildHomeTab()
+            override suspend fun rebuildMainRows() = this@AppState.rebuildMainRows()
+            override fun showSystemsNow(category: MenuCategory) = this@AppState.showSystemsNow(category)
+            override fun gameListLayout(): Pair<MenuStyle, MenuOrientation> = this@AppState.gameListLayout()
+            override fun gameListTurns(style: MenuStyle): Boolean = this@AppState.gameListTurns(style)
+            override fun systems(): List<SystemFolder> = systemsCache
+            override fun artwork(): ArtworkScreenController? = artworkScreens
+            override fun importSaves(source: ImportSource, progress: (String) -> Unit, done: (ImportResult) -> Unit) {
+                this@AppState.importSaves(source, progress, done)
+            }
+        },
+    )
+    /** Whether the main menu's pad skin shows now ([OnboardingScreensController.menuPadShown]). */
+    fun menuPadShown(): Boolean = onboardingUi.menuPadShown()
+    /** A folder step's page title and whether B goes back from it. */
+    fun setupChrome(): Pair<String, Boolean> = onboardingUi.setupChrome()
+    /** The device as App sees it: portrait or not, a controller or not. */
+    fun onPadContext(portrait: Boolean, controller: Boolean) = onboardingUi.onPadContext(portrait, controller)
+    /** A or a tap on onboarding row [index]: that step's choice. */
+    fun onboardingRow(index: Int) = onboardingUi.onboardingRow(index)
+    fun onboardingSettingEvent(event: NxSettingEvent) = onboardingUi.onboardingSettingEvent(event)
+    fun onboardingDraftUser(text: String) = onboardingUi.onboardingDraftUser(text)
+    fun onboardingDraftPassword(text: String) = onboardingUi.onboardingDraftPassword(text)
+    fun onboardingDraftKey(text: String) = onboardingUi.onboardingDraftKey(text)
+    /** The Bottom screen step's button on the second screen was tapped. */
+    fun onboardingBottomScreenOnSecond() = onboardingUi.onboardingBottomScreenOnSecond()
+
+    /** The library changed since the last [load] (folders added or removed, games hidden, unhidden or reassigned): leaving Library reloads. */
     private var libraryDirty = false
 
     /** The app's settings, exposed for the UI (deps stays private). */
@@ -1493,7 +941,7 @@ class AppState(
                     val label = appUpdateLabel(st)
                     if (label == _updateLabel.value) return@collect
                     _updateLabel.value = label
-                    if ((_screen.value as? Screen.Settings)?.section == SettingsSection.SYSTEM) settingsUi.refreshSettings()
+                    refreshSettingsOn(SettingsSection.SYSTEM)
                 }
             }
         }
@@ -1506,19 +954,19 @@ class AppState(
             }
         }
         // The achievements panel follows the game list's selection, and closes off the game list.
-        scope.launch { _selection.collect { ra.followRaPanel(); followTopDetails(); followTopStats(); followGameMeta() } }
+        scope.launch { _selection.collect { ra.followRaPanel(); topScreen.followTopDetails(); topScreen.followTopStats(); topScreen.followGameMeta() } }
         // The top screen's details: new play time re-reads the shown game; its achievements land in place. Stats too.
-        scope.launch { _gameInfo.collect { followTopDetails(reread = true); followTopStats() } }
+        scope.launch { _gameInfo.collect { topScreen.followTopDetails(reread = true); topScreen.followTopStats() } }
         scope.launch {
             ra.detailsRa.collect { r ->
-                _topDetails.value?.let { d -> _topDetails.value = d.copy(achievements = detailsBody(detailsRaFor(d.entry, r))) }
+                topScreen.onDetailsRa(r)
             }
         }
         scope.launch {
             _screen.collect {
-                followTopDetails()
-                followTopStats()
-                followGameMeta()
+                topScreen.followTopDetails()
+                topScreen.followTopStats()
+                topScreen.followGameMeta()
                 if (it !is Screen.Games) { ra.closeRaPanel() } else { ra.followRaPanel() }
                 if (it !is Screen.Games) closeArtPanel()   // as the achievements panel: only over a game list
             }
@@ -1536,7 +984,7 @@ class AppState(
                     when (_screen.value) {
                         // Busy shows no rows; back to idle it lands on the row that started the job. The settings page's rows follow.
                         is Screen.RetroAchievements, is Screen.RaSettings -> ra.onRaState(s, c)
-                        is Screen.Onboarding -> if (s is RaState.Idle) onRaIdleOnboarding(s.status)   // onboarding's sign-in ended
+                        is Screen.Onboarding -> if (s is RaState.Idle) onboardingUi.onRaIdleOnboarding(s.status)   // onboarding's sign-in ended
                         else -> Unit
                     }
                 }
@@ -1582,19 +1030,19 @@ class AppState(
             scope.launch { c.notices.collect { showNotice(it) } }
             // Files arrived (saves, states, their pictures): Continue's resume point and slot picture are read again. Game
             // info files may be among them: a cached absence would have the top screen fetch one and write over it.
-            scope.launch { c.received.collect { gameInfoStore?.forgetCached(); _gameMeta.value = emptyMap(); metaFor = null; refreshMainRows() } }
-            // ROM files arrived: the main menu with nothing over it (the Games tab too) rescans at once; anywhere else (the
-            // tool itself) waits until it is left.
+            scope.launch { c.received.collect { gameInfoStore?.forgetCached(); topScreen.forgetGameMeta(); refreshMainRows() } }
             // Collections changed (merged by this phone's writer, or pushed by a peer phone into its home `Collections/`): a
             // store copy takes in a daemon-written home file, then the tab is listed again and those counts redone.
             scope.launch {
                 c.collectionsArrived.collect { synced ->
                     synced.received.forEach { collections.storeFollowsHome(it) }
-                    refreshCollectionNames()
-                    (synced.written + synced.received).forEach { invalidateCollectionCounts(it) }
+                    collectionCounter.refreshCollectionNames()
+                    (synced.written + synced.received).forEach { collectionCounter.invalidateCollectionCounts(it) }
                     refreshMainRows()
                 }
             }
+            // ROM files arrived: the main menu with nothing over it (the Games tab too) rescans at once; anywhere else (the
+            // tool itself) waits until it is left.
             scope.launch { c.romsArrived.collect { if (menuFree(_screen.value)) rescan() else { romsPending = true; libraryDirty = true } } }
             // Pending ROMs scan as soon as the main menu shows again with nothing over it, however the user got there: B on the tool,
             // Home, Back from a list the sync ended under, the end of a Loading the sync ended during. B on the tool and
@@ -1654,21 +1102,18 @@ class AppState(
         val systems = withContext(deps.compute) { index.playableSystems(hidden) }
         suspend fun steps() {
             if (offerSystems(gen, systems)) libraryIndex.playableOffMain(systems)
-            if (r.counts) invalidateCollectionCounts()
+            if (r.counts) collectionCounter.invalidateCollectionCounts()
             if (r.rows) rebuildMainRows()
             if (r.openList) refreshOpenList(select = (_screen.value as? Screen.Games)?.entries?.getOrNull(_selection.value.index)?.game?.path)
         }
         if (r.ui) withContext(uiContext) { steps() } else steps()
     }
 
-    /** Art results still waiting are written and shown now ([LibraryIndexHolder.flushArt]). */
-    private suspend fun flushArt() = libraryIndex.flushArt()
-
     /** The app left the foreground: art results still waiting are written now, not left to a debounce a kill would lose. */
     fun onBackground() {
         kidsUi.kidsCloseUnlock()   // the unlock PIN or sheet never waits behind another app for the kid to come back to
-        if ((_screen.value as? Screen.Settings)?.section == SettingsSection.SHORTCUTS) { closeShortcuts(); settingsUi.refreshSettings() }
-        scope.launch { flushArt() }
+        if ((_screen.value as? Screen.Settings)?.section == SettingsSection.SHORTCUTS) { controlBindings.closeShortcuts(); settingsUi.refreshSettings() }
+        scope.launch { libraryIndex.flushArt() }
     }
 
     /**
@@ -1677,10 +1122,10 @@ class AppState(
      */
     private fun showPickFolder() {
         val ask = !deps.settings.allFilesAsked && permissionsStep().let { it.allFiles == false || it.notifications == false }
-        if (ask) { allFilesStepShown = true; showPermissions(); return }
+        if (ask) { onboardingUi.allFilesStepShown = true; showPermissions(); return }
         // No All files access: the home is the app's Android/media folder, nothing to pick. Once per run (a failed scan of it picks).
         val media = deps.homes?.media
-        if (media != null && inFirstSetup() && !mediaHomeTaken && !homePickShown()) return takeMediaHome(media)
+        if (media != null && onboardingUi.inFirstSetup() && !onboardingUi.mediaHomeTaken && !homePickShown()) return takeMediaHome(media)
         showPickFolderScreen()
     }
 
@@ -1692,8 +1137,8 @@ class AppState(
 
     /** First setup's folder steps on [media] as after a pick ([setHome]), the saved home left unset: its scan, then the home page. */
     private fun takeMediaHome(media: ContentRef) {
-        mediaHomeTaken = true
-        firstSetup = true
+        onboardingUi.mediaHomeTaken = true
+        onboardingUi.firstSetup = true
         if (deps.settings.onboardingDone == false) deps.settings.onboardingStep = FOLDER_STEPS
         rescan(then = { folders.showHomePage(media) })
     }
@@ -1703,11 +1148,11 @@ class AppState(
 
     /** B from the media home's first page (the home page, or the ROMs folder offer without one): back past the skipped pick, which runs again going on. */
     private fun backPastMediaHome() {
-        mediaHomeTaken = false
+        onboardingUi.mediaHomeTaken = false
         folders.homePage = null
-        firstSetup = false
+        onboardingUi.firstSetup = false
         if (deps.settings.onboardingStep == FOLDER_STEPS) deps.settings.onboardingStep = null
-        backFromHomePick()
+        onboardingUi.backFromHomePick()
     }
 
     /**
@@ -1716,7 +1161,7 @@ class AppState(
      */
     fun setupNote(): String? {
         val media = deps.homes?.media ?: return null
-        if (!mediaHomeTaken || !inFirstSetup()) return null
+        if (!onboardingUi.mediaHomeTaken || !onboardingUi.inFirstSetup()) return null
         val first = when (val s = _screen.value) {
             is Screen.FolderSummary -> s.extraId == Recents.HOME
             Screen.AddFirstExtra -> folders.homePage == null
@@ -1739,7 +1184,6 @@ class AppState(
         _selection.value = ListSelection(if (keep) _selection.value.index.coerceIn(0, rows - 1) else 0, rows)
     }
 
-
     /**
      * The main menu's tabs ([buildMenuTabs]): Home (the last game, the stats as last computed, the game and tool pins),
      * consoles, collections (as last listed, with the counts cached so far), Tools. No tree access: an index start shows it
@@ -1748,7 +1192,7 @@ class AppState(
      */
     private suspend fun rebuildMainRows() {
         buildMainRowsMerged()
-        fillCollectionCounts()
+        collectionCounter.fillCollectionCounts()
     }
 
     /** [rebuildMainRows], then the menu shows the new rows. */
@@ -1810,21 +1254,21 @@ class AppState(
                 systemsCache.filter { !it.unassigned }.groupBy { it.displayName }.values.map { MainRow.System(it) },
                 androidConsole.also { menuAndroidConsole = it },
             ),
-            collections = collectionNames.map { MainRow.Collection(it, collectionCounts[it]) },   // as counted so far; the rest come after
+            collections = collectionCounter.collectionNames.map { MainRow.Collection(it, collectionCounter.countOf(it)) },   // as counted so far; the rest come after
             tools = tools,
             homeStyle = homeStyle(),
         )
-        homeTab.noteHomeBuilt(built)
+        homeTab.noteHomeBuilt(built, allMenuTabs.first { it.category == MenuCategory.HOME }.rows)
     }
 
     /** Rebuilds the Home tab alone from what it was last built from, with the stats, game info and frame as they are now (no I/O). */
     private fun rebuildHomeTab() {
         val built = homeTab.homeFor(kidsUi.kidsHomeInputs(homeTab.homeInputs ?: return))   // the shelves too: the frame may have changed
-        allMenuTabs = allMenuTabs.map { if (it.category == MenuCategory.HOME) MenuTab(MenuCategory.HOME, homeTabRows(built, homeStyle())) else it }
-        homeTab.noteHomeBuilt(built)
+        val rows = homeTabRows(built, homeStyle())
+        allMenuTabs = allMenuTabs.map { if (it.category == MenuCategory.HOME) MenuTab(MenuCategory.HOME, rows) else it }
+        homeTab.noteHomeBuilt(built, rows)
         swapMainRows()
     }
-
 
     /**
      * Home's shelves for [inputs] now, in every layout on every frame: the library, game info and today, [homeShelves].
@@ -1837,10 +1281,9 @@ class AppState(
         // Continue's game and every pinned one are on Home already.
         val exclude = (inputs.games.map { it.game.path } + listOfNotNull(inputs.last?.entry?.game?.path)).toSet()
         // A shelf Layouts hides drops after the pick, so its games never move to another shelf.
-        val hidden = HomeShelf.entries.filterTo(HashSet()) { !shelfShown(it) }   // a hidden shelf takes no game: the others may show them
+        val hidden = HomeShelf.entries.filterTo(HashSet()) { !settingsContent.shelfShown(it) }   // a hidden shelf takes no game: the others may show them
         return shelvesCache.shelves(systemsCache, _gameInfo.value, inputs.recent, exclude, now, deps.calendar.dayStart(now), hidden)
     }
-
 
     /**
      * Home's body as laid out: a new frame rebuilds the Home tab (its slots, strip lines and moves follow it;
@@ -1848,108 +1291,9 @@ class AppState(
      * ([swapMainRows] waits while one is open); closing the menu does that too ([ContextMenuHost.menuClosed]).
      */
     fun onHomeLayout(frame: HomeFrame) {
-        if (frame == homeTab.homeFrame) { val s = _screen.value as? Screen.Systems ?: return; if (s.menu == null && s.tabs != menuTabs) swapMainRows(); return }
+        if (frame == homeTab.homeFrame) { val s = _screen.value as? Screen.Systems ?: return; if (s.menu == null && menuStale(s)) swapMainRows(); return }
         homeTab.homeFrame = frame
         rebuildHomeTab()
-    }
-
-
-    /**
-     * The collection counts are stale: [name]'s (it was just written), or every one (the library or the listing changed).
-     * A written collection leaves the stored cache too. Every other stored entry stays: its file and library stamps decide
-     * whether the next pass may use it, and that pass rewrites the cache.
-     */
-    private fun invalidateCollectionCounts(name: String? = null) {
-        if (name == null) collectionCounts.clear() else collectionCounts.remove(name)
-        countsGeneration++
-        if (name != null) { countCache.remove(name); countCache.save() }
-        // The stats page of a collection holds its games too: computed again, shown in place meanwhile.
-        val stale = name?.let { statsKey(TopContent.CollectionStats(it)) }
-        if (stale == null) statsCache.clear() else statsCache.remove(stale)
-        if (stale == null || topStatsFor?.key == stale) { topStatsFor = null; followTopStats() }
-    }
-
-    /** [CountStamps.library] of [systems] (the games a collection line can resolve to), taken once per systems list. */
-    private suspend fun libraryStamp(systems: List<SystemFolder>): String {
-        libraryStampOf?.takeIf { it.first === systems }?.let { return it.second }
-        val home = home()?.value
-        val lookup = playableOffMain(systems)
-        val stamp = withContext(deps.compute) { CountStamps.library(home, lookup.keys) }
-        libraryStampOf = systems to stamp
-        return stamp
-    }
-
-    /**
-     * Fills the counts of the collections just listed from the stored cache where both stamps still match (one listing,
-     * no collection file read), so the menu built next shows them at once. Dropped when the counts went stale meanwhile.
-     */
-    private suspend fun seedCollectionCounts() {
-        countCache.load()
-        val names = collectionNames
-        if (!countCache.hasAny(names)) return
-        val generation = countsGeneration
-        val systems = systemsCache
-        val library = libraryStamp(systems)
-        val stamps = collections.stamps(names)
-        if (generation != countsGeneration || systems !== systemsCache || names != collectionNames) return
-        names.forEach { n -> countCache.valid(n, stamps[n], library)?.let { collectionCounts[n] = it } }
-    }
-
-    /**
-     * Counts the collections not counted yet, after the menu is shown (a rebuild never waits on collection I/O), then shows
-     * them. Each file is read with the loader opening it uses; its lines resolve on [AppDeps.compute] against one lookup of
-     * the library. A pass begun before its counts went stale is dropped and counted again. One pass at a time.
-     */
-    private fun fillCollectionCounts() {
-        if (countsJob?.isActive == true || collectionNames.all { it in collectionCounts }) return
-        countsJob = scope.launch {
-            countCache.load()
-            while (true) {
-                val generation = countsGeneration
-                val missing = collectionNames.filter { it !in collectionCounts }
-                if (missing.isEmpty()) break
-                val systems = systemsCache
-                val library = libraryStamp(systems)
-                // Stored counts whose stamps still match need no read (a rescan that changed nothing); the rest are read.
-                val cached = if (countCache.hasAny(missing)) {
-                    val stamps = collections.stamps(missing)
-                    missing.mapNotNull { n -> countCache.valid(n, stamps[n], library)?.let { n to it } }.toMap()
-                } else emptyMap()
-                val read = (missing - cached.keys).associateWith { collections.readStamped(it) }
-                val lookup = if (read.isEmpty()) null else playableOffMain(systems)
-                val counts = if (lookup == null) emptyMap() else withContext(deps.compute) {
-                    read.mapValues { (_, r) -> r.lines?.let { resolvedCount(it, lookup) } }
-                }
-                if (generation != countsGeneration) continue
-                collectionCounts.putAll(cached)
-                collectionCounts.putAll(counts)
-                // An unreadable file (no count) or one without a stamp is not stored: the next start counts it.
-                counts.forEach { (n, c) -> val stamp = read[n]?.stamp; if (c != null && stamp != null) countCache.put(n, stamp, library, c) else countCache.remove(n) }
-                countCache.retain(collectionNames)
-                countCache.save()
-                buildMainRowsMerged()
-                swapMainRows()
-            }
-        }
-    }
-
-    /**
-     * Re-lists Collections/ (a tree read). A listing that would not list ([ListingUnavailable]) and gives no names keeps
-     * the names as they were: an empty answer there is no proof. True when the names changed.
-     */
-    private suspend fun refreshCollectionNames(): Boolean {
-        val checked = collections.namesChecked()
-        if (!checked.listed && checked.names.isEmpty()) return false
-        if (checked.names == collectionNames) return false
-        collectionNames = checked.names
-        invalidateCollectionCounts()
-        seedCollectionCounts()
-        return true
-    }
-
-    /** The tree was just read (a scan, the index start's probe): pick up a changed Collections tab. */
-    private suspend fun refreshCollectionsFlag() {
-        if (refreshCollectionNames()) refreshMainRows()
     }
 
     /**
@@ -2048,7 +1392,7 @@ class AppState(
             if (screen is Screen.Games) pageRows = 0
         }
         _screen.value = screen
-        homeTab.publishHomeView()   // the Home rows on screen may be the ones last built now
+        homeTab.publishHomeView(screen)   // the Home rows on screen may be the ones last built now
         if (!screen.menuPushed) category?.let { menuCategory = it }
         val count = (screen as? Screen.Games)?.entries?.size ?: (screen as Screen.Systems).rows.size
         _selection.value = if (at >= 0) ListSelection(at, count).clampedTo(count)
@@ -2062,7 +1406,7 @@ class AppState(
         maybeAskAndroidGames()
         // The menu came up (not rebuilt in place, which a count landing does while the install-permission screen is up):
         // the daily check, or a held install's retry. A foreground over it does the same ([onForeground]).
-        if (!prev.isMainMenu && screen.isMainMenu && screen.contextMenu == null && !firstSetup) updaterOnMainMenu()
+        if (!prev.isMainMenu && screen.isMainMenu && screen.contextMenu == null && !onboardingUi.firstSetup) updaterOnMainMenu()
     }
 
     /**
@@ -2074,6 +1418,10 @@ class AppState(
         if (prev is Screen.Games && prev.isTab && prev.layoutMenu != null && menu is Screen.Games && menu.isTab) {
             // On a choice the dropdown still lists ([applyDualMenu] closes it when the choices change, so this only guards).
             return menu.copy(layoutMenu = prev.layoutMenu.coerceIn(0, GameListLayouts.choices(_dualMenu.value).lastIndex))
+        }
+        if (prev is Screen.Systems && prev.layoutMenu != null && menu is Screen.Systems && prev.category == menu.category) {
+            val choices = prev.category?.let(MenuTabLayouts::choices).orEmpty()
+            if (choices.isNotEmpty()) return menu.copy(layoutMenu = prev.layoutMenu.coerceIn(0, choices.lastIndex))
         }
         val draft = when (prev) {
             is Screen.Systems -> prev.search
@@ -2092,7 +1440,7 @@ class AppState(
      * achievements panel or the art panel).
      */
     private fun menuFree(s: Screen): Boolean = s.isMainMenu && s.contextMenu == null && when (s) {
-        is Screen.Systems -> s.search == null
+        is Screen.Systems -> s.search == null && s.layoutMenu == null
         is Screen.Games -> s.search == null && s.layoutMenu == null && !_panelOpen.value
         else -> false
     }
@@ -2115,7 +1463,7 @@ class AppState(
      * since it was remembered.
      */
     private fun rememberedRow(category: MenuCategory, rows: List<MainRow>): ListSelection {
-        val r = tabSelections[category] ?: return ListSelection(0, 0)
+        val r = tabSelections[category] ?: return ListSelection(if (category == MenuCategory.HOME) homeInitialIndex(rows) else 0, rows.size)
         if (category != MenuCategory.HOME) return r
         return homeTab.rememberedRow(r, rows)
     }
@@ -2129,7 +1477,7 @@ class AppState(
      */
     private fun rememberedGame(entries: List<Listed>): ListSelection {
         val r = tabSelections[MenuCategory.GAMES] ?: return ListSelection(0, entries.size)
-        val at = gamesTabGame?.let { p -> entries.indexOfFirst { it.game.path == p } }?.takeIf { it >= 0 } ?: r.index
+        val at = entries.indexOfPath(gamesTabGame) ?: r.index
         return ListSelection(at, entries.size)
     }
 
@@ -2139,7 +1487,8 @@ class AppState(
      */
     private fun menuRowOf(m: Screen): ListSelection = when (m) {
         is Screen.Games -> rememberedGame(m.entries).clampedTo(m.entries.size)
-        is Screen.Systems -> (m.category?.let(tabSelections::get) ?: ListSelection(0, 0)).clampedTo(m.rows.size)
+        is Screen.Systems -> (m.category?.let(tabSelections::get)
+            ?: ListSelection(if (m.category == MenuCategory.HOME) homeInitialIndex(m.rows) else 0, m.rows.size)).clampedTo(m.rows.size)
         else -> ListSelection(0, 0)
     }
 
@@ -2177,7 +1526,7 @@ class AppState(
 
     /** [s] is the main menu showing tabs other than the ones last built (a swap was held back while a menu was open). */
     private fun menuStale(s: Screen): Boolean = when (s) {
-        is Screen.Systems -> s.tabs != menuTabs
+        is Screen.Systems -> s.tabs != menuTabs || s.tabs.firstOrNull { it.category == MenuCategory.HOME }?.rows !== menuTabs.firstOrNull { it.category == MenuCategory.HOME }?.rows
         is Screen.Games -> s.tabBar != null && menuTabs.let { tabs ->
             s.tabBar.categories != tabs.map { it.category } || tabs.firstOrNull { it.category == MenuCategory.GAMES }?.games !== s.entries
         }
@@ -2194,7 +1543,7 @@ class AppState(
         if (s is Screen.Games || screen is Screen.Games) {
             if (s !is Screen.Games || screen !is Screen.Games) return -1   // another tab
             val path = s.entries.getOrNull(_selection.value.index)?.game?.path
-            return screen.entries.indexOfFirst { it.game.path == path }.takeIf { it >= 0 } ?: _selection.value.index
+            return screen.entries.indexOfPath(path) ?: _selection.value.index
         }
         s as Screen.Systems; screen as Screen.Systems
         val highlighted = s.rows.getOrNull(_selection.value.index)
@@ -2214,16 +1563,16 @@ class AppState(
 
     /** [systems], computed under [gen], becomes [systemsCache] unless a newer computation's is shown; true when it did. */
     private suspend fun offerSystems(gen: Long, systems: List<SystemFolder>): Boolean = systemsLock.withLock {
-        (gen > systemsWritten).also { if (it) { systemsWritten = gen; systemsCache = systems; followTopStats() } }
+        (gen > systemsWritten).also { if (it) { systemsWritten = gen; systemsCache = systems; topScreen.followTopStats() } }
     }
 
     private suspend fun showSystems(playable: List<SystemFolder>) {
         offerSystems(takeSystemsGen(), playable)
-        invalidateCollectionCounts()
+        collectionCounter.invalidateCollectionCounts()
         rebuildMainRows()
         when {
             resumeFolderSteps() -> Unit
-            onboardingTakesOver() -> showOnboarding()
+            onboardingUi.onboardingTakesOver() -> onboardingUi.showOnboarding()
             else -> showSystemsNow()
         }
         refreshGameInfo()
@@ -2234,119 +1583,35 @@ class AppState(
      * resume at the home page (its count and move; none: the ROMs-folder offer).
      */
     private fun resumeFolderSteps(): Boolean {
-        if (firstSetup || deps.settings.onboardingDone != false || deps.settings.onboardingStep != FOLDER_STEPS) return false
+        if (onboardingUi.firstSetup || deps.settings.onboardingDone != false || deps.settings.onboardingStep != FOLDER_STEPS) return false
         val home = home() ?: return false
-        firstSetup = true
-        if (deps.settings.treeRef == null && home == deps.homes?.media) mediaHomeTaken = true   // a restart on the media home: no pick behind it
+        onboardingUi.firstSetup = true
+        if (deps.settings.treeRef == null && home == deps.homes?.media) onboardingUi.mediaHomeTaken = true   // a restart on the media home: no pick behind it
         folders.showHomePage(home)
         return true
     }
 
     /** First setup's folder steps are done: onboarding's own steps start from their first. */
     private fun endFolderSteps() {
-        firstSetup = false
+        onboardingUi.firstSetup = false
         if (deps.settings.onboardingStep == FOLDER_STEPS) deps.settings.onboardingStep = null
-    }
-
-    /**
-     * A load landing while onboarding runs (a sync's rescan) or is still to do (first setup's folder steps just ended):
-     * the flow's step shows instead of the menu, resuming at the saved step.
-     */
-    private fun onboardingTakesOver(): Boolean {
-        if (onboarding.step != null) return true
-        kidsUi.kidsInOnboarding = false   // a setup from onboarding's Who's this for? never outlives the screen it was on
-        if (deps.settings.onboardingDone != false) return false
-        if (firstSetup) return false   // the folder steps' scans: their own page follows, onboarding starts after them
-        onboarding.context = onboarding.context.copy(signedIn = deps.settings.raToken != null, kidsOffered = kids != null && deps.launcher != null)
-        refreshPadContext()   // the customise pages a resume can land on depend on it
-        onboarding.startMain(resume = deps.settings.onboardingStep?.let { n -> OnboardingStep.entries.firstOrNull { it.name == n } })
-        deps.settings.onboardingStep = onboarding.step?.name
-        return true
-    }
-
-    /** The current onboarding step's page, on [selected] (by default the row holding the current value, else the first). */
-    private fun showOnboarding(selected: Int = onboardingCurrentRow(), error: String? = null) {
-        refreshPadContext()
-        val step = onboarding.step ?: return
-        val (title, details, rows) = onboardingPage(step, error)
-        // The step count is the page's small title; the step's own question or name is its headline, its lines under it.
-        // The sync step is Device Sync itself, in place under this page title.
-        if (step == OnboardingStep.SYNC_OFFER) deps.deviceSync?.let { sync ->
-            onboardingSync = true
-            sync.open()
-            _screen.value = Screen.DeviceSync
-            // Sync ROMs first where it is offered: the option before the links.
-            publishSyncSetup(if ((sync.page.value as? DeviceSyncPage.Ready)?.romsAvailable == true) SyncFocus.ROMS else SyncFocus.LINK)
-            return
-        }
-        val pageTitle = onboardingPageTitle()
-        val canGoBack = step != OnboardingStep.WELCOME && !kidsUi.kidsOnAtDone()
-        _screen.value = Screen.Onboarding(
-            step, pageTitle, listOf(title) + details, rows, accent = deps.settings.accent, padTheme = deps.settings.padTheme,
-            canGoBack = canGoBack, shot = onboardingShot(step), touchRows = onboardingTouchRows(step, rows),
-        )
-        _selection.value = ListSelection(selected.coerceIn(0, (rows.size - 1).coerceAtLeast(0)), rows.size)
-    }
-
-    /**
-     * Whether the main menu's pad skin shows now: Appearance → Pad skin, except during first setup and onboarding, which show it
-     * on the PAD page only (its value applies at once there) and give every other page, the folder steps and their
-     * pickers too, the full height. The menu after setup follows the choice.
-     */
-    fun menuPadShown(): Boolean {
-        when (_screen.value) {
-            is Screen.PermissionsStep, Screen.PickFolder, Screen.AddFirstExtra, is Screen.AndroidGamesStep, is Screen.FolderSummary, is Screen.StorageUpgrade -> return false
-            else -> Unit
-        }
-        // First setup between the welcome and HANDHELD (the folder steps and their pickers): not asked yet.
-        val step = onboarding.step ?: return deps.settings.padSkin && deps.settings.onboardingDone != false &&
-            padScreen(_screen.value)
-        // Setup shows it on its own page only (the choice, live); every other page keeps the full height.
-        return step == OnboardingStep.PAD && deps.settings.padSkin
-    }
-
-    /** The screens the pad skin is drawn round after setup: every one, the tools' pages too. */
-    @Suppress("UNUSED_PARAMETER")
-    private fun padScreen(s: Screen): Boolean = true
-
-    /**
-     * The page title onboarding's current step shows: its place in first setup's one count ([setupCounter]): Text size,
-     * System buttons with a controller, Bottom screen where asked, the folder steps, then the rest. "Welcome" on the welcome (before setup).
-     */
-    private fun onboardingPageTitle(): String {
-        val pre = setupPreSteps()
-        return when (onboarding.step) {
-            null, OnboardingStep.WELCOME -> "Welcome"
-            OnboardingStep.TEXT_SIZE -> setupCounter(1)
-            OnboardingStep.BOTTOM_SCREEN -> setupCounter(2)
-            else -> setupCounter(onboarding.position().first + pre + setupFolderSteps())
-        }
-    }
-
-    /**
-     * First setup's steps before the folder steps: Text size, System buttons with a controller connected, and Bottom
-     * screen on a device with a built-in second screen.
-     */
-    private fun setupPreSteps(): Int =
-        if (!inFirstSetup()) 0 else 1 + (if (deps.builtInSecondScreen()) 1 else 0)
-
-    /**
-     * "Setup · Step [at]/m": m the steps as the answers so far make them (Text size, Bottom screen where asked, the folder
-     * steps, then the rest); a yes still to come (a handheld, customising) adds its pages and m grows.
-     */
-    private fun setupCounter(at: Int): String {
-        val main = onboarding.position().second.takeIf { it > 0 } ?: onboardingSteps(onboarding.context).size
-        return "Setup · Step $at/${setupPreSteps() + setupFolderSteps() + main}"
     }
 
     private val _syncSetup = MutableStateFlow<SyncSetup?>(null)
     /** Device Sync's page state ([SyncSetup]): the tool's, or setup's sync step's; null while it is not showing. */
     val syncSetup: StateFlow<SyncSetup?> = _syncSetup.asStateFlow()
 
+    /** Opens Device Sync's page (the tool's, and setup's sync step), Sync ROMs first where it is offered: the option above the links. */
+    private fun showDeviceSync(sync: DeviceSyncController) {
+        sync.open()   // Ready on the cable, or the live page of a sync still running
+        _screen.value = Screen.DeviceSync
+        publishSyncSetup(if ((sync.page.value as? DeviceSyncPage.Ready)?.romsAvailable == true) SyncFocus.ROMS else SyncFocus.LINK)
+    }
+
     private fun publishSyncSetup(focus: SyncFocus = _syncSetup.value?.focus ?: SyncFocus.LINK) {
         _syncSetup.value = when {
             _screen.value != Screen.DeviceSync -> null
-            onboardingSync -> SyncSetup(onboardingPageTitle(), onboardingSynced != null, focus)
+            onboardingUi.onboardingSync -> SyncSetup(onboardingUi.onboardingPageTitle(), onboardingUi.onboardingSynced != null, focus)
             else -> SyncSetup(DeviceSyncText.TITLE, synced = false, focus = focus, inSetup = false)
         }
     }
@@ -2356,138 +1621,11 @@ class AppState(
         val sync = deps.deviceSync ?: return
         val page = sync.page.value as? DeviceSyncPage.Ready ?: return
         if (_screen.value != Screen.DeviceSync) return
-        when (val row = syncSetupRows(page, skip = onboardingSync).getOrNull(index) ?: return) {
+        when (val row = syncSetupRows(page, skip = onboardingUi.onboardingSync).getOrNull(index) ?: return) {
             SyncSetupRow.Roms -> { publishSyncSetup(SyncFocus.ROMS); if (open) sync.flipRoms() }
             is SyncSetupRow.Link -> { sync.pick(row.link); publishSyncSetup(SyncFocus.LINK); if (open) onDeviceSyncButton(NxButton.A) }
-            SyncSetupRow.Skip -> { publishSyncSetup(SyncFocus.SKIP); if (open) leaveOnboardingSync(forward = true) }
+            SyncSetupRow.Skip -> { publishSyncSetup(SyncFocus.SKIP); if (open) onboardingUi.leaveOnboardingSync(forward = true) }
         }
-    }
-
-    /** The row a step opens on: the first (a layout page's layout row, a value page's first value). */
-    private fun onboardingCurrentRow(): Int =
-        // The artwork step opens on Fetch now (else Skip), past its accounts' rows.
-        if (onboarding.step == OnboardingStep.ARTWORK) onboardingArtRows().size else 0
-
-    /** The artwork step's account rows: ScreenScraper's sign-in, the SteamGridDB and TheGamesDB keys, those this build offers. */
-    private fun onboardingArtRows(): List<NxRow> {
-        val art = artworkScreens ?: return emptyList()
-        return listOfNotNull(
-            NxRow(ART_SCREENSCRAPER, secondary = art.ssUser ?: "Sign in").takeIf { art.ssOffered },
-            NxRow(ART_SGDB_KEY, secondary = if (art.sgdbKeySet) "Set" else "Not set").takeIf { art.sgdbOffered },
-            NxRow(ART_TGDB_KEY, secondary = if (art.tgdbKeySet) "Set" else "Not set").takeIf { art.tgdbOffered },
-        )
-    }
-
-    /** The artwork step's prompt confirmed: the sign-in or key checked with its source (kept only when it answers OK), the step again on its row. */
-    private fun submitOnboardingArt(s: Screen.Onboarding) {
-        val art = artworkScreens ?: return
-        val key = s.artKey
-        val row = s.rows.indexOfFirst { it.label == if (key == null) ART_SCREENSCRAPER else if (key == ArtKeyFor.SGDB) ART_SGDB_KEY else ART_TGDB_KEY }
-        if (key == null && (s.draftUser.isBlank() || s.draftPassword.isBlank())) { _error.value = "Enter a username and password"; return }
-        if (key != null && s.draftKey.isBlank()) { _error.value = "Enter a ${key.label} API key"; return }
-        _screen.value = s.copy(artSignIn = false, artKey = null, draftPassword = "", draftKey = "")
-        loader.start(message = if (key == null) "Signing in…" else "Checking key…", cancellable = false) {
-            guardArtwork(_error) {
-                if (key == null) {
-                    val r = art.signIn(s.draftUser.trim(), s.draftPassword)
-                    if (r == SignInResult.OK) showNotice(signInText(r)) else _error.value = signInText(r)
-                } else {
-                    val r = art.setKey(key, s.draftKey.trim())
-                    if (r == KeyResult.OK) showNotice(keyResultText(r, key)) else _error.value = keyResultText(r, key)
-                }
-            }
-            if ((_screen.value as? Screen.Onboarding)?.step == OnboardingStep.ARTWORK) showOnboarding(row.coerceAtLeast(0))
-        }
-    }
-
-    fun onboardingDraftKey(text: String) { (_screen.value as? Screen.Onboarding)?.takeIf { it.artKey != null }?.let { _screen.value = it.copy(draftKey = text) } }
-
-    /**
-     * A value page's row [row] stepped by [by] (-1: the one before; A steps forward), in place: SAVE_FORMATS' save
-     * format, state format and extracted name; TEXT_SIZE's size; ACCENT's accent and secondary accent; TITLE's page
-     * title and button hints (Show / Hide); PAD's pad (shown / hidden), theme and Black's buttons ([ONBOARDING_VALUE_KINDS]). The same
-     * settings Settings steps ([settingValue]), applied at once and the page republished on that row, so the real pad
-     * (or the preview picture, or the colours, or the text size) changes and the step count follows ([App] reads them
-     * per screen). A row past the page's values, or another [step], does nothing.
-     */
-    /**
-     * [rows] of a step as Settings' touch rows: a value row as its Settings row (name, one-line description, control; no
-     * fuller text, as setup has no info popup), a choice as a plain row. WELCOME draws its own page: null.
-     */
-    private fun onboardingTouchRows(step: OnboardingStep, rows: List<NxRow>): List<NxSettingRow>? {
-        if (step == OnboardingStep.WELCOME) return null
-        val kinds = onboardingValueKinds(step)
-        return rows.mapIndexed { i, row ->
-            val kind = kinds.getOrNull(i)?.takeIf { row.cycleable }
-            val value = kind?.let { settingValue(SettingsRow(it, "", category = onboardingKindCategory(step, it))) }
-            val labels = value?.labels
-            if (kind == null || labels == null) NxSettingRow(row.label, value = row.secondary, enabled = row.enabled)   // a status (System buttons' Found) on the right
-            else settingsTouchRow(SettingsRow(kind, row.label, row.secondary, category = onboardingKindCategory(step, kind)), SettingChoices(labels, value.index))
-                .copy(detail = "")
-        }
-    }
-
-    /** The tab a value row of [step] belongs to: the step's own, or the Games tab for the Game lists step's Games tab row. */
-    private fun onboardingKindCategory(step: OnboardingStep?, kind: SettingsKind): MenuCategory? =
-        if (kind == SettingsKind.TAB_SHOWN) MenuCategory.GAMES else ONBOARDING_TAB_STEPS[step]
-
-    /** The Settings value each of [step]'s rows steps, top to bottom: a value page's, or a layout page's ([onboardingLayoutKinds]). */
-    private fun onboardingValueKinds(step: OnboardingStep): List<SettingsKind> =
-        if (step in ONBOARDING_LAYOUT_STEPS) onboardingLayoutKinds(step) else ONBOARDING_VALUE_KINDS[step].orEmpty()
-
-    /**
-     * A touch on an onboarding page's row ([Screen.Onboarding.touchRows]): a segment or a swatch sets that value in place
-     * (a layout through [stepOnboardingLayout], resetting its options), a picker value opens its picker.
-     */
-    fun onboardingSettingEvent(event: NxSettingEvent) {
-        val s = _screen.value as? Screen.Onboarding ?: return
-        val row = when (event) {
-            is NxSettingEvent.Choose -> event.row
-            is NxSettingEvent.OpenPicker -> event.row
-            is NxSettingEvent.Info -> return
-        }
-        val kind = onboardingValueKinds(s.step).getOrNull(row)?.takeIf { s.rows.getOrNull(row)?.cycleable == true } ?: return
-        val value = settingValue(SettingsRow(kind, "", category = onboardingKindCategory(s.step, kind))) ?: return
-        val choose = { i: Int ->
-            when {
-                kind == SettingsKind.MENU_STYLE || kind == SettingsKind.GAME_LIST_STYLE -> if (i != value.index) stepOnboardingLayout(i - value.index) else select(row)
-                value.setTo(i) -> showOnboarding(row)
-                else -> select(row)
-            }
-        }
-        when (event) {
-            is NxSettingEvent.Choose -> choose(event.index)
-            else -> { select(row); settingsUi.openPicker(s.rows[row].label, value.labels.orEmpty(), value.index, choose) }
-        }
-    }
-
-    private fun stepOnboardingValue(step: OnboardingStep?, row: Int, by: Int) {
-        val kind = ONBOARDING_VALUE_KINDS[step]?.getOrNull(row) ?: return
-        settingValue(SettingsRow(kind, ""))?.step(by)   // a bare row: none of these needs a tab, console or hint
-        showOnboarding(row)
-    }
-
-    private var padPortrait = true
-    private var padController = false
-
-    /** The device as App sees it: portrait or not, a controller or not; onboarding's customise pages follow it. */
-    fun onPadContext(portrait: Boolean, controller: Boolean) {
-        if (portrait == padPortrait && controller == padController) return
-        padPortrait = portrait
-        padController = controller
-        // The page republishes for its step count; a sign-in prompt keeps its typing (the count catches up on the next page).
-        val s = _screen.value as? Screen.Onboarding ?: return
-        if (onboarding.step != null && !s.prompt) showOnboarding(_selection.value.index)
-    }
-
-    /**
-     * Which customise pages apply here: the pad is a choice on a phone without a controller (built in, connected or
-     * clip-on: the menu shows no skin with any, [com.nxredux.mobile.ui.nx.menuSkinShown]), in either orientation, as it
-     * shows when the phone is held upright; title and hints hide only where buttons exist.
-     */
-    private fun refreshPadContext() {
-        val padPage = !padController
-        onboarding.context = onboarding.context.copy(padPage = padPage, buttons = padController || (padPage && deps.settings.padSkin))
     }
 
     private var secondConnected = false
@@ -2508,431 +1646,6 @@ class AppState(
         emulatorSettings.refreshOpenPage()
     }
 
-    /** A step's title, details and rows. */
-    private fun onboardingPage(step: OnboardingStep, error: String?): Triple<String, List<String>, List<NxRow>> = when (step) {
-        OnboardingStep.WELCOME -> Triple("NX Redux", listOf("Ready when you are."), listOf(NxRow("Get started")))
-        OnboardingStep.BOTTOM_SCREEN -> Triple(
-            "Which is the bottom screen?",
-            listOf(
-                "Tap the button on the bottom screen. It becomes the touch screen, and games show their picture on the other.",
-                "Change it later in Settings → Second screen, or for one console in its settings.",
-            ),
-            listOf(NxRow("This is the bottom screen"), NxRow("Skip")),
-        )
-        OnboardingStep.HANDHELD -> Triple(
-            "Do you also play on an NX Redux handheld?", listOf("Your games, BIOS, saves, save states and collections can then carry over between the two."),
-            listOf(NxRow("Yes, I have one"), NxRow("No")),
-        )
-        OnboardingStep.SAVE_FORMATS -> Triple(
-            "Match your handheld", listOf("Set these as on your handheld's Settings → System, so each loads the other's saves."),
-            listOf(
-                NxRow("Save format", secondary = deps.settings.saveFormat.label, cycleable = true),
-                NxRow("Save state format", secondary = deps.settings.stateFormat.label, cycleable = true),
-                NxRow("Use extracted file name", secondary = if (deps.settings.useExtractedFileName) "On" else "Off", cycleable = true),
-                NxRow("Continue"),
-            ),
-        )
-        OnboardingStep.SYNC_OFFER -> Triple(
-            "Sync with your handheld",
-            listOfNotNull(
-                "Copies games, BIOS, saves, save states and collections both ways. Open Device Sync on the handheld too.",
-                onboardingSynced?.takeIf { it.isNotEmpty() }?.let { "Last sync: $it." },
-            ),
-            if (onboardingSynced == null) listOf(NxRow("Sync now"), NxRow("Later")) else listOf(NxRow("Sync again"), NxRow("Continue")),
-        )
-        // The three imports, then (in place) a running one's progress with the rows waiting, or its summary and skipped files.
-        OnboardingStep.IMPORT_SAVES -> when (val r = onboardingImported) {
-            is ImportResult.Done -> Triple(
-                "Bring your saves", r.summary.lines() + r.summary.statesNote(), r.summary.skipped.map { NxRow(it.text(), enabled = false) } + NxRow("Continue"),   // a skipped file: a line to read, never an action
-            )
-            else -> Triple(
-                "Bring your saves",
-                listOf(onboardingImporting ?: (r as? ImportResult.Message)?.text ?: "Copy battery saves and save states from another app. Nothing is moved or deleted."),
-                listOf("From a folder", "From a zip file", "From RetroArch", "Skip").map { NxRow(it, enabled = onboardingImporting == null) },
-            )
-        }
-        // The sources' accounts as rows (each opens its prompt), then Fetch now and Skip; Skip alone with nothing to fetch from.
-        OnboardingStep.ARTWORK -> Triple(
-            "Fetch artwork",
-            listOfNotNull(
-                if (artworkScreens?.available == true) "Box art and screenshots for your ${gamesLabel(onboardingGameCount())}, fetched in the background."
-                else "Sign in or add a key to fetch box art and screenshots for your ${gamesLabel(onboardingGameCount())}; or later in Tools → Artwork.",
-                // Not signed in, ScreenScraper's anonymous quota still fetches, more slowly: signing in is optional.
-                "Signing in is optional: without an account art still downloads, just more slowly. You can sign in or add a key later in Tools → Artwork."
-                    .takeIf { artworkScreens?.let { it.ssOffered && it.ssUser == null } == true },
-            ),
-            onboardingArtRows() + listOfNotNull(NxRow(ART_FETCH_NOW).takeIf { artworkScreens?.available == true }, NxRow(ART_SKIP)),
-        )
-        OnboardingStep.RA_SIGN_IN -> Triple(
-            "RetroAchievements",
-            listOfNotNull("Sign in to earn achievements and see your progress.", if (onboardingSigningIn) "Signing in…" else error),
-            listOf(NxRow("Sign in"), NxRow("Skip")),
-        )
-        OnboardingStep.RA_DOWNLOAD -> Triple(
-            "Achievement data", listOf("Achievement lists and badges for your ${gamesLabel(onboardingGameCount())}, downloaded in the background. Its progress shows as a notification."),
-            listOf(NxRow("Download now"), NxRow("Skip")),
-        )
-        OnboardingStep.CUSTOMISE -> Triple(
-            "Customise the layout?", listOf("Pick the menu's look page by page, or keep the defaults. Each can change later in Settings → Layouts."),
-            listOf(NxRow("Yes, customise"), NxRow("Use the defaults")),
-        )
-        // Asked first, after the welcome: the lists', titles' and hints' text (setup's own pages too), a value row that flips
-        // in place (the page reads at the new size), then Continue.
-        OnboardingStep.TEXT_SIZE -> Triple(
-            "Text size", listOf("How big the text reads in setup and the app. Change it later in Settings → Appearance."),
-            listOf(NxRow("Size", secondary = deps.settings.optionTextSize.label, cycleable = true), NxRow("Continue")),   // the title says Text size
-        )
-        // The pad and its theme (only while the pad shows): value rows that flip in place (the real pad follows, to
-        // compare), then Continue.
-        OnboardingStep.PAD -> Triple(
-            "On-screen pad in the menu",
-            // Landscape shows no menu pad: the choice still applies, seen once the phone is upright. Nor does a controller
-            // (one connected on this page, or the step resumed with one): seen once it is disconnected.
-            listOfNotNull(
-                "Show the pad below the menu in portrait, and how it looks. Games keep their own pad, and tools always hide it, so their pages keep the whole screen.",
-                if (padPortrait) null else "Turn your phone upright to see the pad.",
-                if (padController) "Disconnect your controller to see the pad." else null,
-            ),
-            listOfNotNull(
-                NxRow("Pad skin", secondary = if (deps.settings.padSkin) "On" else "Off", cycleable = true),
-                if (deps.settings.padSkin) NxRow("Pad theme", secondary = padThemeLabel(deps.settings.padTheme), cycleable = true) else null,
-                NxRow("Continue"),
-            ),
-        )
-        // The page title and the button hints: value rows that flip in place (the picture above shows the pair), then Continue.
-        OnboardingStep.TITLE -> Triple(
-            "Page title and button hints", listOf("The tab row at the top of the menu (L1 / R1 switch tabs either way) and the hint bar at the bottom."),
-            listOf(
-                NxRow("Page title", secondary = if (deps.settings.menuPageTitle) "Show" else "Hide", cycleable = true),
-                NxRow("Button hints", secondary = if (deps.settings.menuButtonHints) "Show" else "Hide", cycleable = true),
-                NxRow("Continue"),
-            ),
-        )
-        // The layout and the options its picture shows as value rows (they step in place, applied at once, the picture
-        // under them following), then Continue.
-        OnboardingStep.TAB_HOME, OnboardingStep.TAB_CONSOLES, OnboardingStep.TAB_COLLECTIONS, OnboardingStep.TAB_TOOLS -> Triple(
-            "${ONBOARDING_TAB_STEPS.getValue(step).label} layout",
-            listOf(
-                if (step == OnboardingStep.TAB_HOME) "Home is where your last played game waits, next to the games and tools you pin, with a few suggestions of what to play next."
-                else "How the ${ONBOARDING_TAB_STEPS.getValue(step).label} tab lays out.",
-            ),
-            onboardingLayoutRows(step),
-        )
-        OnboardingStep.GAME_LISTS -> Triple(
-            "Game lists layout",
-            listOf("How a console's or a collection's games lay out.", "A tab that lists every game from every console."),
-            onboardingLayoutRows(step),
-        )
-        // The accent and the secondary accent: value rows that step in place (the page recolours), then Continue.
-        OnboardingStep.ACCENT -> Triple(
-            "Pick your accents", listOf("The accent colours the selection everywhere; the secondary accent, the lit details beside it."),
-            listOf(
-                NxRow("Accent", secondary = deps.settings.accent.label, cycleable = true),
-                NxRow("Secondary accent", secondary = deps.settings.secondaryAccent.label, cycleable = true),
-                NxRow("Continue"),
-            ),
-        )
-        // Who's this for: My kids runs Kids Mode's setup here, then Done ([KidsScreensController.kidsStartInOnboarding]); either way the line says where it is.
-        OnboardingStep.KIDS -> Triple(
-            "Who's this for?", listOf(KIDS_ONBOARDING_LINE),
-            listOf(NxRow("Just me"), NxRow("My kids")),
-        )
-        OnboardingStep.DONE -> Triple("Ready, player one", listOf(
-            "Your library is set up and the cartridges are blown clean.",
-            "Every feature is explained at nxredux.com.",
-        ), listOf(NxRow("Press Start")))
-    }
-
-    /** A or a tap on onboarding row [index]: that step's choice. */
-    fun onboardingRow(index: Int) {
-        val s = _screen.value as? Screen.Onboarding ?: return
-        when (s.step) {
-            OnboardingStep.WELCOME -> { onboarding.startTextSize(); showOnboarding() }
-            OnboardingStep.TEXT_SIZE -> if (index < s.rows.lastIndex) stepOnboardingValue(onboarding.step, index, 1)
-                else afterTextSize()
-            OnboardingStep.BOTTOM_SCREEN -> {
-                if (index == 0) deps.settings.bottomScreen = BottomScreen.MAIN   // Skip keeps Auto
-                startFolderSteps()
-            }
-            OnboardingStep.HANDHELD -> {
-                onboarding.context = onboarding.context.copy(handheld = index == 0)
-                onboardingNext()
-            }
-            OnboardingStep.SAVE_FORMATS -> if (index < 3) stepOnboardingValue(OnboardingStep.SAVE_FORMATS, index, 1) else onboardingNext()
-            OnboardingStep.IMPORT_SAVES -> when {
-                onboardingImporting != null -> Unit   // the rows wait for the running import
-                onboardingImported is ImportResult.Done -> if (index == s.rows.lastIndex) onboardingNext()   // a skipped file: inert
-                index < 3 -> onboardingImport(listOf(ImportSource.FOLDER, ImportSource.ZIP, ImportSource.RETROARCH)[index])
-                else -> onboardingNext()
-            }
-            OnboardingStep.CUSTOMISE -> { onboarding.context = onboarding.context.copy(customise = index == 0); onboardingNext() }
-            OnboardingStep.KIDS -> if (index == 1) kidsUi.kidsStartInOnboarding() else onboardingNext()
-            OnboardingStep.PAD -> if (index < s.rows.lastIndex) stepOnboardingValue(onboarding.step, index, 1) else onboardingNext()
-            OnboardingStep.TITLE, OnboardingStep.ACCENT -> if (index < s.rows.lastIndex) stepOnboardingValue(onboarding.step, index, 1) else onboardingNext()
-            OnboardingStep.TAB_HOME, OnboardingStep.TAB_CONSOLES, OnboardingStep.TAB_COLLECTIONS, OnboardingStep.TAB_TOOLS,
-            OnboardingStep.GAME_LISTS -> if (index < s.rows.lastIndex) stepOnboardingLayoutRow(index, 1) else onboardingNext()
-            OnboardingStep.ARTWORK -> when (s.rows.getOrNull(index)?.label) {
-                ART_SCREENSCRAPER -> _screen.value = s.copy(artSignIn = true, draftUser = deps.settings.ssUsername, draftPassword = "")
-                ART_SGDB_KEY -> _screen.value = s.copy(artKey = ArtKeyFor.SGDB, draftKey = "")
-                ART_TGDB_KEY -> _screen.value = s.copy(artKey = ArtKeyFor.TGDB, draftKey = "")
-                ART_FETCH_NOW -> { artworkScreens?.fetchInBackground(); onboardingNext() }
-                else -> onboardingNext()   // Skip
-            }
-            OnboardingStep.RA_SIGN_IN -> when {
-                s.prompt -> submitOnboardingSignIn(s)
-                index == 0 && deps.achievements != null && !onboardingSigningIn ->
-                    _screen.value = s.copy(prompt = true, draftUser = deps.settings.raUsername, draftPassword = "")
-                index == 0 -> Unit   // a sign-in is still running
-                else -> onboardingNext()
-            }
-            OnboardingStep.RA_DOWNLOAD -> { if (index == 0) deps.achievements?.prefetchAll(); onboardingNext() }
-            OnboardingStep.SYNC_OFFER -> if (index == 0) {
-                val sync = deps.deviceSync ?: return onboardingNext()
-                onboardingSync = true
-                sync.open()
-                _screen.value = Screen.DeviceSync
-            } else onboardingNext()
-            else -> onboardingNext()
-        }
-    }
-
-    /** The layout a layout page sets, as it is now. */
-    private fun onboardingLayout(step: OnboardingStep): MenuStyle =
-        ONBOARDING_TAB_STEPS[step]?.let { MenuStyles.styleOf(deps.settings.menuStyles, it) } ?: gameListLayout().first
-
-    /**
-     * A layout page's value rows, the options its picture shows: the layout, then Home's stats, a tab Carousel's
-     * orientation, or a game list Carousel's or Backdrop's orientation and, standing on end, its alignment.
-     */
-    private fun onboardingLayoutKinds(step: OnboardingStep): List<SettingsKind> {
-        val s = deps.settings
-        val category = ONBOARDING_TAB_STEPS[step]
-        return listOfNotNull(
-            if (category == null) SettingsKind.GAME_LIST_STYLE else SettingsKind.MENU_STYLE,
-            SettingsKind.HOME_STATS.takeIf { category == MenuCategory.HOME },
-            SettingsKind.MENU_ORIENTATION.takeIf { category != null && category != MenuCategory.HOME && MenuStyles.styleOf(s.menuStyles, category) == MenuStyle.CAROUSEL },
-            SettingsKind.GAME_LIST_ORIENTATION.takeIf { category == null && gameListTurns(gameListLayout().first) },
-            SettingsKind.GAME_LIST_VERTICAL_ALIGNMENT.takeIf { category == null && gameListsShot().vertical },
-            SettingsKind.TAB_SHOWN.takeIf { category == null },   // the Games tab, on the Game lists step
-        )
-    }
-
-    /** A layout page's rows: its value rows ([onboardingLayoutKinds]), named without the tab (the page's title says it), then Continue. */
-    private fun onboardingLayoutRows(step: OnboardingStep): List<NxRow> {
-        val s = deps.settings
-        val category = ONBOARDING_TAB_STEPS[step]
-        return onboardingLayoutKinds(step).map { kind ->
-            when (kind) {
-                SettingsKind.HOME_STATS -> NxRow("Stats", secondary = if (s.menuHomeStats) "Show" else "Hide", cycleable = true)
-                SettingsKind.MENU_ORIENTATION -> NxRow("Orientation", secondary = orientationLabel(MenuStyles.orientationOf(s.menuOrientations, category!!)), cycleable = true)
-                SettingsKind.GAME_LIST_ORIENTATION -> NxRow("Orientation", secondary = orientationLabel(s.gameListOrientation), cycleable = true)
-                SettingsKind.GAME_LIST_VERTICAL_ALIGNMENT -> NxRow("Alignment", secondary = verticalAlignmentLabel(s.gameListVerticalAlignment), cycleable = true)
-                SettingsKind.TAB_SHOWN -> NxRow("Games tab", secondary = if (s.showGamesTab) "Show" else "Hide", cycleable = true)
-                else -> NxRow("Layout", secondary = menuStyleLabel(onboardingLayout(step)), cycleable = true)
-            }
-        } + NxRow("Continue")
-    }
-
-    /** A layout page's picture: the tab or the game lists as their rows set them; null on the other steps. */
-    private fun onboardingShot(step: OnboardingStep): LayoutShot? {
-        if (step == OnboardingStep.GAME_LISTS) return gameListsShot()
-        val c = ONBOARDING_TAB_STEPS[step] ?: return null
-        val style = MenuStyles.styleOf(deps.settings.menuStyles, c)
-        val vertical = style == MenuStyle.CAROUSEL && c != MenuCategory.HOME && MenuStyles.orientationOf(deps.settings.menuOrientations, c) == MenuOrientation.VERTICAL
-        return LayoutShot.Tab(c, style, stats = c != MenuCategory.HOME || deps.settings.menuHomeStats, vertical = vertical, art = consoleShotArt(c))
-    }
-
-    /**
-     * A layout page's value row [row] stepped by [by]: the layout ([stepOnboardingLayout]), or the option on that row in
-     * place, the same setting Settings steps ([settingValue], through a bare row carrying the page's tab), so the
-     * picture follows.
-     */
-    private fun stepOnboardingLayoutRow(row: Int, by: Int) {
-        val step = onboarding.step ?: return
-        when (val kind = onboardingLayoutKinds(step).getOrNull(row) ?: return) {
-            // The layout is onboarding's own: it resets the orientation (and alignment) with it, from its own list.
-            SettingsKind.MENU_STYLE, SettingsKind.GAME_LIST_STYLE -> return stepOnboardingLayout(by)
-            else -> settingValue(SettingsRow(kind, "", category = onboardingKindCategory(step, kind)))?.step(by)
-        }
-        showOnboarding(row)
-    }
-
-    /** A layout page's layout stepped by [by] (-1: the one before): applied at once (its orientation reset), the page on its row. */
-    private fun stepOnboardingLayout(by: Int) {
-        val step = onboarding.step ?: return
-        val category = ONBOARDING_TAB_STEPS[step]
-        if (category == null) {
-            deps.settings.gameListStyle = MenuStyles.gameListStyles(_dualMenu.value).stepFrom(gameListLayout().first, by)
-            deps.settings.gameListOrientation = MenuStyles.DEFAULT_ORIENTATION
-            deps.settings.gameListVerticalAlignment = VerticalListAlignment.DEFAULT
-        } else {
-            deps.settings.menuStyles = deps.settings.menuStyles + (category to MenuStyles.cycleMainMenu(MenuStyles.styleOf(deps.settings.menuStyles, category), by))
-            deps.settings.menuOrientations = deps.settings.menuOrientations - category
-            if (category == MenuCategory.HOME) rebuildHomeTab()
-        }
-        showOnboarding(0)
-    }
-
-    /** The library's game count, for the artwork and achievement steps' lines. */
-    private fun onboardingGameCount(): Int = systemsCache.sumOf { it.gameCount }
-
-    /** The sign-in prompt's typing (as the RetroAchievements settings' prompt). */
-    fun onboardingDraftUser(text: String) { (_screen.value as? Screen.Onboarding)?.takeIf { it.prompt || it.artSignIn }?.let { _screen.value = it.copy(draftUser = text) } }
-    fun onboardingDraftPassword(text: String) { (_screen.value as? Screen.Onboarding)?.takeIf { it.prompt || it.artSignIn }?.let { _screen.value = it.copy(draftPassword = text) } }
-
-    /** The prompt's confirm: both filled, the sign-in runs ([onRaIdleOnboarding] takes its end); else it stays. */
-    private fun submitOnboardingSignIn(s: Screen.Onboarding) {
-        val c = deps.achievements ?: return
-        if (s.draftUser.isBlank() || s.draftPassword.isBlank() || c.busy) return
-        onboardingSigningIn = true
-        showOnboarding(0)
-        c.login(s.draftUser.trim(), s.draftPassword)
-    }
-
-    /** A sign-in from onboarding ended: signed in, on to the download offer; else the step again with the error. */
-    private fun onRaIdleOnboarding(status: RaStatus) {
-        if (!onboardingSigningIn) return
-        onboardingSigningIn = false
-        // Judged by the sign-in's own result: a token kept from before stays through a failed one.
-        val signedIn = status.lastError == null && deps.settings.raToken != null
-        // Even when the user skipped on meanwhile: the download offer becomes a step (behind them, B reaches it).
-        if (signedIn) onboarding.context = onboarding.context.copy(signedIn = true)
-        if (onboarding.step != OnboardingStep.RA_SIGN_IN) return
-        if (signedIn) onboardingNext() else showOnboarding(0, error = status.lastError ?: "Sign-in failed")
-    }
-
-    /** On to the next step, saved for a resume; past DONE onboarding ends ([finishOnboarding]). */
-    private fun onboardingNext() {
-        refreshPadContext()
-        onboardingImported = null
-        val next = onboarding.next() ?: return finishOnboarding()
-        deps.settings.onboardingStep = next.name
-        showOnboarding()
-    }
-
-    /**
-     * The Bottom screen step's button on the second screen was tapped: the second screen is the bottom one. Only while the
-     * step shows.
-     */
-    fun onboardingBottomScreenOnSecond() {
-        if (onboarding.step != OnboardingStep.BOTTOM_SCREEN || (_screen.value as? Screen.Onboarding)?.step != OnboardingStep.BOTTOM_SCREEN) return
-        deps.settings.bottomScreen = BottomScreen.SECOND
-        startFolderSteps()
-    }
-
-    /** The welcome pages are answered: on to first setup's folder steps. */
-    private fun startFolderSteps() {
-        welcomeDone = true
-        onboarding.finish()
-        showPickFolder()
-    }
-
-    /** B: the step before; WELCOME stays, the first post-folder step goes back to the ROMs folder step. */
-    private fun onboardingBack() {
-        if (kidsUi.kidsOnAtDone()) return   // Kids Mode on: the earlier steps (Device Sync, the folders) are a parent's, Press Start alone goes on
-        // A first run's first step after the folders: back to the ROMs folder step (going on again comes back here, the saved step kept).
-        if (onboarding.isFirstMain()) { onboarding.finish(); return showAddFirstExtra() }
-        val step = onboarding.back() ?: return
-        onboardingImported = null
-        deps.settings.onboardingStep = step.takeIf { it > OnboardingStep.BOTTOM_SCREEN }?.name   // the steps before the folders are never resumed
-        showOnboarding()
-    }
-
-    /** B on first setup's home pick: the All files step while access is declared and not granted, else the text size question. */
-    private fun backFromHomePick() {
-        val access = deps.allFilesAccess
-        if (access != null && access.declared && !access.granted()) {
-            showPermissions()
-        } else backToWelcome()
-    }
-
-    /** First setup's first folder step (All files access or the home pick), back: the bottom screen question where asked, else the text size question. */
-    private fun backToWelcome() {
-        welcomeDone = false
-        when {
-            deps.builtInSecondScreen() -> onboarding.startBottomScreen()
-            else -> onboarding.startTextSize()
-        }
-        showOnboarding()
-    }
-
-    /** After the text size: the bottom screen question where there is one, else the folder steps. */
-    private fun afterTextSize() {
-        if (deps.builtInSecondScreen()) { onboarding.startBottomScreen(); showOnboarding() } else startFolderSteps()
-    }
-
-    // ---- SELECT / START / MENU (Controls → System buttons) ----
-
-    /** The pad that pressed a key last: Controls → System buttons acts on it. */
-    private var lastPad: PadModel? = null
-
-    private fun systemButtonMap() = SystemButtons.decode(deps.settings.systemButtons)
-
-    /** The pad Settings acts on: the last one pressed while it's connected, else the first connected. */
-    private fun currentPad(): PadModel? {
-        val pads = deps.connectedPads()
-        return lastPad?.takeIf { p -> pads.any { it.key == p.key } } ?: pads.firstOrNull()
-    }
-
-    /**
-     * Every key from a physical device, before anything else sees it. [model]: its pad (null: not one); [source]: the
-     * device itself when it is no pad (a handheld's own buttons on a device beside its pad), null for a pad or a device
-     * that binds nothing. It remembers the pad, and a wait in Controls → System buttons takes the press; true when it
-     * used the key (the menu must not see it).
-     */
-    fun systemButtonKey(model: PadModel?, source: String?, keyCode: Int, scanCode: Int, down: Boolean, repeat: Boolean): Boolean {
-        // A wait keeps its pad: another pad's press neither binds nor moves the page to it.
-        if (systemButtonWaiting != null || (model?.key ?: source) in systemButtonsHeld) return systemButtonSettingsKey(model, source, keyCode, scanCode, down, repeat)
-        if (model != null && down) lastPad = model
-        return false
-    }
-
-    /** Controls → System buttons: the role waiting for a press (its row says so), or null. */
-    private var systemButtonWaiting: SystemRole? = null
-    /** The devices whose press bound or cancelled a wait, each until its release (swallowed with it). */
-    private var systemButtonsHeld: Set<String> = emptySet()
-
-    /**
-     * Controls → System buttons: the pad it acts on ([currentPad], by name), then SELECT, START and MENU with their
-     * buttons (Standard: the pad's own), then Reset. No pad: [SYSTEM_BUTTONS_NO_CONTROLLER]; the bindings stay.
-     */
-    private fun systemButtonRows(): List<SettingsRow> {
-        val pad = currentPad() ?: return listOf(SettingsRow(SettingsKind.TEXT, SYSTEM_BUTTONS_NO_CONTROLLER))
-        val map = systemButtonMap()
-        return listOf(SettingsRow(SettingsKind.TEXT, pad.name)) + SystemRole.entries.map { role ->
-            val value = if (role == systemButtonWaiting) SYSTEM_BUTTON_PROMPT
-                else map.bound[pad.key]?.get(role)?.let(::physicalKeyLabel) ?: "Standard"
-            SettingsRow(SettingsKind.SYSTEM_BUTTON_BIND, role.label, value, note = if (role == systemButtonWaiting) "B cancels" else null, systemRole = role)
-        } + SettingsRow(SettingsKind.RESET_DEFAULTS, RESET_DEFAULTS_LABEL)
-    }
-
-    /** A bound key's name: a key code's ([KeyLabels]), or "Button 2F1" for a scan code Android has no key for. */
-    private fun physicalKeyLabel(k: PhysicalKey): String =
-        if (k.keyCode == 0) "Button ${k.scanCode.toString(16).uppercase()}" else KeyLabels.label(ShortcutBinding(null, k.keyCode))
-
-    /**
-     * A key while System buttons waits: the next fresh press binds the role, from its pad or from a device that is no
-     * pad (a handheld whose SELECT and START sit on a device beside its pad), swapping with a role that had that button;
-     * the pad's B cancels, another pad's keys pass. The press's release is swallowed with it.
-     */
-    private fun systemButtonSettingsKey(model: PadModel?, source: String?, keyCode: Int, scanCode: Int, down: Boolean, repeat: Boolean): Boolean {
-        val sender = model?.key ?: source ?: return false
-        if (!down) { val held = sender in systemButtonsHeld; systemButtonsHeld = systemButtonsHeld - sender; return held }
-        val role = systemButtonWaiting ?: return false
-        val pad = currentPad() ?: return false
-        if (model != null && model.key != pad.key) return false
-        if (repeat) return true
-        systemButtonsHeld = systemButtonsHeld + sender
-        systemButtonWaiting = null
-        // B cancels; the pad's Back binds like any button (a Retroid Pocket Classic's home button sends it).
-        if (model == null || keyCode != KeyCodes.BUTTON_B) {
-            val key = PhysicalKey.of(keyCode, scanCode, device = if (model == null) sender else "")
-            deps.settings.systemButtons = SystemButtons.encode(SystemButtons.bind(systemButtonMap(), pad.key, role, key))
-        }
-        settingsUi.refreshSettings()
-        return true
-    }
-
     /** First setup's home page and folder summaries, with their moves. */
     // Lazy: built on first use, so a collector of [init] that reaches it during construction gets it, not null.
     private val folders: FolderSummaryController by lazy { FolderSummaryController(
@@ -2951,39 +1664,6 @@ class AppState(
     private fun showAddFirstExtra() {
         _screen.value = Screen.AddFirstExtra
         _selection.value = ListSelection(0, 2)
-    }
-
-    /** First setup is on: the welcome was not finished by an earlier run. */
-    private fun inFirstSetup(): Boolean = deps.settings.onboardingDone == false
-
-    /** How many folder steps first setup has before HANDHELD: All files (where shown or still to ask), home, ROMs, Android games (once shown). */
-    private fun setupFolderSteps(): Int {
-        if (!inFirstSetup()) return 0
-        val access = deps.allFilesAccess
-        val allFiles = allFilesStepShown || (access != null && access.declared && !access.granted() && !deps.settings.allFilesAsked)
-        val pick = if (mediaHomeTaken || !homePickShown()) 0 else 1   // no home pick on the media home
-        return (if (allFiles) 1 else 0) + 1 + pick + (if (folders.homePage != null) 1 else 0) + (if (addedExtraId != null) 1 else 0) + (if (androidStepShown) 1 else 0)
-    }
-
-    /**
-     * A folder step's page title and whether B goes back from it: "Setup · Step n/m" (and back) in first setup; after
-     * it (a lost home's pick) just the page's name, and B has nowhere to go.
-     */
-    fun setupChrome(): Pair<String, Boolean> {
-        val screen = _screen.value
-        if (!inFirstSetup()) return (if (screen is Screen.AddFirstExtra) "ROM folders" else "Home folder") to (screen is Screen.AddFirstExtra)
-        val access = deps.allFilesAccess
-        val allFiles = allFilesStepShown || (access != null && access.declared && !access.granted() && !deps.settings.allFilesAsked)
-        val home = if (folders.homePage != null) 1 else 0   // the home page, between the pick and the ROMs folder offer
-        val pick = if (mediaHomeTaken || !homePickShown()) 0 else 1   // no home pick on the media home
-        val at = setupPreSteps() + (if (allFiles) 1 else 0) + when (screen) {
-            is Screen.PermissionsStep -> 0
-            Screen.PickFolder -> 1
-            Screen.AddFirstExtra -> 1 + pick + home
-            is Screen.FolderSummary -> if (screen.extraId == Recents.HOME) 1 + pick else 2 + pick + home
-            else -> 2 + pick + home + (if (addedExtraId != null) 1 else 0)
-        }
-        return setupCounter(at) to true
     }
 
     /** The first of the page's two buttons side by side ([setupButtons]), its row index; null when the page has no pair. */
@@ -3008,69 +1688,6 @@ class AppState(
             Screen.AddFirstExtra -> if (index == 0) pickExtra() else skipFirstExtra()
             is Screen.AndroidGamesStep -> answerAndroidGames(index == 0)
             is Screen.FolderSummary -> folders.folderSummaryRow(_screen.value as Screen.FolderSummary, index)
-            else -> Unit
-        }
-    }
-
-    /** Every onboarding flag back to a run's start (a new run, or onboarding ended or left), so none leaks into normal use. */
-    private fun resetOnboardingRun() {
-        onboardingSync = false
-        _syncSetup.value = null
-        onboardingSynced = null
-        onboardingSigningIn = false
-        allFilesStepShown = false
-        androidStepShown = false
-        addedExtraId = null
-        folders.reset()
-    }
-
-    /** Onboarding done: the menu on Home, its tabs rebuilt for the layout and options picked. */
-    private fun finishOnboarding() {
-        kidsUi.kidsInOnboarding = false
-        onboarding.finish()
-        resetOnboardingRun()
-        deps.settings.onboardingDone = true
-        deps.settings.onboardingStep = null
-        // A new install has nothing to upgrade, unless data waits to move. Before any load can ask the gate (a new install's
-        // private root is a few files to walk).
-        deps.storageUpgrade?.markIfEmpty()
-        scope.launch {
-            rebuildMainRows()
-            showSystemsNow(MenuCategory.HOME)
-        }
-    }
-
-    /** A pad press on an onboarding step: UP / DOWN move (wrapping), A chooses, B goes back. */
-    private fun onOnboardingButton(s: Screen.Onboarding, button: NxButton) {
-        if (s.artSignIn || s.artKey != null) {   // the artwork step's prompt: A checks it, B closes it
-            when (button) {
-                NxButton.A -> submitOnboardingArt(s)
-                NxButton.B -> _screen.value = s.copy(artSignIn = false, artKey = null, draftPassword = "", draftKey = "")
-                else -> Unit
-            }
-            return
-        }
-        if (s.prompt) {   // the sign-in prompt: A signs in, B closes it
-            when (button) {
-                NxButton.A -> submitOnboardingSignIn(s)
-                NxButton.B -> _screen.value = s.copy(prompt = false, draftPassword = "")
-                else -> Unit
-            }
-            return
-        }
-        // The last page: START goes as Press Start does.
-        if (s.step == OnboardingStep.DONE && button == NxButton.START) return onboardingRow(0)
-        when (button) {
-            NxButton.UP -> _selection.value = _selection.value.up(wrap = true)
-            NxButton.DOWN -> _selection.value = _selection.value.down(wrap = true)
-            NxButton.LEFT, NxButton.RIGHT -> when (s.step) {
-                OnboardingStep.SAVE_FORMATS -> stepOnboardingValue(OnboardingStep.SAVE_FORMATS, _selection.value.index, if (button == NxButton.LEFT) -1 else 1)
-                OnboardingStep.PAD, OnboardingStep.TITLE, OnboardingStep.ACCENT, OnboardingStep.TEXT_SIZE -> if (_selection.value.index < s.rows.lastIndex) stepOnboardingValue(onboarding.step, _selection.value.index, if (button == NxButton.LEFT) -1 else 1)
-                in ONBOARDING_LAYOUT_STEPS -> if (_selection.value.index < s.rows.lastIndex) stepOnboardingLayoutRow(_selection.value.index, if (button == NxButton.LEFT) -1 else 1)
-                else -> Unit
-            }
-            NxButton.A -> onboardingRow(_selection.value.index)
-            NxButton.B -> onboardingBack()
             else -> Unit
         }
     }
@@ -3137,7 +1754,7 @@ class AppState(
      * dropdown); null on any other screen.
      */
     private fun tabRowOf(s: Screen): Pair<List<MenuCategory>, Int>? = when (s) {
-        is Screen.Systems -> if (s.menu != null || s.search != null) null else s.tabs.map { it.category } to s.tab
+        is Screen.Systems -> if (s.menu != null || s.search != null || s.layoutMenu != null) null else s.tabs.map { it.category } to s.tab
         is Screen.Games -> s.tabBar?.takeIf { s.menu == null && s.search == null && s.layoutMenu == null }?.let { it.categories to it.index }
         else -> null
     }
@@ -3215,9 +1832,9 @@ class AppState(
         if (upgrade.upgradeOn || upgrade.upgradeDue()) { if (!upgrade.upgradeOn) upgrade.startStorageUpgrade(); return }
         if (upgrade.upgradeCase() == UpgradeCase.QUIET) deps.storageUpgrade?.startQuietMove()   // Case A: in the background, never mid-game
         // First setup's folder steps come first even with a media home to fall back to; a saved step means they were reached.
-        val setupFirst = deps.settings.treeRef == null && deps.settings.onboardingDone == false && deps.settings.onboardingStep == null && !mediaHomeTaken
+        val setupFirst = deps.settings.treeRef == null && deps.settings.onboardingDone == false && deps.settings.onboardingStep == null && !onboardingUi.mediaHomeTaken
         if (home() == null || setupFirst) {
-            if (deps.settings.onboardingDone == false && !welcomeDone && onboarding.step == null) { onboarding.startWelcome(); showOnboarding(); return }
+            if (deps.settings.onboardingDone == false && !onboardingUi.welcomeDone && onboarding.step == null) { onboarding.startWelcome(); onboardingUi.showOnboarding(); return }
             showPickFolder(); return
         }
         libraryDirty = false
@@ -3226,7 +1843,7 @@ class AppState(
             convertToFiles()   // before the index is read, so a converted home or extra scans once
             val root = home() ?: return@launch
             mediaHomeNotice(root)
-            countCache.load()   // before the first menu build: the collections listed next show their stored counts
+            collectionCounter.loadStored()   // before the first menu build: the collections listed next show their stored counts
             toolPins = readToolPins()
             val usable = fittingIndex(root)
             if (usable == null || backOnline(usable)) {
@@ -3243,11 +1860,11 @@ class AppState(
 
     /** [ToolPins.FILE] (a suspending read, as the count cache's); a missing or unreadable file is no pins. */
     private suspend fun readToolPins(): List<String> =
-        try { ToolPins.decode(deps.privateFiles.read(ToolPins.FILE)) } catch (e: CancellationException) { throw e } catch (e: Throwable) { emptyList() }
+        tryOrAny({ emptyList() }) { ToolPins.decode(deps.privateFiles.read(ToolPins.FILE)) }
 
     /** Writes [keys] as [ToolPins.FILE] off the main thread, then keeps them; false (nothing changed) when the write fails. */
     private suspend fun writeToolPins(keys: List<String>): Boolean {
-        try { withContext(deps.compute) { deps.privateFiles.write(ToolPins.FILE, ToolPins.encode(keys)) } } catch (e: CancellationException) { throw e } catch (e: Throwable) { return false }
+        tryOrAny({ return false }) { withContext(deps.compute) { deps.privateFiles.write(ToolPins.FILE, ToolPins.encode(keys)) } }
         toolPins = keys
         return true
     }
@@ -3313,7 +1930,7 @@ class AppState(
             .onSuccess {
                 libraryDirty = false   // the index is this scan's
                 homeReadable()
-                refreshCollectionsFlag()   // the scan just walked the tree, so the first show can carry the row
+                collectionCounter.refreshCollectionsFlag()   // the scan just walked the tree, so the first show can carry the row
                 showSystems(it.playableSystems(readHidden()))
                 then?.invoke(systemsCache)
             }
@@ -3383,7 +2000,6 @@ class AppState(
         return withContext(deps.compute) { index.withFirstSeen(previous, now).let { if (now != null) it.copy(scannedAt = now) else it } }
     }
 
-
     /**
      * After a start from the index: the one SAF probe (is the home still there?), then the skeleton once per home.
      * A gone home (revoked grant, stale URI) clears it and the index as a failed scan would; other failures are ignored.
@@ -3433,7 +2049,7 @@ class AppState(
         }
         homeReadable()
         ensureSkeleton(root)
-        refreshCollectionsFlag()   // the probe showed the tree readable: the Collections row may appear now
+        collectionCounter.refreshCollectionsFlag()   // the probe showed the tree readable: the Collections row may appear now
     }
 
     /**
@@ -3456,13 +2072,9 @@ class AppState(
     }
 
     /** The home probe: null when [root] lists, else the failure. */
-    private suspend fun probe(root: ContentRef): Throwable? = try {
+    private suspend fun probe(root: ContentRef): Throwable? = tryOrAny({ it }) {
         deps.source.listChildren(root)
         null
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Throwable) {
-        e
     }
 
     /** A failure that means the tree itself is gone or invalid: a revoked grant (SecurityException), a stale or deleted tree (IllegalArgumentException). */
@@ -3537,23 +2149,6 @@ class AppState(
     private fun homeAwayError(root: ContentRef, then: String): String =
         if (FileRefs.isFile(root) && deps.allFilesAccess?.granted() != true && !inMediaHome(root)) ACCESS_OFF else "$HOME_OFFLINE $then"
 
-    /**
-     * Library's All files access row: the switch [granted]; off while something needs it, a warning line saying what
-     * (the saved home read from the media folder [root] instead, else ROM folders that can't be read) in place of its
-     * description, so the app need not say it with a notice at every start.
-     */
-    private fun allFilesRow(granted: Boolean, root: ContentRef?): SettingsRow {
-        val saved = deps.settings.treeRef
-        val note = when {
-            granted -> null
-            root != null && saved != null && root == deps.homes?.media && FileRefs.isFile(saved) && saved != root ->
-                "Off: your home folder can't be read, so ${mediaPath(root)} is used"
-            deps.settings.extraFolders.any { fileAccessOff(it.ref) } -> "Off: some ROM folders can't be read"
-            else -> null
-        }
-        return SettingsRow(SettingsKind.ALL_FILES, "All files access", if (granted) "On" else "Off", warning = note != null, note = note)
-    }
-
     /** True for a file ref read without All files access: its folder is not "offline", the permission is off. */
     private fun fileAccessOff(ref: ContentRef): Boolean = FileRefs.isFile(ref) && deps.allFilesAccess?.granted() == false && !inMediaHome(ref)
 
@@ -3571,12 +2166,11 @@ class AppState(
     /** The list-style picker; null without [AppDeps.localFiles]. */
     private val filePicker = deps.localFiles?.let { FilePickerController(scope, _screen, _selection, _error, it) }
 
-    /** All files access is on and the list-style picker is there: every pick goes through it. */
-    /** Whether a folder pick goes to the app's own picker (All files access), not Android's. */
+    /** All files access is on and the list-style picker is there: every folder pick goes through it, not Android's. */
     fun filePickerOn(): Boolean = filePicker != null && deps.allFilesAccess?.granted() == true
 
     /**
-     * The home pick: the list-style picker with All files access. Without it no picker home is saved any more (the
+     * The home pick: the list-style picker with All files access. Without it no picker home is saved (the
      * home is the media one): All files access is asked for instead, and the row picks once it is on. Only a platform
      * without a media home or that permission keeps Android's picker ([FolderPicker.pickHome]).
      */
@@ -3637,7 +2231,7 @@ class AppState(
         }
         if (upgrade.upgradeOn) { upgrade.upgradeAccessChanged(); return }   // the upgrade screen answers it, never a library reload
         if (_screen.value is Screen.PermissionsStep) { showPermissions(keep = true); return }   // back from a prompt: the rows show its answer
-        if ((_screen.value as? Screen.Settings)?.section == SettingsSection.LIBRARY) settingsUi.refreshSettings()
+        refreshSettingsOn(SettingsSection.LIBRARY)
         // Granted meanwhile: SAF folders on external storage become paths. The main menu reloads at once (rescanning, as the
         // index no longer fits); any other page leaves it to the next load. A load in flight converts first itself. The
         // same when the home itself changed with the access (the saved one back, or the media one in its place).
@@ -3666,12 +2260,12 @@ class AppState(
             return
         }
         // First setup: no home yet, or a pick from the setup screen (a retry after a failed first load keeps treeRef).
-        val first = (old == null && inFirstSetup()) || _screen.value is Screen.PickFolder
+        val first = (old == null && onboardingUi.inFirstSetup()) || _screen.value is Screen.PickFolder
         val fromLibrary = if (first) null else settingsUi.rememberLibraryPage()
         // The data home this change leaves (the full-access folder, or the media one): its saves may be copied over.
         val copyFrom = home()?.takeIf { !first && upgrade.copyOffered(it, ref) }
         deps.settings.treeRef = ref
-        if (first) firstSetup = true
+        if (first) onboardingUi.firstSetup = true
         // First setup's folder steps, saved: a restart before they end comes back to them ([resumeFolderSteps]).
         if (first && deps.settings.onboardingDone == false) deps.settings.onboardingStep = FOLDER_STEPS
         if (old != null && old != ref && old !in extras) deps.folderPicker.forget(old)
@@ -3730,7 +2324,7 @@ class AppState(
         val id = Sources.uniqueId(Sources.idFor(deps.source.displayName(ref), ref), deps.settings.extraFolders.map { it.id })
         deps.settings.extraFolders = deps.settings.extraFolders + ExtraFolder(id, ref)
         libraryDirty = true
-        if (_screen.value is Screen.AddFirstExtra) { addedExtraId = id; rescan { folders.showFolderSummary(id) }; return }   // the first-setup offer: its summary
+        if (_screen.value is Screen.AddFirstExtra) { onboardingUi.addedExtraId = id; rescan { folders.showFolderSummary(id) }; return }   // the first-setup offer: its summary
 
         val fromLibrary = settingsUi.rememberLibraryPage()
         rescan {
@@ -3796,6 +2390,7 @@ class AppState(
      * its picker, X shows the selected row's info when it has more to say. False for every other press.
      */
     private fun onEmulatorTouchButton(s: Screen.EmulatorOptions, button: NxButton): Boolean {
+        if (s.confirmReset) return false   // the reset question takes the press
         val touch = settingsUi.settingTouchRow(_selection.value.index) ?: return false
         return when {
             button == NxButton.A && touch.choices.size >= 2 && touch.control == NxSettingControl.PICKER -> openEmulatorPicker(s)
@@ -3813,287 +2408,10 @@ class AppState(
         (_screen.value as? Screen.EmulatorOptions)?.takeIf(::gameSettingsModal)?.let(emulatorSettings::closeGame)
     }
 
-    /** A page's note under its title ([Screen.Settings.banner]): Saves', where they live. */
-    private fun settingsBanner(section: SettingsSection): String? {
-        if (section == SettingsSection.LAYOUT_GAMES_TAB) return "Its layout follows Layouts \u2192 Game lists."
-        if (section != SettingsSection.SAVES) return null
-        val home = home()
-        val media = deps.homes?.media
-        return when {
-            !dataMoved() -> SAVES_STILL_INSIDE
-            home != null && home == media -> "Saves are in ${mediaPath(media)}. Uninstalling the app removes them."
-            home != null && deps.homes != null && FileRefs.isFile(home) -> "Saves are in your home folder."
-            else -> "Saves are stored inside the app. Export them before uninstalling or clearing app data."   // a picker home: still private
-        }
+    /** Rebuilds the Settings rows when one of [sections] is the open page. */
+    private fun refreshSettingsOn(vararg sections: SettingsSection) {
+        if ((_screen.value as? Screen.Settings)?.section in sections) settingsUi.refreshSettings()
     }
-
-    /** The Button layout page's consoles: every console, by name. */
-    private val buttonLayoutConsoles: List<Console> by lazy { CoreRegistry.consoles.sortedBy { it.displayName.lowercase() } }
-
-    /** The Button layout page's console (the last one picked, while the app runs) and, on the Wii and the 3DS, its controller. */
-    private var buttonLayoutConsole: Console? = null
-    private var buttonLayoutWiiPad: WiiPad = WiiPad.CLASSIC
-    /** The 3DS's New 3DS controls (most games resolve to the regular ones under Auto, so Regular first). */
-    private var buttonLayoutN3dsNew: Boolean = false
-
-    private fun buttonLayoutConsole(): Console = buttonLayoutConsole ?: buttonLayoutConsoles.first()
-
-    /** The Wii controllers in the page's order: the Wii's default pad first. */
-    private val wiiPads = listOf(WiiPad.CLASSIC, WiiPad.NUNCHUK, WiiPad.SIDEWAYS, WiiPad.UPRIGHT)
-
-    private fun wiiPadLabel(pad: WiiPad): String = when (pad) {
-        WiiPad.CLASSIC -> "Classic"; WiiPad.NUNCHUK -> "Nunchuk"; WiiPad.SIDEWAYS -> "Sideways"; WiiPad.UPRIGHT -> "Upright"
-    }
-
-    private fun n3dsPadLabel(new: Boolean): String = if (new) "New" else "Regular"
-
-    /** Any console has a tweak stored, skin or overlay: Appearance's Button layout row reads Custom. */
-    private fun buttonLayoutCustom(): Boolean = listOf(deps.settings.skinTweaks, deps.settings.overlayTweaks)
-        .any { stored -> SkinTweaks.decode(stored).values.any { c -> c.values.any { it.isNotEmpty() } } }
-
-    private fun buttonLayoutRows(): List<SettingsRow> {
-        val console = buttonLayoutConsole()
-        return listOfNotNull(
-            SettingsRow(SettingsKind.BUTTON_LAYOUT_CONSOLE, "Console", console.displayName),
-            if (console.id == WII_CONSOLE) SettingsRow(SettingsKind.BUTTON_LAYOUT_WII_PAD, "Controller", wiiPadLabel(buttonLayoutWiiPad)) else null,
-            if (console.id == N3DS_CONSOLE) SettingsRow(SettingsKind.BUTTON_LAYOUT_N3DS_PAD, "Controller", n3dsPadLabel(buttonLayoutN3dsNew)) else null,
-            SettingsRow(SettingsKind.BUTTON_LAYOUT_ORIENTATION, "Portrait", landscape = false),
-            SettingsRow(SettingsKind.BUTTON_LAYOUT_ORIENTATION, "Landscape", landscape = true),
-            SettingsRow(SettingsKind.BUTTON_LAYOUT_RESET, "Reset console"),
-        )
-    }
-
-    /** An editor is opening or open: a second quick A / tap does not stack another over it (its Save would win). */
-    private var skinEditorOpen = false
-
-    private fun openSkinEditor(landscape: Boolean) {
-        val editor = deps.skinEditor ?: return
-        if (skinEditorOpen) return
-        skinEditorOpen = true
-        val console = buttonLayoutConsole()
-        val pad = buttonLayoutWiiPad.takeIf { console.id == WII_CONSOLE }
-        val n3ds = console.id == N3DS_CONSOLE
-        val new = n3ds && buttonLayoutN3dsNew
-        val controller = pad?.let(::wiiPadLabel) ?: n3dsPadLabel(new).takeIf { n3ds }
-        editor.open(SkinEditRequest(console.id, landscape, pad, new), controller?.let { "${console.displayName} · $it" } ?: console.displayName)
-    }
-
-    /** The editor saved or left: republish the page if Settings is still showing (the activity wrote the settings). */
-    fun onSkinLayoutEdited() {
-        skinEditorOpen = false
-        if (_screen.value is Screen.Settings) settingsUi.refreshSettings()
-    }
-
-    /** Reset console: the page's console's tweaks go, every layout of it, skin and overlay; other consoles keep theirs. */
-    private fun resetButtonLayoutConsole() {
-        val id = buttonLayoutConsole().id
-        deps.settings.skinTweaks = SkinTweaks.encode(SkinTweaks.decode(deps.settings.skinTweaks) - id)
-        deps.settings.overlayTweaks = SkinTweaks.encode(SkinTweaks.decode(deps.settings.overlayTweaks) - id)
-        settingsUi.showSettingsOn(SettingsSection.BUTTON_LAYOUT, SettingsKind.BUTTON_LAYOUT_RESET)
-    }
-
-    private fun shortcutSet(): ShortcutSet = shortcutDraft ?: Shortcuts.decodeBase(deps.settings.shortcuts)
-
-    private var controllerConnected = true
-
-    /**
-     * The UI reports whether a controller is connected: the Shortcuts page shows its bind rows only with one (the
-     * on-screen pad binds nothing), so a wait ends when it goes.
-     */
-    fun onControllerConnected(connected: Boolean) {
-        if (controllerConnected == connected) return
-        controllerConnected = connected
-        if (!connected) cancelCapture()
-        refreshShortcuts()
-    }
-
-    /**
-     * A raw key from the platform, before it maps to an [NxButton]: true when press to bind took it, so the platform
-     * drops it. Waiting, every key is the capture's (MENU opens nothing, L23); after it ends, the keys still held stay
-     * its until released ([ShortcutCapture.takes]). Auto-repeats are the platform's to drop.
-     */
-    fun captureKey(keyCode: Int, down: Boolean): Boolean {
-        if (capture.active && (_screen.value as? Screen.Settings)?.section != SettingsSection.SHORTCUTS) closeShortcuts()   // a stale wait: never the menu's keys
-        if (!capture.takes(keyCode, down)) return false
-        val result = capture.onKey(keyCode, down) ?: return true
-        val action = _capturingShortcut.value
-        _capturingShortcut.value = null
-        if (action != null) when (result) {
-            is CaptureResult.Bound -> setShortcut(action, result.binding)
-            is CaptureResult.Refused -> { refreshShortcuts(); showNotice(result.reason) }
-            CaptureResult.Cancelled -> refreshShortcuts()
-        }
-        return true
-    }
-
-    private fun startCapture(action: ShortcutAction) {
-        capture.start()
-        _capturingShortcut.value = action
-        refreshShortcuts()
-    }
-
-    /** Ends a capture without a binding (B on the pad or a touch hint, Back, the page left). */
-    private fun cancelCapture() {
-        if (_capturingShortcut.value == null) return
-        capture.cancel()
-        _capturingShortcut.value = null
-        refreshShortcuts()
-    }
-
-    /** [action] on [binding] (null: None; [ShortcutSet.withBinding]). */
-    private fun setShortcut(action: ShortcutAction, binding: ShortcutBinding?) {
-        shortcutDraft = shortcutSet().withBinding(action, binding)
-        refreshShortcuts()
-    }
-
-    private fun setTouch(slot: TouchSlot, action: ShortcutAction?) { shortcutDraft = shortcutSet().withTouch(slot, action) }
-
-    private fun refreshShortcuts() { if ((_screen.value as? Screen.Settings)?.section == SettingsSection.SHORTCUTS) settingsUi.refreshSettings() }
-
-    /**
-     * The Shortcuts page closes (any screen but it, [_screen]; the app backgrounded): a capture ends, and the draft is
-     * written once (L25: not per change).
-     */
-    private fun closeShortcuts() {
-        capture.cancel()
-        _capturingShortcut.value = null
-        shortcutDraft?.let { deps.settings.shortcuts = Shortcuts.encodeBase(it) }
-        shortcutDraft = null
-    }
-
-    /**
-     * Controls -> Shortcuts: one press-to-bind row per action (its button or combo, None unbound; the one waiting shows
-     * [SHORTCUT_PROMPT] and, as its line, how to bind), the two touch buttons' actions, then Clear all. With no
-     * controller the bind rows give way to [SHORTCUTS_NO_CONTROLLER]; their bindings stay.
-     */
-    private fun shortcutRows(): List<SettingsRow> {
-        val set = shortcutSet()
-        val waiting = _capturingShortcut.value
-        val binds = if (!controllerConnected) listOf(SettingsRow(SettingsKind.TEXT, SHORTCUTS_NO_CONTROLLER))
-        else ShortcutAction.entries.map { a ->
-            if (a == waiting) SettingsRow(SettingsKind.SHORTCUT_BIND, a.label, SHORTCUT_PROMPT, note = "Hold MENU for a combo", shortcut = a)
-            else SettingsRow(SettingsKind.SHORTCUT_BIND, a.label, set.bindings[a]?.let(KeyLabels::label) ?: "None", note = if (a.mic) MIC_ROW_NOTE else null, shortcut = a)
-        }
-        return binds + TouchSlot.entries.map { t ->
-            SettingsRow(SettingsKind.SHORTCUT_TOUCH, t.label, set.touch[t]?.label ?: "None", touchSlot = t)
-        } + SettingsRow(SettingsKind.RESET_DEFAULTS, "Clear all")
-    }
-
-    private fun settingsRows(section: SettingsSection): List<SettingsRow> = when (section) {
-        SettingsSection.LIBRARY -> libraryRows()
-        SettingsSection.EMULATORS -> buildList {
-            add(SettingsRow(SettingsKind.DEFAULTS, "Default emulators"))
-            add(SettingsRow(SettingsKind.EMULATORS, "Default settings"))
-        }
-        SettingsSection.SECOND_SCREEN -> listOf(
-            SettingsRow(SettingsKind.SECOND_SCREEN_ENABLE, "Enable", if (deps.settings.secondScreen) "On" else "Off"),
-            SettingsRow(SettingsKind.BOTTOM_SCREEN, "Bottom screen", bottomScreenLabel(deps.settings.bottomScreen)),
-        )
-        // NX Redux's Settings → System save rows, so both devices name saves alike.
-        SettingsSection.SAVES -> listOf(
-            SettingsRow(SettingsKind.SAVE_FORMAT, "Save format", deps.settings.saveFormat.label),
-            SettingsRow(SettingsKind.STATE_FORMAT, "Save state format", deps.settings.stateFormat.label),
-            SettingsRow(SettingsKind.EXTRACTED_NAME, "Use extracted file name", if (deps.settings.useExtractedFileName) "On" else "Off"),
-            // Saves live only inside the app; these copy them out and back in.
-            SettingsRow(SettingsKind.EXPORT_SAVES, "Export saves"),
-            SettingsRow(SettingsKind.IMPORT_SAVES, "Import saves"),
-        )
-        SettingsSection.IMPORT_SAVES -> listOf(
-            SettingsRow(SettingsKind.IMPORT_FOLDER, "From a folder"),
-            SettingsRow(SettingsKind.IMPORT_ZIP, "From a zip file"),
-            SettingsRow(SettingsKind.IMPORT_RETROARCH, "From RetroArch"),
-        )
-        // The summary, then each skipped file with its reason; read-only but for Done.
-        SettingsSection.IMPORT_RESULT -> importResult?.let { r ->
-            r.lines().map { SettingsRow(SettingsKind.INFO, it) } + r.skipped.map { SettingsRow(SettingsKind.INFO, it.name, it.reasonText()) }
-        }.orEmpty() + SettingsRow(SettingsKind.IMPORT_DONE, "Done")
-        SettingsSection.DEFAULT_EMULATORS -> defaultEmulatorRows()
-        SettingsSection.BUTTON_LAYOUT -> buttonLayoutRows()
-        SettingsSection.SHORTCUTS -> shortcutRows()
-        SettingsSection.SYSTEM_BUTTONS -> systemButtonRows()
-        SettingsSection.APPEARANCE -> listOf<SettingsRow?>(
-            SettingsRow(SettingsKind.PAD_SKIN, "Pad skin", if (deps.settings.padSkin) "On" else "Off"),
-            // the skin's look: none to pick while the skin is Off (the full-screen overlay pad)
-            if (deps.settings.padSkin) SettingsRow(SettingsKind.PAD_THEME, "Pad theme", padThemeLabel(deps.settings.padTheme)) else null,
-            SettingsRow(SettingsKind.ACCENT, "Accent", deps.settings.accent.label),
-            SettingsRow(SettingsKind.SECONDARY_ACCENT, "Secondary accent", deps.settings.secondaryAccent.label),
-            // The options lists' text (Settings, Game Settings, the in-game menu): Large or Small.
-            SettingsRow(SettingsKind.TEXT_SIZE, "Text size", deps.settings.optionTextSize.label),
-            // the skin's buttons moved and resized per console (the bare overlay's too), its own page
-            SettingsRow(SettingsKind.BUTTON_LAYOUT, "Button layout", if (buttonLayoutCustom()) "Custom" else "Default"),
-            SettingsRow(SettingsKind.RESET_DEFAULTS, RESET_DEFAULTS_LABEL),
-        ).filterNotNull()
-        SettingsSection.MAIN_MENU -> layoutsRows()
-        SettingsSection.LAYOUT_HOME, SettingsSection.LAYOUT_GAMES_TAB, SettingsSection.LAYOUT_CONSOLES, SettingsSection.LAYOUT_COLLECTIONS, SettingsSection.LAYOUT_TOOLS ->
-            layoutTabRows(section.tab!!)
-        SettingsSection.LAYOUT_GAME_LISTS -> layoutGameListRows()
-        SettingsSection.LAYOUT_TITLE_HINTS -> layoutTitleHintRows()
-        SettingsSection.LAYOUT_SWITCHER -> listOf(SettingsRow(SettingsKind.SWITCHER_LAYOUT, "Layout", deps.settings.switcherLayout.label))
-        // The on-screen pad's press tick, then a core's rumble.
-        SettingsSection.CONTROLS -> listOf(
-            SettingsRow(SettingsKind.PAD_VIBRATION, "Pad vibration", deps.settings.padVibration.label),
-            SettingsRow(SettingsKind.GAME_RUMBLE, "Game rumble", deps.settings.gameRumble.label),
-            // Fast forward, rewind and reset buttons, its own page (Shortcuts).
-            SettingsRow(SettingsKind.SHORTCUTS, "Shortcuts"),
-            // Which of the pad's buttons are SELECT, START and MENU, its own page (System buttons).
-            SettingsRow(SettingsKind.SYSTEM_BUTTONS, "System buttons"),
-            SettingsRow(SettingsKind.RESET_DEFAULTS, RESET_DEFAULTS_LABEL),
-        )
-        SettingsSection.SYSTEM -> systemRows()
-        SettingsSection.KIDS -> kidsUi.kidsRows()
-    }
-
-    /**
-     * Settings -> System: its options as one group under the page's title (Player name, Pause when unfocused, Screen care, Use as home screen with
-     * a launcher, Debug log), then the About and Licenses groups.
-     */
-    /**
-     * The Cable Link rows on mGBA's Emulator Settings page ([EmulatorRows.hostsCableLink]): the input delay, for trying a
-     * game at a fixed one, its overlay, and the received-ROM cache. Only where Cable Link exists (the platform with a link
-     * ROM cache).
-     */
-    private fun cableLinkRows(): List<SettingsRow> = deps.linkRomCache?.let { cache ->
-        listOf(
-            SettingsRow(SettingsKind.CABLE_LINK_DELAY, "Input delay", cableLinkDelayLabel(deps.settings.cableLinkDelayPin)),
-            SettingsRow(SettingsKind.CABLE_LINK_DELAY_OVERLAY, "Delay overlay", if (deps.settings.cableLinkDelayOverlay) "On" else "Off"),
-            SettingsRow(SettingsKind.CLEAR_LINK_ROMS, "Clear link ROM cache", formatBytes(cache.sizeBytes())),
-        )
-    }.orEmpty()
-
-    private fun systemRows(): List<SettingsRow> = buildList {
-        add(SettingsRow(SettingsKind.PLAYER_NAME, "Player name", PlayerName.resolve(deps.settings.playerName, deps.deviceName())))
-        add(SettingsRow(SettingsKind.PAUSE_UNFOCUSED, "Pause when unfocused", if (deps.settings.pauseWhenUnfocused) "On" else "Off"))
-        add(SettingsRow(SettingsKind.SCREEN_CARE, "Screen care", if (deps.settings.screenCare) "On" else "Off"))
-        deps.launcher?.let { l -> add(SettingsRow(SettingsKind.HOME_SCREEN, "Use as home screen", if (l.isHome()) "On" else "Off")) }
-        if (deps.ownKeyboard) add(SettingsRow(SettingsKind.KEYBOARD, "Keyboard", keyboardLabel(deps.settings.androidKeyboard)))
-        // Logging for a bug report; off, only errors reach logcat.
-        add(SettingsRow(SettingsKind.DEBUG_LOG, "Debug log", if (deps.settings.debugLog) "On" else "Off"))
-        add(SettingsRow(SettingsKind.GAP, ""))
-        add(SettingsRow(SettingsKind.SECTION, "About"))
-        queryGpu()   // the page (or its preview) shows: the GPU row reads "…" until this lands
-        aboutRows(deps.appInfo, _gpu.value).forEach { (label, value) -> add(SettingsRow(SettingsKind.INFO, label, value)) }
-        add(SettingsRow(SettingsKind.COPY_INFO, "Copy device info"))
-        _updateLabel.value?.let { add(SettingsRow(SettingsKind.APP_UPDATE, it)) }
-        add(SettingsRow(SettingsKind.GAP, ""))
-        add(SettingsRow(SettingsKind.SECTION, "Licenses"))
-        ABOUT_LICENSES.forEach { add(SettingsRow(SettingsKind.TEXT, it)) }
-        add(SettingsRow(SettingsKind.LICENSES_LINK, "Full list of licenses", LICENSES_URL))
-    }
-
-    /** About's GPU name once its query answered ([UNKNOWN_INFO] on a failure); null before. */
-    private val _gpu = MutableStateFlow<String?>(null)
-    internal val gpu: StateFlow<String?> = _gpu.asStateFlow()   // the two-pane preview of About redraws when it lands
-    private var gpuJob: Job? = null
-
-    /**
-     * Asks [AppDeps.deviceGpu] once; the About page then re-reads its rows. Started lazily so a query that answers at
-     * once (no suspension) finds [gpuJob] already set and the rows it rebuilds do not ask again.
-     */
-    private fun queryGpu(): Job = gpuJob ?: scope.launch(start = CoroutineStart.LAZY) {
-        val name = tryOrNull { deps.deviceGpu() }
-        _gpu.value = name?.trim()?.ifEmpty { null } ?: UNKNOWN_INFO
-        if ((_screen.value as? Screen.Settings)?.section == SettingsSection.SYSTEM) settingsUi.refreshSettings()
-    }.also { gpuJob = it; it.start() }
 
     private val localRomFinder = LocalRomFinder(deps.source, deps.privateFiles)
 
@@ -4107,207 +2425,8 @@ class AppState(
         return withContext(deps.compute) { localRomFinder.find(hash, sizeBytes, games) }
     }
 
-    /** Copy device info: the About rows as text on the clipboard (after the GPU query, which is quick), then a notice. */
-    private fun copyDeviceInfo() {
-        scope.launch {
-            queryGpu().join()
-            deps.copyText(aboutCopyText(deps.appInfo, _gpu.value))
-            showNotice("Device info copied")
-        }
-    }
-
-    private fun cableLinkDelayLabel(frames: Int): String = when (frames) {
-        0 -> "Auto"
-        1 -> "1 frame"
-        else -> "$frames frames"
-    }
-
-    private fun bottomScreenLabel(b: BottomScreen): String = when (b) {
-        BottomScreen.AUTO -> "Auto"
-        BottomScreen.MAIN -> "Main screen"
-        BottomScreen.SECOND -> "Second screen"
-    }
-
-    private fun padThemeLabel(theme: PadTheme): String = when (theme) {
-        PadTheme.NX_CARBON -> "NX Carbon"
-        PadTheme.NX_ONYX -> "NX Onyx"
-        PadTheme.NX_PLASMA -> "NX Plasma"
-        PadTheme.NX_EMBER -> "NX Ember"
-        PadTheme.NX_VOLT -> "NX Volt"
-        PadTheme.NX_TIDE -> "NX Tide"
-        PadTheme.NX_OBSIDIAN -> "NX Obsidian"
-    }
-
-
-    /**
-     * The Library page, one list with no groups: the counts with Rescan, the home (its path; "Not available" while recorded
-     * offline, [offlineHomeSaid]), each extra ROM folder (its path, or its state while the in-memory index lists it
-     * offline) and Add ROM folder, All files access where the permission is declared (a sideloaded Android 11+ build) as a
-     * switch opening Android's page, Saves, Android games, and Unassigned and Hidden while they hold a game. From memory
-     * only, no SAF call. Extras reflect the last scan: one whose card was pulled since reads as fine until a rescan. "Not
-     * ready yet" (mounted but not listing, as the scan's notice says) only comes from a scan in this AppState
-     * ([lateMountHere]); a lateMount read from the stored index is from an earlier run, so it reads "Not available".
-     */
-    private fun libraryRows(): List<SettingsRow> = buildList {
-        val ix = libraryIndex.snapshot
-        // At the top: the games and consoles (a merged console counts once, as on the main menu), the last good scan
-        // under them, and the Rescan button on the right.
-        val consoles = systemsCache.filter { !it.unassigned }.map { it.displayName }.distinct().size
-        val counts = "${gamesLabel(systemsCache.sumOf { it.gameCount })} · ${if (consoles == 1) "1 console" else "$consoles consoles"}"
-        add(SettingsRow(SettingsKind.RESCAN, counts, ix?.scannedAt?.let { "Last scan: ${formatDateTime(it)}" }))
-        // One list, no groups: the home, the ROM folders added beside it, Add ROM folder, All files access, then Saves and
-        // the game lists.
-        val root = home()
-        val homeOffline = root != null && offlineHomeSaid == root
-        val homeText = when {
-            root == null -> "No home folder"
-            homeOffline -> "Not available"
-            else -> Sources.displayPath(root) ?: deps.source.displayName(root)
-        }
-        add(SettingsRow(SettingsKind.HOME, "Home folder", homeText, warning = homeOffline))
-        deps.settings.extraFolders.forEach {
-            val state = when {
-                ix == null || it.id !in ix.offline -> null
-                fileAccessOff(it.ref) -> "All files access off"
-                it.id in ix.lateMount && it.id in lateMountHere -> "Not ready yet"
-                else -> "Not available"
-            }
-            add(SettingsRow(SettingsKind.EXTRA, "ROM Folder: ${deps.source.displayName(it.ref)}", state ?: Sources.displayPath(it.ref) ?: "ROM folder", extra = it, warning = state != null))
-        }
-        add(SettingsRow(SettingsKind.ADD_EXTRA, "Add ROM folder"))
-        deps.allFilesAccess?.takeIf { it.declared }?.let { add(allFilesRow(it.granted(), root)) }
-        deps.micAccess?.takeIf { it.usable }?.let { add(SettingsRow(SettingsKind.MIC_ACCESS, "Microphone access", if (it.granted()) "On" else "Off")) }
-        add(SettingsRow(SettingsKind.SAVES, "Saves"))
-        if (deps.launcher != null) add(SettingsRow(SettingsKind.ANDROID_GAMES, "Android games", installedCache?.let { gamesCountLabel(androidGames(it).size) } ?: "…"))
-        unassignedSystem()?.let { add(SettingsRow(SettingsKind.UNASSIGNED, "Unassigned games", gamesLabel(it.gameCount))) }
-        if (hiddenPaths.isNotEmpty()) add(SettingsRow(SettingsKind.HIDDEN, "Hidden games", gamesLabel(hiddenPaths.size)))
-    }
-
-    /**
-     * The lines above a page's rows. Default emulators: what the choice is for (Library's counts are its first row). From
-     * memory only: no SAF call.
-     */
-    private fun settingsDetails(section: SettingsSection): List<String> = when (section) {
-        SettingsSection.DEFAULT_EMULATORS -> listOf("A game's own Emulator choice still wins. Saves and settings follow the tag.")
-        SettingsSection.IMPORT_RESULT -> importResult?.statesNote().orEmpty()   // wraps, unlike the one-line rows
-        else -> emptyList()
-    }
-
-    /** Emulators -> Default emulators, built from [systemsCache] (no SAF call): [defaultEmulatorRows]. */
-    private fun defaultEmulatorRows(): List<SettingsRow> = defaultEmulatorRows(systemsCache, deps.settings.defaultTags)
-
-    /**
-     * Settings' value row [row] as a [SettingValue]: every setting LEFT / RIGHT (NX Redux ITEM_CYCLE), A and the touch
-     * chooser step, in one table, so each is written once. A change republishes the page (App re-reads the theme,
-     * accent, scale and pad with it); an arm with more to do says so in its `after`. Null for a row that is not a value
-     * row, or has nothing to step (a console of one tag, a row without its tab, shelf or hint). Two-value rows flip on
-     * every press. Onboarding's value rows step the same entries through a bare row of their kind.
-     */
-    private fun settingValue(row: SettingsRow): SettingValue<*>? {
-        val s = deps.settings
-        val republish: (Any?) -> Unit = { settingsUi.refreshSettings() }
-        fun <T> cycle(values: List<T>, current: T, label: ((T) -> String)? = null, after: (T) -> Unit = republish, set: (T) -> Unit) =
-            SettingValue(values, current, set, label, after = after)
-        // Off / On, or Hide / Show for a row that shows or hides something (Layouts'): the touch row's switch reads either.
-        fun flip(on: Boolean, show: Boolean = false, after: (Boolean) -> Unit = republish, set: (Boolean) -> Unit) =
-            cycle(listOf(false, true), on, { if (show) (if (it) "Show" else "Hide") else (if (it) "On" else "Off") }, after = after, set = set)
-        return when (row.kind) {
-            // Appearance: the pad theme, the accent presets, Auto and the presets, Large / Small.
-            SettingsKind.PAD_SKIN -> flip(s.padSkin) { s.padSkin = it }
-            SettingsKind.PAD_THEME -> cycle(PadTheme.entries, s.padTheme, ::padThemeLabel) { s.padTheme = it }
-            SettingsKind.ACCENT -> cycle(AccentPreset.entries, s.accent, { it.label }) { s.accent = it }
-            SettingsKind.SECONDARY_ACCENT -> cycle(SecondaryAccent.entries, s.secondaryAccent, { it.label }) { s.secondaryAccent = it }
-            SettingsKind.TEXT_SIZE -> cycle(OptionTextSize.entries, s.optionTextSize, { it.label }) { s.optionTextSize = it }
-            // Layouts. A main menu tab cycles List, Grid, Carousel and Minimal ([MenuStyles.MAIN_MENU_STYLES]; Backdrop is a
-            // game-list style only), Home rebuilt in its new one.
-            SettingsKind.MENU_STYLE -> row.category?.let { c ->
-                cycle(MenuStyles.MAIN_MENU_STYLES, MenuStyles.styleOf(s.menuStyles, c), ::menuStyleLabel, after = {
-                    if (c == MenuCategory.HOME) rebuildHomeTab()
-                    settingsUi.refreshSettings()
-                }) { s.menuStyles = s.menuStyles + (c to it) }
-            }
-            // Two screens: from the style drawn, never through Backdrop; the saved one changes only when stepped.
-            SettingsKind.GAME_LIST_STYLE -> cycle(MenuStyles.gameListStyles(_dualMenu.value), gameListLayout().first, ::menuStyleLabel) { s.gameListStyle = it }
-            SettingsKind.MENU_ORIENTATION -> row.category?.let { c ->
-                cycle(MenuOrientation.entries, MenuStyles.orientationOf(s.menuOrientations, c), ::orientationLabel) { s.menuOrientations = s.menuOrientations + (c to it) }
-            }
-            SettingsKind.GAME_LIST_ORIENTATION -> if (_dualMenu.value) null else cycle(MenuOrientation.entries, s.gameListOrientation, ::orientationLabel) { s.gameListOrientation = it }
-            SettingsKind.GAME_LIST_VERTICAL_ALIGNMENT -> cycle(VerticalListAlignment.entries, s.gameListVerticalAlignment, ::verticalAlignmentLabel) { s.gameListVerticalAlignment = it }
-            SettingsKind.CONTROLLER_ART -> cycle(ConsoleArt.entries, s.consoleArt, { it.label }) { s.consoleArt = it }   // Controller, Background, None
-            SettingsKind.LIST_ART -> cycle(GameListArt.entries, s.gameListArt, { it.label }) { s.gameListArt = it }
-            SettingsKind.BACKDROP_ART -> cycle(BackdropArt.entries, s.backdropArt, { it.label }) { s.backdropArt = it }
-            SettingsKind.SWITCHER_LAYOUT -> cycle(SwitcherLayout.entries, s.switcherLayout, { it.label }) { s.switcherLayout = it }   // Full screen / List
-            SettingsKind.TAB_SHOWN -> row.category?.let { c ->
-                flip(tabSetting(c), show = true) { on ->
-                    when (c) {
-                        MenuCategory.HOME -> s.showHomeTab = on
-                        MenuCategory.GAMES -> s.showGamesTab = on
-                        MenuCategory.CONSOLES -> s.showConsolesTab = on
-                        MenuCategory.COLLECTIONS -> s.showCollectionsTab = on
-                        MenuCategory.TOOLS -> s.showToolsTab = on
-                        MenuCategory.APPS -> Unit   // Kids Mode's: no Layouts row
-                    }
-                }
-            }
-            // New shelf / Not started shelf: Home is rebuilt without (or with) it. Pick up again has no setting.
-            SettingsKind.SHELF_SHOWN -> row.shelf?.let { shelf ->
-                flip(shelfShown(shelf), show = true, after = { rebuildHomeTab(); settingsUi.refreshSettings() }) { on ->
-                    when (shelf) {
-                        HomeShelf.NEW -> s.showNewShelf = on
-                        HomeShelf.NOT_STARTED -> s.showNotStartedShelf = on
-                        HomeShelf.MOST_PLAYED -> s.showMostPlayedShelf = on
-                        HomeShelf.PICK_UP -> Unit
-                    }
-                }
-            }
-            // Netplay hint: the Show / Hide of Y's hint (Recent and Search are always icons).
-            SettingsKind.HINT_SHOWN -> if (row.hint == NxButton.Y) flip(s.showNetplayHint, show = true) { s.showNetplayHint = it } else null
-            SettingsKind.PAGE_TITLE -> flip(s.menuPageTitle, show = true, after = { settingsUi.refreshSettings() }) { s.menuPageTitle = it }
-            SettingsKind.BUTTON_HINTS -> flip(s.menuButtonHints, show = true) { s.menuButtonHints = it }
-            SettingsKind.EXTRA_INFO -> flip(s.menuExtraInfo, show = true) { s.menuExtraInfo = it }
-            SettingsKind.GAME_INFO -> cycle(listOf(false, true), s.menuInfoAchievements, ::gameInfoLabel) { s.menuInfoAchievements = it }
-            SettingsKind.HOME_STATS -> flip(s.menuHomeStats, show = true) { s.menuHomeStats = it }   // Home's board follows through its frame
-            SettingsKind.LAYOUT_OPTIONS -> flip(s.gameListLayoutOptions, show = true) { s.gameListLayoutOptions = it }   // a game list's icons
-            SettingsKind.ACHIEVEMENTS_PANEL -> flip(s.gameListAchievementsPanel, show = true) { s.gameListAchievementsPanel = it }   // X's hint
-            // Controls: Off, Light, Medium and Strong; Game rumble previews the new level. The menu pad: the shell follows.
-            SettingsKind.PAD_VIBRATION -> cycle(PadVibration.entries, s.padVibration, { it.label }) { s.padVibration = it }
-            SettingsKind.GAME_RUMBLE -> cycle(GameRumble.entries, s.gameRumble, { it.label }, after = { settingsUi.refreshSettings(); deps.rumblePreview(it) }) { s.gameRumble = it }
-            // A touch button: None, then every action a touch button can do ([ShortcutAction.touch]).
-            SettingsKind.SHORTCUT_TOUCH -> row.touchSlot?.let { slot ->
-                cycle(listOf<ShortcutAction?>(null) + ShortcutAction.entries.filter { it.touch }, shortcutSet().touch[slot], { it?.label ?: "None" }) { setTouch(slot, it) }
-            }
-            SettingsKind.BUTTON_LAYOUT_CONSOLE -> cycle(buttonLayoutConsoles, buttonLayoutConsole(), { it.displayName }) { buttonLayoutConsole = it }
-            SettingsKind.BUTTON_LAYOUT_WII_PAD -> cycle(wiiPads, buttonLayoutWiiPad, ::wiiPadLabel) { buttonLayoutWiiPad = it }
-            SettingsKind.BUTTON_LAYOUT_N3DS_PAD -> cycle(listOf(false, true), buttonLayoutN3dsNew, ::n3dsPadLabel) { buttonLayoutN3dsNew = it }
-            // Emulators, Saves (the handheld's formats in its order), Second screen and Developer.
-            SettingsKind.PAUSE_UNFOCUSED -> flip(s.pauseWhenUnfocused) { s.pauseWhenUnfocused = it }
-            SettingsKind.SCREEN_CARE -> flip(s.screenCare) { s.screenCare = it }
-            SettingsKind.SAVE_FORMAT -> cycle(SaveFormat.entries, s.saveFormat, { it.label }) { s.saveFormat = it }
-            SettingsKind.STATE_FORMAT -> cycle(StateFormat.entries, s.stateFormat, { it.label }) { s.stateFormat = it }
-            SettingsKind.EXTRACTED_NAME -> flip(s.useExtractedFileName) { s.useExtractedFileName = it }
-            // A console's default emulator steps through its tags (leaving Default emulators rescans); one tag: nothing to pick.
-            SettingsKind.DEFAULT_TAG -> row.consoleId?.let { id -> CoreRegistry.consoles.firstOrNull { it.id == id } }?.takeIf { it.tags.size > 1 }?.let { console ->
-                cycle(console.tags, console.defaultTagFor(s.defaultTags[console.id]), CoreRegistry::emulatorLabel) { s.defaultTags = s.defaultTags + (console.id to it) }
-            }
-            SettingsKind.SECOND_SCREEN_ENABLE -> flip(s.secondScreen) { s.secondScreen = it }
-            SettingsKind.BOTTOM_SCREEN -> cycle(BottomScreen.entries, s.bottomScreen, ::bottomScreenLabel) { s.bottomScreen = it }   // Auto, Main screen, Second screen
-            SettingsKind.DEBUG_LOG -> flip(s.debugLog) { s.debugLog = it }
-            SettingsKind.CABLE_LINK_DELAY -> cycle((0..NetplayCores.CABLE_LINK_DELAY_MAX).toList(), s.cableLinkDelayPin.coerceIn(0, NetplayCores.CABLE_LINK_DELAY_MAX), ::cableLinkDelayLabel) { s.cableLinkDelayPin = it }
-            SettingsKind.CABLE_LINK_DELAY_OVERLAY -> flip(s.cableLinkDelayOverlay) { s.cableLinkDelayOverlay = it }
-            SettingsKind.KEYBOARD -> cycle(listOf(false, true), s.androidKeyboard, ::keyboardLabel) { s.androidKeyboard = it }
-            // Kids Mode On / Off: the first switch-on runs setup (another screen), so the page is republished only if still up.
-            SettingsKind.KIDS_ENABLE -> kids?.let {
-                flip(s.kidsEnabled, after = { if ((_screen.value as? Screen.Settings)?.section == SettingsSection.KIDS) settingsUi.refreshSettings() }) { on -> kidsUi.kidsSetEnabled(on) }
-            }
-            else -> null
-        }
-    }
-
     /** A save transfer's report: its progress notice stays until the result (done) replaces it. */
     private fun showTransferNotice(text: String, done: Boolean) = showNotice(text, sticky = !done)
-
-    /** The last finished import's summary, which the Import results page lists. */
-    private var importResult: ImportSummary? = null
 
     /**
      * Import saves from [source]: [progress] and [done] by default are Settings' (a sticky progress notice, then
@@ -4326,7 +2445,7 @@ class AppState(
     private fun settingsImportDone(result: ImportResult) {
         when (result) {
             is ImportResult.Done -> {
-                importResult = result.summary
+                settingsContent.importResult = result.summary
                 if ((_screen.value as? Screen.Settings)?.section != SettingsSection.IMPORT_SAVES) return showNotice(result.summary.lines().joinToString("; "))
                 dismissNotice()
                 settingsUi.forgetSection(SettingsSection.IMPORT_RESULT)
@@ -4336,29 +2455,25 @@ class AppState(
         }
     }
 
-    /**
-     * Onboarding's import from [source]: its progress and then its result show on the step itself (re-drawn), never a
-     * Settings page or sticky notice. Ended after the step was left, the result is a notice.
-     */
-    private fun onboardingImport(source: ImportSource) {
-        fun onStep() = onboarding.step == OnboardingStep.IMPORT_SAVES && (_screen.value as? Screen.Onboarding)?.step == OnboardingStep.IMPORT_SAVES
-        onboardingImported = null
-        importSaves(source, progress = { text ->
-            onboardingImporting = text
-            if (onStep()) showOnboarding(_selection.value.index)
-        }) { result ->
-            onboardingImporting = null
-            when {
-                onStep() -> {
-                    onboardingImported = result
-                    // A summary lands on Continue; a message keeps the row picked.
-                    showOnboarding(if (result is ImportResult.Done) result.summary.skipped.size else _selection.value.index)
-                }
-                result is ImportResult.Done -> showNotice(result.summary.lines().joinToString("; "))
-                result is ImportResult.Message -> showNotice(result.text)
+    /** Import BIOS from [source]: a sticky progress notice, then the results page (or a notice). */
+    private fun importBios(source: com.nxredux.mobile.bios.BiosSource) =
+        deps.biosIntake?.import(source, progress = { showNotice(it, sticky = true) }, done = ::biosImportDone)
+
+    private fun biosImportDone(result: com.nxredux.mobile.bios.BiosIntakeResult) {
+        when (result) {
+            is com.nxredux.mobile.bios.BiosIntakeResult.Done -> {
+                topScreen.forgetBios()
+                if ((_screen.value as? Screen.Settings)?.section != SettingsSection.IMPORT_BIOS) return showNotice(result.summary.headline())
+                dismissNotice()
+                _screen.value = Screen.BiosImportResult(result.summary)
+                _selection.value = ListSelection(0, 1)   // Done, the page's one button
             }
+            is com.nxredux.mobile.bios.BiosIntakeResult.Message -> showNotice(result.text)
         }
     }
+
+    /** Done (A, a tap or B) on the BIOS import's results: back to Library on its Import BIOS row. */
+    fun biosResultDone() = settingsUi.showSettingsOn(SettingsSection.LIBRARY, SettingsKind.IMPORT_BIOS)
 
     /**
      * Rescan (Library's counts row): a full scan under the loading overlay (Settings stays underneath), then [section] again on the
@@ -4384,139 +2499,10 @@ class AppState(
     }
 
     /**
-     * Layouts' rows in the handheld's order (settings.c): each tab's Show/Hide row, then while it shows its layout, Home's
-     * shelves and stats, its orientation (Carousel only; Home has none) and Consoles' controller (List only); then the
-     * game lists' layout, orientation (Carousel, Backdrop), alignment (vertical), List art (List), Backdrop art
-     * (Backdrop), Layout options and Achievements panel; then Game Switcher layout, Extra info, Page title, Button hints,
-     * the hints' Show/Hide (while Button hints shows) and Reset. A row that comes or goes is always below the row that
-     * changes it, so [refreshSettings]' clamp keeps the highlight on the changed row.
-     */
-    /**
-     * Layouts: a row per group (its page: a tab's, the game lists', the page title's and hints', the Game Switcher's), each
-     * with what it is now (a shown tab its layout, a hidden one Hidden), then Extra info and Reset to defaults.
-     */
-    private fun layoutsRows(): List<SettingsRow> {
-        val s = deps.settings
-        val tabs = MenuCategory.entries.filter { it != MenuCategory.APPS }.map { c ->   // Kids Mode's Apps: no Layouts group
-            val group = SettingsSection.entries.first { it.tab == c }
-            SettingsRow(group.opener!!, group.label, if (!tabSetting(c)) "Hidden"
-                else menuStyleLabel(if (c == MenuCategory.GAMES) gameListLayout().first else MenuStyles.styleOf(s.menuStyles, c)))   // Games follows the game lists
-        }
-        val chrome = when {
-            s.menuPageTitle && s.menuButtonHints -> "Show"
-            s.menuPageTitle -> "Title only"
-            s.menuButtonHints -> "Hints only"
-            else -> "Hide"
-        }
-        return tabs + listOf(
-            SettingsRow(SettingsKind.LAYOUT_GAME_LISTS, SettingsSection.LAYOUT_GAME_LISTS.label, menuStyleLabel(gameListLayout().first)),
-            SettingsRow(SettingsKind.LAYOUT_TITLE_HINTS, SettingsSection.LAYOUT_TITLE_HINTS.label, chrome),
-            SettingsRow(SettingsKind.LAYOUT_SWITCHER, SettingsSection.LAYOUT_SWITCHER.label, s.switcherLayout.label),
-            SettingsRow(SettingsKind.EXTRA_INFO, "Extra info", if (s.menuExtraInfo) "Show" else "Hide"),
-            SettingsRow(SettingsKind.GAME_INFO, "Game info", gameInfoLabel(s.menuInfoAchievements)),
-            SettingsRow(SettingsKind.RESET_DEFAULTS, RESET_DEFAULTS_LABEL),
-        )
-    }
-
-    /**
-     * A tab's group: its Show / Hide (Visible), and while shown its layout and the options that layout has. On a group's
-     * page the rows don't repeat its name (the page title says it): Visible, Layout, Orientation, Background, Stats. Home's layout row comes
-     * last, right above the picture it changes (after its shelves and stats); the other tabs' follows the Show / Hide.
-     */
-    private fun layoutTabRows(c: MenuCategory): List<SettingsRow> {
-        val s = deps.settings
-        fun shown(on: Boolean) = if (on) "Show" else "Hide"
-        val on = tabSetting(c)
-        // The Games tab's layout is the game lists' (Layouts -> Game lists): its page has the one row.
-        if (c == MenuCategory.GAMES) return listOf(SettingsRow(SettingsKind.TAB_SHOWN, "Visible", shown(on), category = c))
-        val style = MenuStyles.styleOf(s.menuStyles, c)
-        val home = c == MenuCategory.HOME
-        val layout = SettingsRow(SettingsKind.MENU_STYLE, "Layout", menuStyleLabel(style), category = c).takeIf { on }
-        return listOfNotNull(
-            SettingsRow(SettingsKind.TAB_SHOWN, "Visible", shown(on), category = c),
-            layout.takeIf { !home },
-            // Home's New and Not started shelves, Show / Hide, while the Home tab shows.
-            SettingsRow(SettingsKind.SHELF_SHOWN, "New shelf", shown(s.showNewShelf), shelf = HomeShelf.NEW).takeIf { on && c == MenuCategory.HOME },
-            SettingsRow(SettingsKind.SHELF_SHOWN, "Not started shelf", shown(s.showNotStartedShelf), shelf = HomeShelf.NOT_STARTED).takeIf { on && c == MenuCategory.HOME },
-            SettingsRow(SettingsKind.SHELF_SHOWN, "Most played shelf", shown(s.showMostPlayedShelf), shelf = HomeShelf.MOST_PLAYED).takeIf { on && c == MenuCategory.HOME },
-            // Home's stats strip (its cards' info follows Extra info).
-            SettingsRow(SettingsKind.HOME_STATS, "Stats", shown(s.menuHomeStats)).takeIf { on && c == MenuCategory.HOME },
-            SettingsRow(SettingsKind.MENU_ORIENTATION, "Orientation", orientationLabel(MenuStyles.orientationOf(s.menuOrientations, c)), category = c)
-                .takeIf { on && c != MenuCategory.HOME && style == MenuStyle.CAROUSEL },
-            SettingsRow(SettingsKind.CONTROLLER_ART, "Background", s.consoleArt.label, category = c)
-                .takeIf { on && c == MenuCategory.CONSOLES && style != MenuStyle.GRID && style != MenuStyle.MINIMAL },   // List and Carousel; the Grid has no controllers, Minimal no art
-            layout.takeIf { home },
-        )
-    }
-
-    /**
-     * The game lists' group: the options their layout has, the Layout icon and the achievements panel, a vertical list's
-     * alignment, then the layout and its orientation last, right above the picture they change.
-     */
-    private fun layoutGameListRows(): List<SettingsRow> {
-        val s = deps.settings
-        fun shown(on: Boolean) = if (on) "Show" else "Hide"
-        val (list, orientation) = gameListLayout()
-        return listOfNotNull(
-            SettingsRow(SettingsKind.LIST_ART, "List art", s.gameListArt.label).takeIf { list == MenuStyle.LIST },
-            // Every layout: it also picks the game panel's header and the Game Switcher's box.
-            SettingsRow(SettingsKind.BACKDROP_ART, "Backdrop art", s.backdropArt.label),
-            // A game list's Layout icon (hidden: Layouts only), and its trophy icon and X hint (hidden: X and the game's menu).
-            SettingsRow(SettingsKind.LAYOUT_OPTIONS, "Layout options", shown(s.gameListLayoutOptions)),
-            SettingsRow(SettingsKind.ACHIEVEMENTS_PANEL, "Achievements panel", shown(s.gameListAchievementsPanel)).takeIf { deps.achievements != null },
-            // A vertical list's alignment: with the layout rows, just above them.
-            SettingsRow(SettingsKind.GAME_LIST_VERTICAL_ALIGNMENT, "Alignment", verticalAlignmentLabel(s.gameListVerticalAlignment))
-                .takeIf { MenuStyles.effectiveOrientation(list, orientation) == MenuOrientation.VERTICAL },
-            SettingsRow(SettingsKind.GAME_LIST_STYLE, "Layout", menuStyleLabel(list)),
-            SettingsRow(SettingsKind.GAME_LIST_ORIENTATION, "Orientation", orientationLabel(orientation)).takeIf { gameListTurns(list) },
-        )
-    }
-
-    /** The page title's and hints' group: the two, and each hint on its own while the bar shows. */
-    private fun layoutTitleHintRows(): List<SettingsRow> {
-        val s = deps.settings
-        fun shown(on: Boolean) = if (on) "Show" else "Hide"
-        return listOfNotNull(
-            SettingsRow(SettingsKind.PAGE_TITLE, "Page title", shown(s.menuPageTitle)),
-            SettingsRow(SettingsKind.BUTTON_HINTS, "Button hints", shown(s.menuButtonHints)),
-            // Each hint on its own, while the bar shows (hidden: Netplay in the context menu, Recent and Search as icons).
-            SettingsRow(SettingsKind.HINT_SHOWN, "Netplay hint", shown(s.showNetplayHint), hint = NxButton.Y).takeIf { s.menuButtonHints && netplay != null },
-        )
-    }
-
-    /** The game lists' picture: their layout, stood on end (a Carousel or Backdrop) on the left or the right. */
-    private fun gameListsShot(): LayoutShot.Games {
-        val (style, orientation) = gameListLayout()
-        val vertical = MenuStyles.effectiveOrientation(style, orientation) == MenuOrientation.VERTICAL && MenuStyles.hasOrientation(style)
-        return LayoutShot.Games(style, vertical, right = vertical && deps.settings.gameListVerticalAlignment == VerticalListAlignment.RIGHT)
-    }
-
-    /** A tab picture's Consoles background: the setting's on Consoles, the default on the other tabs (they have none). */
-    private fun consoleShotArt(c: MenuCategory): ConsoleArt = if (c == MenuCategory.CONSOLES) deps.settings.consoleArt else ConsoleArt.CONTROLLER
-
-    /** A Layouts group's picture of its values: a shown tab's layout, the game lists', the title and hints, the Game Switcher's; else none. */
-    private fun layoutShot(section: SettingsSection): LayoutShot? {
-        val s = deps.settings
-        section.tab?.let { c ->
-            if (!tabSetting(c)) return null
-            if (c == MenuCategory.GAMES) return gameListsShot()   // follows Layouts -> Game lists, never menuStyles
-            val style = MenuStyles.styleOf(s.menuStyles, c)
-            val vertical = style == MenuStyle.CAROUSEL && c != MenuCategory.HOME && MenuStyles.orientationOf(s.menuOrientations, c) == MenuOrientation.VERTICAL
-            return LayoutShot.Tab(c, style, stats = c != MenuCategory.HOME || s.menuHomeStats, vertical = vertical, art = consoleShotArt(c))
-        }
-        return when (section) {
-            SettingsSection.LAYOUT_GAME_LISTS -> gameListsShot()
-            SettingsSection.LAYOUT_TITLE_HINTS -> LayoutShot.Chrome(s.menuPageTitle, s.menuButtonHints)
-            SettingsSection.LAYOUT_SWITCHER -> LayoutShot.Switcher(s.switcherLayout)
-            else -> null
-        }
-    }
-
-    /**
      * The tabs Layouts shows ([tabSetting]). Tools too: a hidden Tools (and Settings in it) stays reachable from MENU and
      * a long press ([hiddenTabs]).
      */
-    private fun shownTabs(): Set<MenuCategory> = MenuCategory.entries.filterTo(HashSet()) { tabSetting(it) }
+    private fun shownTabs(): Set<MenuCategory> = MenuCategory.entries.filterTo(HashSet()) { settingsContent.tabSetting(it) }
 
     /**
      * The tabs Layouts hides that have content ([hiddenMenuTabs]): MENU's and the long press's items; none over a pushed
@@ -4524,24 +2510,6 @@ class AppState(
      */
     internal fun hiddenTabs(): List<MenuCategory> =
         if (_screen.value.menuPushed) emptyList() else hiddenMenuTabs(kidsMenuTabs, menuTabs)
-
-    /** Layouts → [c] tab as stored: Show (true) or Hide. */
-    private fun tabSetting(c: MenuCategory): Boolean = when (c) {
-        MenuCategory.HOME -> deps.settings.showHomeTab
-        MenuCategory.GAMES -> deps.settings.showGamesTab
-        MenuCategory.CONSOLES -> deps.settings.showConsolesTab
-        MenuCategory.COLLECTIONS -> deps.settings.showCollectionsTab
-        MenuCategory.TOOLS -> deps.settings.showToolsTab
-        MenuCategory.APPS -> true   // shown whenever Kids Mode puts it in ([KidsScreensController.withKidsApps])
-    }
-
-    /** Whether Layouts shows [shelf] on Home: New and Not started by their settings; Pick up again always. */
-    private fun shelfShown(shelf: HomeShelf): Boolean = when (shelf) {
-        HomeShelf.NEW -> deps.settings.showNewShelf
-        HomeShelf.NOT_STARTED -> deps.settings.showNotStartedShelf
-        HomeShelf.MOST_PLAYED -> deps.settings.showMostPlayedShelf
-        HomeShelf.PICK_UP -> true
-    }
 
     /**
      * B on a sub-page: its section on the row that opened it. Leaving Default emulators (under Emulators) with a changed
@@ -4569,7 +2537,7 @@ class AppState(
             tryQuietly {
                 scanIndex(root, IndexRefresh(counts = true))
                 libraryDirty = false   // the index is this re-index's
-                refreshCollectionNames()
+                collectionCounter.refreshCollectionNames()
                 refreshMainRows()   // the consoles and the collection counts follow the new index, names changed or not
                 // Still on a Library page: the rows were built before this scan, so refresh them (selection clamped).
                 (_screen.value as? Screen.Settings)?.takeIf { it.section.library }?.let { s ->
@@ -4583,7 +2551,7 @@ class AppState(
 
     /** The console's next default tag ([step] -1: the previous one, for LEFT). Leaving Default emulators rescans. */
     fun cycleDefaultTag(consoleId: String, step: Int = 1) {
-        settingValue(SettingsRow(SettingsKind.DEFAULT_TAG, "", consoleId = consoleId))?.change(step)   // one tag (or none): nothing to pick
+        settingsContent.settingValue(SettingsRow(SettingsKind.DEFAULT_TAG, "", consoleId = consoleId))?.change(step)   // one tag (or none): nothing to pick
     }
 
     /** Settings sections and the section menu: UP/DOWN move, A opens or acts, B goes back. */
@@ -4611,6 +2579,14 @@ class AppState(
             }
             return
         }
+        (s as? Screen.Settings)?.confirmDriver?.let { driver ->
+            when (button) {
+                NxButton.A -> settingsContent.removeGpuDriver(driver)
+                NxButton.B -> _screen.value = s.copy(confirmDriver = null)
+                else -> Unit
+            }
+            return
+        }
         (s as? Screen.Settings)?.confirmRemove?.let { extra ->
             when (button) {
                 NxButton.A -> removeExtra(extra)
@@ -4626,16 +2602,16 @@ class AppState(
             NxButton.A -> openSelected()
             NxButton.B -> back()
             NxButton.X -> (s as? Screen.Settings)?.rows?.getOrNull(_selection.value.index)?.let { row ->
-                if (row.kind == SettingsKind.SHORTCUT_BIND) row.shortcut?.let { setShortcut(it, null) }   // back to None
+                if (row.kind == SettingsKind.SHORTCUT_BIND) row.shortcut?.let { controlBindings.setShortcut(it, null) }   // back to None
                 else if (settingsUi.selectedSettingShowsInfo()) showSettingInfo(_selection.value.index)
             }
-            // A value row being changed ([onRowEditButton]) steps on LEFT/RIGHT; a default emulator steps through its
-            // console's tags. Otherwise LEFT / RIGHT go between pages there.
+            // A value row being changed ([onRowEditButton], after A) steps on LEFT/RIGHT; a default emulator steps through
+            // its console's tags.
             NxButton.LEFT, NxButton.RIGHT -> if (s is Screen.SettingsMenu) {
                 // Two panes: RIGHT on a category moves into its page, like A. One page has no pane to go to.
                 if (settingsUi.settingsSplit && button == NxButton.RIGHT) openSelected()
             } else (s as? Screen.Settings)?.rows?.getOrNull(_selection.value.index)?.let { row ->
-                if (row.enabled) settingValue(row)?.change(if (button == NxButton.LEFT) -1 else 1)   // a dimmed row (one tag) stays
+                if (row.enabled) settingsContent.settingValue(row)?.change(if (button == NxButton.LEFT) -1 else 1)   // a dimmed row (one tag) stays
             }
             else -> Unit
         }
@@ -4786,7 +2762,7 @@ class AppState(
      */
     fun openSearch() {
         when (val s = _screen.value) {
-            is Screen.Systems -> if (s.menu == null && s.search == null && canSearch) _screen.value = s.copy(search = lastSearch)
+            is Screen.Systems -> if (s.menu == null && s.search == null && s.layoutMenu == null && canSearch) _screen.value = s.copy(search = lastSearch)
             is Screen.Games -> if (s.isTab && s.menu == null && s.search == null && s.layoutMenu == null && canSearch) _screen.value = s.copy(search = lastSearch)
             else -> Unit
         }
@@ -4876,7 +2852,7 @@ class AppState(
             val entries = entriesFor(source.parent)
             if (_screen.value !== here) return@launch
             if (entries.isEmpty()) { leaveList(source.parent); return@launch }
-            val at = picked?.let { p -> entries.indexOfFirst { it.game.path == p } }?.takeIf { it >= 0 } ?: listSearchFrom
+            val at = entries.indexOfPath(picked) ?: listSearchFrom
             showList(freshSource(source.parent), entries, at)
         }
     }
@@ -4886,13 +2862,26 @@ class AppState(
         (source as? ListSource.Console)?.let { c -> consoleGroup(c.system)?.let { ListSource.Console(it) } } ?: source
 
     /**
-     * The Layout icon: opens the dropdown on the layout in use, or closes it when open; on the Games tab too, whose
-     * layout is the game lists' (while it is open the tab's own keys are the dropdown's: [onPageButton], [tabRowOf]).
+     * The Layout icon: opens the dropdown on the layout in use, or closes it when open; on every main menu tab (whose
+     * layout is that tab's own, or the game lists' on Games) and every game list. While it is open the screen's own
+     * keys are the dropdown's ([onPageButton], [tabRowOf]).
      */
     fun toggleLayoutMenu() {
-        val s = _screen.value as? Screen.Games ?: return
-        if (s.menu != null || s.search != null || !deps.settings.gameListLayoutOptions) return
-        _screen.value = s.copy(layoutMenu = if (s.layoutMenu != null) null else GameListLayouts.indexOf(deps.settings.gameListStyle, deps.settings.gameListOrientation, deps.settings.gameListVerticalAlignment, _dualMenu.value))
+        if (!deps.settings.gameListLayoutOptions) return
+        when (val s = _screen.value) {
+            is Screen.Games -> {
+                if (s.menu != null || s.search != null) return
+                _screen.value = s.copy(layoutMenu = if (s.layoutMenu != null) null else GameListLayouts.indexOf(deps.settings.gameListStyle, deps.settings.gameListOrientation, deps.settings.gameListVerticalAlignment, _dualMenu.value))
+            }
+            is Screen.Systems -> {
+                val category = s.category ?: return
+                if (s.menu != null || s.search != null || MenuTabLayouts.choices(category).isEmpty()) return
+                val style = MenuStyles.styleOf(deps.settings.menuStyles, category)
+                val orientation = MenuStyles.orientationOf(deps.settings.menuOrientations, category)
+                _screen.value = s.copy(layoutMenu = if (s.layoutMenu != null) null else MenuTabLayouts.indexOf(category, style, orientation))
+            }
+            else -> Unit
+        }
     }
 
     /** The Layout dropdown has the buttons: UP / DOWN move, A picks, B closes. */
@@ -4906,20 +2895,47 @@ class AppState(
         }
     }
 
-    /**
-     * [index]'s layout for every game list (Layouts → Game lists layout, its orientation for Carousel and Backdrop, and a
-     * vertical one's alignment); the dropdown closes.
-     */
-    fun pickLayout(index: Int) {
-        val s = _screen.value as? Screen.Games ?: return
-        val layout = GameListLayouts.choices(_dualMenu.value).getOrNull(index) ?: return
-        deps.settings.gameListStyle = layout.style
-        if (MenuStyles.hasOrientation(layout.style)) deps.settings.gameListOrientation = layout.orientation
-        layout.alignment?.let { deps.settings.gameListVerticalAlignment = it }
-        gridColumns = 0   // a Grid reports its own columns on its first layout
-        _screen.value = s.copy(layoutMenu = null)   // a new screen: the page redraws in the new style, on the same game
+    /** The main menu tab's Layout dropdown has the buttons: UP / DOWN move, A picks, B closes. */
+    private fun onLayoutMenuButton(s: Screen.Systems, at: Int, button: NxButton) {
+        val last = (s.category?.let(MenuTabLayouts::choices)?.lastIndex ?: -1).coerceAtLeast(0)
+        when (button) {
+            NxButton.UP -> _screen.value = s.copy(layoutMenu = (at - 1).coerceAtLeast(0))
+            NxButton.DOWN -> _screen.value = s.copy(layoutMenu = (at + 1).coerceAtMost(last))
+            NxButton.A -> pickLayout(at)
+            NxButton.B -> _screen.value = s.copy(layoutMenu = null)
+            else -> Unit
+        }
     }
 
+    /**
+     * [index]'s layout for every game list (Layouts → Game lists layout, its orientation for Carousel and Backdrop, and a
+     * vertical one's alignment) or for the current main menu tab (Layouts → that tab's layout and orientation); the
+     * dropdown closes.
+     */
+    fun pickLayout(index: Int) {
+        when (val s = _screen.value) {
+            is Screen.Games -> {
+                val layout = GameListLayouts.choices(_dualMenu.value).getOrNull(index) ?: return
+                deps.settings.gameListStyle = layout.style
+                if (MenuStyles.hasOrientation(layout.style)) deps.settings.gameListOrientation = layout.orientation
+                layout.alignment?.let { deps.settings.gameListVerticalAlignment = it }
+                gridColumns = 0   // a Grid reports its own columns on its first layout
+                _screen.value = s.copy(layoutMenu = null)   // a new screen: the page redraws in the new style, on the same game
+            }
+            is Screen.Systems -> {
+                val category = s.category ?: return
+                val layout = MenuTabLayouts.choices(category).getOrNull(index) ?: return
+                deps.settings.menuStyles = deps.settings.menuStyles + (category to layout.style)
+                if (category != MenuCategory.HOME && MenuStyles.hasOrientation(layout.style)) {
+                    deps.settings.menuOrientations = deps.settings.menuOrientations + (category to layout.orientation)
+                }
+                gridColumns = 0   // a Grid reports its own columns on its first layout
+                _screen.value = s.copy(layoutMenu = null)   // a new screen: the page redraws in the new style
+                if (category == MenuCategory.HOME) rebuildHomeTab()
+            }
+            else -> Unit
+        }
+    }
 
     /**
      * B from the Unassigned or Hidden list: Settings -> Library on its [kind] row, else where the page was left (its last
@@ -4947,7 +2963,7 @@ class AppState(
                 val entries = entriesFor(s.source)
                 if (_screen.value !== s) return   // the user navigated while the source was read
                 if (entries.isEmpty()) { leaveList(s.source); return }
-                val index = select?.let { p -> entries.indexOfFirst { it.game.path == p } }?.takeIf { it >= 0 } ?: _selection.value.index
+                val index = entries.indexOfPath(select) ?: _selection.value.index
                 // A background refresh (a browsing art fetch landing) must not close what the user has open: actions
                 // that change the list close their menu before refreshing, so whatever is still open here stays.
                 _screen.value = Screen.Games(
@@ -4976,7 +2992,7 @@ class AppState(
         val m = menuScreen(s.menuTab ?: menuCategory)
         if (m !is Screen.Games) { showMenu(m); return }
         val kept = if (s.menu != null) m.copy(menu = keptMenu(s.menu, m.entries)) else m
-        val at = select?.let { p -> m.entries.indexOfFirst { it.game.path == p } }?.takeIf { it >= 0 } ?: keptRow(s, m)
+        val at = m.entries.indexOfPath(select) ?: keptRow(s, m)
         showMenu(kept, at)
         rememberMenuSelection()
     }
@@ -4990,6 +3006,9 @@ class AppState(
      * nothing came back. Home's stats are recomputed and its rows rebuilt (Continue's save may be new); that
      * rebuild uses app-private reads only (recents, pins, resume markers, tool pins, the in-memory index), never the tree.
      */
+    /** Play time moved outside the menu's own reads (a killed game's session closed): the screens read it again. */
+    fun playTimeChanged() = refreshGameInfo()
+
     fun onForeground() {
         kidsUi.kidsReturned()   // back from Usage access or Alarms & reminders: a setup step moves on once granted
         kidsUi.kidsHomeCheck()  // back from setup's home question: on once home
@@ -4997,6 +3016,7 @@ class AppState(
         checkArt(reuse = true)   // art deleted or added while away (only changed art folders are listed)
         if (!launches.minimalPending) launches.clearMinimalOpening()
         onLauncherChanged()   // back from Android's home settings or the role dialog: System re-reads its state
+        onRotationChanged()   // auto-rotate may have been switched meanwhile
         refreshInstalled()    // apps may have been installed or removed meanwhile
         refreshGameInfo()   // back from a game (or another app): its time and unlocks may have moved
         homeTab.refreshStatsIfAsked()   // Home's stats too (before the menu's first show, that show computes them)
@@ -5009,7 +3029,7 @@ class AppState(
         // The main menu: any tab, the Games tab too.
         val s = _screen.value.takeIf { it.isMainMenu } ?: run { scope.launch { refreshMainRows() }; switcher.reopenSwitcher(); return }
         if (s.contextMenu != null) { switcher.dropSwitcherReturn(); return }
-        if (!firstSetup) updaterOnMainMenu()   // back over the menu (from a game, or the install-permission screen)
+        if (!onboardingUi.firstSetup) updaterOnMainMenu()   // back over the menu (from a game, or the install-permission screen)
         scope.launch { refreshMainRows(); switcher.reopenSwitcher() }   // Continue's save (its resume frame) may be new since the rows were built
         val root = home() ?: return
         if (foregroundJob?.isActive == true) return   // a quick second onStart: the first check (or its scan) covers it
@@ -5055,7 +3075,7 @@ class AppState(
      */
     fun goHome() {
         // Onboarding (and its embedded Device Sync) stays put, as first setup does.
-        if (_screen.value is Screen.Onboarding || (_screen.value == Screen.DeviceSync && onboardingSync)) return
+        if (_screen.value is Screen.Onboarding || (_screen.value == Screen.DeviceSync && onboardingUi.onboardingSync)) return
         when (_screen.value) { Screen.Loading, is Screen.PermissionsStep, Screen.PickFolder, Screen.AddFirstExtra, is Screen.AndroidGamesStep, is Screen.FilePicker, is Screen.StorageUpgrade -> return; else -> Unit }
         switcher.cancelLoad()
         loader.cancel()
@@ -5122,11 +3142,11 @@ class AppState(
     private fun toolRows(): List<ToolRow> = (listOfNotNull(
         deps.achievements?.let { ToolRow(ToolKind.RETRO_ACHIEVEMENTS, "RetroAchievements", null) },
         deps.gameTime?.let { ToolRow(ToolKind.GAME_TIME, "Game Tracker", null) },
-        artworkScreens?.let { ToolRow(ToolKind.ARTWORK, "Artwork", null) },
+        artworkScreens?.let { ToolRow(ToolKind.ARTWORK, ToolKind.ARTWORK.toolName!!, null) },
         ToolRow(ToolKind.CHEAT_DB, "Cheats & Patches", null),
         deps.deviceSync?.let { ToolRow(ToolKind.DEVICE_SYNC, "Device Sync", null) },
-        deps.launcher?.let { ToolRow(ToolKind.APPS, "Apps", null) },
-    ) + appToolRows()).sortedBy { it.label.lowercase() } + ToolRow(ToolKind.SETTINGS, "Settings", null)
+        deps.launcher?.let { ToolRow(ToolKind.APPS, ToolKind.APPS.toolName!!, null) },
+    ) + appToolRows()).sortedBy { it.label.lowercase() } + ToolRow(ToolKind.SETTINGS, ToolKind.SETTINGS.toolName!!, null)
 
     /**
      * The Android apps the user added; one not installed is skipped (and kept, for a reinstall), and so is
@@ -5159,13 +3179,10 @@ class AppState(
 
     /** [row]'s tool opened (an app, [ToolKind.APP], launches). */
     private fun openTool(row: ToolRow) {
-        if (row.kind == ToolKind.KIDS_LOCK) return kidsUi.kidsLockNow()   // not a tool page: the tiles screen (or the menu, in a window)
-        openToolNow(row)
-    }
-
-    private fun openToolNow(row: ToolRow) {
-        // Kids Mode: no tool (Settings, Apps, an app, Device Sync …) but for a parent; the Apps tab's allowed apps open for the kid.
-        if (!kidsUi.kidsToolsAllowed && !(row.kind == ToolKind.APP && row.appId in deps.settings.kidsAllowedApps)) return
+        // Kids Mode: no tool (Settings, Apps, an app, Device Sync …) but for a parent; the Apps tab's allowed apps open
+        // for the kid, and the lock is not a tool page.
+        val kidsApp = row.kind == ToolKind.APP && row.appId in deps.settings.kidsAllowedApps
+        if (row.kind != ToolKind.KIDS_LOCK && !kidsApp && !kidsUi.kidsToolsAllowed) return
         when (row.kind) {
             ToolKind.RETRO_ACHIEVEMENTS -> if (deps.achievements != null) ra.showRetroAchievements()
             ToolKind.GAME_TIME -> gameTimeScreen?.open(onCancel = ::showTools)
@@ -5176,16 +3193,12 @@ class AppState(
                 _selection.value = ListSelection(0, cheatDbRows(c.state.value).size)
             }
             ToolKind.DEVICE_SYNC -> {
-                val c = deps.deviceSync ?: return
-                c.open()   // Ready on the cable, or the live page of a sync still running
-                _screen.value = Screen.DeviceSync
-                // Sync ROMs first where it is offered (the option above the links), as setup's sync step.
-                publishSyncSetup(if ((c.page.value as? DeviceSyncPage.Ready)?.romsAvailable == true) SyncFocus.ROMS else SyncFocus.LINK)
+                showDeviceSync(deps.deviceSync ?: return)
             }
             ToolKind.SETTINGS -> openSettingsMenu()
-            ToolKind.APPS -> openToolApps(AppPick.TOOLS)
+            ToolKind.APPS -> androidApps.openToolApps(AppPick.TOOLS)
             ToolKind.APP -> androidApps.openApp(row)
-            ToolKind.KIDS_LOCK -> kidsUi.kidsLockNow()
+            ToolKind.KIDS_LOCK -> kidsUi.kidsLockNow()   // the tiles screen (or the menu, in a window)
         }
     }
 
@@ -5193,52 +3206,27 @@ class AppState(
     private fun onDeviceSyncButton(button: NxButton) {
         val sync = deps.deviceSync
         val page = sync?.page?.value
-        if (onboardingSync) noteOnboardingSync(page)
+        if (onboardingUi.onboardingSync) onboardingUi.noteOnboardingSync(page)
         // Ready (the tool and setup's sync step alike): the d-pad goes Sync ROMs (where available) → cable → Wi-Fi (→ Skip
         // in setup) and round; A, LEFT or RIGHT on Sync ROMs flips it; A on Skip goes on.
         val focus = _syncSetup.value?.focus ?: SyncFocus.LINK
         if (page is DeviceSyncPage.Ready && sync != null) {
-            val rows = syncSetupRows(page, skip = onboardingSync)
+            val rows = syncSetupRows(page, skip = onboardingUi.onboardingSync)
             if (button == NxButton.UP || button == NxButton.DOWN) {
-                val at = syncSetupIndex(page, focus, skip = onboardingSync)
+                val at = syncSetupIndex(page, focus, skip = onboardingUi.onboardingSync)
                 syncSetupTap((at + (if (button == NxButton.UP) -1 else 1) + rows.size) % rows.size, open = false)
                 return
             }
-            if (focus == SyncFocus.ROMS && (button == NxButton.A || button == NxButton.LEFT || button == NxButton.RIGHT)) { sync.flipRoms(); return }
-            if (onboardingSync && focus == SyncFocus.SKIP && button == NxButton.A) return leaveOnboardingSync(forward = true)
+            // Sync ROMs is a switch: A flips it, LEFT / RIGHT leave it alone (as on every settings page).
+            if (focus == SyncFocus.ROMS && (button == NxButton.A || button == NxButton.LEFT || button == NxButton.RIGHT)) { if (button == NxButton.A) sync.flipRoms(); return }
+            if (onboardingUi.onboardingSync && focus == SyncFocus.SKIP && button == NxButton.A) return onboardingUi.leaveOnboardingSync(forward = true)
         }
         // Setup: A on Done (Continue) goes on; leaving Ready (B) goes back a step.
-        if (onboardingSync && button == NxButton.A && page is DeviceSyncPage.Done) return leaveOnboardingSync(forward = true)
+        if (onboardingUi.onboardingSync && button == NxButton.A && page is DeviceSyncPage.Done) return onboardingUi.leaveOnboardingSync(forward = true)
         if (sync?.onButton(button) == true) { publishSyncSetup(); return }
-        if (onboardingSync) return leaveOnboardingSync(forward = false)
+        if (onboardingUi.onboardingSync) return onboardingUi.leaveOnboardingSync(forward = false)
         _syncSetup.value = null
         if (romsPending) { romsPending = false; rescan() } else showTools()
-    }
-
-
-    /**
-     * Leaves setup's sync step: on to the next step ([forward]) or back to the one before. ROMs that arrived are scanned
-     * first; the load then shows the step onboarding is on.
-     */
-    private fun leaveOnboardingSync(forward: Boolean) {
-        onboardingSync = false
-        _syncSetup.value = null
-        if (forward) {
-            val next = onboarding.next() ?: return finishOnboarding()
-            deps.settings.onboardingStep = next.name
-        } else {
-            onboarding.back()?.let { deps.settings.onboardingStep = it.name }
-        }
-        if (romsPending) { romsPending = false; rescan() } else showOnboarding()
-    }
-
-    /** The sync step's result from the page Device Sync shows: an ended sync's outcome. */
-    private fun noteOnboardingSync(page: DeviceSyncPage?) {
-        onboardingSynced = when (page) {
-            is DeviceSyncPage.Done -> "done"
-            is DeviceSyncPage.Failed -> if (page.reason == DeviceSyncText.STOPPED) "stopped" else "failed"
-            else -> onboardingSynced
-        }
     }
 
     /** UP/DOWN move over the action rows; A runs the highlighted one (Remove asks first); B cancels a running job, closes the confirm, or goes back. */
@@ -5265,7 +3253,6 @@ class AppState(
             else -> Unit
         }
     }
-
 
     /**
      * Opens main menu row [index] of [s]: a console or collection's list, a game (resumed, or played), a tool, a hidden tab.
@@ -5305,12 +3292,12 @@ class AppState(
      */
     fun launchFromTop(entry: Listed): Job? {
         if (loader.active || launches.minimalPending || kidsUi.kidsLocked || textEntryOpen) return null
-        if (settingsUi.chooser.value != null || settingsUi.settingInfo.value != null || _capturingShortcut.value != null) return null
-        if (_androidGamesAsk.value != null || _updateConfirm.value != null || updatePopupShows() || _error.value != null) return null
+        if (settingsUi.chooser.value != null || settingsUi.settingInfo.value != null || controlBindings.capturingShortcut.value != null) return null
+        if (_androidGamesAsk.value != null || _firstTip.value != null || _updateConfirm.value != null || updatePopupShows() || _error.value != null) return null
         if (netplay?.page?.value != null) return null
         val s = _screen.value as? Screen.Systems ?: return null
         if (s.menu != null || s.search != null) return null
-        val stats = _topStats.value ?: return null
+        val stats = topScreen.topStats.value ?: return null
         if (stats.key != statsKey(DualMenu.top(s, _selection.value.index))) return null
         if (stats.shelf.none { it.entry.game.path == entry.game.path }) return null
         return launchPinned(entry)
@@ -5318,7 +3305,7 @@ class AppState(
 
     fun select(index: Int) {
         if (launches.minimalPending) return   // a Minimal open is under way: the selection stays on the row opening
-        if (index != _selection.value.index) cancelCapture()   // a tap on another Shortcuts row ends a wait for a press
+        if (index != _selection.value.index) controlBindings.cancelCapture()   // a tap on another Shortcuts row ends a wait for a press
         _selection.value = _selection.value.copy(index = index).clampedTo(_selection.value.count)
         (_screen.value as? Screen.Systems)?.takeIf { it.category == MenuCategory.HOME }?.let { homeTab.noteHomeFocus(_selection.value.index, it.rows) }
         refreshResume()
@@ -5328,13 +3315,13 @@ class AppState(
         if (loader.active) return   // a screen is loading: only B (cancel) acts
         if (launches.minimalPending) return   // a Minimal open is under way: a tap waits too
         when (val s = _screen.value) {
-            is Screen.Onboarding -> onboardingRow(_selection.value.index)
+            is Screen.Onboarding -> onboardingUi.onboardingRow(_selection.value.index)
             is Screen.Systems -> if (styleOf(s) == MenuStyle.MINIMAL) launches.openMinimal(s) else openMainRow(s, _selection.value.index)
             is Screen.SettingsMenu -> settingsUi.openHighlightedSection()
             is Screen.ToolApps -> if (s.pick == AppPick.GAMES) androidApps.toggleAndroidGame(s) else androidApps.launchDrawerApp(s)
             is Screen.CheatDb -> onCheatDbButton(s, NxButton.A)
             Screen.DeviceSync -> onDeviceSyncButton(NxButton.A)
-            is Screen.RetroAchievements -> ra.onRaButton(s, NxButton.A)
+            Screen.RetroAchievements -> ra.onRaButton(NxButton.A)
             is Screen.RaDownload -> Unit   // its rows only read (A, Done, comes through onButton)
             is Screen.RaConsoles, is Screen.RaGames, is Screen.RaGame -> ra.onRaBrowserButton(s, NxButton.A)
             is Screen.RaAchievement, Screen.RaProfile -> Unit   // a detail page: nothing to open
@@ -5347,7 +3334,7 @@ class AppState(
                 else if (styleOf(s) == MenuStyle.MINIMAL) launches.openMinimal(s) else launches.openGameRow(s, _selection.value.index)
             is Screen.Switcher -> switcher.onSwitcherButton(s, NxButton.A)
             is Screen.Settings -> s.rows.getOrNull(_selection.value.index)?.let { row ->
-                val value = settingValue(row)
+                val value = settingsContent.settingValue(row)
                 if (value != null) {
                     // A value row: a picker row (many or long values) opens its picker; the others step forward, as RIGHT.
                     val touch = settingsTouchRow(row, s.choices.getOrNull(_selection.value.index), s.section)
@@ -5370,23 +3357,31 @@ class AppState(
                     SettingsKind.IMPORT_ZIP -> importSaves(ImportSource.ZIP)
                     SettingsKind.IMPORT_RETROARCH -> importSaves(ImportSource.RETROARCH)
                     SettingsKind.IMPORT_DONE -> leaveSubPage(SettingsSection.IMPORT_RESULT)
+                    SettingsKind.IMPORT_BIOS -> settingsUi.openSubPage(s, SettingsSection.IMPORT_BIOS)
+                    SettingsKind.IMPORT_BIOS_FOLDER -> importBios(com.nxredux.mobile.bios.BiosSource.FOLDER)
+                    SettingsKind.IMPORT_BIOS_FILES -> importBios(com.nxredux.mobile.bios.BiosSource.FILES)
+                    SettingsKind.IMPORT_BIOS_ZIP -> importBios(com.nxredux.mobile.bios.BiosSource.ZIP)
+                    SettingsKind.IMPORT_BIOS_RETROARCH -> importBios(com.nxredux.mobile.bios.BiosSource.RETROARCH)
                     SettingsKind.BUTTON_LAYOUT -> settingsUi.openSubPage(s, SettingsSection.BUTTON_LAYOUT)
-                    SettingsKind.BUTTON_LAYOUT_ORIENTATION -> row.landscape?.let(::openSkinEditor)
+                    SettingsKind.BUTTON_LAYOUT_ORIENTATION -> row.landscape?.let(settingsContent::openSkinEditor)
                     SettingsKind.BUTTON_LAYOUT_RESET -> _screen.value = s.copy(confirmReset = true)   // asks first
                     SettingsKind.SHORTCUTS -> settingsUi.openSubPage(s, SettingsSection.SHORTCUTS)
                     SettingsKind.SYSTEM_BUTTONS -> settingsUi.openSubPage(s, SettingsSection.SYSTEM_BUTTONS)
+                    SettingsKind.GPU_DRIVER -> if (row.enabled) settingsUi.openSubPage(s, SettingsSection.GPU_DRIVER)   // dimmed: the reason is all it says
+                    SettingsKind.GPU_DRIVER_ITEM -> row.gpuDriver?.let(settingsContent::gpuDriverRowA)
+                    SettingsKind.GPU_DRIVER_ADD -> settingsContent.addGpuDriver()
                     // Without a controller too: one plugged in next answers it (the row says to connect one).
-                    SettingsKind.SHORTCUT_BIND -> row.shortcut?.let(::startCapture)
-                    SettingsKind.SYSTEM_BUTTON_BIND -> row.systemRole?.let { systemButtonWaiting = it; settingsUi.refreshSettings() }
+                    SettingsKind.SHORTCUT_BIND -> row.shortcut?.let(controlBindings::startCapture)
+                    SettingsKind.SYSTEM_BUTTON_BIND -> row.systemRole?.let { controlBindings.systemButtonWaiting = it; settingsUi.refreshSettings() }
                     SettingsKind.HIDDEN -> openList(ListSource.Hidden)
                     SettingsKind.UNASSIGNED -> unassignedSystem()?.let { settingsUi.rememberSection(s.section, _selection.value); openSystem(it) }
                     SettingsKind.EMULATORS -> { settingsUi.rememberSection(s.section, _selection.value); emulatorSettings.openList(systemsCache) }
                     SettingsKind.INFO -> Unit   // About: read-only
-                    SettingsKind.COPY_INFO -> copyDeviceInfo()
+                    SettingsKind.COPY_INFO -> settingsContent.copyDeviceInfo()
                     SettingsKind.PLAYER_NAME -> _screen.value = s.copy(nameDraft = PlayerName.resolve(deps.settings.playerName, deps.deviceName()))
                     SettingsKind.APP_UPDATE -> deps.updater?.let(::appUpdateRowA)
                     SettingsKind.HOME_SCREEN -> deps.launcher?.let { it.setHome(!it.isHome()); settingsUi.refreshSettings() }
-                    SettingsKind.ANDROID_GAMES -> openToolApps(AppPick.GAMES)
+                    SettingsKind.ANDROID_GAMES -> androidApps.openToolApps(AppPick.GAMES)
                     SettingsKind.RESET_DEFAULTS -> _screen.value = s.copy(confirmReset = true)   // asks first
                     SettingsKind.ALL_FILES -> deps.allFilesAccess?.openSettings()
                     SettingsKind.MIC_ACCESS -> deps.micAccess?.request()
@@ -5397,12 +3392,13 @@ class AppState(
                     SettingsKind.KIDS_ALARMS -> kids?.openExactAlarms()
                     SettingsKind.KIDS_HOME -> deps.launcher?.setHome(true)   // the row goes once home ([onLauncherChanged])
                     SettingsKind.KIDS_FORGOT -> showSettingInfo(_selection.value.index)   // where the flag is, and what deleting it does
-                    else -> Unit   // a value row with nothing to step ([settingValue] null): as before, nothing
+                    else -> Unit   // a value row with nothing to step ([settingValue] null)
                 }
             }
             Screen.PickFolder, is Screen.PermissionsStep -> setupStepRow(_selection.value.index)
             is Screen.StorageUpgrade -> upgrade.storageUpgradeRow(_selection.value.index)
             is Screen.CopySaves -> upgrade.copySavesRow(_selection.value.index)
+            is Screen.BiosImportResult -> biosResultDone()
             is Screen.FilePicker -> filePicker?.onButton(s, NxButton.A)
             Screen.AddFirstExtra, is Screen.AndroidGamesStep, is Screen.FolderSummary -> setupStepRow(_selection.value.index)
             Screen.Loading -> Unit
@@ -5445,16 +3441,34 @@ class AppState(
 
     // --- Emulator Settings (Settings -> Emulation -> Default settings) and Game Settings ---
 
-    internal val emulatorSettings = EmulatorSettingsController(
+    /** Game Settings' Badge row: a saved choice goes into the index, and the lists and Home show it. */
+    private val gameBadges = GameBadgeEditor(
+        scope, deps.userData, deps.compute,
+        saved = { game, choice -> mutateIndex(IndexRefresh(rows = true, openList = true, ui = true)) { current -> current?.setBadgeChoice(game, choice) } },
+        failed = { _error.value = "Could not save the badge"; emulatorSettings.refreshOpenPage() },
+    )
+
+    /** The game whose Game Settings page is open, for its Badge row. */
+    private fun badgeGame(): GameEntry? = (_screen.value as? Screen.EmulatorOptions)?.game?.game
+
+    internal val emulatorSettings: EmulatorSettingsController = EmulatorSettingsController(
         scope, _screen, _selection, _error, deps.coreOptions, deps.emulatorConfigs, deps.coreDefaults,
         host = object : EmulatorSettingsHost {
             override fun showEmulatorsSettings() = settingsUi.showSettingsOn(SettingsSection.EMULATORS, SettingsKind.EMULATORS)
-            override fun appSection(page: EmulatorPage): EmulatorAppSection? =
-                if (!EmulatorRows.hostsCableLink(page)) null
-                else EmulatorAppSection(EmulatorRows.CABLE_LINK_LABEL, cableLinkRows().map { EmulatorRow.App(it, settingsUi.settingChoices(it)) })
+            override fun followRowEdit(key: Any?, from: Int, to: Int?) = settingsUi.followRowEdit(key, from, to)
+            override fun appSection(page: EmulatorPage, game: Listed?): EmulatorAppSection? = when {
+                page.forGame -> game?.let { gameBadges.section(it.game) }
+                EmulatorRows.hostsCableLink(page) ->
+                    EmulatorAppSection(EmulatorRows.CABLE_LINK_LABEL, settingsContent.cableLinkRows().map { EmulatorRow.App(it, settingsUi.settingChoices(it)) })
+                else -> null
+            }
             // Without the value's `after`: it republishes a Settings page, which would leave this one (the controller shows the rows).
-            override fun stepAppRow(row: SettingsRow, delta: Int) { settingValue(row)?.step(delta) }
-            override fun chooseAppRow(row: SettingsRow, index: Int) { settingValue(row)?.setTo(index) }
+            override fun stepAppRow(row: SettingsRow, delta: Int) {
+                if (row.kind == SettingsKind.GAME_BADGE) badgeGame()?.let { gameBadges.step(it, delta) } else settingsContent.settingValue(row)?.step(delta)
+            }
+            override fun chooseAppRow(row: SettingsRow, index: Int) {
+                if (row.kind == SettingsKind.GAME_BADGE) badgeGame()?.let { gameBadges.choose(it, index) } else settingsContent.settingValue(row)?.setTo(index)
+            }
             override fun runAppRow(row: SettingsRow) { if (row.kind == SettingsKind.CLEAR_LINK_ROMS) deps.linkRomCache?.clear() }
             override fun restore(screen: Screen, selection: ListSelection) {
                 _screen.value = screen
@@ -5472,6 +3486,12 @@ class AppState(
         screenClass = deps.screenClass,
         windowPx = deps.windowPx,
         ps2BiosFiles = deps.ps2BiosFiles,
+        // Null (no rows) where custom drivers cannot be used ([GpuDriverStore.unavailableReason]).
+        gpuDrivers = { deps.gpuDrivers?.takeIf { it.unavailableReason() == null }?.installed() },
+        gpuDriverAppWide = { deps.settings.gpuDriver },
+        gpuName = { tryOrNull { deps.deviceGpu() } },
+        gpuDriverCrashed = { path -> GpuDriverCrash.crashed(deps.settings.gpuDriverCrashes, path) },
+        clearGpuDriverCrash = { path -> deps.settings.gpuDriverCrashes = GpuDriverCrash.clearGame(deps.settings.gpuDriverCrashes, path).takeIf { it.isNotEmpty() } },
         alwaysListed = { if (deps.linkRomCache != null) listOf(EmulatorRows.CABLE_LINK_TAG) else emptyList() },
     )
 
@@ -5555,7 +3575,7 @@ class AppState(
             libraryIndex.applyArt(ref, art)
         }
 
-        override suspend fun flushArt() = this@AppState.flushArt()
+        override suspend fun flushArt() = libraryIndex.flushArt()
 
         /** The art store has the new screenshot: the console is rebuilt from it, on the UI's thread. */
         override suspend fun refreshAndroidConsole() = withContext(uiContext) { applyAndroidConsole() }
@@ -5587,7 +3607,7 @@ class AppState(
         artCheck = scope.launch {
             running?.join()
             val from = libraryIndex.snapshot ?: return@launch
-            val art = try { scanner.readArt(from, reuse) } catch (e: CancellationException) { throw e } catch (e: Throwable) { return@launch }
+            val art = tryOrAny({ return@launch }) { scanner.readArt(from, reuse) }
             mutateIndex(IndexRefresh(rows = true, openList = true, ui = true)) { current -> current?.takeIf { it === from }?.withArt(art) } ?: return@launch
             withContext(uiContext) { artworkScreens?.libraryChanged() }
         }
@@ -5605,7 +3625,7 @@ class AppState(
             scope, store, lookup = c::lookupInfo, wantsArt = c::wantsArt, fetchArt = c::fetchArtQuietly,
             enabled = { deps.settings.fetchGameInfo && c.ssAvailable }, runActive = { c.busy },
             quotaRead = { c.ssQuotaRead }, now = ::clockNow, calendar = deps.calendar,
-        ).also { f -> scope.launch { f.fetched.collect { showFetchedInfo(it) } } }
+        ).also { f -> scope.launch { f.fetched.collect { topScreen.showFetchedInfo(it) } } }
     }
 
     /** The scanner's one-time `grid/` and `hero/` move, sharing the artwork controller's written-art log; none without it. */
@@ -5633,11 +3653,11 @@ class AppState(
 
     /**
      * The game menu's Fetch art / Change art panel over a game list; null without a controller. A pick's art is already
-     * in the index and shown ([com.nxredux.mobile.scraper.ArtworkHost.applyArt], then [flushArt]); the flush after it
-     * writes anything still batched.
+     * in the index and shown ([com.nxredux.mobile.scraper.ArtworkHost.applyArt], then [LibraryIndexHolder.flushArt]);
+     * the flush after it writes anything still batched.
      */
     private val artPanels: ArtPanelController? = artworkController?.let { c ->
-        ArtPanelController(scope, c, deps.settings, onPicked = { scope.launch { flushArt() } }, onLayoutSwitched = ::syncArtLayout)
+        ArtPanelController(scope, c, deps.settings, onPicked = { scope.launch { libraryIndex.flushArt() } }, onLayoutSwitched = ::syncArtLayout)
     }
     private val noArtPanel = MutableStateFlow<ArtPanel?>(null)
     private val _artLayout = MutableStateFlow(ArtLayout(deps.settings.backdropArt, deps.settings.gameListArt))
@@ -5716,10 +3736,10 @@ class AppState(
             override fun select(index: Int) = this@AppState.select(index)
             override fun showNotice(text: String) = this@AppState.showNotice(text)
             override suspend fun rebuildMainRows() {
-                refreshCollectionNames()   // a new or emptied collection shows or leaves the tab
+                collectionCounter.refreshCollectionNames()   // a new or emptied collection shows or leaves the tab
                 this@AppState.rebuildMainRows()
             }
-            override fun collectionChanged(name: String) = invalidateCollectionCounts(name)
+            override fun collectionChanged(name: String) = collectionCounter.invalidateCollectionCounts(name)
             override fun selectCollection(name: String) = this@AppState.selectCollection(name)
             override fun menuClosed() { if (menuStale(_screen.value)) swapMainRows() }
             override suspend fun refreshOpenList(select: String?) = this@AppState.refreshOpenList(select)
@@ -5738,6 +3758,8 @@ class AppState(
             override fun openAchievements() = ra.openRaPanel()
             override suspend fun canResume(entry: Listed): Boolean = deps.userData.resumeInfo(entry.system.tag, entry.game.fileName).canResume
             override fun playFromStart(entry: Listed) = launches.playFromStart(entry)
+            override val aResumes: Boolean get() = deps.settings.aResumes
+            override fun resumeGame(entry: Listed) { launches.resumeGame(entry) }
             override fun hiddenTabs(): List<MenuCategory> = this@AppState.hiddenTabs()
             override fun openHiddenTab(category: MenuCategory) = this@AppState.openHiddenTab(category)
             override val appOnTop: Boolean get() = _appOnTop.value
@@ -5748,7 +3770,7 @@ class AppState(
     // --- Netplay: the sheet over a game list or the main menu (context menu's Netplay, or Y on a game) ---
 
     /** The Netplay sheet; null on a platform without netplay. While its page is set it takes every pad press and Back. */
-    val netplay: NetplayController? = deps.netplay?.let { NetplayController(scope, it, ::launchNetplay, work = deps.compute, findLibraryRom = ::findLocalRom) }   // handshakes and save files off the main thread
+    val netplay: NetplayController? = deps.netplay?.let { NetplayController(scope, it, ::launchNetplay, work = deps.compute, findLibraryRom = ::findLocalRom, playerName = { PlayerName.resolve(deps.settings.playerName, deps.deviceName()) }) }   // handshakes and save files off the main thread
 
     /** [entry] can be played over netplay here: the platform has it, the game's tag has netplay cores, and it can launch. */
     fun canNetplay(entry: Listed?): Boolean =
@@ -5794,12 +3816,8 @@ class AppState(
         if (s.source != ListSource.Hidden) return
         val entry = s.entries.getOrNull(_selection.value.index) ?: return
         val job = scope.launch {
-            try {
+            tryOrAny({ e -> _error.value = "Something went wrong: ${e.message ?: e::class.simpleName}" }) {
                 applyHidden(entry, hidden = false, closeMenu = false)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Throwable) {
-                _error.value = "Something went wrong: ${e.message ?: e::class.simpleName}"
             }
         }
         hideJob = job
@@ -5822,7 +3840,7 @@ class AppState(
             val gen = takeSystemsGen()
             offerSystems(gen, withContext(deps.compute) { ix.playableSystems(hiddenSet) })
         }
-        invalidateCollectionCounts()   // a hidden game leaves the counts
+        collectionCounter.invalidateCollectionCounts()   // a hidden game leaves the counts
         rebuildMainRows()
         if (closeMenu) closeContextMenu()
         refreshOpenList()
@@ -6024,10 +4042,15 @@ class AppState(
         launches.clearMinimalOpening()   // opened: the next press clears it
         if (settingsUi.onPopupButton(button)) return   // a touch chooser or a Settings row's info popup takes the pad while open
         // Press to bind waits on the controller's raw keys ([captureKey]): a touch hint's or the on-screen pad's B cancels, the rest wait.
-        if (_capturingShortcut.value != null) { if (button == NxButton.B) cancelCapture(); return }
+        if (controlBindings.capturingShortcut.value != null) { if (button == NxButton.B) controlBindings.cancelCapture(); return }
         if (_error.value != null) { if (button == NxButton.A || button == NxButton.B) dismissError(); return }
+        if (_message.value != null) { if (button == NxButton.A || button == NxButton.B) dismissMessage(); return }
         if (_androidGamesAsk.value != null) {   // the Android games question: A Yes, B Not now
             if (button == NxButton.A) answerAndroidGames(true) else if (button == NxButton.B) answerAndroidGames(false)
+            return
+        }
+        if (_firstTip.value != null) {   // a first-launch tip: A Got it, B (or its lit Don't show again) never again
+            if (button == NxButton.A) answerTip(hide = false) else if (button == NxButton.B) answerTip(hide = true)
             return
         }
         if (_updateConfirm.value != null) { onUpdateDialogButton(button, ::answerUpdateConfirm); return }   // About's confirm: A Update, B Cancel
@@ -6052,9 +4075,9 @@ class AppState(
         }
         if (loader.active) { if (button == NxButton.B) loader.cancel(); return }   // a screen is loading: B abandons it, the rest waits
         dismissNoticeOnPress()
-        (_screen.value as? Screen.Onboarding)?.let { onOnboardingButton(it, button); return }
+        (_screen.value as? Screen.Onboarding)?.let { onboardingUi.onOnboardingButton(it, button); return }
         netplay?.takeIf { it.page.value != null }?.let { it.onButton(button); return }   // the Netplay sheet over a game list
-        // A two-pane page's row edit takes the press, or has the page hear LEFT / RIGHT as its own B / A.
+        // The row edit takes the press (A first, then LEFT / RIGHT), or on two panes has the page hear LEFT / RIGHT as its own B / A.
         val heard = settingsUi.onRowEditButton(_screen.value, button) ?: return
         // A held direction turned into B or A acts once: its repeats would climb or open one page per repeat.
         if (repeat && heard != button) return
@@ -6067,9 +4090,12 @@ class AppState(
         (_screen.value as? Screen.KidsSetup)?.let { kidsUi.onKidsSetupButton(it, button); return }
         (_screen.value as? Screen.KidsDayEdit)?.let { kidsUi.onKidsDayButton(it, button); return }
         _screen.value.takeIf { it is Screen.Settings || it is Screen.SettingsMenu }?.let { onSettingsButton(it, button); return }
-        (_screen.value as? Screen.ToolApps)?.takeIf { it.menu == null }?.let { androidApps.onToolAppsButton(it, button); return }
+        (_screen.value as? Screen.ToolApps)?.takeIf { it.menu == null }?.let { androidApps.onToolAppsButton(button); return }
         _screen.value.contextMenu?.let { contextMenus.onMenuButton(it, button); return }
-        (_screen.value as? Screen.Systems)?.let { s -> s.search?.let { onSearchButton(s, it, button); return } }
+        (_screen.value as? Screen.Systems)?.let { s ->
+            s.search?.let { onSearchButton(s, it, button); return }
+            s.layoutMenu?.let { onLayoutMenuButton(s, it, button); return }
+        }
         (_screen.value as? Screen.Games)?.let { s ->
             s.search?.let { if (s.isTab) onSearchButton(s, it, button) else onListSearchButton(s, it, button); return }   // the tab's is START's
             s.layoutMenu?.let { onLayoutMenuButton(s, it, button); return }
@@ -6085,17 +4111,15 @@ class AppState(
         }
         if (artworkScreens?.onButton(_screen.value, button) == true) return
         (_screen.value as? Screen.Switcher)?.let { switcher.onSwitcherButton(it, button, repeat); return }
-        // The summary: its move's confirmation takes every button first; LEFT and RIGHT flip the Move row as A does.
+        // The summary: its move's confirmation takes every button first; the Move row is a switch, A flips it and LEFT / RIGHT
+        // leave it alone (as on every settings page).
         (_screen.value as? Screen.FolderSummary)?.let { fs ->
             if (fs.confirmMove) { folders.onFolderMoveConfirm(fs, button); return }
-            val rows = folderSummaryRows(fs)
-            if ((button == NxButton.LEFT || button == NxButton.RIGHT) && rows.getOrNull(_selection.value.index)?.kind == SummaryRowKind.MOVE) {
-                _screen.value = fs.copy(move = !fs.move); return
-            }
+            if ((button == NxButton.LEFT || button == NxButton.RIGHT) && folderSummaryRows(fs).getOrNull(_selection.value.index)?.kind == SummaryRowKind.MOVE) return
         }
         (_screen.value as? Screen.CheatDb)?.let { onCheatDbButton(it, button); return }   // before the generic when: UP/DOWN use the action-row count
         if (_screen.value == Screen.DeviceSync) { onDeviceSyncButton(button); return }   // every button is the controller's
-        (_screen.value as? Screen.RetroAchievements)?.let { ra.onRaButton(it, button); return }   // same: UP/DOWN use the action-row count
+        if (_screen.value == Screen.RetroAchievements) { ra.onRaButton(button); return }   // same: UP/DOWN use the action-row count
         (_screen.value as? Screen.RaDownload)?.let { ra.onRaDownloadButton(it, button); return }
         (_screen.value as? Screen.RaSettings)?.let {   // LEFT/RIGHT change values; dialogs take the buttons; X the selected row's info
             if (button == NxButton.X && !it.signingIn && it.confirm == null) { if (settingsUi.selectedSettingShowsInfo()) showSettingInfo(_selection.value.index); return }
@@ -6240,10 +4264,12 @@ class AppState(
 
     /** Returns true when a screen was popped. */
     fun back(): Boolean {
+        if (_message.value != null) { dismissMessage(); return true }   // a page's message dialog: Back closes it, the page stays
         if (settingsUi.closePopup()) return true   // a touch chooser or a Settings row's info popup: Back closes it
-        if (_capturingShortcut.value != null) { cancelCapture(); return true }   // press to bind: Back cancels it, the page stays
-        if (systemButtonWaiting != null) { systemButtonWaiting = null; settingsUi.refreshSettings(); return true }   // likewise System buttons' wait
+        if (controlBindings.capturingShortcut.value != null) { controlBindings.cancelCapture(); return true }   // press to bind: Back cancels it, the page stays
+        if (controlBindings.systemButtonWaiting != null) { controlBindings.systemButtonWaiting = null; settingsUi.refreshSettings(); return true }   // likewise System buttons' wait
         if (_androidGamesAsk.value != null) { answerAndroidGames(false); return true }   // the dialog's B: Not now
+        if (_firstTip.value != null) { answerTip(hide = true); return true }   // a tip's B: Don't show again
         if (_updateConfirm.value != null) { answerUpdateConfirm(false); return true }   // About's confirm: Cancel
         if (updatePopupShows()) { answerUpdate(false); return true }   // the update dialog's B: Not now
         netplay?.takeIf { it.page.value != null }?.let { it.onButton(NxButton.B); return true }   // the Netplay sheet: its own B
@@ -6259,7 +4285,7 @@ class AppState(
             is Screen.Onboarding -> {
                 when {
                     s.prompt -> _screen.value = s.copy(prompt = false, draftPassword = "")
-                    else -> onboardingBack()
+                    else -> onboardingUi.onboardingBack()
                 }
                 true
             }
@@ -6278,10 +4304,12 @@ class AppState(
                 true
             }
             is Screen.Systems -> if (s.search != null) { _screen.value = s.copy(search = null); true }
+                else if (s.layoutMenu != null) { _screen.value = s.copy(layoutMenu = null); true }
                 else if (s.menu != null) { if (!s.menu.busy) closeContextMenu(); true }
                 else if (s.pushed) { popHiddenTab(); true }
                 else false
-            is Screen.Settings -> if (s.nameDraft != null) { _screen.value = s.copy(nameDraft = null); true } else if (s.confirmReset) { _screen.value = s.copy(confirmReset = false); true } else {   // Back keeps the settings
+            is Screen.Settings -> if (s.nameDraft != null) { _screen.value = s.copy(nameDraft = null); true } else if (s.confirmReset) { _screen.value = s.copy(confirmReset = false); true }
+                else if (s.confirmDriver != null) { _screen.value = s.copy(confirmDriver = null); true } else {   // Back keeps the settings
                 settingsUi.rememberSection(s.section, _selection.value)
                 // A sub-page goes back to its section. Library or Emulators: after a change ([libraryDirty]), or an extra set
                 // or default tag changed behind the page's back (it fails the fit), it reloads (rescanning if needed); either
@@ -6302,27 +4330,28 @@ class AppState(
             Screen.AddFirstExtra -> {
                 val page = folders.homePage
                 when {
-                    !inFirstSetup() -> skipFirstExtra()
+                    !onboardingUi.inFirstSetup() -> skipFirstExtra()
                     page != null -> { _screen.value = page; _selection.value = ListSelection(0, folderSummaryRows(page).size) }   // back to the home page
-                    mediaHomeTaken -> backPastMediaHome()
+                    onboardingUi.mediaHomeTaken -> backPastMediaHome()
                     else -> showPickFolderScreen()
                 }
                 true
             }
             // First setup's home pick: back to the All files step while it still applies, else to the welcome (a lost home after setup has nothing before it).
-            Screen.PickFolder -> if (inFirstSetup()) { backFromHomePick(); true } else false
+            Screen.PickFolder -> if (onboardingUi.inFirstSetup()) { onboardingUi.backFromHomePick(); true } else false
             is Screen.FilePicker -> { filePicker?.onButton(s, NxButton.B); true }
-            is Screen.PermissionsStep -> { if (deps.settings.onboardingDone == false) backToWelcome() else skipAllFiles(); true }
+            is Screen.PermissionsStep -> { if (deps.settings.onboardingDone == false) onboardingUi.backToWelcome() else skipAllFiles(); true }
             is Screen.StorageUpgrade -> { upgrade.storageUpgradeBack(s); true }   // required: B never leaves it for the library
             is Screen.CopySaves -> { if (!s.busy) upgrade.copySavesRow(if (s.error != null) 0 else 1); true }   // B: Keep separate (or OK)
-            is Screen.AndroidGamesStep -> { if (inFirstSetup()) showAddFirstExtra() else answerAndroidGames(false); true }
+            is Screen.BiosImportResult -> { biosResultDone(); true }
+            is Screen.AndroidGamesStep -> { if (onboardingUi.inFirstSetup()) showAddFirstExtra() else answerAndroidGames(false); true }
             // The summary: B stops a running move (after the current game); otherwise back to the ROMs folder step (the folder stays added).
             // The home page: back to the pick (a new pick shows its page again).
             is Screen.FolderSummary -> {
                 when {
                     s.confirmMove -> _screen.value = s.copy(confirmMove = false)   // the move's confirmation closes first
                     s.progress != null -> folders.cancelMove()
-                    s.extraId == Recents.HOME && mediaHomeTaken -> backPastMediaHome()
+                    s.extraId == Recents.HOME && onboardingUi.mediaHomeTaken -> backPastMediaHome()
                     s.extraId == Recents.HOME -> { folders.homePage = null; showPickFolderScreen() }
                     else -> showAddFirstExtra()
                 }
@@ -6350,14 +4379,18 @@ class AppState(
 
     fun dismissError() { _error.value = null }
 
+    fun dismissMessage() { _message.value = null }
+
     /**
      * The platform's home state or apps may have changed (the role dialog, Android's home settings, a new listing): System's
      * Use as home screen and Library's Android games re-read them.
      */
+    /** Auto-rotate or the window's shape changed: Button layout's orientation rows follow. */
+    fun onRotationChanged() = refreshSettingsOn(SettingsSection.BUTTON_LAYOUT)
+
     fun onLauncherChanged() {
         kidsUi.kidsHomeCheck()   // the role dialog's answer: Kids Mode on once home
-        val section = (_screen.value as? Screen.Settings)?.section
-        if (section == SettingsSection.SYSTEM || section == SettingsSection.LIBRARY || section == SettingsSection.KIDS) settingsUi.refreshSettings()
+        refreshSettingsOn(SettingsSection.SYSTEM, SettingsSection.LIBRARY, SettingsSection.KIDS)
     }
 
     /**
@@ -6409,9 +4442,6 @@ class AppState(
         return androidConsoleOf(androidGames(installed), deps.androidArtStore)
     }
 
-    /** The app ids the Android games console holds by the settings now (their icons are kept, [AppIcons.retain]). */
-    private fun androidConsoleIds(): List<String> = androidGames(installedCache.orEmpty()).map { it.id }
-
     /**
      * Rebuilds [androidConsole]; the main menu's rows follow when they were built with another, and so does an open
      * Android list showing another with no menu over it (an emptied one leaves as B would). Compared with what each
@@ -6434,7 +4464,7 @@ class AppState(
      * launcher, before it was answered, and when [installedCache] has a detected game. First setup asks it as a step instead.
      */
     private fun maybeAskAndroidGames() {
-        if (deps.launcher == null || home() == null || deps.settings.androidGamesAsked || firstSetup) return
+        if (deps.launcher == null || home() == null || deps.settings.androidGamesAsked || onboardingUi.firstSetup) return
         if (_androidGamesAsk.value != null) return
         val s = _screen.value.takeIf { it.isMainMenu } ?: return   // any tab, the Games tab too
         if (s.contextMenu != null || _panelOpen.value) return   // nor over the Games tab's panels (asked when they close)
@@ -6535,7 +4565,7 @@ class AppState(
             val ask = apps?.let(::androidGamesAskFor)
             if (ask == null) { endFolderSteps(); next(); return@launch }
             afterAndroidStep = next
-            androidStepShown = true
+            onboardingUi.androidStepShown = true
             _screen.value = Screen.AndroidGamesStep(ask)
             _selection.value = ListSelection(0, 2)   // Yes, Not now
         }
@@ -6584,9 +4614,6 @@ class AppState(
 
     // --- Android apps: the picker and app launches live in AppsController ---
 
-    /** The apps grid for [pick] ([AppsController.openToolApps]): the Apps tool, the drawer preview's tap, Settings -> Library -> Android games. */
-    private fun openToolApps(pick: AppPick, selectId: String? = null) = androidApps.openToolApps(pick, selectId)
-
     /** The apps grid laid out [columns] tiles wide: the d-pad then steps by tiles. */
     fun onToolAppsLayout(columns: Int) = androidApps.onToolAppsLayout(columns)
 
@@ -6618,98 +4645,65 @@ class AppState(
     fun kidsDayRow(index: Int) = kidsUi.kidsDayRow(index)
     fun kidsDaySetting(event: NxSettingEvent) = kidsUi.kidsDaySetting(event)
 
+    /**
+     * Shows the first-launch tip the screen calls for, if it is due ([FirstTip]): the main menu's on a main menu tab, then a
+     * game list's on a game list or the Games tab. Each once a launch, until its Don't show again; never over another
+     * dialog, a context menu, a prompt or a panel, nor while first setup or Kids Mode has the screen.
+     */
+    private fun maybeShowTip() {
+        if (_firstTip.value != null || onboardingUi.firstSetup || loader.active || kidsUi.kidsLocked) return
+        if (_androidGamesAsk.value != null || _updateConfirm.value != null || updatePopupShows() || _error.value != null) return
+        if (netplay?.page?.value != null) return
+        val s = _screen.value
+        val free = s.contextMenu == null && when (s) {
+            is Screen.Systems -> s.isMainMenu && s.search == null && s.layoutMenu == null
+            is Screen.Games -> s.search == null && s.layoutMenu == null && !_panelOpen.value
+            else -> false
+        }
+        if (!free) return
+        fun due(t: FirstTip) = t !in tipsShown && !when (t) {
+            FirstTip.MAIN_MENU -> deps.settings.mainMenuTipHidden
+            FirstTip.GAME_LIST -> deps.settings.gameListTipHidden
+        }
+        val tip = when {
+            s.isMainMenu && due(FirstTip.MAIN_MENU) -> FirstTip.MAIN_MENU
+            s is Screen.Games && due(FirstTip.GAME_LIST) -> FirstTip.GAME_LIST
+            else -> return
+        }
+        tipsShown += tip
+        tipGuard?.cancel()
+        tipGuard = scope.launch { delay(ANDROID_ASK_GUARD_MILLIS) }
+        _firstTip.value = tip
+    }
+
+    /** The tip's answer: Got it closes it until the next launch; [hide] (Don't show again) never shows it again. */
+    fun answerTip(hide: Boolean) {
+        if (tipGuard?.isActive == true) return
+        val tip = _firstTip.value ?: return
+        if (hide) when (tip) {
+            FirstTip.MAIN_MENU -> deps.settings.mainMenuTipHidden = true
+            FirstTip.GAME_LIST -> deps.settings.gameListTipHidden = true
+        }
+        _firstTip.value = null
+        maybeShowTip()   // the Games tab: its own tip next
+    }
+
     init {
         // Last in the class: every property [KidsScreensController.onKidsMode] reads is set by now.
         kids?.let { k -> scope.launch { k.mode.collect { kidsUi.onKidsMode(it); contextMenus.onKidsRestricted() } } }
+        // The first-launch tips follow the screen (and a panel closing over it).
+        scope.launch { combine(_screen, _panelOpen) { _, _ -> }.collect { maybeShowTip() } }
     }
-}
-
-/** The screens Kids Mode itself shows: its tiles screen, PIN prompt and unlock sheet. */
-internal fun isKidsScreen(s: Screen): Boolean = s == Screen.KidsHome || s == Screen.KidsUnlock || s is Screen.KidsPin
-
-/** A summary page row: the Move choice or Continue. */
-internal enum class SummaryRowKind { MOVE, CONTINUE }
-
-internal data class SummaryRow(val kind: SummaryRowKind, val row: NxRow)
-
-/** The summary page's rows: the Move choice (only when some games are placed and nothing ran yet) and Continue. None while a move runs. */
-internal fun folderSummaryRows(s: Screen.FolderSummary): List<SummaryRow> = buildList {
-    if (s.progress != null) return@buildList
-    val movable = if (s.extraId == Recents.HOME) s.summary.outside > 0 || s.summary.split > 0 else s.summary.games > s.summary.unassigned
-    if (s.result == null && movable) {
-        add(SummaryRow(SummaryRowKind.MOVE, NxRow("Move them into ${s.home}/Roms", secondary = if (s.move) "On" else "Off", cycleable = true)))
-    }
-    add(SummaryRow(SummaryRowKind.CONTINUE, NxRow("Continue")))
-}
-
-/**
- * The move's confirmation for [s] (title, text), or null when Continue moves nothing: Move off, already run, or nothing
- * to move. An extra folder's placed games leave it for the home's Roms; the home's games outside Roms move in and a
- * console's extra folders merge into one.
- */
-internal fun folderMoveAsk(s: Screen.FolderSummary): Pair<String, String>? {
-    if (!s.move || s.result != null || s.progress != null) return null
-    val sum = s.summary
-    fun games(n: Int) = if (n == 1) "1 game" else "$n games"
-    if (s.extraId == Recents.HOME) {
-        if (sum.outside == 0 && sum.split == 0) return null
-        val parts = listOfNotNull(
-            if (sum.outside > 0) "${games(sum.outside)} outside Roms will be moved into ${s.home}/Roms" else null,
-            if (sum.split > 0) (if (sum.split == 1) "1 console's folders will be merged into one" else "${sum.split} consoles' folders will be merged into one") else null,
-        )
-        return "Move games?" to (parts.joinToString(", and ") + ". Folders left empty are removed.")
-    }
-    val placed = sum.games - sum.unassigned
-    if (placed <= 0) return null
-    return "Move games?" to "${games(placed)} will be moved from ${s.name} into ${s.home}/Roms. ${if (placed == 1) "It is" else "They are"} moved, not copied."
-}
-
-/** The summary page's headline and lines: what was found, per console, where the unassigned are; the move's progress or result. */
-internal fun folderSummaryDetails(s: Screen.FolderSummary): List<String> = buildList {
-    val sum = s.summary
-    add(if (sum.games == 0) "No games found in ${s.name}" else if (sum.games == 1) "Found 1 game in ${s.name}" else "Found ${sum.games} games in ${s.name}")
-    sum.byConsole.forEach { (name, n) -> add("$name ($n)") }   // a line each, largest first
-    val after = ArrayList<String>()
-    val progress = s.progress
-    if (progress != null) after += if (progress.second == 0) "Moving…" else "Moving ${progress.first} of ${progress.second}…"
-    else s.result?.let { r ->
-        after += (listOfNotNull(
-            "Moved ${r.moved} into ${s.home}/Roms",
-            if (r.clashed > 0) "${r.clashed} left in place (same name already in Roms)" else null,
-            if (r.failed > 0) "${r.failed} could not be moved" else null,
-            if (r.cancelled) "Stopped" else null,
-        ).joinToString(" · "))
-    }
-    if (progress == null) unassignedHint(sum.unassigned)?.let { after += it }
-    // The home: how many lie outside its Roms (moved in by the Move row).
-    if (progress == null && s.result == null && sum.outside > 0) after += if (sum.outside == 1) "1 of them is outside Roms." else "${sum.outside} of them are outside Roms."
-    if (progress == null && s.result == null && sum.split > 0) {
-        after += if (sum.split == 1) "1 console has more than one folder; they are merged into one."
-        else "${sum.split} consoles have more than one folder; they are merged into one."
-    }
-    if (after.isNotEmpty() && sum.byConsole.isNotEmpty()) add("")   // a blank line between the console list and what follows
-    addAll(after)
 }
 
 /** [AppSettings.onboardingStep] while first setup's folder steps are under way (no [OnboardingStep] has this name). */
 private const val FOLDER_STEPS = "FOLDERS"
 
 /** Settings' Saves note and the library's notice until the one-time move is done. */
-private const val SAVES_STILL_INSIDE = "Saves are still stored inside the app until your home folder is available."
+internal const val SAVES_STILL_INSIDE = "Saves are still stored inside the app until your home folder is available."
 
 /** The library's notice once the quiet move failed on several starts. */
 private const val MOVE_STUCK = "Saves couldn't move to your home folder. They're still inside the app."
-
-/** [s]'s rows: Allow and Not now on the first page, Pick folder on the pick, OK after (or after an error). */
-internal fun storageUpgradeRows(s: Screen.StorageUpgrade): List<String> = when {
-    s.error != null -> listOf("OK")
-    s.stage == Screen.StorageUpgrade.Stage.EXPLAIN -> listOf("Allow", "Not now")
-    s.stage == Screen.StorageUpgrade.Stage.PICK -> listOf("Pick folder")
-    else -> listOf("OK")
-}
-
-/** [s]'s rows: Copy and Keep separate; OK once a copy failed. */
-internal fun copySavesRows(s: Screen.CopySaves): List<String> = if (s.error != null) listOf("OK") else listOf("Copy", "Keep separate")
 
 internal enum class PermissionRow { ALL_FILES, NOTIFICATIONS, CONTINUE }
 
@@ -6720,53 +4714,3 @@ internal fun permissionRows(s: Screen.PermissionsStep): List<PermissionRow> = li
     PermissionRow.CONTINUE,
 )
 
-/** Where setup's sync page has the selection: the Sync ROMs row, the link the page shows, or Skip. */
-enum class SyncFocus { ROMS, LINK, SKIP }
-
-/**
- * Device Sync's page state: its [title], where the selection is, and whether it is setup's sync step ([inSetup]: a
- * headline and the Skip row, which reads Continue once a sync ended there, [synced]).
- */
-data class SyncSetup(val title: String, val synced: Boolean, val focus: SyncFocus, val inSetup: Boolean = true) {
-    val skipSelected: Boolean get() = focus == SyncFocus.SKIP
-}
-
-sealed interface SyncSetupRow {
-    data object Roms : SyncSetupRow
-    data class Link(val link: SyncLink) : SyncSetupRow
-    data object Skip : SyncSetupRow
-}
-
-/** Device Sync's Ready rows on [page]: Sync ROMs where ROM sync is available, the links, and in setup ([skip]) Skip. */
-fun syncSetupRows(page: DeviceSyncPage.Ready, skip: Boolean = true): List<SyncSetupRow> =
-    listOfNotNull(SyncSetupRow.Roms.takeIf { page.romsAvailable }) + SyncLink.entries.map { SyncSetupRow.Link(it) } + listOfNotNull(SyncSetupRow.Skip.takeIf { skip })
-
-/** The row [focus] is on, on [page]. */
-fun syncSetupIndex(page: DeviceSyncPage.Ready, focus: SyncFocus, skip: Boolean = true): Int = syncSetupRows(page, skip).indexOfFirst {
-    when (focus) {
-        SyncFocus.ROMS -> it == SyncSetupRow.Roms
-        SyncFocus.LINK -> it == SyncSetupRow.Link(page.link)
-        SyncFocus.SKIP -> it == SyncSetupRow.Skip
-    }
-}.coerceAtLeast(0)
-
-/** Whether [s] has a text field up ([AppState.textEntryOpen]). */
-internal fun textEntryOpen(s: Screen): Boolean = when (s) {
-    is Screen.RaSettings -> s.signingIn
-    is Screen.Onboarding -> s.prompt || s.artSignIn || s.artKey != null   // setup's sign-in and art prompts
-    is Screen.ArtworkSettings -> s.signingIn || s.editingKey
-    is Screen.FilePicker -> s.prompt != null
-    is Screen.Settings -> s.nameDraft != null
-    is Screen.Systems -> s.search != null || s.menu?.prompt.isTextEntry
-    is Screen.Games -> s.search != null || s.menu?.prompt.isTextEntry
-    else -> s.contextMenu?.prompt.isTextEntry
-}
-
-private fun keyboardLabel(android: Boolean): String = if (android) "Android" else "NX"
-
-/** [menu] over the rebuilt [entries], on its game's fresh entry; dropped when that game left the list. */
-internal fun keptMenu(menu: ContextMenu?, entries: List<Listed>): ContextMenu? {
-    val entry = menu?.entry ?: return menu
-    val fresh = entries.firstOrNull { it.game.path == entry.game.path } ?: return null
-    return menu.copy(entry = fresh)
-}

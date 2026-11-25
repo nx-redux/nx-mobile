@@ -20,8 +20,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.SubcomposeLayout
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
@@ -195,15 +193,8 @@ fun TopStatsPage(stats: TopStats, onLaunch: (Listed) -> Unit, prefer: BackdropAr
             val loose = Constraints(maxWidth = constraints.maxWidth)
             val head = subcompose("head") {
                 Column {
-                    // Trimmed line spacing: the title and the facts line read as one block.
-                    Text(
-                        stats.title, color = colors.listText, fontFamily = font, fontSize = 40.sp, lineHeight = 42.sp, fontWeight = FontWeight.Bold,
-                        maxLines = 2, overflow = TextOverflow.Ellipsis, style = TextStyle(lineHeightStyle = TOP_TIGHT_LINES),
-                    )
-                    Text(
-                        statsLine(stats, now), color = colors.hint, fontFamily = font, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        style = TextStyle(lineHeightStyle = TOP_TIGHT_LINES), modifier = Modifier.padding(top = 2.dp),
-                    )
+                    TopTitle(stats.title)
+                    TopLine(statsLine(stats, now))
                     biosPill(stats.bios)?.let { pill ->
                         Text(
                             pill, color = colors.alertText, fontFamily = font, fontSize = 13.sp, maxLines = 1,

@@ -8,18 +8,9 @@
 #include <cstdio>
 #include <cstring>
 
-using namespace libretrodroid;
+#include "check.h"
 
-static int fails = 0;
-#define CHECK(cond, msg)                \
-    do {                                \
-        if (cond) {                     \
-            printf("PASS: %s\n", msg);  \
-        } else {                        \
-            printf("FAIL: %s\n", msg);  \
-            fails++;                    \
-        }                               \
-    } while (0)
+using namespace libretrodroid;
 
 static const uint64_t MB = 1024ULL * 1024;
 

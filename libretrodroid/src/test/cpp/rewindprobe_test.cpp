@@ -5,18 +5,9 @@
 
 #include <cstdio>
 
-using namespace libretrodroid;
+#include "check.h"
 
-static int fails = 0;
-#define CHECK(cond, msg)                \
-    do {                                \
-        if (cond) {                     \
-            printf("PASS: %s\n", msg);  \
-        } else {                        \
-            printf("FAIL: %s\n", msg);  \
-            fails++;                    \
-        }                               \
-    } while (0)
+using namespace libretrodroid;
 
 static const unsigned LIMIT = 900;   // 15 s at 60 fps
 

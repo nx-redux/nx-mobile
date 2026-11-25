@@ -10,6 +10,7 @@ object StorageLayout {
     private const val SHARED = ".userdata/shared/"
     private const val ANDROID = ".userdata/android/"
     private const val HIDDEN = "hidden.txt"
+    private const val BADGES = "badges.txt"
     private val STAY_FOLDERS = setOf("ra", "sidecars")
 
     /** The kind of [rel], a `/`-separated path relative to the private root. */
@@ -20,9 +21,9 @@ object StorageLayout {
         else -> Kind.STAY
     }
 
-    /** `hidden.txt`, and a file in a per-core folder (`<TAG>-<core>/`); every other android file stays. */
+    /** `hidden.txt`, `badges.txt`, and a file in a per-core folder (`<TAG>-<core>/`); every other android file stays. */
     private fun androidKind(tail: String): Kind {
-        if (tail == HIDDEN) return Kind.MOVE
+        if (tail == HIDDEN || tail == BADGES) return Kind.MOVE
         val slash = tail.indexOf('/')
         if (slash <= 0) return Kind.STAY
         val folder = tail.substring(0, slash)

@@ -10,8 +10,8 @@ sealed interface CaptureResult {
 /**
  * Press to bind, on raw key codes (extra paddles' BUTTON_1..16 too, which no NxButton names), shared by Controls ->
  * Shortcuts and the in-game Shortcuts page. MENU ([ShortcutBinding.MODIFIERS]) held and another key pressed is that
- * combo; any other key pressed alone is that key; MENU pressed and released alone binds nothing (L23:
- * MENU alone opens the in-game menu) and keeps waiting. B or Back alone cancels, so neither binds as a single button
+ * combo; any other key pressed alone is that key; MENU pressed and released alone binds nothing (MENU
+ * alone opens the in-game menu) and keeps waiting. B or Back alone cancels, so neither binds as a single button
  * (MENU+B still does). SELECT or START as the key, alone or with MENU, is refused ([ShortcutBinding.GAME_KEYS]: they
  * stay the game's), as is a result in [reserved] (a console's built-in hotkeys, [ConsoleHotkeys.always] by default).
  *

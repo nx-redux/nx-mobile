@@ -108,7 +108,8 @@ internal enum class BackdropSlot { BOX, LOGO, TOOL, COLLECTION }
  */
 internal fun backdropSlotGeometry(slot: BackdropSlot, bodyH: Float, captionDp: Float = 0f, portraitW: Float? = null): RowGeometry = when (slot) {
     BackdropSlot.BOX -> rowGeometry(RowStyle.BACKDROP, false, bodyH, captionDp)
-    // On a portrait body [portraitW] wide, the console's pad held to [CONSOLE_PAD_MAX_SHARE] of it.
+    // On a body [portraitW] wide (any orientation: a short landscape one as a skin's touch screen too), the console's pad
+    // held to [CONSOLE_PAD_MAX_SHARE] of it; a wide body leaves it as it is.
     BackdropSlot.LOGO -> rowGeometry(RowStyle.BACKDROP, true, bodyH, captionDp).let { g -> portraitW?.let { g.scaledBy(consolePortraitFit(g.itemH, it)) } ?: g }
     BackdropSlot.TOOL, BackdropSlot.COLLECTION -> RowGeometry(
         itemW = if (slot == BackdropSlot.COLLECTION) COLLECTION_SLOT_W else TOOL_SLOT_W, itemH = TOOL_SLOT_H,
@@ -286,7 +287,7 @@ internal fun rowBlockTop(bodyDp: Float, itemH: Float, captionDp: Float): Float {
  */
 internal fun titleRoomSizingBody(boxDp: Float, titleRoomDp: Float): Float = (boxDp - titleRoomDp.coerceAtLeast(0f)).coerceAtLeast(0f)
 
-/** A portrait game list Carousel's selected tile is at most this share of the body's width ([carouselRowPlace]). */
+/** A Carousel's selected tile is at most this share of the body's width ([carouselRowPlace]), so its neighbours show. */
 internal const val CAROUSEL_TILE_MAX_SHARE = 0.6f
 
 /** A Carousel's first neighbour, of the selected tile, and each further one's of the one before ([carouselRowPlace]). */
@@ -305,19 +306,20 @@ internal data class CarouselRowPlace(val g: RowGeometry, val top: Float, val cap
 /**
  * The Carousel row (Home's and a game list's) in a box [boxDp] tall with [captionDp] of caption room under it: sized from the shown
  * title's body ([titleRoomSizingBody]: a hidden title's [titleRoomDp] left out), the block ([rowBlockTop])
- * centred in the whole box. On a portrait body [portraitW] wide, the selected tile (and the row's gaps) is
- * shrunk to at most [CAROUSEL_TILE_MAX_SHARE] of it, so its neighbours show either side. The first
+ * centred in the whole box. On a body [bodyW] wide (any orientation: a portrait screen, or a short landscape one as a
+ * pad skin's touch screen), the selected tile (and the row's gaps) is shrunk to at most [CAROUSEL_TILE_MAX_SHARE] of
+ * it, so its neighbours show either side; a wide body leaves it at [CAROUSEL_MAX_W]. The first
  * neighbours are at [CAROUSEL_SIDE_SCALE], each further one [CAROUSEL_TAPER] of the one before. The selection is never
  * wider than [CAROUSEL_MAX_W]. [maxItemH] (a game list's, [carouselItemHMax]): the selection is never taller, the row
  * (its gaps, its neighbours) scaled down with it, and the place says it is [CarouselRowPlace.capped]; null, no such cap
  * (Home's row).
  */
-internal fun carouselRowPlace(boxDp: Float, titleRoomDp: Float, captionDp: Float, portraitW: Float? = null, maxItemH: Float? = null): CarouselRowPlace {
+internal fun carouselRowPlace(boxDp: Float, titleRoomDp: Float, captionDp: Float, bodyW: Float? = null, maxItemH: Float? = null): CarouselRowPlace {
     val spec = rowGeometry(RowStyle.CAROUSEL, false, titleRoomSizingBody(boxDp, titleRoomDp), captionDp)
     val widthCapped = spec.scaledBy(min(1f, CAROUSEL_MAX_W / spec.itemW))
     val sides = widthCapped.copy(scale = CAROUSEL_SIDE_SCALE, taper = CAROUSEL_TAPER)
     val uncapped = sides.let { g ->
-        portraitW?.let { w -> g.scaledBy(min(1f, CAROUSEL_TILE_MAX_SHARE * w / g.itemW)) } ?: g
+        bodyW?.let { w -> g.scaledBy(min(1f, CAROUSEL_TILE_MAX_SHARE * w / g.itemW)) } ?: g
     }
     val cap = maxItemH?.takeIf { uncapped.itemH > it }
     val g = cap?.let { uncapped.scaledBy(it / uncapped.itemH) } ?: uncapped

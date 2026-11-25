@@ -6,7 +6,8 @@ data class RaResponse(val status: Int, val body: String)
 class RaHttpException(message: String, cause: Throwable? = null) : Exception(message, cause)
 
 interface RaHttp {
-    suspend fun post(url: String, body: String, contentType: String): RaResponse
+    /** [core]: the running core's [RaRequests.coreToken] for the user agent, null outside a game. */
+    suspend fun post(url: String, body: String, contentType: String, core: String? = null): RaResponse
     /** Binary GET for badges: (status, body bytes). */
     suspend fun getBytes(url: String): Pair<Int, ByteArray>
 }

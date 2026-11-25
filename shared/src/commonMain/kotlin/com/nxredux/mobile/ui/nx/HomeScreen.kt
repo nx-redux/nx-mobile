@@ -55,6 +55,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -80,11 +81,14 @@ import com.nxredux.mobile.ui.HomeStripMost
 import com.nxredux.mobile.ui.HomeView
 import com.nxredux.mobile.ui.InfoLine
 import com.nxredux.mobile.ui.MainRow
+import com.nxredux.mobile.ui.ToolRow
 import com.nxredux.mobile.ui.abstractAccentArtUrl
 import com.nxredux.mobile.ui.continueFrame
 import com.nxredux.mobile.ui.continuePictures
 import com.nxredux.mobile.ui.gridTiles
 import com.nxredux.mobile.ui.homeStripLines
+import com.nxredux.mobile.ui.pinKey
+import com.nxredux.mobile.ui.toolAbstractArtUrl
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
 import kotlin.math.max
@@ -126,6 +130,7 @@ internal fun HomeScreen(
     modifier: Modifier = Modifier,
     layoutKey: Any? = null,
     tabMenu: Boolean = false,
+    iconsWidth: Float = HOME_HEADER_ICONS_ROOM,
 ) {
     val colors = LocalNxColors.current
     val portrait = homeGridPortrait()
@@ -151,10 +156,10 @@ internal fun HomeScreen(
         val b = remember(built, view) { homeBoard(built, view.lines ?: homeStripLines(view.strip), view.tools, view.games, view.shelves) }
         val topCount = view.topCount.coerceIn(0, rows.size)
         val pins = remember(rows, topCount) { rows.drop(topCount) }
-        val pinTiles = remember(pins) { gridTiles(pins) }
-        // The top section's tools and inline games, as their tiles (null: Continue, Pick a game, "+N").
+        val pinTiles = remember(pins) { pins.map { if (it is MainRow.Pin || it is MainRow.Shelf) gridTiles(listOf(it)).single() else null } }
+        // The top section's inline games, as their tiles (null: Continue, Pick a game).
         val topTiles = remember(rows, topCount) {
-            rows.take(topCount).map { if (it is MainRow.PinnedTool || it is MainRow.Pin) gridTiles(listOf(it)).single() else null }
+            rows.take(topCount).map { if (it is MainRow.Pin) gridTiles(listOf(it)).single() else null }
         }
         // Continue's info, kept as one list while it is equal, so a focus move elsewhere lets the card skip.
         val contInfo = remember(continueInfo, signedIn) { timeOnly(homeInfo(continueInfo, signedIn)) }
@@ -174,7 +179,7 @@ internal fun HomeScreen(
         // selection eases it as little as keeps the selected tile in view ([homeBoardTile]),
         // from where it is (a drag included); a new board snaps; a rows swap on the same board (stats, recents) keeps
         // it ([homeScrollStep]).
-        val tiles = b.rowGames + b.shelfTiles.size   // the row tiles the board has rects for: pins, then the shelves'
+        val tiles = b.rowGames + b.toolTiles.size + b.shelfTiles.size   // the row tiles the board has rects for: pins, tools, then shelves
         val pageH = b.pageH
         val scroll = remember { Animatable(0f) }
         val last = remember { arrayOfNulls<Any>(2) }   // the board and the selected rect the scroll last answered
@@ -229,22 +234,35 @@ internal fun HomeScreen(
                         else -> Unit
                     }
                 }
-                // The row tiles under the top section: the pins, then the shelves' games (a shelf's title on 2 lines; a
+                // The bands under the top section: row pinned games, pinned tools, then shelves (a shelf's title on 2 lines; a
                 // New, Not started or Most played game's caption always shows, its console under its name; a pinned game's too).
                 pins.forEachIndexed { k, row ->
                     if (k >= tiles) return@forEachIndexed
                     val i = topCount + k
-                    val lines = if (k >= b.rowGames) 2 else null
-                    val console = (row as? MainRow.Shelf)?.takeIf { homeShelfCaptioned(it.shelf) }?.entry?.system?.displayName
-                    // A shelf game wears its badge top-left on its picture ([HomeBadge], [homeShelfBadge]), as Continue does:
-                    // New's and Not started's reason, Most played's play time.
-                    val reason = (row as? MainRow.Shelf)?.let(::homeShelfBadge)
-                    pinTiles.getOrNull(k)?.let { t ->
-                        val m = Modifier.at(homeBoardTile(b, k)).taps(i, menu = true)
-                        HomeLit(i, selection) { lit ->
-                            Box(m) {
-                                HomePinTile(t, lit, { pinInfo(i) }, signedIn, portrait, Modifier.fillMaxSize(), lines, console, always = row is MainRow.Pin)
-                                reason?.let { HomeBadge(it, portrait, Modifier.align(Alignment.TopStart), lit = lit) }
+                    val rect = homeBoardTile(b, k)
+                    when (row) {
+                        is MainRow.PinnedTool -> {
+                            val m = Modifier.at(rect).taps(i, menu = true)
+                            HomeLit(i, selection) { lit -> HomeToolTile(row.row, lit, rect.h, m) }
+                        }
+                        is MainRow.MoreTools -> {
+                            val m = Modifier.at(rect).taps(i, menu = tabMenu)
+                            HomeLit(i, selection) { lit -> HomeMoreTile(row.count, lit, rect.w, m) }
+                        }
+                        else -> {
+                            val lines = if (row is MainRow.Shelf) 2 else null
+                            val console = (row as? MainRow.Shelf)?.takeIf { homeShelfCaptioned(it.shelf) }?.entry?.system?.displayName
+                            // A shelf game wears its badge top-left on its picture ([HomeBadge], [homeShelfBadge]), as Continue does:
+                            // New's and Not started's reason, Most played's play time.
+                            val reason = (row as? MainRow.Shelf)?.let(::homeShelfBadge)
+                            pinTiles.getOrNull(k)?.let { t ->
+                                val m = Modifier.at(rect).taps(i, menu = true)
+                                HomeLit(i, selection) { lit ->
+                                    Box(m) {
+                                        HomePinTile(t, lit, { pinInfo(i) }, signedIn, portrait, Modifier.fillMaxSize(), lines, console, always = row is MainRow.Pin)
+                                        reason?.let { HomeBadge(it, portrait, Modifier.align(Alignment.TopStart), lit = lit) }
+                                    }
+                                }
                             }
                         }
                     }
@@ -285,7 +303,7 @@ internal fun HomeScreen(
         header?.let { hd ->
             Box(Modifier.fillMaxWidth().height(hd.height.dp + NX_TOP_BAND_REACH).graphicsLayer { alpha = band.value }.nxTopBandFade(colors.background))
             if (hd.lines > 0) view.strip?.let {
-                HomeStripLines(it, hd.lines, b.gutter, hd.stripTop, w - b.gutter - homeInsetEnd(whole) - HOME_HEADER_ICONS_ROOM, homeStripLineH(whole), homeStripPitch(whole))
+                HomeStripLines(it, hd.lines, b.gutter, hd.stripTop, w - b.gutter - homeInsetEnd(whole) - iconsWidth, homeStripLineH(whole), homeStripPitch(whole))
             }
         }
     }
@@ -379,6 +397,50 @@ private fun HomePinTile(
         modifier = modifier, titleSize = 12.sp * nxTextScale(), titleLines = titleLines ?: if (portrait) 4 else 3, homeCaption = true,
         subtitle = console, captionAlways = always, drained = true,   // no ring: the selection in colour, the rest grey
     )
+
+/**
+ * A Grid Home pinned tool card (same [HomeBoard.pinW] × [HomeBoard.pinH] size as game tiles): deterministic abstract
+ * art ([toolAbstractArtUrl]) drained to greyscale when unfocused and easing to full colour on focus ([nxDrain]), a
+ * centred icon above the caption fade, and the tool's full name bottom-left over [homeCaptionFade] (easing to the
+ * accent on focus, matching [HomePinTile]).
+ */
+@Composable
+private fun HomeToolTile(tool: ToolRow, lit: Boolean, cardH: Float, modifier: Modifier) {
+    val colors = LocalNxColors.current
+    val litness = nxLitness(lit)
+    val url = remember(tool.pinKey, tool.appId) { toolAbstractArtUrl(tool) }
+    val titleSp = (HOME_TILE_NAME * nxTextScale()).value
+    val captionRoom = (titleSp * 1.15f + 16f).dp
+    val iconSize = ((cardH - captionRoom.value) * 0.62f).coerceIn(28f, 52f).dp
+    val nameColor = lerp(colors.listText.copy(alpha = DRAIN_NAME_ALPHA), colors.accent, litness())   // role: an unselected Grid tile's name
+    val iconTint = lerp(colors.listText.copy(alpha = DRAIN_NAME_ALPHA), colors.listText, litness())   // role: an unselected Grid tile's name
+    Box(modifier.homeCardFrame(colors)) {
+        AsyncImage(
+            model = url, contentDescription = null, contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize().nxDrain(litness),
+        )
+        Box(
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(HOME_CAPTION_SHARE)
+                .homeCaptionFade(colors.background),
+        )
+        Box(
+            Modifier.fillMaxSize().padding(top = 6.dp, bottom = captionRoom),
+            contentAlignment = Alignment.Center,
+        ) {
+            val iconMod = if (tool.appId != null) {
+                Modifier.size(iconSize).nxSaturation(alpha = { nxDimInk(litness()) }, saturation = litness)
+            } else {
+                Modifier.size(iconSize)
+            }
+            ToolIcon(toolIcon(tool.kind), tool.appId, iconTint, iconMod)
+        }
+        HomeText(
+            tool.label, nameColor, titleSp, titleSp * 1.15f, maxLines = 1,
+            modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(start = 10.dp, end = 10.dp, bottom = 8.dp),
+            shadow = titleShadow(),
+        )
+    }
+}
 
 /**
  * "+N" as a tool tile ([ToolTileCell], the pinned tools' size [w]): the count large in the icon's place, over "More".
@@ -501,7 +563,7 @@ private fun RowScope.StripMost(m: HomeStripMost) {
  * Continue: the last game's resume frame, else its screenshot (a hero one not in [portrait]), else its abstract
  * picture ([continuePictures], all through the one image loader). The picture is cropped, framed at 40% from the top, then zoomed [HOME_CONTINUE_ZOOM]
  * about that point and clipped to the card. Over it, the pinned games' caption fade ([homeCaptionFade], the bottom 80%)
- * holds the name (up to 2 balanced lines where the card holds them) and the time ([info], TIME only) at the name's size.
+ * holds the name (one line) and the time ([info], TIME only) at the name's size.
  * With no picture at all it is a title card: the name large in the middle, the time at the bottom. A "Continue"
  * [HomeBadge] sits top-left. No ring or edge: selected, the picture in colour and the name in the accent; not, grey.
  */
@@ -548,23 +610,16 @@ private fun ContinueCard(row: MainRow.Continue, lit: Boolean, info: List<InfoLin
                 )
                 // The pinned games' caption fade, over the card's bottom 80%; the text sits on it at the bottom.
                 Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().fillMaxHeight(HOME_CAPTION_SHARE).homeCaptionFade(colors.background))
-                // The name wraps to a second, balanced line where the card holds it ([homeCaptionTitleLines]),
-                // growing upward from the bottom-anchored block; the time sits under it a step smaller, as on the
-                // pinned games' cards ([nxCardTitleSize] the name, [nxCardStatsSize] the time).
+                // The time sits under the name a step smaller, as on the pinned games' cards ([nxCardTitleSize] the
+                // name, [nxCardStatsSize] the time).
                 val gap = if (portrait) 1.7f else 2.55f
                 val bottom = if (portrait) 8.5f else 10.2f
-                val scale = LocalDensity.current.fontScale
-                val line = titleLine * scale
-                val lines = 1   // one line, an ellipsis, as the tiles' names
                 Column(
                     Modifier.align(Alignment.BottomStart).fillMaxWidth()
                         .padding(horizontal = if (portrait) 10.2.dp else 13.6.dp).padding(bottom = bottom.dp),
                     verticalArrangement = Arrangement.spacedBy(gap.dp),
                 ) {
-                    HomeText(
-                        game.shownName, name, titleSp, titleLine, maxLines = lines, balanced = lines > 1,
-                        shadow = if (lines > 1) titleShadow() else null,
-                    )
+                    HomeText(game.shownName, name, titleSp, titleLine, maxLines = 1)   // one line, an ellipsis, as the tiles' names
                     for (r in rows) InfoRow(r, infoSp, infoLine, sub)
                 }
             } else {
@@ -643,7 +698,7 @@ private fun Modifier.homeCardFrame(colors: NxColors): Modifier {
 
 /**
  * A fresh install's only card: an abstract picture in the accent's palette ([abstractAccentArtUrl]; Crop, through the one
- * image loader), the NX mark in front of it (centred, the drawn mark 60% of the card's [cardH], [homeMarkAlpha] of the
+ * image loader), the NX mark in front of it (centred, the drawn mark 60% of the card's [cardH], [HOME_MARK_ALPHA] of the
  * ink), then "Pick a game" over grey "Nothing played yet" with a soft shadow so they read on any palette. As Continue,
  * no ring: selected, the picture in colour; not, grey ([nxDrain]).
  */
@@ -657,7 +712,7 @@ internal fun PickCard(lit: Boolean, portrait: Boolean, cardH: Float, modifier: M
             AsyncImage(model = url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().nxDrain(litness))
             Image(
                 painterResource(homePickMark), contentDescription = null, contentScale = ContentScale.Fit,
-                colorFilter = ColorFilter.tint(colors.listText.copy(alpha = homeMarkAlpha(false))),   // role: the Pick card's watermark mark
+                colorFilter = ColorFilter.tint(colors.listText.copy(alpha = HOME_MARK_ALPHA)),   // role: the Pick card's watermark mark
                 // Wider than a narrow card is fine: the mark itself is 41% of the box, and the card clips the rest.
                 modifier = Modifier.requiredSize(homeMarkBox(cardH).dp),
             )

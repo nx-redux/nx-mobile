@@ -1,5 +1,7 @@
 package com.nxredux.mobile.ui
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -10,12 +12,10 @@ import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxRow
 import com.nxredux.mobile.ui.nx.NxScreenScaffold
 import com.nxredux.mobile.ui.nx.NX_EDIT_HINTS
-import com.nxredux.mobile.ui.nx.splitWindow
 import com.nxredux.mobile.ui.nx.valueHints
 import com.nxredux.mobile.ui.nx.NxSettingEvent
 import com.nxredux.mobile.ui.nx.NxSettingRow
 import com.nxredux.mobile.ui.nx.NxSettingsPage
-import com.nxredux.mobile.ui.nx.control
 
 private val LIST_HINTS = listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Select"))
 
@@ -67,20 +67,24 @@ fun EmulatorOptionsScreen(
     onSetting: (NxSettingEvent) -> Unit = {}, onTruncated: (String, Boolean) -> Unit = { _, _ -> },
     truncated: String? = null,   // the selected row's description the UI reported cut off ([AppState.settingInfoTruncated])
     editing: Int = -1,   // the row the pad is changing ([AppState.rowEdit]); -1 none
+    dialog: Boolean = true,   // draws Reset to defaults' question itself (the two-pane Settings draws it over its stage)
 ) {
     val rows = remember(screen.rows, editing) {   // not per d-pad move
         screen.rows.mapIndexed { i, r -> emulatorTouchRow(r).let { if (i == editing) it.copy(editing = true) else it } }
     }
-    NxSettingsPage(
-        emulatorOptionsTitle(screen), rows, selectedIndex,
-        hints = if (editing >= 0) NX_EDIT_HINTS
-            else emulatorOptionsHints(screen.rows.getOrNull(selectedIndex), rows.getOrNull(selectedIndex), truncated, rowEditTwoPane(screen, settingsSplit(splitWindow()))),
-        onSelect = { i -> if (screen.rows.getOrNull(i)?.selectable == true) onSelect(i) },   // headers and notices take no tap
-        onOpen = { i -> if (screen.rows.getOrNull(i)?.selectable == true) onOpen(i) },
-        onEvent = { e -> if (screen.rows.getOrNull(e.row)?.selectable == true) onSetting(e) },
-        modifier = modifier, onHint = onHint,
-        onTruncated = onTruncated,
-    )
+    Box(modifier.fillMaxSize()) {
+        NxSettingsPage(
+            emulatorOptionsTitle(screen), rows, selectedIndex,
+            hints = if (editing >= 0) NX_EDIT_HINTS
+                else emulatorOptionsHints(screen.rows.getOrNull(selectedIndex), rows.getOrNull(selectedIndex), truncated),
+            onSelect = { i -> if (screen.rows.getOrNull(i)?.selectable == true) onSelect(i) },   // headers and notices take no tap
+            onOpen = { i -> if (screen.rows.getOrNull(i)?.selectable == true) onOpen(i) },
+            onEvent = { e -> if (screen.rows.getOrNull(e.row)?.selectable == true) onSetting(e) },
+            onHint = onHint,
+            onTruncated = onTruncated,
+        )
+        if (dialog && screen.confirmReset) SettingsResetDialog(EMULATOR_RESET_ASK, onHint)
+    }
 }
 
 internal val NxSettingEvent.row: Int get() = when (this) {
@@ -97,6 +101,7 @@ internal val NxSettingEvent.row: Int get() = when (this) {
 internal fun emulatorTouchRow(row: EmulatorRow): NxSettingRow = when (row) {
     is EmulatorRow.Header -> NxSettingRow(row.label, section = true)
     EmulatorRow.UseEmulatorSettings -> NxSettingRow("Use emulator settings", info = USE_EMULATOR_SETTINGS_INFO, detail = USE_EMULATOR_SETTINGS_DETAIL)
+    EmulatorRow.ResetDefaults -> NxSettingRow(RESET_DEFAULTS_LABEL, info = EMULATOR_RESET_INFO, detail = EMULATOR_RESET_DETAIL)
     is EmulatorRow.Console -> row.row.option.let { o ->
         val note = row.row.disabledNote
         if (note != null) NxSettingRow(o.label, info = note, enabled = false)
@@ -118,20 +123,18 @@ internal fun emulatorTouchRow(row: EmulatorRow): NxSettingRow = when (row) {
     is EmulatorRow.App -> settingsTouchRow(row.row, row.choices, SettingsSection.EMULATORS)
 }
 
+/** Reset to defaults' line on the emulator's page (as every Settings page's) and its fuller text. */
+internal const val EMULATOR_RESET_INFO = "Resets every setting on this page"
+internal const val EMULATOR_RESET_DETAIL = "Put this console's settings and its in-game shortcuts back to their defaults; games with their own settings keep them"
+
+/** Reset to defaults' question on the emulator's page ([Screen.EmulatorOptions.confirmReset]). */
+internal val EMULATOR_RESET_ASK = SettingsResetAsk(
+    "Reset to defaults?", "Every setting saved for this console, its in-game shortcuts included, goes back to its default. Games with their own settings keep them.", "Reset",
+)
+
 /** Use emulator settings' line (what A does) and its fuller text. */
 internal const val USE_EMULATOR_SETTINGS_INFO = "Deletes this game's own settings"
 internal const val USE_EMULATOR_SETTINGS_DETAIL = "Delete this game's settings, so it follows the emulator's again"
-
-internal fun emulatorNxRow(row: EmulatorRow): NxRow = when (row) {
-    is EmulatorRow.Header -> NxRow(row.label, section = true)   // a group's label: grey, never selected
-    EmulatorRow.UseEmulatorSettings -> NxRow("Use emulator settings")
-    is EmulatorRow.Console -> NxRow(row.row.option.label, enabled = row.row.disabledNote == null, secondary = row.row.disabledNote ?: row.row.option.labelOf(row.row.value), cycleable = row.row.disabledNote == null)
-    is EmulatorRow.Core -> NxRow(CoreOptionFilter.rowLabel(row.option, row.inCategory), secondary = CoreOptionFilter.valueLabel(row.option), cycleable = true)
-    is EmulatorRow.Category -> NxRow(row.label, secondary = "›")
-    is EmulatorRow.Notice -> NxRow(row.text)
-    EmulatorRow.Gap -> NxRow("", spacer = true)
-    is EmulatorRow.App -> settingsNxRow(row.row)
-}
 
 /** "<emulator> — <console> (<TAG>)", or the game's name for Game Settings; an open category is appended. */
 internal fun emulatorOptionsTitle(s: Screen.EmulatorOptions): String {
@@ -145,19 +148,15 @@ internal fun emulatorOptionsTitle(s: Screen.EmulatorOptions): String {
  * The page's hints for [row]: on a value row, with its touch row ([touch]), A's Toggle on a switch, Choose on a picker or
  * Change on segments ([padAHint]); X Info while its description is cut off ([truncated]) or says more.
  */
-internal fun emulatorOptionsHints(row: EmulatorRow?, touch: NxSettingRow? = null, truncated: String? = null, twoPane: Boolean = false): List<Hint> {
+internal fun emulatorOptionsHints(row: EmulatorRow?, touch: NxSettingRow? = null, truncated: String? = null): List<Hint> {
     val info = touch != null && nxShowsInfo(touch, truncated)
     val x = if (info) listOf(Hint(NxButton.X, "Info")) else emptyList()
-    fun valueRow() =
-        if (twoPane) listOf(Hint(NxButton.B, "Back")) + (if (touch == null) listOf(Hint(NxButton.A, "Select")) else touch.valueHints(true)) + x
-        // One page: LEFT / RIGHT change it at once, A toggles or opens a picker as before.
-        else listOf(Hint(NxButton.LEFT, "Change"), Hint(NxButton.B, "Back")) +
-            (if (touch == null) listOf(Hint(NxButton.A, "Select")) else touch.valueHints(false).filter { it.button != NxButton.LEFT }) + x
+    fun valueRow() = listOf(Hint(NxButton.B, "Back")) + (touch?.valueHints ?: listOf(Hint(NxButton.A, "Select"))) + x
     return when (row) {
         is EmulatorRow.Console, is EmulatorRow.Core -> valueRow()
         // A hosted Settings row: a value row hints as a console row; Clear link ROM cache A Select, as on Settings.
         is EmulatorRow.App -> if (touch != null && touch.choices.size >= 2) valueRow() else LIST_HINTS + x
-        is EmulatorRow.Category, EmulatorRow.UseEmulatorSettings -> LIST_HINTS + x
+        is EmulatorRow.Category, EmulatorRow.UseEmulatorSettings, EmulatorRow.ResetDefaults -> LIST_HINTS + x
         else -> listOf(Hint(NxButton.B, "Back"))
     }
 }

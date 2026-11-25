@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.unit.dp
 import com.nxredux.mobile.shared.res.Res
 import com.nxredux.mobile.shared.res.menu_icon_lock
+import com.nxredux.mobile.shared.res.nav_icon_layout
 import com.nxredux.mobile.shared.res.nav_icon_recent
 import com.nxredux.mobile.shared.res.nav_icon_search
 import org.jetbrains.compose.resources.DrawableResource
@@ -57,15 +58,24 @@ private fun TopIcon(action: TopIconAction) {
 }
 
 /**
- * The launcher's Recent and Search icons (Search only with games to search, [canSearch]); none without [onHint].
- * [recent] false: no Recent icon (inside Recent, the switcher). They are always icons, never hints in a bar.
- * [onKidsLock]: Kids Mode's lock last, the parent's way in while games are open (the main menu's pages only).
+ * The launcher's Recent, Search (only with games to search, [canSearch]) and optional Layout ([onLayout], lit while its
+ * dropdown is open, [layoutOpen]) icons; none without [onHint]. [recent] false: no Recent icon (inside Recent, the
+ * switcher). They are always icons, never hints in a bar. [onKidsLock]: Kids Mode's lock last, the parent's way in
+ * while games are open (the main menu's pages only).
  */
-fun launcherTopActions(onHint: ((NxButton) -> Unit)?, canSearch: Boolean, recent: Boolean = true, onKidsLock: (() -> Unit)? = null): List<TopIconAction> {
+fun launcherTopActions(
+    onHint: ((NxButton) -> Unit)?,
+    canSearch: Boolean,
+    recent: Boolean = true,
+    onKidsLock: (() -> Unit)? = null,
+    onLayout: (() -> Unit)? = null,
+    layoutOpen: Boolean = false,
+): List<TopIconAction> {
     val hint = onHint ?: return emptyList()
     return buildList {
         if (recent) add(TopIconAction(Res.drawable.nav_icon_recent, "Recent") { hint(NxButton.SELECT) })
         if (canSearch) add(TopIconAction(Res.drawable.nav_icon_search, "Search") { hint(NxButton.START) })
+        onLayout?.let { add(TopIconAction(Res.drawable.nav_icon_layout, "Layout", lit = layoutOpen, onClick = it)) }
         onKidsLock?.let { add(TopIconAction(Res.drawable.menu_icon_lock, "Parent", onClick = it)) }
     }
 }

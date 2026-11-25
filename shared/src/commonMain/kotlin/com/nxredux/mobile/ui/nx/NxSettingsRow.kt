@@ -1,8 +1,8 @@
 package com.nxredux.mobile.ui.nx
 
-import com.nxredux.mobile.ui.SETTINGS_ROWS_FADE_STEPS
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -134,18 +134,8 @@ val NxSettingRow.padAHint: Hint? get() = when (padA) {
     NxPadA.NONE -> null
 }
 
-/**
- * [this] value row's hints by how the page is drawn: beside another page ([twoPane]) A's alone ([padAHint]: Toggle,
- * Choose or Change, LEFT / RIGHT then step it); one page, LEFT / RIGHT change it at once and A toggles a switch or opens
- * a picker (segments step on A too, no hint of their own). [side] false: LEFT / RIGHT leave this row alone (a row
- * Android changes).
- */
-fun NxSettingRow.valueHints(twoPane: Boolean, side: Boolean = true): List<Hint> =
-    if (twoPane) listOfNotNull(padAHint)
-    else listOfNotNull(
-        Hint(NxButton.LEFT, "Change").takeIf { side },
-        when (padA) { NxPadA.FLIP -> Hint(NxButton.A, "Toggle"); NxPadA.PICK -> Hint(NxButton.A, "Choose"); else -> null },
-    )
+/** [this] value row's hints: A's alone ([padAHint]: Toggle, Choose or Change); LEFT / RIGHT step it only after A's Change. */
+val NxSettingRow.valueHints: List<Hint> get() = listOfNotNull(padAHint)
 
 /** The hints while a row is being changed ([NxSettingRow.editing]): LEFT / RIGHT change it, A or B are done. */
 val NX_EDIT_HINTS: List<Hint> = listOf(Hint(NxButton.LEFT, "Change"), Hint(NxButton.B, "Done"))
@@ -262,7 +252,7 @@ fun NxSettingsPage(
     // The Settings rows block ([LocalSettingsBlock]): the title its first line, the rows from the bottom.
     LocalSettingsBlock.current?.let { block ->
         Column(modifier.fillMaxSize()) {
-            SettingsRowsBlock(block, title, Modifier.weight(1f), header) {
+            SettingsRowsBlock(block, title, Modifier.weight(1f), header, listBottom = true) {
                 NxSettingsList(rows, selectedIndex, onSelect, onOpen, onEvent, Modifier, onTruncated, preview, footer)
             }
             NxHintBar(hints, onHint = onHint)
@@ -313,10 +303,7 @@ fun NxSettingsList(
         val footerWidth = listWidth + (footer?.bleedStart ?: 0.dp) + (footer?.bleedEnd ?: 0.dp)
         val footerHeight = footer?.height?.invoke(footerWidth) ?: 0.dp
         // Rows differ in height (a bare row, a group label, segments under the text): kept clear of the fade in px.
-        val fade = settingsRowsFade(sizes.bare, sizes.row / 2)   // the Settings rows block's: two one-line rows
-        val block = LocalSettingsBlock.current != null
-        // A spacer is no row, nor is the footer: a picture faded whole as the outermost row would be hidden by it.
-        val isRow: (Int) -> Boolean = { it < rows.size && !rows[it].spacer }
+        val fade = settingsRowsFade(sizes.row / 2)   // the Settings rows block's thin fixed one
         val edgePx = with(density) { fade.roundToPx() }
         // The selected row's and the list's laid-out heights (before the first layout, the most the row can take and the room).
         val footerPx = with(density) { footerHeight.roundToPx() }
@@ -348,15 +335,14 @@ fun NxSettingsList(
             listState.animateScrollBy(-edgePx.toFloat())
         }
         LazyColumn(
-            // The Settings rows block fades by row ([nxRowFade]); elsewhere the edges fade by pixel.
-            Modifier.nxBleed(outStart, outEnd).heightIn(max = maxHeight)
-                .then(if (block) Modifier.nxRowEdgeMask(listState) else Modifier.nxScrollFade(listState, height = fade, strong = true)),
-            state = listState, flingBehavior = rememberNxRowSnapFling(listState),
+            // The edges fade by pixel: in the Settings rows block its thin fixed fade ([settingsRowsFade]), the next row peeking.
+            Modifier.nxBleed(outStart, outEnd).heightIn(max = maxHeight).nxScrollFade(listState, height = fade, strong = true),
+            contentPadding = PaddingValues(bottom = com.nxredux.mobile.ui.LocalSettingsRowsBottom.current), state = listState, flingBehavior = rememberNxRowSnapFling(listState),
         ) {
             itemsIndexed(rows) { i, row ->
                 val selected = i == selectedIndex
                 // Padded back to the list's edges when the lazy list is widened for its footer.
-                Box(Modifier.then(if (block) Modifier.nxRowFade(listState, i, SETTINGS_ROWS_FADE_STEPS, isRow) else Modifier).padding(start = outStart, end = outEnd)) {
+                Box(Modifier.padding(start = outStart, end = outEnd)) {
                     NxSettingTouchRow(
                         row, selected, sizes, index = i,
                         onTap = { nxSettingRowTap(row, i, onSelect, onOpen) },
@@ -375,6 +361,30 @@ fun NxSettingsList(
                 }
             }
         }
+    }
+}
+
+/**
+ * One settings row ([row]) drawn as an [NxSettingsList] row, with no lazy list under it: safe inside a vertically
+ * scrolling parent, which measures its children with unbounded height (a lazy list there throws). Taps, events and the
+ * fitted segments are the list's.
+ */
+@Composable
+fun NxSettingsSingleRow(
+    row: NxSettingRow, selected: Boolean,
+    onSelect: () -> Unit, onOpen: () -> Unit, onEvent: (NxSettingEvent) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val itemHeight = nxOptionsRowHeight(NxListPitch, LocalNxOptionText.current)   // Appearance → Text size
+    BoxWithConstraints(modifier.fillMaxWidth().padding(horizontal = NxOptionsSidePad).padding(top = 4.dp), contentAlignment = Alignment.TopCenter) {
+        val sizes = nxTouchRowSizes(itemHeight, maxWidth, SETTING_DESC_OF_LABEL)
+        val fitted = remember(row, sizes.segmentsFitLine) { row.fittedTo(sizes.segmentsFitLine) }
+        NxSettingTouchRow(
+            fitted, selected, sizes, index = 0,
+            onTap = { nxSettingRowTap(fitted, 0, { onSelect() }, { onOpen() }) },
+            onEvent = onEvent, onTruncated = { _, _ -> },
+            onButton = { nxTap(0, selected = false, opens = true, { onSelect() }, { onOpen() }) },
+        )
     }
 }
 

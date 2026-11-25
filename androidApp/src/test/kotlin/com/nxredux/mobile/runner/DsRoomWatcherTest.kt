@@ -10,7 +10,7 @@ import org.junit.Test
 class DsRoomWatcherTest {
     private var room = DsPresence.OUT
     private val changes = mutableListOf<DsPresence>()
-    private fun watcher(scope: CoroutineScope = CoroutineScope(Job())) = DsRoomWatcher(scope, { room }) { changes += it }
+    private fun watcher(scope: CoroutineScope = CoroutineScope(Job())) = DsRoomWatcher(scope, { room }, onChange = { changes += it })
 
     @Test fun onlyChangesAreTold() {
         val w = watcher()

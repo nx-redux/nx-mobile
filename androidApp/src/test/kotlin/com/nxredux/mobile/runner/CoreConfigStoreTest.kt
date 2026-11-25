@@ -4,6 +4,7 @@ import com.nxredux.mobile.shortcuts.ShortcutAction
 import com.nxredux.mobile.shortcuts.ShortcutBinding
 import com.nxredux.mobile.shortcuts.ShortcutOverrides
 import com.nxredux.mobile.shortcuts.Shortcuts
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.io.File
@@ -14,6 +15,8 @@ class CoreConfigStoreTest {
     private val dir = Files.createTempDirectory("cfg").toFile()
     private val console = File(dir, "console.cfg")
     private val game = File(dir, "game.cfg")
+
+    @After fun cleanUp() { dir.deleteRecursively() }
 
     @Test fun a_save_writes_only_overrides_and_drops_the_rest() {
         game.writeText("nx_bind_toggle_ff = 103\nnx_bind_touch_1 = reset\nfoo = 1\n")

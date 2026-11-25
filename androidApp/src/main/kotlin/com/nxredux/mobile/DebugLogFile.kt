@@ -40,6 +40,9 @@ object DebugLogFile {
     private var crashHook = false
     /** The game process's console and core ([nameGame]), for its file's name; it may come before the file opens. */
     private var gameLabel: String? = null
+    /** The marker [drain] waits for, and the latch the pump opens when the marker's line reaches the file. */
+    private var drainMark: String? = null
+    private var drained: java.util.concurrent.CountDownLatch? = null
 
     /** Starts this process's file, off the calling thread (the home lookup and the fork touch storage). Idempotent. */
     fun start(context: Context) {
@@ -116,6 +119,25 @@ object DebugLogFile {
         )
     }
 
+    /**
+     * Blocks until this process's lines so far are in the file, at most [timeoutMs]: the game process ends right after
+     * its last lines (a refused launch's reason), and the pipe from logcat lags behind them. A marker line is logged and
+     * the pump opens the latch once it has written it. Off the main thread; returns at once with no file.
+     */
+    fun drain(timeoutMs: Long) {
+        val latch = java.util.concurrent.CountDownLatch(1)
+        val mark = "log-drain-" + System.nanoTime()
+        synchronized(lock) {
+            if (out == null) return
+            drained = latch
+            drainMark = mark
+        }
+        // Straight to logcat, not through NxLog: the marker must reach the pipe whatever NxLog filters.
+        android.util.Log.i(TAG, mark)
+        runCatching { latch.await(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS) }
+        synchronized(lock) { drainMark = null; drained = null }
+    }
+
     /** Copies the child's lines into [sink] until the child ends or [stop] swaps the file out. */
     private fun pump(child: Process, sink: RotatingFile) {
         try {
@@ -126,6 +148,7 @@ object DebugLogFile {
                         if (out !== sink) return
                         sink.write(line)
                         if (!reader.ready()) sink.flush()
+                        drainMark?.let { mark -> if (line.contains(mark)) { sink.flush(); drained?.countDown() } }
                     }
                 }
             }

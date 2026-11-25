@@ -32,6 +32,8 @@ import kotlinx.coroutines.launch
  */
 internal interface KidsHost {
     fun showNotice(text: String)
+    /** [text] in an info dialog titled [title] (A or B closes it). */
+    fun showMessage(title: String, text: String)
     /** The main menu on [category] (null: the tab last shown). */
     fun showSystemsNow(category: MenuCategory? = null)
     /** The tiles screen replaces the menu: no hidden tab pushed over it, nothing game-related on the top screen. */
@@ -193,8 +195,7 @@ internal class KidsScreensController(
     fun kidsLockPressed() {
         val k = kids ?: return
         if (screen.value != Screen.KidsHome) return
-        screen.value = Screen.KidsPin(PinPurpose.UNLOCK, waitUntil = k.waitUntil)
-        selection.value = ListSelection(0, KIDS_PIN_KEYS.size)
+        showPin(Screen.KidsPin(PinPurpose.UNLOCK, waitUntil = k.waitUntil))
         kidsUnlockInput()
     }
 
@@ -205,9 +206,14 @@ internal class KidsScreensController(
     fun kidsParentPressed() {
         val k = kids ?: return
         if (kidsMode !is KidsMode.Open || !screen.value.isMainMenu) return   // any tab, the Games tab too
-        screen.value = Screen.KidsPin(PinPurpose.UNLOCK, waitUntil = k.waitUntil)
-        selection.value = ListSelection(0, KIDS_PIN_KEYS.size)
+        showPin(Screen.KidsPin(PinPurpose.UNLOCK, waitUntil = k.waitUntil))
         kidsUnlockInput()
+    }
+
+    /** A PIN prompt, the highlight on its first key. */
+    private fun showPin(page: Screen.KidsPin) {
+        screen.value = page
+        selection.value = ListSelection(0, KIDS_PIN_KEYS.size)
     }
 
     /** Off the unlock PIN or the sheet without a choice: the tiles while Locked, else the main menu the lock was pressed on. */
@@ -560,8 +566,7 @@ internal class KidsScreensController(
 
     /** The new-PIN prompt (Change PIN's or setup's), with [message] under its dots. */
     private fun kidsAskNewPin(message: String?) {
-        screen.value = Screen.KidsPin(if (kidsPinChange) PinPurpose.CHANGE else PinPurpose.SETUP_NEW, message = message)
-        selection.value = ListSelection(0, KIDS_PIN_KEYS.size)
+        showPin(Screen.KidsPin(if (kidsPinChange) PinPurpose.CHANGE else PinPurpose.SETUP_NEW, message = message))
     }
 
     /** Enter on a new PIN: the first time asks again; the second must match, else both start over ([KIDS_PIN_MISMATCH]). */
@@ -569,8 +574,7 @@ internal class KidsScreensController(
         if (!kidsParentOnly()) return
         if (s.purpose != PinPurpose.SETUP_CONFIRM) {
             kidsNewPin = s.typed
-            screen.value = Screen.KidsPin(PinPurpose.SETUP_CONFIRM)
-            selection.value = ListSelection(0, KIDS_PIN_KEYS.size)
+            showPin(Screen.KidsPin(PinPurpose.SETUP_CONFIRM))
             return
         }
         val pin = kidsNewPin
@@ -593,7 +597,6 @@ internal class KidsScreensController(
         if (!kidsParentOnly()) return
         val k = kids ?: return
         val skip = when (step) {
-            KidsSetupStep.PIN -> return kidsAskNewPin(null)
             KidsSetupStep.USAGE -> k.hasUsageAccess()
             KidsSetupStep.ALARMS -> k.canExactAlarms()
             KidsSetupStep.HOME -> !kidsNeedsHome()
@@ -658,7 +661,7 @@ internal class KidsScreensController(
             is KidsSetupRow.Day -> kidsOpenDay(row.day, setup = true)
             KidsSetupRow.Next -> when {
                 !s.setup -> kidsShowPage(SettingsKind.KIDS_APPS)
-                s.step == KidsSetupStep.APPS && s.allowed.isEmpty() -> host.showNotice(KIDS_PICK_ONE_APP)   // the tiles would be empty
+                s.step == KidsSetupStep.APPS && s.allowed.isEmpty() -> host.showMessage("Allowed apps", KIDS_PICK_ONE_APP_MESSAGE)   // the tiles would be empty
                 else -> kidsSetupAfter(s.step)
             }
             KidsSetupRow.Grant -> if (s.step == KidsSetupStep.USAGE) k.openUsageAccess() else k.openExactAlarms()   // on with the step on resume
@@ -678,7 +681,8 @@ internal class KidsScreensController(
     }
 
     /**
-     * The pad on a setup step: UP / DOWN along its rows, A or a side step on an app's switch, B out. B leaves setup for
+     * The pad on a setup step: UP / DOWN along its rows, A on an app's switch flips it (LEFT / RIGHT leave it alone, as on
+     * every settings page), B out. B leaves setup for
      * the Kids Mode page (Kids Mode stays off, nothing stored but the apps and times chosen); Allowed apps' B is its Done.
      */
     fun onKidsSetupButton(s: Screen.KidsSetup, button: NxButton) {
@@ -686,14 +690,16 @@ internal class KidsScreensController(
         val rows = kidsSetupRows(s)
         when (button) {
             NxButton.UP, NxButton.DOWN -> if (rows.isNotEmpty()) selection.value = sel.copy(index = (sel.index + if (button == NxButton.UP) -1 else 1).mod(rows.size))
-            // An app's switch flips; the two buttons side by side (Grant / Skip, Use as home screen / Skip): LEFT the first, RIGHT the second.
-            NxButton.LEFT, NxButton.RIGHT -> when (val row = rows.getOrNull(sel.index)) {
-                is KidsSetupRow.App -> kidsToggleApp(s, row.app)
-                is KidsSetupRow.Day, KidsSetupRow.Next, null -> Unit
+            // The two buttons side by side (Grant / Skip, Use as home screen / Skip): LEFT the first, RIGHT the second.
+            NxButton.LEFT, NxButton.RIGHT -> when (rows.getOrNull(sel.index)) {
+                is KidsSetupRow.App, is KidsSetupRow.Day, KidsSetupRow.Next, null -> Unit
                 else -> selection.value = sel.copy(index = if (button == NxButton.LEFT) 0 else 1)
             }
             NxButton.A -> kidsSetupRow(sel.index)
             NxButton.B -> host.back()
+            // Continue (or Done) from anywhere in a long list of apps or days, without scrolling to it
+            NxButton.X -> rows.indexOf(KidsSetupRow.Next).takeIf { it >= 0 }?.let(::kidsSetupRow)
+            NxButton.Y -> kidsSetupMore(s)?.let { host.showMessage(kidsSetupText(s).first, it) }   // the step's info icon
             else -> Unit
         }
     }
@@ -726,13 +732,6 @@ internal class KidsScreensController(
     private fun kidsDayLocked(s: Screen.KidsDayEdit, locked: Boolean) {
         if (locked == (s.window == null)) return
         kidsDaySet(s, if (locked) null else s.kept, KidsDayRow.LOCKED)
-    }
-
-    /** From or To [by] half hours, From kept before To ([kidsDayStep]). */
-    private fun kidsDayStep(s: Screen.KidsDayEdit, row: KidsDayRow, by: Int) {
-        val w = s.window ?: return
-        val next = kidsDayStep(w, row == KidsDayRow.FROM, by)
-        if (next != w) kidsDaySet(s, next, row)
     }
 
     /** A on (or a tap on) day row [index]: Locked flips, From / To open their picker, Done goes back. */
@@ -769,17 +768,12 @@ internal class KidsScreensController(
         }
     }
 
-    /** The pad on a day: UP / DOWN along the rows, LEFT / RIGHT half an hour on From / To (or flip Locked), A as a tap, B back. */
+    /** The pad on a day: UP / DOWN along the rows, A as a tap (Locked flips, From / To open their picker), B back; LEFT / RIGHT change nothing. */
     fun onKidsDayButton(s: Screen.KidsDayEdit, button: NxButton) {
         val sel = selection.value
         val rows = kidsDayRows(s)
         when (button) {
             NxButton.UP, NxButton.DOWN -> selection.value = sel.copy(index = (sel.index + if (button == NxButton.UP) -1 else 1).mod(rows.size))
-            NxButton.LEFT, NxButton.RIGHT -> when (val row = rows.getOrNull(sel.index)) {
-                KidsDayRow.FROM, KidsDayRow.TO -> kidsDayStep(s, row, if (button == NxButton.LEFT) -1 else 1)
-                KidsDayRow.LOCKED -> kidsDayLocked(s, s.window != null)
-                else -> Unit
-            }
             NxButton.A -> kidsDayRow(sel.index)
             NxButton.B -> host.back()
             else -> Unit
@@ -832,4 +826,4 @@ internal const val KIDS_FLAG_NAME = "kids-mode.flag"
 internal const val KIDS_FLAG_FAILED = "Flag file couldn't be created — check All files access"
 
 /** Setup's Apps step with none picked: its line, and the notice when Continue is refused. */
-internal const val KIDS_PICK_ONE_APP = "Pick at least one app"
+internal const val KIDS_PICK_ONE_APP_MESSAGE = "Pick at least one app your kid can open while games are closed."

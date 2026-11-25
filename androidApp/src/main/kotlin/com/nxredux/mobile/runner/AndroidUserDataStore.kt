@@ -1,6 +1,7 @@
 package com.nxredux.mobile.runner
 
 import android.content.Context
+import com.nxredux.mobile.library.GameBadges
 import com.nxredux.mobile.storage.DataRoot
 import com.nxredux.mobile.storage.FileRefs
 import com.nxredux.mobile.storage.NxPaths
@@ -17,39 +18,41 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
- * nx-redux user data under the data root (recent.txt, shortcuts.txt, hidden.txt, `.minui` slot markers and screenshots):
+ * nx-redux user data under the data root (recent.txt, shortcuts.txt, hidden.txt, badges.txt, `.minui` slot markers and screenshots):
  * [DataRoot.of], read per call (on the IO dispatcher), so a move or a home change is followed.
  */
 class AndroidUserDataStore(context: Context) : UserDataStore {
     private val app = context.applicationContext
     private val root: File get() = DataRoot.of(app)
 
-    override suspend fun readRecents(): List<Recent> = withContext(Dispatchers.IO) {
-        runCatching { File(root, NxPaths.RECENTS).takeIf { it.exists() }?.readText()?.let(Recents::parse) }.getOrNull() ?: emptyList()
+    override suspend fun readRecents(): List<Recent> = readList(NxPaths.RECENTS, Recents::parse)
+
+    override suspend fun writeRecents(list: List<Recent>) {
+        writeText(NxPaths.RECENTS, "recents") { Recents.render(list) }
     }
 
-    override suspend fun writeRecents(list: List<Recent>) = withContext(Dispatchers.IO) {
-        runCatching { File(root, NxPaths.RECENTS).writeAtomically(Recents.render(list).encodeToByteArray()) }
-            .onFailure { NxLog.e("UserData", "writing recents failed", it) }
-        Unit
+    override suspend fun readPins(): List<Shortcut> = readList(NxPaths.SHORTCUTS, Shortcuts::parse)
+
+    override suspend fun writePins(list: List<Shortcut>): Boolean = writeText(NxPaths.SHORTCUTS, "pins") { Shortcuts.render(list) }
+
+    override suspend fun readHidden(): List<String> = readList(NxPaths.HIDDEN, PathLines::parse)
+
+    override suspend fun writeHidden(list: List<String>): Boolean = writeText(NxPaths.HIDDEN, "hidden") { PathLines.render(list) }
+
+    /** A file that is there but cannot be read throws, so a rewrite never drops the other games' lines. */
+    override suspend fun readBadges(): Map<String, String> = withContext(Dispatchers.IO) {
+        File(root, NxPaths.BADGES).takeIf { it.exists() }?.readText()?.let(GameBadges::parse) ?: emptyMap()
     }
 
-    override suspend fun readPins(): List<Shortcut> = withContext(Dispatchers.IO) {
-        runCatching { File(root, NxPaths.SHORTCUTS).takeIf { it.exists() }?.readText()?.let(Shortcuts::parse) }.getOrNull() ?: emptyList()
+    override suspend fun writeBadges(choices: Map<String, String>): Boolean = writeText(NxPaths.BADGES, "badges") { GameBadges.render(choices) }
+
+    private suspend fun <T> readList(path: String, parse: (String) -> List<T>): List<T> = withContext(Dispatchers.IO) {
+        runCatching { File(root, path).takeIf { it.exists() }?.readText()?.let(parse) }.getOrNull() ?: emptyList()
     }
 
-    override suspend fun writePins(list: List<Shortcut>): Boolean = withContext(Dispatchers.IO) {
-        runCatching { File(root, NxPaths.SHORTCUTS).writeAtomically(Shortcuts.render(list).encodeToByteArray()); true }
-            .onFailure { NxLog.e("UserData", "writing pins failed", it) }.getOrDefault(false)
-    }
-
-    override suspend fun readHidden(): List<String> = withContext(Dispatchers.IO) {
-        runCatching { File(root, NxPaths.HIDDEN).takeIf { it.exists() }?.readText()?.let(PathLines::parse) }.getOrNull() ?: emptyList()
-    }
-
-    override suspend fun writeHidden(list: List<String>): Boolean = withContext(Dispatchers.IO) {
-        runCatching { File(root, NxPaths.HIDDEN).writeAtomically(PathLines.render(list).encodeToByteArray()); true }
-            .onFailure { NxLog.e("UserData", "writing hidden failed", it) }.getOrDefault(false)
+    private suspend fun writeText(path: String, what: String, render: () -> String): Boolean = withContext(Dispatchers.IO) {
+        runCatching { File(root, path).writeAtomically(render().encodeToByteArray()); true }
+            .onFailure { NxLog.e("UserData", "writing $what failed", it) }.getOrDefault(false)
     }
 
     override suspend fun resumeInfo(tag: String, fileName: String): ResumeInfo = withContext(Dispatchers.IO) {

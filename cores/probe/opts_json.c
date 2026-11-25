@@ -136,7 +136,7 @@ static int section_add_item(OptSection *sec, const char *key, const char *label,
    return 0;
 }
 
-/* Drops sections without items (built lazily in NX Redux; here afterwards). */
+/* Drops sections without items. */
 static void schema_compact(OptSchema *s) {
    int w = 0;
    for (int r = 0; r < s->n; r++) {

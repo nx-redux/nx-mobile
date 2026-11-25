@@ -1,5 +1,6 @@
 package com.nxredux.mobile.library
 
+import com.nxredux.mobile.library.disc.ps1BinBytes
 import com.nxredux.mobile.runner.ContentRef
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
@@ -31,67 +32,79 @@ class RomMoverTest {
         ),
     )
 
-    private fun names(src: FakeRomsSource, dir: String) = kotlinx.coroutines.runBlocking { src.listChildren(ContentRef(dir)).map { it.name } }
+    /**
+     * Folder [folder]'s placed games in [index] as move items into the home's console folders: how the mover is fed in
+     * these tests (the app only moves the home's own games; an extra folder is never moved from).
+     */
+    private suspend fun plan(source: RomsSource, index: LibraryIndex, folder: String): List<MoveItem> = index.systems
+        .filter { !it.unassigned }
+        .flatMap { system ->
+            val target = system.folderName.ifEmpty { com.nxredux.mobile.runner.CoreRegistry.consoleOf(system.tag)?.let { "${it.displayName} (${it.tags.first()})" }.orEmpty() }
+            if (target.isEmpty()) emptyList() else system.games.filter { it.source == folder }.map { game ->
+                val dir = ContentRef(game.folder)
+                MoveItem(dir, listOf(game.file) + DiscSheet.loadedNames(source, dir, game.file) + MsuSets.loadedNames(source, dir, game.file, game.badge), target)
+            }
+        }
 
     @Test fun a_cue_moves_with_its_bins_and_the_unassigned_stay() = runTest {
         val src = source()
         val mover = RomMover(src, ContentRef("H"))
-        val items = mover.plan(index, "x")
+        val items = plan(src, index, "x")
         assertEquals(listOf("Sony PlayStation (PS)", "Game Boy Advance (GBA)"), items.map { it.targetFolder })
         assertEquals(listOf("G.cue", "G (Track 1).bin", "G (Track 2).bin"), items[0].files)
         val result = mover.run(items, { _, _ -> }) { false }
         assertEquals(MoveResult(moved = 2), result)
-        assertEquals(listOf("G.cue", "G (Track 1).bin", "G (Track 2).bin"), names(src, "H/Roms/Sony PlayStation (PS)"))
-        assertEquals(listOf("K.gba"), names(src, "H/Roms/Game Boy Advance (GBA)"))
-        assertEquals(listOf("N.chd"), names(src, "x"))
+        assertEquals(listOf("G.cue", "G (Track 1).bin", "G (Track 2).bin"), listedNames(src, "H/Roms/Sony PlayStation (PS)"))
+        assertEquals(listOf("K.gba"), listedNames(src, "H/Roms/Game Boy Advance (GBA)"))
+        assertEquals(listOf("N.chd"), listedNames(src, "x"))
     }
 
-    // Review Focus 4: a name already in the target leaves both where they are.
+    // A name already in the target leaves both where they are.
     @Test fun a_clash_leaves_the_game_in_place() = runTest {
         val src = source(home = listOf("K.gba"))
         val mover = RomMover(src, ContentRef("H"))
-        val result = mover.run(mover.plan(index, "x"), { _, _ -> }) { false }
+        val result = mover.run(plan(src, index, "x"), { _, _ -> }) { false }
         assertEquals(MoveResult(moved = 1, clashed = 1), result)
-        assertTrue("K.gba" in names(src, "x"))
+        assertTrue("K.gba" in listedNames(src, "x"))
     }
 
     @Test fun without_a_provider_move_it_copies_then_deletes() = runTest {
         val src = source().apply { moveRefused = true }
         val mover = RomMover(src, ContentRef("H"))
-        assertEquals(2, mover.run(mover.plan(index, "x"), { _, _ -> }) { false }.moved)
-        assertEquals(listOf("N.chd"), names(src, "x"))
+        assertEquals(2, mover.run(plan(src, index, "x"), { _, _ -> }) { false }.moved)
+        assertEquals(listOf("N.chd"), listedNames(src, "x"))
     }
 
-    // Review Focus 5: cancel stops between games; the first moved whole, the second untouched.
+    // Cancel stops between games; the first moved whole, the second untouched.
     @Test fun cancel_stops_after_the_current_game() = runTest {
         val src = source()
         val mover = RomMover(src, ContentRef("H"))
         var done = 0
-        val result = mover.run(mover.plan(index, "x"), { d, _ -> done = d }) { done >= 1 }
+        val result = mover.run(plan(src, index, "x"), { d, _ -> done = d }) { done >= 1 }
         assertEquals(MoveResult(moved = 1, cancelled = true), result)
-        assertTrue("K.gba" in names(src, "x"))
-        assertFalse("G.cue" in names(src, "x"))
+        assertTrue("K.gba" in listedNames(src, "x"))
+        assertFalse("G.cue" in listedNames(src, "x"))
     }
 
     // A move that cannot happen (no target folder, a refused copy) is a failure, not a name clash.
     @Test fun a_refused_move_is_a_failure_not_a_clash() = runTest {
         val src = source().apply { moveRefused = true; readOnlyPaths += "H/Roms/Sony PlayStation (PS)" }
         val mover = RomMover(src, ContentRef("H"))
-        assertEquals(MoveResult(moved = 1, failed = 1), mover.run(mover.plan(index, "x"), { _, _ -> }) { false })
-        assertTrue("G.cue" in names(src, "x"))
+        assertEquals(MoveResult(moved = 1, failed = 1), mover.run(plan(src, index, "x"), { _, _ -> }) { false })
+        assertTrue("G.cue" in listedNames(src, "x"))
     }
 
-    // Review Focus 5 again: a cancelled coroutine (the app closing) mid-set still moves the set whole.
+    // A cancelled coroutine (the app closing) mid-set still moves the set whole.
     @Test fun cancelling_the_job_mid_set_leaves_no_half_set() = runTest {
         val src = source()
         val mover = RomMover(src, ContentRef("H"))
-        val items = mover.plan(index, "x")
+        val items = plan(src, index, "x")
         val job = launch { mover.run(items, { _, _ -> }) { false } }
         src.onMove = { job.cancel() }                                     // at the cue's first file
         job.join()
-        val moved = names(src, "H/Roms/Sony PlayStation (PS)")
+        val moved = listedNames(src, "H/Roms/Sony PlayStation (PS)")
         assertTrue(moved.isEmpty() || moved.size == 3, "$moved")
-        assertTrue(names(src, "x").none { it.startsWith("G") } || names(src, "x").count { it.startsWith("G") } == 3)
+        assertTrue(listedNames(src, "x").none { it.startsWith("G") } || listedNames(src, "x").count { it.startsWith("G") } == 3)
     }
 
     // A home's outside games: into Roms by console (a disc folder as a folder), and the folders they empty go.
@@ -111,9 +124,9 @@ class RomMoverTest {
         val r = mover.run(mover.planLoose(files, homeIndex), { _, _ -> }) { false }
         mover.pruneEmpty(ContentRef("H"), files.map { it.relativeDir })
         assertEquals(MoveResult(moved = 2), r)
-        assertEquals(setOf("Old.gba", "K.gba"), names(src, "H/Roms/Game Boy Advance (GBA)").toSet())
-        assertEquals(setOf("G.cue", "G (Track 1).bin", "G (Track 2).bin"), names(src, "H/Roms/Sony PlayStation (PS)/G").toSet())
-        assertEquals(listOf("Roms"), names(src, "H"))                     // Stuff, Stuff/PS and Stuff/PS/G emptied: gone
+        assertEquals(setOf("Old.gba", "K.gba"), listedNames(src, "H/Roms/Game Boy Advance (GBA)").toSet())
+        assertEquals(setOf("G.cue", "G (Track 1).bin", "G (Track 2).bin"), listedNames(src, "H/Roms/Sony PlayStation (PS)/G").toSet())
+        assertEquals(listOf("Roms"), listedNames(src, "H"))                     // Stuff, Stuff/PS and Stuff/PS/G emptied: gone
     }
 
     @Test fun a_loose_file_whose_name_is_taken_stays_with_its_folder() = runTest {
@@ -126,10 +139,10 @@ class RomMoverTest {
         val r = mover.run(mover.planLoose(files, LibraryIndex(LibraryIndex.VERSION, "H", emptyList(), emptyMap(), emptyList())), { _, _ -> }) { false }
         mover.pruneEmpty(ContentRef("H"), files.map { it.relativeDir })
         assertEquals(MoveResult(clashed = 1), r)
-        assertEquals(listOf("K.gba"), names(src, "H/Stuff"))
+        assertEquals(listOf("K.gba"), listedNames(src, "H/Stuff"))
     }
 
-    // I4: a folder is removed only when its parent's listing still shows it: a provider whose listings come back empty
+    // A folder is removed only when its parent's listing still shows it: a provider whose listings come back empty
     // (the Fold's Android 17 fault) never gets a delete that would take a full folder with it.
     @Test fun nothing_is_pruned_while_listings_come_back_empty() = runTest {
         val src = FakeRomsSource(mapOf("H" to listOf("Roms", "Stuff"), "H/Stuff" to listOf("K.gba")))
@@ -155,14 +168,6 @@ class RomMoverTest {
         assertEquals(listOf("Roms", "Stuff"), src.listChildren(ContentRef("H")).map { it.name })
     }
 
-    /**
-     * A cue written in Windows-1252 that names its second track in another case: [FakeRomsSource.readText] gives what a
-     * UTF-8 read makes of it (U+FFFD for each Latin-1 byte), its head the bytes as they are.
-     */
-    private val legacyCue = "FILE \"Pok\u00e9mon (Track 1).bin\" BINARY\n TRACK 01 MODE2/2352\nFILE \"pok\u00e9mon (track 2).BIN\" BINARY\n TRACK 02 AUDIO\n"
-    private val legacyCueBytes = ByteArray(legacyCue.length) { legacyCue[it].code.toByte() }
-    private val legacyCueUtf8 = legacyCue.replace('\u00e9', '\uFFFD')
-
     @Test fun a_legacy_cue_moves_with_its_bins_under_their_names_on_disk() = runTest {
         val bins = listOf("Pok\u00e9mon (Track 1).bin", "Pok\u00e9mon (Track 2).bin")
         val src = FakeRomsSource(
@@ -172,10 +177,10 @@ class RomMoverTest {
         )
         val idx = LibraryIndex(LibraryIndex.VERSION, "H", emptyList(), emptyMap(), listOf(IndexedSystem("PS", "Sony PlayStation", games = listOf(game("P.cue", "P")))))
         val mover = RomMover(src, ContentRef("H"))
-        val items = mover.plan(idx, "x")
+        val items = plan(src, idx, "x")
         assertEquals(listOf("P.cue") + bins, items.single().files)
         assertEquals(MoveResult(moved = 1), mover.run(items, { _, _ -> }) { false })
-        assertEquals(listOf("P.cue") + bins, names(src, "H/Roms/Sony PlayStation (PS)"))
+        assertEquals(listOf("P.cue") + bins, listedNames(src, "H/Roms/Sony PlayStation (PS)"))
     }
 
     @Test fun a_loose_legacy_cue_moves_with_its_bins() = runTest {
@@ -183,7 +188,7 @@ class RomMoverTest {
         val src = FakeRomsSource(
             mapOf("H" to listOf("Roms", "Stuff"), "H/Roms" to emptyList(), "H/Stuff" to listOf("P.cue") + bins),
             texts = mapOf("H/Stuff/P.cue" to legacyCueUtf8),
-            bytes = mapOf("H/Stuff/P.cue" to legacyCueBytes, "H/Stuff/${bins[0]}" to ps1Bin(), "H/Stuff/${bins[1]}" to ByteArray(20)),
+            bytes = mapOf("H/Stuff/P.cue" to legacyCueBytes, "H/Stuff/${bins[0]}" to ps1BinBytes(), "H/Stuff/${bins[1]}" to ByteArray(20)),
         )
         val files = LibraryScanner(src).scanOutsideRoms(ContentRef("H"), emptyMap())
         val mover = RomMover(src, ContentRef("H"))
@@ -191,6 +196,4 @@ class RomMoverTest {
         assertEquals(listOf("P.cue") + bins, items.single().files)
         assertEquals(MoveResult(moved = 1), mover.run(items, { _, _ -> }) { false })
     }
-
-    private fun ps1Bin(): ByteArray = com.nxredux.mobile.library.disc.DiscProbeTest().ps1BinBytes()
 }

@@ -33,6 +33,9 @@ class PadMap private constructor(
     /** The button the app's menus act on for an on-screen [button]; the game still receives the raw button. */
     fun menuButton(button: NxButton): NxButton = menu[button] ?: button
 
+    /** The Sega pad resolved to 3 buttons (no X Y Z, no Mode): its skin is the A B C one. */
+    val segaThree: Boolean get() = segaCluster && SELECT in hidden
+
     /** The keycode a pressed [keyCode] reaches the core as; keys that are not face/shoulder/START/SELECT pass through. */
     fun sendKey(keyCode: Int): Int {
         val button = BY_KEY[keyCode] ?: return keyCode
@@ -93,7 +96,7 @@ class PadMap private constructor(
             "GBA", "MGBA" -> PadMap(labels = TURBO_AB + mapOf(L2 to "TL", R2 to "TR"))
             "VB" -> PadMap(labels = mapOf(X to "Batt", L2 to "R↑", R2 to "R←"))
             "FC", "FDS" -> PadMap(labels = mapOf(L1 to "Side", R1 to "Insert", R2 to "Coin"))
-            // The DS has only L and R. L2 and R2 are NX Redux's stylus and swap-screens hotkeys (NdsHotkeys): a controller's
+            // The DS has only L and R. L2 and R2 are NX Redux's swap-screens and stylus hotkeys (NdsHotkeys): a controller's
             // still work, and the on-screen pad has STYLUS and SWAP pills for them instead (PadTools).
             "NDS" -> PadMap(labels = mapOf(L1 to "L", R1 to "R"), hidden = setOf(L2, R2))
             else -> IDENTITY

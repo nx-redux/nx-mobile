@@ -7,33 +7,35 @@ import kotlin.test.assertNull
 
 class ScreenMapTest {
     private fun view(x: Int, y: Int, w: Int, h: Int, screen: Int, eye: Int = 0) = MapView(x, y, w, h, screen, eye)
+    private val dsStack3x = listOf(view(0, 0, 768, 576, 0), view(0, 576, 768, 576, 1))
+    private val n3dsStack2x = listOf(view(0, 0, 800, 480, 0), view(80, 480, 640, 480, 1))
 
     @Test fun dsStackAt3x() {
-        val map = ScreenMap.from(listOf(view(0, 0, 768, 576, 0), view(0, 576, 768, 576, 1)), 768, 1152)!!
+        val map = ScreenMap.from(dsStack3x, 768, 1152)!!
         assertEquals(FrameRect(0f, 0f, 1f, 0.5f), map.src(NdsScreen.TOP))
         assertEquals(FrameRect(0f, 0.5f, 1f, 1f), map.src(NdsScreen.BOTTOM))
         assertEquals(768 to 576, map.topSizePx)
     }
 
     @Test fun n3dsStackAt2x() {
-        val map = ScreenMap.from(listOf(view(0, 0, 800, 480, 0), view(80, 480, 640, 480, 1)), 800, 960)!!
+        val map = ScreenMap.from(n3dsStack2x, 800, 960)!!
         assertEquals(FrameRect(0f, 0f, 1f, 0.5f), map.src(NdsScreen.TOP))
         assertEquals(FrameRect(0.1f, 0.5f, 0.9f, 1f), map.src(NdsScreen.BOTTOM))
         assertEquals(640 to 480, map.bottomSizePx)
     }
 
     @Test fun rectOutsideFrameIsNull() {
-        assertNull(ScreenMap.from(listOf(view(0, 0, 768, 576, 0), view(0, 576, 768, 576, 1)), 768, 1151))
+        assertNull(ScreenMap.from(dsStack3x, 768, 1151))
     }
 
     @Test fun staleMapInsideABiggerFrameIsNull() {
         // 3D Resolution raised: the 2x map arrives with the 3x frame's first relayout, or the reverse; it fits but is wrong.
-        assertNull(ScreenMap.from(listOf(view(0, 0, 800, 480, 0), view(80, 480, 640, 480, 1)), 1200, 1440, byShape = true))
-        assertNull(ScreenMap.from(listOf(view(0, 0, 768, 576, 0), view(0, 576, 768, 576, 1)), 1024, 1536))
+        assertNull(ScreenMap.from(n3dsStack2x, 1200, 1440, byShape = true))
+        assertNull(ScreenMap.from(dsStack3x, 1024, 1536))
     }
 
     @Test fun sameMapResentIsEqual() {
-        val views = listOf(view(0, 0, 800, 480, 0), view(80, 480, 640, 480, 1))
+        val views = n3dsStack2x
         assertEquals(ScreenMap.from(views, 800, 960, byShape = true), ScreenMap.from(views.toList(), 800, 960, byShape = true))
     }
 
@@ -64,13 +66,13 @@ class ScreenMapRegionsTest {
     private val stack3x = ScreenMap.from(listOf(MapView(0, 0, 768, 576, 0, 0), MapView(0, 576, 768, 576, 1, 0)), 768, 1152)
 
     @Test fun plainStackMapLeavesDsRegionsUnchanged() {
-        val regions = DualScreen.ndsPanelUp(1920f, 1080f, com.nxredux.mobile.options.NdsSettings.parse(emptyMap()))
+        val regions = DualScreen.ndsScreen(1920f, 1080f, NdsScreen.TOP) + DualScreen.ndsScreen(1920f, 1080f, NdsScreen.BOTTOM)
         assertEquals(regions, regions.withMap(stack3x))
     }
 
     @Test fun movedBottomViewMovesOnlyTheBottomSource() {
         val gap = ScreenMap.from(listOf(MapView(0, 0, 768, 576, 0, 0), MapView(0, 624, 768, 576, 1, 0)), 768, 1200)!!
-        val regions = DualScreen.ndsPanelUp(1920f, 1080f, com.nxredux.mobile.options.NdsSettings.parse(emptyMap()))
+        val regions = DualScreen.ndsScreen(1920f, 1080f, NdsScreen.TOP) + DualScreen.ndsScreen(1920f, 1080f, NdsScreen.BOTTOM)
         val mapped = regions.withMap(gap)
         assertEquals(regions.map { it.dst }, mapped.map { it.dst })
         assertEquals(FrameRect(0f, 0.52f, 1f, 1f), mapped.first { it.screen == NdsScreen.BOTTOM }.src)
@@ -80,5 +82,13 @@ class ScreenMapRegionsTest {
     @Test fun noMapLeavesRegionsUnchanged() {
         val regions = DualScreen.ndsScreen(1280f, 960f, NdsScreen.BOTTOM)
         assertEquals(regions, regions.withMap(null))
+    }
+
+    @Test fun topScaleIsTheTopScreensWholeScaleOverNative() {
+        assertEquals(3, stack3x!!.topScale(n3ds = false))   // a DS top of 576 rows: 3 x 192
+        val n3ds2x = ScreenMap.from(listOf(MapView(0, 0, 800, 480, 0, 0), MapView(80, 480, 640, 480, 1, 0)), 800, 960, byShape = true)!!
+        assertEquals(2, n3ds2x.topScale(n3ds = true))   // a 3DS top of 480 rows: 2 x 240
+        val native = ScreenMap.from(listOf(MapView(0, 0, 256, 192, 0, 0), MapView(0, 192, 256, 192, 1, 0)), 256, 384)!!
+        assertEquals(1, native.topScale(n3ds = false))
     }
 }

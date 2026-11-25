@@ -101,6 +101,7 @@ class ContextMenusTest {
         val gg = entry("GG", file = "Sonic.gg")
         val nds = entry("NDS", file = "Mario Kart DS.nds")
         val dc = entry("DC", file = "Daxter.cdi")
+        val vb = entry("VB", file = "Wario Land.vb")
         fun netplay(e: Listed, source: ListSource = ListSource.Console(e.system), on: Boolean = true) =
             ContextMenus.itemsFor(source, e, false, netplay = on).filter { it.kind == ContextKind.NETPLAY }
         assertEquals(listOf(ContextItem(ContextKind.NETPLAY, "Netplay")), netplay(sfc))
@@ -110,7 +111,8 @@ class ContextMenusTest {
         assertEquals(listOf(ContextItem(ContextKind.NETPLAY, "Netplay")), netplay(gba))   // GBA link
         assertEquals(listOf(ContextItem(ContextKind.NETPLAY, "Netplay")), netplay(gg))   // GG lockstep, as the handheld's GG.pak
         assertEquals(listOf(ContextItem(ContextKind.NETPLAY, "Netplay")), netplay(nds))   // DS local wireless
-        assertTrue(netplay(dc).isEmpty())
+        assertEquals(listOf(ContextItem(ContextKind.NETPLAY, "Netplay")), netplay(dc))   // flycast's GGPO rollback
+        assertTrue(netplay(vb).isEmpty())
         assertTrue(netplay(sfc, on = false).isEmpty())   // a platform without netplay
         assertTrue(netplay(sfc, ListSource.Recent).isEmpty())
         val u = entry("SFC", unassigned = true, file = "thing.sfc")
@@ -136,13 +138,13 @@ class ContextMenusTest {
     @Test fun game_list_titles_are_the_lists_own_names() {
         val sfc = SystemFolder("Super Nintendo ES", "SFC", CoreRegistry.forTag("SFC"), emptyList())
         val supa = SystemFolder("Super Nintendo ES", "SUPA", CoreRegistry.forTag("SUPA"), emptyList())
-        assertEquals("ColecoVision", listTitle(ListSource.Console(SystemFolder("ColecoVision", "COLECO", CoreRegistry.forTag("COLECO"), emptyList()))))
-        assertEquals("Super Nintendo ES", listTitle(ListSource.Console(listOf(sfc, supa))))
-        assertEquals("Android", listTitle(ListSource.Console(SystemFolder("Android", ANDROID_TAG, null, emptyList(), android = true))))
-        assertEquals("RPGs", listTitle(ListSource.Collection("RPGs")))
-        assertEquals("Unassigned", listTitle(ListSource.Console(SystemFolder("Unassigned", "", null, emptyList(), unassigned = true))))
-        assertEquals("Hidden games", listTitle(ListSource.Hidden))
-        assertEquals("Recently Played", listTitle(ListSource.Recent))
+        assertEquals("ColecoVision", ListSource.Console(SystemFolder("ColecoVision", "COLECO", CoreRegistry.forTag("COLECO"), emptyList())).title)
+        assertEquals("Super Nintendo ES", ListSource.Console(listOf(sfc, supa)).title)
+        assertEquals("Android", ListSource.Console(SystemFolder("Android", ANDROID_TAG, null, emptyList(), android = true)).title)
+        assertEquals("RPGs", ListSource.Collection("RPGs").title)
+        assertEquals("Unassigned", ListSource.Console(SystemFolder("Unassigned", "", null, emptyList(), unassigned = true)).title)
+        assertEquals("Hidden games", ListSource.Hidden.title)
+        assertEquals("Recently Played", ListSource.Recent.title)
     }
     @Test fun emulator_menu_lists_the_consoles_tags_with_the_current_one_marked() {
         val m = ContextMenus.emulatorMenu(system("MGBA"))!!
@@ -233,8 +235,8 @@ class ContextMenusTest {
         assertEquals(listOf(ContextKind.PLAY_FROM_START, ContextKind.NETPLAY, ContextKind.PIN), lead(src, e).map { it.kind }.take(3))
         assertEquals(listOf(ContextKind.NETPLAY, ContextKind.PIN), lead(src, e, canResume = false).map { it.kind }.take(2))
         assertEquals(listOf(ContextKind.PLAY_FROM_START, ContextKind.PIN), lead(src, e, netplay = false).map { it.kind }.take(2))
-        val dc = entry("DC", file = "Daxter.cdi")   // a tag without netplay: never Netplay
-        assertTrue(ContextKind.NETPLAY !in lead(ListSource.Console(dc.system), dc).map { it.kind })
+        val vb = entry("VB", file = "Wario Land.vb")   // a tag without netplay: never Netplay
+        assertTrue(ContextKind.NETPLAY !in lead(ListSource.Console(vb.system), vb).map { it.kind })
     }
 
     @Test fun collection_and_search_menus_list_netplay_once() {
@@ -290,5 +292,18 @@ class ContextMenusTest {
         assertEquals(emptyList<ContextItem>(), ContextMenus.hiddenTabItems(listOf(MenuCategory.HOME)))
         assertEquals(MenuCategory.TOOLS, ContextMenus.tabOf(ContextKind.OPEN_TOOLS))
         assertEquals(null, ContextMenus.tabOf(ContextKind.PIN))
+    }
+
+    @Test fun resume_leads_when_a_resumes_is_off() {
+        val e = entry("GB", file = "Tetris.gb")
+        val src = ListSource.Console(e.system)
+        val off = ContextMenus.itemsFor(src, e, pinned = false, canResume = true, aResumes = false).map { it.kind }
+        assertEquals(ContextKind.RESUME, off.first())
+        assertTrue(ContextKind.PLAY_FROM_START !in off)
+        assertEquals(ContextKind.PLAY_FROM_START, ContextMenus.itemsFor(src, e, pinned = false, canResume = true).first().kind)
+        assertTrue(ContextKind.RESUME !in ContextMenus.itemsFor(src, e, pinned = false, canResume = false, aResumes = false).map { it.kind })
+        assertEquals(listOf(ContextKind.RESUME, ContextKind.PIN), ContextMenus.homeGameItems(pinned = false, fromStart = true, aResumes = false).map { it.kind })
+        assertEquals(listOf(ContextKind.RESUME, ContextKind.UNPIN), ContextMenus.pinRowItems(fromStart = true, aResumes = false).map { it.kind })
+        assertTrue(ContextMenus.kidsMayPick(ContextKind.RESUME))
     }
 }

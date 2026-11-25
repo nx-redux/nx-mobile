@@ -69,6 +69,13 @@ class NetplayGameTest {
         assertNull(netplaySessionFrom("HOST", "10.0.0.2", "snes9x", null))
     }
 
+    @Test fun the_hosts_sega_pad_crosses_into_the_game_process() {
+        assertEquals("6", netplaySessionFrom("CLIENT", "10.0.0.2", "picodrive", "picodrive", segaPad = "6")?.segaPad)
+        assertEquals("auto", netplaySessionFrom("HOST", "10.0.0.2", "picodrive", "picodrive", segaPad = "auto")?.segaPad)
+        assertNull(netplaySessionFrom("HOST", "10.0.0.2", "picodrive", "picodrive", segaPad = "9")?.segaPad)
+        assertNull(netplaySessionFrom("HOST", "10.0.0.2", "picodrive", "picodrive")?.segaPad)
+    }
+
     @Test fun both_roles_need_the_peer_as_ipv4() {
         // The host's engine accepts only this address: without one the session fails closed.
         assertNull(netplaySessionFrom("HOST", "", "snes9x", "snes9x"))
@@ -165,7 +172,7 @@ class NetplayGameTest {
         assertEquals("This phone can't run both games at full speed, so the session ended.", NetplayText.ENDED_TOO_SLOW)
         assertEquals(NetplayNotice.Ended(NetplayText.ENDED_PEER_TOO_SLOW), notice(LibretroNetplay.STATE_ENDED, reason = LibretroNetplay.REASON_PEER_TOO_SLOW))
         assertEquals("The other phone can't run both games at full speed, so the session ended.", NetplayText.ENDED_PEER_TOO_SLOW)
-        // The other player leaving keeps today's text.
+        // The other player leaving keeps the plain ended text.
         assertEquals(NetplayNotice.Ended("${NetplayText.ENDED}\n${NetplayText.ENDED_DETAIL}"), notice(LibretroNetplay.STATE_ENDED, reason = LibretroNetplay.REASON_PEER_LEFT))
         assertEquals(NetplayNotice.Pill(NetplayText.SYNCING), notice(LibretroNetplay.STATE_RESYNCING))
 

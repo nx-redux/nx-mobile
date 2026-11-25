@@ -60,7 +60,7 @@ internal const val HOME_LIST_GAP_ROWS = 0.5f
 internal fun HomeListScreen(
     rows: List<MainRow>, selection: () -> Int, strip: HomeStrip?,
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, onLongPress: ((Int) -> Unit)?, onHint: ((NxButton) -> Unit)?,
-    modifier: Modifier = Modifier, tabMenu: Boolean = false, iconsRoom: Dp = 0.dp,
+    modifier: Modifier = Modifier, tabMenu: Boolean = false, iconsRoom: Dp = 0.dp, iconsWidth: Float = HOME_HEADER_ICONS_ROOM,
 ) {
     val chrome = LocalLauncherChrome.current
     val portrait = LocalPortrait.current
@@ -75,7 +75,8 @@ internal fun HomeListScreen(
     // Home; with no strip the rows run up beside the Recent and Search icons ([homeListTopRoom]).
     val statLines = if (shownStrip != null) stripLines else 0
     val header = if (!chrome.tabRow && statLines > 0) homeStatsHeader(frame.copy(titleHidden = true), statLines) else null
-    val topRoom = homeListTopRoom(chrome.tabRow, header?.height?.dp, pickAGame = rows == listOf(MainRow.PickAGame))
+    val pick = rows == listOf(MainRow.PickAGame)
+    val topRoom = homeListTopRoom(chrome.tabRow, header?.height?.dp, pickAGame = pick)
     val pageStrip = shownStrip?.takeIf { header == null }   // the strip in the page, under the tab row
     val (capTop, inkH) = homeStripInk(frame, stripLines)
     val above = homeUnderlineAbove(frame)
@@ -85,8 +86,8 @@ internal fun HomeListScreen(
         Column(Modifier.fillMaxSize()) {
             if (topRoom > 0.dp) Spacer(Modifier.height(topRoom))
             // The Pick a game card (its own 12 dp padding above it) the least gap under the strip's text.
-            if (pageStrip != null && rows == listOf(MainRow.PickAGame)) Spacer(Modifier.height((2 * HOME_LIST_STRIP_MIN_GAP + inkH - above - 12f).coerceAtLeast(0f).dp))
-            if (rows == listOf(MainRow.PickAGame)) {
+            if (pageStrip != null && pick) Spacer(Modifier.height((2 * HOME_LIST_STRIP_MIN_GAP + inkH - above - 12f).coerceAtLeast(0f).dp))
+            if (pick) {
                 // Nothing played yet: the Pick a game card fills the body (the selection is always on it).
                 NxScreenScaffold(
                     rows = emptyList(), selectedIndex = 0, hints = emptyList(), onSelect = onSelect, onOpen = onOpen,
@@ -107,19 +108,19 @@ internal fun HomeListScreen(
                 bottomRows = if (header != null) HOME_LIST_GAP_ROWS else 0f,   // the tab row hidden: the other half off the bottom edge
             )
         }
-        HomeStripOverlay(shownStrip, pageStrip, header?.takeIf { shownStrip != null }, statLines, inkTop, capTop, frame, inset)
+        HomeStripOverlay(shownStrip, pageStrip, header?.takeIf { shownStrip != null }, statLines, inkTop, capTop, frame, inset, iconsWidth)
     }
 }
 
 /**
  * List and Minimal Home's strip over their body, on the page [inset]: [pageStrip] in the page under
  * the tab row, its text's top at [inkTop] ([capTop] under its lines' top), or [strip] in the stats [header] (the tab row
- * hidden), short of the Recent and Search icons MainMenuScreen draws at its right.
+ * hidden), short of the top icons MainMenuScreen draws at its right ([iconsWidth]).
  */
 @Composable
 internal fun HomeStripOverlay(
     strip: HomeStrip?, pageStrip: HomeStrip?, header: HomeStatsHeader?, stripLines: Int, inkTop: Float, capTop: Float,
-    frame: HomeFrame, inset: PageInset,
+    frame: HomeFrame, inset: PageInset, iconsWidth: Float = HOME_HEADER_ICONS_ROOM,
 ) {
     // Still while the page slides between tabs, as the tab row and the icons are ([pageFixed]). The layer spans the
     // body: the strip's lines are offset down from the box's top, and one a line tall would cut the second (Most played).
@@ -135,7 +136,7 @@ internal fun HomeStripOverlay(
         BoxWithConstraints(Modifier.fillMaxSize().pageFixed()) {
             HomeStripLines(
                 strip, stripLines, inset.start.value, header.stripTop,
-                width = (maxWidth - inset.start - inset.end).value - HOME_HEADER_ICONS_ROOM, lh = homeStripLineH(frame), pitch = homeStripPitch(frame),
+                width = (maxWidth - inset.start - inset.end).value - iconsWidth, lh = homeStripLineH(frame), pitch = homeStripPitch(frame),
             )
         }
     }

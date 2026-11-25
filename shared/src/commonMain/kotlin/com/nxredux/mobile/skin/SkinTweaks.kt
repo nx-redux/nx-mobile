@@ -47,7 +47,7 @@ object SkinTweaks {
      * strip's buttons and labels), which is no part of the game's picture. A glass with no strip over it is whole.
      */
     fun screenAreas(p: SkinPlacement): List<PxRect> {
-        val ids = (listOfNotNull(p.spec.frame?.strip) + p.spec.pieces.mapNotNull { it.strip }).flatMap { s -> s.labels.map { it.id } }.toSet()
+        val ids = SkinGroups.stripsOf(p.spec).flatMap { s -> s.labels.map { it.id } }.toSet()
         val rows = p.controls.filter { it.spec.id in ids }.map { hit(it) } + p.pieces.filter { it.strip }.map { it.dst }
         return p.glasses.map { g ->
             val r = g.rect
@@ -313,7 +313,7 @@ object SkinTweaks {
 
     /** Each group's pieces and controls in [p] (indexes into its lists), in [groups]' order: the strip's are its strip pieces and its first buttons. */
     private fun members(p: SkinPlacement, groups: List<SkinGroup>): Pair<List<List<Int>>, List<List<Int>>> {
-        val stripN = p.spec.frame?.strip?.labels?.size ?: 0
+        val stripN = SkinGroups.stripsOf(p.spec).sumOf { it.labels.size }   // their buttons come first ([SkinSolver])
         val pieceAt = groups.map { g ->
             val strip = g.id == SkinGroups.STRIP
             p.pieces.indices.filter { if (strip) p.pieces[it].strip else p.pieces[it].piece in g.pieces }
@@ -372,15 +372,10 @@ object SkinTweaks {
      */
     private fun ownControls(p: SkinPlacement, groups: List<SkinGroup>, g: SkinGroup, stripN: Int): List<Int> {
         val mine = p.spec.controls.filter { c ->
-            c.id in g.controls && groups.filter { c.id in it.controls && it.id != SkinGroups.STRIP }.minByOrNull { gap(it.ref, c.x, c.y) } == g
+            c.id in g.controls && groups.filter { c.id in it.controls && it.id != SkinGroups.STRIP }.minByOrNull { SkinGroups.gap(it.ref, c.x, c.y) } == g
         }.map { Triple(it.id, it.x, it.y) }.toSet()
         return p.controls.indices.filter { it >= stripN && Triple(p.controls[it].spec.id, p.controls[it].spec.x, p.controls[it].spec.y) in mine }
     }
-
-    private fun ControlSpec.scaled(s: Float) = copy(
-        r = r * s, hw = hw * s, hh = hh * s, capR = capR * s, arm = arm * s, labelDy = labelDy * s, labelDx = labelDx * s,
-        labelH = labelH * s, travel = travel * s, knobTravel = knobTravel * s,
-    )
 
     /** A placed control's hit box (window px). */
     private fun hit(c: PlacedControl): PxRect {
@@ -403,11 +398,6 @@ object SkinTweaks {
         val w = minOf(a.x + a.width, b.x + b.width) - maxOf(a.x, b.x)
         val h = minOf(a.y + a.height, b.y + b.height) - maxOf(a.y, b.y)
         return if (w > 0f && h > 0f) w * h else 0f
-    }
-
-    private fun gap(r: PxRect, x: Float, y: Float): Float {
-        val dx = maxOf(r.x - x, 0f, x - (r.x + r.width)); val dy = maxOf(r.y - y, 0f, y - (r.y + r.height))
-        return dx * dx + dy * dy
     }
 
     /** [consoleId]'s tweaks for [layoutId] in the [stored] text ([decode]); none when it has none. */

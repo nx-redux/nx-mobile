@@ -9,7 +9,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -40,6 +39,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -62,12 +62,6 @@ import org.jetbrains.compose.resources.painterResource
 import kotlin.math.pow
 
 /**
- * The selected item's info on one line (gameInfoLines' segments in order: the time, the achievements with the trophy,
- * the next goal), in grey, joined by [INFO_SEPARATOR], with a shadow so it reads over art (the band's fade,
- * [GameInfoBand], sits behind). One text, the trophy inline, so the whole line ellipsizes at its end: never wraps and no
- * segment overflows another. [alignEnd]: right-aligned (beside a band's arrows).
- */
-/**
  * A game list's achievements panel toggle ([com.nxredux.mobile.ui.GameListFrame]'s trophy action): a tap on the selected
  * game's caption (its name and info, [captionTap]) opens or closes the panel too. Null elsewhere: no tap target.
  */
@@ -80,6 +74,12 @@ internal fun Modifier.captionTap(): Modifier {
     return clickable(remember { MutableInteractionSource() }, indication = null, onClick = tap)
 }
 
+/**
+ * The selected item's info on one line (gameInfoLines' segments in order: the time, the achievements with the trophy,
+ * the next goal), in grey, joined by [INFO_SEPARATOR], with a shadow so it reads over art (the band's fade,
+ * [GameInfoBand], sits behind). One text, the trophy inline, so the whole line ellipsizes at its end: never wraps and no
+ * segment overflows another. [alignEnd]: right-aligned (a List band's).
+ */
 @Composable
 private fun GameInfoBlock(lines: List<InfoLine>, alignEnd: Boolean, modifier: Modifier = Modifier, scale: Float = 1f) {
     if (lines.isEmpty()) return
@@ -106,20 +106,89 @@ private const val GENRE_HEIGHT = 1.1f
 private val GENRE_MEASURE = 100.sp   // the pill text is measured once at this size; its width scales with the font
 
 /** [genre]'s pill width in em of the line's font size: its text at [GENRE_TEXT] and [GENRE_PAD] each side. */
-internal fun genrePillEm(measurer: TextMeasurer, density: Density, font: FontFamily, genre: String): Float {
-    val w = measurer.measure(genre, TextStyle(fontFamily = font, fontWeight = FontWeight.Medium, fontSize = GENRE_MEASURE), maxLines = 1, softWrap = false).size.width
-    return w / with(density) { GENRE_MEASURE.toPx() } * GENRE_TEXT + 2 * GENRE_PAD
+internal fun genrePillEm(measurer: TextMeasurer, density: Density, font: FontFamily, genre: String): Float =
+    pillEm(measurer, density, font, genre, GENRE_TEXT, GENRE_PAD)
+
+/** [word]'s pill width in em of the line's font size: its text at [text] em and [pad] em each side. */
+private fun pillEm(measurer: TextMeasurer, density: Density, font: FontFamily, word: String, text: Float, pad: Float): Float {
+    val w = measurer.measure(word, TextStyle(fontFamily = font, fontWeight = FontWeight.Medium, fontSize = GENRE_MEASURE), maxLines = 1, softWrap = false).size.width
+    return w / with(density) { GENRE_MEASURE.toPx() } * text + 2 * pad
 }
 
 /** [genre] as an outlined pill, inline in the info text: sized in em ([widthEm]), so it follows the line's font size. */
-private fun genrePill(genre: String, widthEm: Float, tint: Color, font: FontFamily) =
-    InlineTextContent(Placeholder(widthEm.em, GENRE_HEIGHT.em, PlaceholderVerticalAlign.TextCenter)) {
+private fun genrePill(genre: String, widthEm: Float, tint: Color, font: FontFamily) = pill(genre, widthEm, GENRE_TEXT, GENRE_HEIGHT, tint, font)
+
+// A caption name's badge ([com.nxredux.mobile.library.GameEntry.badge]) against the name's font size (em): smaller than a genre pill against its
+// line, so it reads as a mark on the name rather than a second word.
+private const val BADGE_TEXT = 0.5f
+private const val BADGE_PAD = 0.4f
+private const val BADGE_HEIGHT = 0.8f
+private const val BADGE_ID = "badge"
+
+/** A caption's name with its badge as a pill after it: the text, the pill's placeholder (to measure it as drawn) and content. */
+internal class BadgedTitle(
+    val text: AnnotatedString,
+    val placeholders: List<AnnotatedString.Range<Placeholder>>,
+    val inlineContent: Map<String, InlineTextContent>,
+)
+
+/**
+ * [title] with [badge] as an outlined pill in [tint] after it; the plain [title] without a badge, null without a title.
+ * The name gives way to the badge: one too long for [maxLines] lines of [style] in [maxWidthPx] is cut short with an
+ * ellipsis before the pill, which always shows (it is what tells a pack from its plain ROM of the same name).
+ */
+@Composable
+internal fun rememberBadgedTitle(title: String?, badge: String?, tint: Color, style: TextStyle, maxLines: Int, maxWidthPx: Int): BadgedTitle? {
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val font = LocalNxFont.current
+    return remember(title, badge, tint, font, density, style, maxLines, maxWidthPx) {
+        when {
+            title == null -> null
+            badge == null -> BadgedTitle(AnnotatedString(title), emptyList(), emptyMap())
+            else -> {
+                val content = pill(badge, pillEm(measurer, density, font, badge, BADGE_TEXT, BADGE_PAD), BADGE_TEXT, BADGE_HEIGHT, tint, font)
+                fun badged(name: String): BadgedTitle {
+                    val text = buildAnnotatedString { append(name); append(" "); appendInlineContent(BADGE_ID, badge) }
+                    return BadgedTitle(text, listOf(AnnotatedString.Range(content.placeholder, name.length + 1, text.length)), mapOf(BADGE_ID to content))
+                }
+                val constraints = Constraints(maxWidth = maxWidthPx.coerceAtLeast(0))
+                fun fits(b: BadgedTitle) =
+                    !measurer.measure(b.text, style, TextOverflow.Clip, maxLines = maxLines, placeholders = b.placeholders, constraints = constraints).hasVisualOverflow
+                val whole = badged(title)
+                if (maxWidthPx <= 0 || fits(whole)) whole
+                else {
+                    // With an ellipsis and the pill.
+                    badged(ellipsizedToFit(title, title.length - 1) { fits(badged(it)) })
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The longest start of [text], [most] characters at most and its end trimmed, that [fits] with an ellipsis after it;
+ * the ellipsis alone when none does.
+ */
+internal fun ellipsizedToFit(text: String, most: Int, fits: (String) -> Boolean): String {
+    var lo = 0
+    var hi = most
+    while (lo < hi) {
+        val mid = (lo + hi + 1) / 2
+        if (fits(text.take(mid).trimEnd() + "\u2026")) lo = mid else hi = mid - 1
+    }
+    return text.take(lo).trimEnd() + "\u2026"
+}
+
+/** [word] as an outlined pill, inline in a text: [widthEm] by [heightEm] of its font size, the word at [textEm]. */
+private fun pill(word: String, widthEm: Float, textEm: Float, heightEm: Float, tint: Color, font: FontFamily) =
+    InlineTextContent(Placeholder(widthEm.em, heightEm.em, PlaceholderVerticalAlign.TextCenter)) {
         BoxWithConstraints(Modifier.fillMaxSize().border(1.dp, tint.copy(alpha = 0.7f), RoundedCornerShape(50)), contentAlignment = Alignment.Center) {   // role: the pill's outline, a little under the text
-            val size = with(LocalDensity.current) { (maxHeight * (GENRE_TEXT / GENRE_HEIGHT)).toSp() }
+            val size = with(LocalDensity.current) { (maxHeight * (textEm / heightEm)).toSp() }
             // On its natural line box, which may be taller than the pill: the font's capitals sit at that box's middle, so
             // centring the box centres the word; a line squeezed to the pill's height would sit low.
             Text(
-                genre, Modifier.wrapContentSize(unbounded = true), color = tint, fontFamily = font, fontWeight = FontWeight.Medium, fontSize = size,
+                word, Modifier.wrapContentSize(unbounded = true), color = tint, fontFamily = font, fontWeight = FontWeight.Medium, fontSize = size,
                 maxLines = 1, softWrap = false, style = TextStyle(shadow = null),
             )
         }
@@ -209,7 +278,7 @@ internal fun fitCaptionRows(
 
 /**
  * A game caption's info [rows], centred or as [style] aligns them, in grey with
- * the trophy inline and the next goal in white ([infoText]), [fitCaptionRows]-fitted to [avail] (the caption's width):
+ * the trophy inline ([infoText]), [fitCaptionRows]-fitted to [avail] (the caption's width):
  * a trophy row too long for it puts "Next: <name>" on a line of its own, using only the [spare] height left under the
  * caption's reserve, so the row above never moves; [alwaysSplitNext]: whether it fits or not ([fitCaptionRows]).
  * Measured once per row text, width and style.
@@ -354,9 +423,8 @@ internal fun Modifier.nxTopBandFade(ground: Color): Modifier = nxEasedFade(groun
 
 internal const val TOP_BAND_POWER = 3.5f
 
-/** The room a band keeps for the scroll arrow pair, so the text never moves: two arrows and the 1 dp between them. */
-private val ARROW_SLOT = NxScrollArrowWidth * 2 + 1.dp
-private val ARROW_GAP = 12.dp   // between the arrows' room and the text
+/** The room a List band keeps clear at the row labels' start: its text ellipsizes before it. */
+private val BAND_LEAD = 69.dp
 
 /**
  * The info line's height: the info style's text (merged into LocalTextStyle, as Text does), or the trophy when taller.
@@ -390,15 +458,14 @@ fun GameInfoBand(lines: List<InfoLine>, modifier: Modifier = Modifier, edgeAlpha
  * The List's info band ([InfoBand] [band], fixed just above the hints, its bottom [InfoBand.overlap] inside the bar):
  * the selected item's [lines], one line centred in it ([BAND_PAD] above and below). Its fill is the background, fading
  * linearly in from nothing at the band's top to [NX_HINT_BAR_ALPHA], held solid over the last [BAND_SOLID] down to the
- * bar's edge, and nothing over the bar itself (its own fill shows). [arrows] (the list's scroll arrow pair): centred on
- * the line, packed flush left at [arrowStart] (where row labels start: [nxListInset], or the main menu's gutter), in a
- * fixed room so the text never moves. The text is right-aligned at the screen gutter (16 dp portrait, 24 dp landscape)
- * and may use all the width back to the arrows, ellipsizing only there. "N games" stays the info grey.
+ * bar's edge, and nothing over the bar itself (its own fill shows). The text is right-aligned at the screen gutter
+ * (16 dp portrait, 24 dp landscape) and may use all the width back to [BAND_LEAD] past [textStart] (where row labels
+ * start: [nxListInset], or the main menu's gutter), ellipsizing only there. "N games" stays the info grey.
  * [shade] false (the main menu's Consoles List) draws no fill at all, neither the fade nor the solid one of
- * [BandGround.NONE]: the arrows (and any [lines]) sit on the page as it is. The band's height is unchanged, so rows never move.
+ * [BandGround.NONE]: any [lines] sit on the page as it is. The band's height is unchanged, so rows never move.
  */
 @Composable
-private fun ListInfoBand(lines: List<InfoLine>, band: InfoBand, arrows: @Composable () -> Unit, arrowStart: Dp, ground: BandGround, shade: Boolean) {
+private fun ListInfoBand(lines: List<InfoLine>, band: InfoBand, textStart: Dp, ground: BandGround, shade: Boolean) {
     val colors = LocalNxColors.current
     val inset = nxPageInset()
     Box(Modifier.fillMaxWidth().height(band.height.dp)) {
@@ -408,12 +475,10 @@ private fun ListInfoBand(lines: List<InfoLine>, band: InfoBand, arrows: @Composa
         else if (ground == BandGround.NONE) Box(Modifier.fillMaxSize().nxVerticalFade(colors.background, NX_HINT_BAR_ALPHA, hold = band.height.dp - BAND_PAD))
         else Box(Modifier.fillMaxWidth().height((band.height - band.overlap).dp).nxVerticalFade(colors.background, NX_HINT_BAR_ALPHA, hold = BAND_SOLID))
         Row(
-            Modifier.fillMaxSize().padding(start = arrowStart, end = inset.end, top = BAND_PAD, bottom = BAND_PAD),
+            Modifier.fillMaxSize().padding(start = textStart + BAND_LEAD, end = inset.end, top = BAND_PAD, bottom = BAND_PAD),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(Modifier.width(ARROW_SLOT), contentAlignment = Alignment.CenterStart) { arrows() }   // a lone arrow takes the first place
-            Spacer(Modifier.width(ARROW_GAP))
-            // The info on its own line in the bar's row instead ([BarInfoLine]): the band keeps the arrows alone.
+            // The info on its own line in the bar's row instead ([BarInfoLine]): the band stays empty.
             if (ground != BandGround.SHADE_WITH_INFO) Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) { GameInfoBlock(lines, alignEnd = true) }
         }
     }
@@ -449,14 +514,14 @@ internal fun SwitcherBarInfoLine(lines: List<InfoLine>, modifier: Modifier) {
 
 /**
  * Places the selected item's [info] around a List-style [scaffold] (an NxScreenScaffold), on a one-line band
- * ([nxInfoBandGeometry]) fixed just above the hints, reaching into the bar's empty top and holding the list's scroll
- * arrows (the [NxHintsBand] handed to [scaffold]). The band has one height everywhere, so the list's rows never move;
+ * ([nxInfoBandGeometry]) fixed just above the hints, reaching into the bar's empty top (the [NxHintsBand] handed to
+ * [scaffold]). The band has one height everywhere, so the list's rows never move;
  * the list ends at the band's [InfoBand.reserve] in both orientations. [info] is read only inside the band, so a new
- * selection's info recomposes the band alone. [textStart]: where the list's row labels start (the band's arrows start
- * there too). [ground]: what is under the band's bottom ([BandGround]); with [BandGround.SHADE_WITH_INFO] the info goes
+ * selection's info recomposes the band alone. [textStart]: where the list's row labels start. [ground]: what is under
+ * the band's bottom ([BandGround]); with [BandGround.SHADE_WITH_INFO] the info goes
  * to the band's [NxHintsBand.barInfo], drawn in the bar's row.
  * [shade] false (the main menu's Consoles List, decided by its caller) leaves the band unfilled; its
- * geometry and reserve stay the same, so the list's rows and the arrows keep their places.
+ * geometry and reserve stay the same, so the list's rows keep their places.
  */
 @Composable
 internal fun GameInfoPlacement(
@@ -466,8 +531,8 @@ internal fun GameInfoPlacement(
     // Touch only, the band reaches into no bar, unless the bar's row is kept for the info ([BandGround.SHADE_WITH_INFO]).
     val geometry = nxInfoBandGeometry(infoLineHeight().value, NxHintInkTop.value, touch = touchOnly() && ground != BandGround.SHADE_WITH_INFO)
     val barInfo: (@Composable () -> Unit)? = if (ground == BandGround.SHADE_WITH_INFO) { { BarInfoLine(info(), textStart) } } else null
-    val band = NxHintsBand(reserve = geometry.reserve.dp, overlap = geometry.overlap.dp, barInfo = barInfo) { arrows ->
-        ListInfoBand(info(), geometry, arrows, arrowStart = textStart, ground = ground, shade = shade)
+    val band = NxHintsBand(reserve = geometry.reserve.dp, overlap = geometry.overlap.dp, barInfo = barInfo) {
+        ListInfoBand(info(), geometry, textStart, ground = ground, shade = shade)
     }
     scaffold(modifier, band)
 }

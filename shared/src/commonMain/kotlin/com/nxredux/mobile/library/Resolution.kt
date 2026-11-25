@@ -9,9 +9,8 @@ import com.nxredux.mobile.runner.CoreRegistry
  * then the one console owning the extension (a zip by its first entry's extension; a 7z has no cheap peek, so it is
  * placed only by the earlier steps). A candidate tag takes any archive (it is unpacked at launch, where the inner file
  * is checked against the core). A candidate whose core cannot run a bare file's extension falls back to the first tag
- * of the same console whose core can, else is skipped, so a `.gba` inside "Game Boy (GB)" still resolves to GBA. A
- * folder naming a known console with no bundled core would claim every file under it ([byFolder]); every bundled
- * console has a core, so that rule never applies to the bundled set. Null means unassigned.
+ * of the same console whose core can, else is skipped, so a `.gba` inside "Game Boy (GB)" still resolves to GBA. Null
+ * means unassigned.
  */
 object Resolution {
     fun isCandidate(fileName: String): Boolean {
@@ -54,12 +53,7 @@ object Resolution {
         val console = folder.tags.firstNotNullOfOrNull { CoreRegistry.consoleOf(it) }
         val own = sidecarTag?.let { s -> if (console == null) s else CoreRegistry.tagOn(console, s) }
         own?.let { accepts(it, ext, archive) }?.let { return it }
-        // A console known to the registry but with no bundled core keeps what its folder holds instead of letting the
-        // extension send it elsewhere. Unused by the bundled set (every console has a core); kept for on-demand cores.
-        for (tag in folder.tags) {
-            val claimed = if (CoreRegistry.consoleOf(tag) != null && CoreRegistry.forTag(tag) == null) tag.trim().uppercase() else accepts(tag, ext, archive)
-            if (claimed != null) return claimed
-        }
+        folder.tags.firstNotNullOfOrNull { accepts(it, ext, archive) }?.let { return it }
         return if (own == null) sidecarTag?.let { accepts(it, ext, archive) } else null
     }
 

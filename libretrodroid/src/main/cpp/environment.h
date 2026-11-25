@@ -18,8 +18,6 @@
 #ifndef LIBRETRODROID_ENVIRONMENT_H
 #define LIBRETRODROID_ENVIRONMENT_H
 
-#define MODULE_NAME_CORE "Libretro Core"
-
 #include "videoviews.h"
 #include <vector>
 #include <string>
@@ -49,6 +47,10 @@ public:
     void operator=(Environment const&) = delete;
 
     static void callback_retro_log(enum retro_log_level level, const char *fmt, ...);
+    // Whether the core's warnings reach logcat with the Debug log on (errors always do). Off for a core whose warnings
+    // come in floods: melonDS DS logs "restore CPSR under bad mode" thousands of times a second in Mario Kart DS, and
+    // logd taking them cut the AYANEO from 36 to 6 fps.
+    static void setCoreWarningsLogged(bool value) { coreWarningsLogged.store(value, std::memory_order_relaxed); }
 
     static bool callback_set_sensor_state(unsigned port, enum retro_sensor_action action, unsigned rate);
 
@@ -81,6 +83,7 @@ public:
     bool getFastForwardingOverride(struct retro_fastforwarding_override &out);
 
 private:
+    static inline std::atomic<bool> coreWarningsLogged { true };
     Environment() {}
 
 public:
@@ -145,8 +148,6 @@ public:
     const std::vector<struct Variable> getVariables() const;
     bool updateCoreOptionsDisplay();
 
-    const std::vector<std::vector<struct Controller>> &getControllers() const;
-
 private:
     bool environment_handle_set_variables(const struct retro_variable* received);
     bool environment_handle_set_core_options(const struct retro_core_option_definition* definitions);
@@ -157,7 +158,6 @@ private:
     bool environment_handle_set_variable(const struct retro_variable* variable);
     void registerOption(struct Variable option);
     bool environment_handle_get_variable(struct retro_variable* requested);
-    bool environment_handle_set_controller_info(const struct retro_controller_info* received);
     bool environment_handle_set_hw_render(struct retro_hw_render_callback* hw_render_callback);
     bool environment_handle_get_vfs_interface(struct retro_vfs_interface_info* vfs_interface_info);
     bool environment_handle_get_microphone_interface(struct retro_microphone_interface* microphone_interface);
@@ -216,8 +216,6 @@ private:
     std::atomic<unsigned> variablesGeneration { 0 };
     int nextVariableOrder = 0;
     retro_core_options_update_display_callback_t core_options_update_display_callback = nullptr;
-
-    std::vector<std::vector<struct Controller>> controllers;
 };
 
 struct Variable {
@@ -238,12 +236,6 @@ public:
     std::string defaultValue;
     bool visible = true;
     int order = -1;
-};
-
-struct Controller {
-public:
-    unsigned id;
-    std::string description;
 };
 
 #endif //LIBRETRODROID_ENVIRONMENT_H

@@ -28,6 +28,14 @@ class RaTransportTest {
         t.call(RaRequests.URL, "r=ping&u=me&t=tok&g=42")
         assertEquals(setOf(RaPaths.login(), RaPaths.gameId(hash), RaPaths.sets(hash), RaPaths.summary(hash), RaPaths.session(42)), store.files.keys)   // a set reply writes its summary
     }
+    @Test fun every_request_names_the_core_once_known() = runTest {
+        val (t, _, http) = setup()
+        http.on("login2", body = """{"Success":true,"User":"me","Token":"tok"}""")
+        t.call(RaRequests.URL, RaRequests.login2("me", "tok"))
+        t.core = "melonDS_DS/1.4.0"
+        t.call(RaRequests.URL, RaRequests.login2("me", "tok")); t.call(RaRequests.URL, "r=awardachievement&u=me&t=tok&a=7&h=0&m=$hash&v=x")
+        assertEquals(listOf(null, "melonDS_DS/1.4.0", "melonDS_DS/1.4.0"), http.cores)
+    }
     @Test fun online_does_not_cache_failures_or_non_200() = runTest {
         val (t, store, http) = setup()
         http.on("login2", body = """{"Success":false,"Error":"Invalid"}"""); http.on("gameid", status = 500, body = """{"Success":true,"GameID":1}""")

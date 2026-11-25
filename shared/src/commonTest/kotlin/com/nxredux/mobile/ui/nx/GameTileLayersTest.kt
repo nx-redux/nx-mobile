@@ -86,7 +86,7 @@ class GameTileLayersTest {
         assertEquals(listOf(CAPTION), gameTileLayers(picture = false, lit = true, caption = true, homeCaption = false, gameFade = true, artLess = true))
         // The main menu Grid's linear fade, as lit.
         assertEquals(listOf(PICTURE, FADE, EDGE, CAPTION), gameTileLayers(picture = true, lit = false, caption = true, homeCaption = false, artLess = true))
-        // No inside caption (the Carousel): unchanged, the title tile keeps its centred name.
+        // No inside caption (the Carousel): the title tile keeps its centred name.
         assertEquals(listOf(TITLE, EDGE), gameTileLayers(picture = false, lit = false, caption = false, homeCaption = false, artLess = true))
         assertEquals(listOf(PICTURE, EDGE), gameTileLayers(picture = true, lit = false, caption = false, homeCaption = false, artLess = true))
         // Real art: the caption only when lit.

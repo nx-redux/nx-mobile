@@ -7,6 +7,7 @@ import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.netplay.NetplayText
 import com.nxredux.mobile.netplay.NetplayWire
 import com.nxredux.mobile.netplay.wizard.CableLinkSetup
+import com.nxredux.mobile.settings.PlayerName
 import com.swordfish.libretrodroid.LibretroNetplay
 import com.swordfish.libretrodroid.NxLog
 import kotlinx.coroutines.CoroutineScope
@@ -81,16 +82,18 @@ internal fun netplayNotice(state: Int, secondsLeft: Int, reason: Int, onCopy: Bo
  * [emptySaves]: no save copy happened although one was due ([NetplaySession.emptySaves]); [overUsb]: the session runs
  * over the USB cable ([NetplaySession.overUsb]); [mixed] and [peerWl]: [NetplaySession.mixed], [NetplaySession.peerWl].
  * [cableLink]: a Cable Link over Wi-Fi session's settled fields; one without the other GBA's ROM, with a slot other than 1
- * or 2, or an unknown BIOS mode makes no session.
+ * or 2, or an unknown BIOS mode makes no session. [segaPad]: [NetplaySession.segaPad]; an unknown value is none.
  */
 internal fun netplaySessionFrom(
     role: String?, peer: String?, coreId: String, folderCoreId: String?, emptySaves: Boolean = false, overUsb: Boolean = false,
-    mixed: Boolean = false, peerWl: String? = null, cableLink: CableLinkSetup? = null,
+    mixed: Boolean = false, peerWl: String? = null, cableLink: CableLinkSetup? = null, peerName: String? = null,
+    segaPad: String? = null,
 ): NetplaySession? {
     val r = NetplayRole.entries.firstOrNull { it.name == role } ?: return null
     if (folderCoreId.isNullOrEmpty()) return null
     val ip = NetplayAddress.ipv4(peer) ?: return null
-    val session = NetplaySession(r, ip, coreId, folderCoreId, emptySaves, overUsb, mixed, peerWl)
+    val session = NetplaySession(r, ip, coreId, folderCoreId, emptySaves, overUsb, mixed, peerWl, peerName = PlayerName.clean(peerName).ifEmpty { null },
+        segaPad = segaPad?.takeIf { it in SegaPadType.SETTINGS })
     if (cableLink == null) return session
     if (cableLink.otherRomPath.isEmpty() || cableLink.localSlot !in 1..2) return null
     if (cableLink.biosMode != CableLinkSetup.BIOS_REAL && cableLink.biosMode != CableLinkSetup.BIOS_HLE) return null
@@ -213,10 +216,10 @@ internal class NetplayGame(
         val ok = withContext(NetplayEngine.dispatcher) {
             runCatching {
                 if (!prepareEngine(engine, session, delayPin)) {
-                    NxLog.w(TAG, "netplay: the core has no pair mode")
+                    NxLog.w(TAG_LOG, "netplay: the core has no pair mode")
                     false
                 } else engine.start(role, peer, NetplayWire.ENGINE_PORT)
-            }.onFailure { NxLog.w(TAG, "netplay start failed", it) }.getOrDefault(false)
+            }.onFailure { NxLog.w(TAG_LOG, "netplay start failed", it) }.getOrDefault(false)
         }
         if (!ok) return false
         live = true
@@ -276,7 +279,6 @@ internal class NetplayGame(
     }
 
     companion object {
-        private const val TAG = "NXAPP"
         /**
          * The game screen is gone (after its native destroy, which shuts both engines too; a second shutdown is a no-op):
          * the engines are shut down, then [discardCopy] runs (the screen releases its own session copy), off the main thread.
@@ -288,7 +290,7 @@ internal class NetplayGame(
                     runCatching { LibretroNetplay.shutdown() }
                     runCatching { LibretroNetplay.linkShutdown() }
                 }
-                discardCopy?.let { runCatching { it() }.onFailure { e -> NxLog.e(TAG, "netplay session copy not released", e) } }
+                discardCopy?.let { runCatching { it() }.onFailure { e -> NxLog.e(TAG_LOG, "netplay session copy not released", e) } }
             }
         }
     }

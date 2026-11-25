@@ -23,7 +23,7 @@ internal interface SwitcherHost {
     /** A recents line resolved against the playable cache; null when hidden, coreless or not indexed. */
     fun resolveOne(path: String): Listed?
     /** A game started from the switcher ([AppState]'s launch); null when refused before it started. */
-    fun launch(entry: Listed, resumeSlot: Int?, fromSwitcher: Boolean): Job?
+    fun launch(entry: Listed, resumeSlot: Int?, fromSwitcher: Boolean, fresh: Boolean): Job?
     /** The main menu on its current tab with that tab's remembered row: where a switcher with no snapshot closes to. */
     fun menuWithItsRow(): Pair<Screen, ListSelection>
     /** Home's own view for the rows on screen now. */
@@ -68,7 +68,7 @@ internal class SwitcherController(
 
     /** A game resumed from the switcher ended: the switcher opens again, once (a list or the main menu; elsewhere, nothing). */
     fun reopenSwitcher() {
-        if (!switcherReturn || switcherRestored) return   // a restored one opens once the first screen has loaded (init)
+        if (!switcherReturn || switcherRestored) return   // a restored one opens once the first screen has loaded ([restoreReturn])
         dropSwitcherReturn()
         openSwitcher()
     }
@@ -101,7 +101,9 @@ internal class SwitcherController(
         userData.readRecents().mapNotNull { recent ->
             val e = host.resolveOne(recent.path)?.takeUnless { it.system.android } ?: return@mapNotNull null   // never one (not recorded): kept out anyway
             val info = userData.resumeInfo(e.system.tag, e.game.fileName)
-            if (info.canResume) SwitcherEntry(e.system, e.game, info) else null
+            // Without Save on quit no game keeps a hidden state: every recent stays, and A starts it fresh. With A resumes
+            // off, A starts every game fresh: the slot goes, its picture stays.
+            if (info.canResume || !settings.saveOnQuit) SwitcherEntry(e.system, e.game, if (settings.aResumes) info else info.copy(slot = null)) else null
         }.distinctBy { it.game.path }   // a hidden copy's line and its home game's are one game
 
     /**
@@ -138,11 +140,11 @@ internal class SwitcherController(
 
     /**
      * A from the switcher: the game opens over the switcher, which stays ([switcherUnderGame]). A launch that never reaches the runner
-     * (the game gone, a transfer running: [launch]'s refusals) closes it as before, so B and the error land on its page.
+     * (the game gone, a transfer running: [launch]'s refusals) closes it, so B and the error land on its page.
      */
     private fun launchFromSwitcher(entry: Listed, resumeSlot: Int?) {
         switcherUnderGame = true
-        val job = host.launch(entry, resumeSlot, fromSwitcher = true) ?: run { closeSwitcher(); return }
+        val job = host.launch(entry, resumeSlot, fromSwitcher = true, fresh = !settings.aResumes) ?: run { closeSwitcher(); return }
         scope.launch {
             job.join()
             if (switcherUnderGame && !switcherReturn) closeSwitcher()   // refused: [switcherReturn] is set only at the runner's call

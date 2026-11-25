@@ -23,8 +23,9 @@ object NetplayLinkOptions {
     fun gbIpKey(digit: Int) = "gambatte_gb_link_network_server_ip_$digit"
 
     /**
-     * Azahar's room link: host, join, auto or off; the core reads these at load, and the mode again on a variable update
-     * (off leaves the room; auto in a session leaves its room and starts the automatic route, reading them all again).
+     * Azahar's room link: host, join, auto, standby or off; the core reads these at load, and the mode again on a variable
+     * update (off leaves the room; auto in a session leaves its room and starts the automatic route, reading them all
+     * again; auto and standby switch the automatic route on and off).
      */
     const val N3DS_MODE = "nx_3ds_link"
     const val N3DS_IP = "nx_3ds_link_ip"
@@ -37,6 +38,11 @@ object NetplayLinkOptions {
     const val N3DS_AUTO = "auto"
     /** The link off: the room is left and the game plays on alone for the rest of the launch (DS, 3DS and PSP). */
     const val N3DS_OFF = "off"
+    /**
+     * Azahar's automatic route with the console's Local Wireless switched off: out of rooms, nothing sent, the game's
+     * wireless still followed so switching it on ([N3DS_AUTO]) mid-game finds the game's wireless already on.
+     */
+    const val N3DS_STANDBY = "standby"
     /** Azahar's default room port. */
     const val N3DS_PORT = 24872
 
@@ -135,8 +141,9 @@ object NetplayLinkOptions {
     /**
      * The variables a DS ([NetplayLinkKind.NDSLINK]) or 3DS ([NetplayLinkKind.N3DSLINK]) sheet session's Disconnect sends:
      * with the console's [localWireless] on, the automatic route's mode and [broadcast] as a launch outside a session sends
-     * them ([forSolo]; the name, port and DS MAC are the session's, the same values), so the game finds the others again
-     * once it turns its wireless off and on; otherwise the link off for the rest of the launch. Empty for any other link.
+     * them ([forSolo]; the name, port and DS MAC are the session's, the same values), out of rooms until the console's
+     * Local Wireless is switched on in the game; otherwise the link switched off ([soloLocalWireless]), so switching
+     * Local Wireless on later starts the automatic route. Empty for any other link.
      */
     fun dsSessionLeft(kind: NetplayLinkKind, localWireless: Boolean, broadcast: String?): Map<String, String> {
         val (mode, broadcastKey) = when (kind) {
@@ -144,7 +151,7 @@ object NetplayLinkOptions {
             NetplayLinkKind.N3DSLINK -> N3DS_MODE to N3DS_BROADCAST
             else -> return emptyMap()
         }
-        if (!localWireless) return mapOf(mode to N3DS_OFF)
+        if (!localWireless) return soloLocalWireless(if (kind == NetplayLinkKind.N3DSLINK) "azahar" else "melondsds", false)
         return buildMap {
             put(mode, N3DS_AUTO)
             broadcast?.let { put(broadcastKey, it) }
@@ -190,25 +197,62 @@ object NetplayLinkOptions {
     /**
      * gbalink_serial_option outside a session: mGBA's mode matters only in one, and `cable` keeps the core from scanning
      * the ROM for it on every load. Azahar and melonDS DS get their automatic local wireless under [roomName] (null:
-     * none), searching for rooms on [broadcast] too; melonDS DS also runs under [ndsMac] when given. Never saved, like
-     * [forSession]'s.
+     * none), searching for rooms on [broadcast] too; melonDS DS also runs under [ndsMac] when given. With the console's
+     * Local Wireless off ([localWireless]) the same variables go with the link switched off ([soloLocalWireless]), so
+     * switching it on mid-game needs only the mode. Never saved, like [forSession]'s.
      */
-    fun forSolo(coreId: String, roomName: String? = null, broadcast: String? = null, ndsMac: String? = null): Map<String, String> = when (coreId) {
+    fun forSolo(
+        coreId: String, roomName: String? = null, broadcast: String? = null, ndsMac: String? = null, localWireless: Boolean = true,
+    ): Map<String, String> = when (coreId) {
         "mgba" -> mapOf(MGBA_LINK to MGBA_DEFAULT)
         // 3DS local wireless with no session: Azahar finds or opens a room itself once the game turns its wireless on.
         "azahar" -> if (roomName == null) emptyMap() else buildMap {
-            put(N3DS_MODE, N3DS_AUTO)
-            put(N3DS_NAME, roomName)
-            put(N3DS_PORT_KEY, N3DS_PORT.toString())
-            broadcast?.let { put(N3DS_BROADCAST, it) }
+            putSoloRoom(N3DS_ROOM, coreId, localWireless, roomName, broadcast)
         }
         "melondsds" -> if (roomName == null) emptyMap() else buildMap {
-            put(NDS_MODE, N3DS_AUTO)
-            put(NDS_NAME, roomName)
-            put(NDS_PORT_KEY, NDS_PORT.toString())
-            broadcast?.let { put(NDS_BROADCAST, it) }
+            putSoloRoom(NDS_ROOM, coreId, localWireless, roomName, broadcast)
             ndsMac?.let { put(NDS_MAC_MODE, it) }
         }
+        else -> emptyMap()
+    }
+
+    /** One console's room link variables: the DS's and the 3DS's differ only in these. */
+    private class RoomKeys(
+        val mode: String, val name: String, val ip: String, val portKey: String, val port: Int, val broadcast: String,
+    )
+
+    private val N3DS_ROOM = RoomKeys(N3DS_MODE, N3DS_NAME, N3DS_IP, N3DS_PORT_KEY, N3DS_PORT, N3DS_BROADCAST)
+    private val NDS_ROOM = RoomKeys(NDS_MODE, NDS_NAME, NDS_IP, NDS_PORT_KEY, NDS_PORT, NDS_BROADCAST)
+
+    private fun MutableMap<String, String>.putSoloRoom(
+        room: RoomKeys, coreId: String, localWireless: Boolean, roomName: String, broadcast: String?,
+    ) {
+        putAll(soloLocalWireless(coreId, localWireless))
+        put(room.name, roomName)
+        put(room.portKey, room.port.toString())
+        broadcast?.let { put(room.broadcast, it) }
+    }
+
+    private fun MutableMap<String, String>.putSessionRoom(room: RoomKeys, session: NetplaySession, roomName: String?) {
+        put(room.portKey, room.port.toString())
+        if (session.role == NetplayRole.HOST) {
+            put(room.mode, N3DS_HOST)
+            put(room.name, roomName ?: "Player 1")
+        } else {
+            put(room.mode, N3DS_JOIN)
+            put(room.name, roomName ?: "Player 2")
+            put(room.ip, session.peerIp)
+        }
+    }
+
+    /**
+     * The automatic route's mode outside a session for the console's Local Wireless [on]: at launch ([forSolo]) and when
+     * it is switched in the game. Azahar stays ready while off ([N3DS_STANDBY]); melonDS DS's link is made again from
+     * its variables on every change, so off is simply off. Empty for any other core.
+     */
+    fun soloLocalWireless(coreId: String, on: Boolean): Map<String, String> = when (coreId) {
+        "azahar" -> mapOf(N3DS_MODE to if (on) N3DS_AUTO else N3DS_STANDBY)
+        "melondsds" -> mapOf(NDS_MODE to if (on) N3DS_AUTO else N3DS_OFF)
         else -> emptyMap()
     }
 
@@ -287,27 +331,9 @@ object NetplayLinkOptions {
                 else -> emptyMap()
             }
         }
-        NetplayLinkKind.N3DSLINK -> buildMap {
-            put(N3DS_PORT_KEY, N3DS_PORT.toString())
-            if (session.role == NetplayRole.HOST) {
-                put(N3DS_MODE, N3DS_HOST)
-                put(N3DS_NAME, roomName ?: "Player 1")
-            } else {
-                put(N3DS_MODE, N3DS_JOIN)
-                put(N3DS_NAME, roomName ?: "Player 2")
-                put(N3DS_IP, session.peerIp)
-            }
-        }
+        NetplayLinkKind.N3DSLINK -> buildMap { putSessionRoom(N3DS_ROOM, session, roomName) }
         NetplayLinkKind.NDSLINK -> buildMap {
-            put(NDS_PORT_KEY, NDS_PORT.toString())
-            if (session.role == NetplayRole.HOST) {
-                put(NDS_MODE, N3DS_HOST)
-                put(NDS_NAME, roomName ?: "Player 1")
-            } else {
-                put(NDS_MODE, N3DS_JOIN)
-                put(NDS_NAME, roomName ?: "Player 2")
-                put(NDS_IP, session.peerIp)
-            }
+            putSessionRoom(NDS_ROOM, session, roomName)
             ndsMac?.let { put(NDS_MAC_MODE, it) }
         }
         NetplayLinkKind.PSPLINK -> {

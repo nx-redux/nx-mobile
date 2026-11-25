@@ -1,6 +1,5 @@
 package com.nxredux.mobile.ui
 
-import com.nxredux.mobile.achievements.RaSortOrder
 import com.nxredux.mobile.kids.FlagSeen
 import com.nxredux.mobile.kids.KidsController
 import com.nxredux.mobile.kids.KidsFlag
@@ -17,17 +16,10 @@ import com.nxredux.mobile.library.FakeRomsSource
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.runner.EmulatorRunner
 import com.nxredux.mobile.runner.GameSession
-import com.nxredux.mobile.settings.AccentPreset
 import com.nxredux.mobile.settings.AppSettings
-import com.nxredux.mobile.settings.ExtraFolder
-import com.nxredux.mobile.settings.FolderPicker
+import com.nxredux.mobile.settings.FakeAppSettings
 import com.nxredux.mobile.settings.MenuCategory
-import com.nxredux.mobile.settings.MenuOrientation
 import com.nxredux.mobile.settings.MenuStyle
-import com.nxredux.mobile.settings.MenuStyles
-import com.nxredux.mobile.settings.PadTheme
-import com.nxredux.mobile.settings.SecondaryAccent
-import com.nxredux.mobile.settings.VerticalListAlignment
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.storage.SaveFormat
 import com.nxredux.mobile.storage.StateFormat
@@ -47,9 +39,8 @@ import kotlin.test.assertTrue
 /** Kids Mode in AppState: the tiles screen while Locked, no Tools while Open, the PIN wait, the flag and the lock. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppStateKidsTest {
-    private class MemorySettings(override var treeRef: ContentRef? = ContentRef("Home")) : AppSettings {
-        override var extraFolders: List<ExtraFolder> = emptyList()
-        override var defaultTags: Map<String, String> = emptyMap()
+    private class MemorySettings(treeRef: ContentRef? = ContentRef("Home")) :
+        FakeAppSettings(treeRef, padSkin = false, gameListStyle = MenuStyle.LIST) {
         override var debugLog = false
         override var secondScreen = true
         override var pauseWhenUnfocused = true
@@ -57,34 +48,9 @@ class AppStateKidsTest {
         override var saveFormat = SaveFormat.DEFAULT
         override var stateFormat = StateFormat.DEFAULT
         override var useExtractedFileName = false
-        override var padTheme: PadTheme = PadTheme.DEFAULT
-        override var padSkin = false
-        override var menuStyles: Map<MenuCategory, MenuStyle> = emptyMap()
-        override var gameListStyle: MenuStyle = MenuStyle.LIST
-        override var menuOrientations: Map<MenuCategory, MenuOrientation> = emptyMap()
-        override var gameListOrientation: MenuOrientation = MenuStyles.DEFAULT_ORIENTATION
-        override var gameListVerticalAlignment: VerticalListAlignment = VerticalListAlignment.DEFAULT
-        override var toolApps: List<String> = emptyList()
-        override var androidConsoleApps: List<String> = emptyList()
-        override var androidGamesAsked = false
         override var allFilesAsked = false
         override var onboardingDone: Boolean? = true
         override var onboardingStep: String? = null
-        override var androidPins: List<String> = emptyList()
-        override var raEnabled = false
-        override var raUsername = ""
-        override var raToken: String? = null
-        override var raShowNotifications = true
-        override var raNotificationSeconds = 3
-        override var raProgressSeconds = 1
-        override var raSortOrder = RaSortOrder.DEFAULT
-        override var ssUsername = ""
-        override var ssPassword: String? = null
-        override var sgdbApiKey: String? = null
-        override var tgdbApiKey: String? = null
-        override var artReplaceExisting = false
-        override var consoleArt = com.nxredux.mobile.settings.ConsoleArt.DEFAULT; override var gameListArt = com.nxredux.mobile.settings.GameListArt.DEFAULT; override var backdropArt = com.nxredux.mobile.settings.BackdropArt.DEFAULT; override var showHomeTab = true; override var showConsolesTab = true; override var showCollectionsTab = true; override var showToolsTab = true; override var showNewShelf = true; override var showNotStartedShelf = true; override var showNetplayHint = true; override var menuPageTitle = MenuStyles.DEFAULT_PAGE_TITLE; override var menuButtonHints = MenuStyles.DEFAULT_BUTTON_HINTS; override var menuExtraInfo = com.nxredux.mobile.settings.MenuStyles.DEFAULT_EXTRA_INFO; override var menuHomeStats = true; override var gameListLayoutOptions = true; override var gameListAchievementsPanel = true; override var padVibration = com.nxredux.mobile.settings.PadVibration.DEFAULT; override var gameRumble = com.nxredux.mobile.settings.GameRumble.DEFAULT; override var accent = AccentPreset.DEFAULT
-        override var secondaryAccent: SecondaryAccent = SecondaryAccent.DEFAULT
         override var switcherLayout = com.nxredux.mobile.settings.SwitcherLayout.DEFAULT
         override var optionTextSize = com.nxredux.mobile.settings.OptionTextSize.DEFAULT
 
@@ -109,12 +75,6 @@ class AppStateKidsTest {
     private class GatedSource(private val inner: FakeRomsSource) : com.nxredux.mobile.library.RomsSource by inner {
         var gate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
         override suspend fun child(dir: ContentRef, name: String) = gate.let { it?.await(); inner.child(dir, name) }
-    }
-
-    private class Picker : FolderPicker {
-        override fun pickHome() {}
-        override fun pickExtra() {}
-        override fun forget(ref: ContentRef) {}
     }
 
     private class Flag(var home: String? = "Home", var seen: FlagSeen = FlagSeen.PRESENT) : KidsFlag {
@@ -166,7 +126,7 @@ class AppStateKidsTest {
         settings: AppSettings, kids: KidsController?, launcher: AppLauncher? = null,
         roms: com.nxredux.mobile.library.RomsSource = source, runner: EmulatorRunner = Runner(),
     ) = AppState(
-        AppDeps(settings, roms, runner, Picker(), compute = UnconfinedTestDispatcher(testScheduler), launcher = launcher),
+        AppDeps(settings, roms, runner, NoopFolderPicker, compute = UnconfinedTestDispatcher(testScheduler), launcher = launcher),
         CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
         kids,
     )
@@ -464,9 +424,7 @@ class AppStateKidsTest {
         val runner = Runner()
         val st = state(settings, kids, roms = roms, runner = runner)
         st.load()
-        val sys = assertIs<Screen.Systems>(st.screen.value).tabs.flatMap { it.rows }
-            .flatMap { (it as? MainRow.System)?.systems.orEmpty() }.first { it.tag == "GB" }
-        st.openSystem(sys)
+        st.openConsole("GB")
         val game = assertIs<Screen.Games>(st.screen.value).entries.single().game
         roms.gate = kotlinx.coroutines.CompletableDeferred()
         val job = st.play(game)
@@ -884,9 +842,7 @@ class AppStateKidsTest {
         val kids = KidsController(settings, Platform(SAT, 10 * 60))
         val st = state(settings, kids)
         st.load()
-        val sys = assertIs<Screen.Systems>(st.screen.value).tabs.flatMap { it.rows }
-            .flatMap { (it as? MainRow.System)?.systems.orEmpty() }.first { it.tag == "GB" }
-        st.openSystem(sys)
+        st.openConsole("GB")
         st.openContextMenu(0)
         val kinds = assertIs<Screen.Games>(st.screen.value).menu!!.items.map { it.kind }
         val parentOnly = setOf(
@@ -904,9 +860,7 @@ class AppStateKidsTest {
         val st = state(settings, kids)
         st.load()
         kids.enterParent(platform.epochMs)
-        val sys = assertIs<Screen.Systems>(st.screen.value).tabs.flatMap { it.rows }
-            .flatMap { (it as? MainRow.System)?.systems.orEmpty() }.first { it.tag == "GB" }
-        st.openSystem(sys)
+        st.openConsole("GB")
         st.openContextMenu(0)
         val kinds = assertIs<Screen.Games>(st.screen.value).menu!!.items.map { it.kind }
         assertTrue(ContextKind.HIDE in kinds && ContextKind.RENAME in kinds && ContextKind.GAME_SETTINGS in kinds, "$kinds")
@@ -920,9 +874,7 @@ class AppStateKidsTest {
         val st = state(settings, kids)
         st.load()
         kids.enterParent(platform.epochMs)
-        val sys = assertIs<Screen.Systems>(st.screen.value).tabs.flatMap { it.rows }
-            .flatMap { (it as? MainRow.System)?.systems.orEmpty() }.first { it.tag == "GB" }
-        st.openSystem(sys)
+        st.openConsole("GB")
         st.openContextMenu(0)
         val items = assertIs<Screen.Games>(st.screen.value).menu!!.items
         st.menuSelect(items.indexOfFirst { it.kind == ContextKind.RENAME })
@@ -947,7 +899,7 @@ class AppStateKidsTest {
     @Test fun kidsPlayItemsKeepPlayAndDropLibraryEdits() {
         val all = ContextKind.entries.map { ContextItem(it, it.name) }
         assertEquals(
-            setOf(ContextKind.PLAY_FROM_START, ContextKind.NETPLAY, ContextKind.PIN, ContextKind.UNPIN, ContextKind.REMOVE_RECENT,
+            setOf(ContextKind.PLAY_FROM_START, ContextKind.RESUME, ContextKind.NETPLAY, ContextKind.PIN, ContextKind.UNPIN, ContextKind.REMOVE_RECENT,
                 ContextKind.ACHIEVEMENTS, ContextKind.OPEN_GAMES, ContextKind.OPEN_CONSOLES, ContextKind.OPEN_COLLECTIONS, ContextKind.USE_TOP_SCREEN),
             ContextMenus.kidsPlayItems(all).map { it.kind }.toSet(),
         )

@@ -27,9 +27,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
@@ -189,14 +187,8 @@ private fun DetailsText(details: TopDetails, now: Long, fit: DetailsFit, onAchie
     val colors = LocalNxColors.current
     val font = LocalNxFont.current
     Column(modifier.fillMaxHeight(), verticalArrangement = Arrangement.Bottom) {
-        Text(
-            details.entry.shown, color = colors.listText, fontFamily = font, fontSize = 40.sp, lineHeight = 42.sp, fontWeight = FontWeight.Bold,
-            maxLines = 2, overflow = TextOverflow.Ellipsis, style = TextStyle(lineHeightStyle = TOP_TIGHT_LINES),
-        )
-        Text(
-            genreLine(details.scraped, details.entry.system.displayName), color = colors.hint, fontFamily = font, fontSize = 18.sp,
-            maxLines = 1, overflow = TextOverflow.Ellipsis, style = TextStyle(lineHeightStyle = TOP_TIGHT_LINES), modifier = Modifier.padding(top = 2.dp),
-        )
+        TopTitle(details.entry.shown)
+        TopLine(genreLine(details.scraped, details.entry.system.displayName))
         if (fit.synopsis) synopsisOf(details.scraped)?.let { synopsis ->
             Text(
                 synopsis, color = colors.hint, fontFamily = font, fontSize = 16.sp, maxLines = TD_SYNOPSIS_LINES,

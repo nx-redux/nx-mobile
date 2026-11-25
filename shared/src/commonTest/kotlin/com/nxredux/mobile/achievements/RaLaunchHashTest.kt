@@ -1,6 +1,5 @@
 package com.nxredux.mobile.achievements
 
-import com.nxredux.mobile.library.FakeRomsSource
 import com.nxredux.mobile.runner.ContentRef
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -9,7 +8,7 @@ import kotlinx.coroutines.test.runTest
 
 class RaLaunchHashTest {
     private val h = "0123456789abcdef0123456789abcdef"
-    private fun fp() = RaFingerprints(RaHomeTree(FakeRomsSource(mapOf("home" to listOf("Roms"), "home/Roms" to listOf("W (WII)"), "home/Roms/W (WII)" to emptyList()))) { ContentRef("home") })
+    private fun fp() = RaFingerprints(RaHomeTree(raHomeSource("W (WII)")) { ContentRef("home") })
     private val target = RaLaunchTarget(RaGamePointer("WII", "home", "Roms/W (WII)", "g.iso", "g"), "10:5000", 19, storable = true)
 
     @Test fun computes_then_hits_after_an_answer() = runTest {

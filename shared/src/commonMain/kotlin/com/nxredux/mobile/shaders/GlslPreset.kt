@@ -1,7 +1,10 @@
 package com.nxredux.mobile.shaders
 
+import com.nxredux.mobile.storage.TextLines
+
 enum class ScaleType { NONE, SOURCE, VIEWPORT, ABSOLUTE }
-enum class WrapMode { EDGE, REPEAT, MIRRORED }
+/** [BORDER] (transparent black outside the texture) is asked for by slang presets only; GLSL presets get [EDGE] for it. */
+enum class WrapMode { EDGE, REPEAT, MIRRORED, BORDER }
 
 /** One pass of a RetroArch legacy GLSL preset, with its source text (pragma lines stripped). */
 data class ShaderPass(
@@ -35,7 +38,6 @@ object GlslPreset {
     const val MAX_PASSES = 8
     const val MAX_LUTS = 16
     private val IGNORED_PASS_KEYS = listOf("float_framebuffer", "srgb_framebuffer", "rgb10_framebuffer", "mipmap_input")
-    private const val BOM = "\uFEFF"
     private val PRAGMA = Regex("""^\s*#pragma\s+parameter\s+(\S+)\s+"([^"]*)"\s+(\S+)\s+(\S+)\s+(\S+)(?:\s+(\S+))?(?:\s.*)?$""")
 
     fun parse(presetPath: String, read: (String) -> String?): ParsedChain {
@@ -49,7 +51,7 @@ object GlslPreset {
         val dir = path.substringBeforeLast('/', "")
         val warnings = mutableListOf<String>()
         val cfg = LinkedHashMap<String, String>()
-        for (raw in text.removePrefix(BOM).lines()) {
+        for (raw in TextLines.stripBom(text).lines()) {
             val line = raw.trim()
             if (line.isEmpty()) continue
             if (line.startsWith("#reference")) throw PresetException("unsupported: #reference")
@@ -104,7 +106,7 @@ object GlslPreset {
 
     fun pragmas(source: String): List<ShaderParam> {
         val out = mutableListOf<ShaderParam>()
-        for (line in source.removePrefix(BOM).lines()) {
+        for (line in TextLines.stripBom(source).lines()) {
             val m = PRAGMA.find(line) ?: continue
             val (id, label, def, min, max, step) = m.destructured
             val minF = min.toFloatOrNull() ?: continue
@@ -120,7 +122,7 @@ object GlslPreset {
 
     /** [source] without its pragma lines and without a leading BOM, which would hide a first-line `#version`. */
     fun stripPragmas(source: String): String =
-        source.removePrefix(BOM).lines().filterNot { PRAGMA.matches(it) }.joinToString("\n")
+        TextLines.stripBom(source).lines().filterNot { PRAGMA.matches(it) }.joinToString("\n")
 
     fun normalize(path: String): String? {
         val parts = ArrayDeque<String>()
@@ -134,13 +136,13 @@ object GlslPreset {
         return parts.joinToString("/")
     }
 
-    private fun resolve(dir: String, rel: String): String? = normalize(if (dir.isEmpty()) rel else "$dir/$rel")
+    internal fun resolve(dir: String, rel: String): String? = normalize(if (dir.isEmpty()) rel else "$dir/$rel")
 
-    private fun unquote(v: String): String = v.trim().let { if (it.length >= 2 && it.startsWith('"') && it.endsWith('"')) it.substring(1, it.length - 1) else it }
+    internal fun unquote(v: String): String = v.trim().let { if (it.length >= 2 && it.startsWith('"') && it.endsWith('"')) it.substring(1, it.length - 1) else it }
 
-    private fun bool(v: String) = v.equals("true", ignoreCase = true) || v == "1"
+    internal fun bool(v: String) = v.equals("true", ignoreCase = true) || v == "1"
 
-    private fun scaleType(v: String): ScaleType? = when (v.lowercase()) {
+    internal fun scaleType(v: String): ScaleType? = when (v.lowercase()) {
         "source" -> ScaleType.SOURCE
         "viewport" -> ScaleType.VIEWPORT
         "absolute" -> ScaleType.ABSOLUTE

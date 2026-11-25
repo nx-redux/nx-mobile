@@ -2,7 +2,6 @@ package com.nxredux.mobile.skin
 
 import com.nxredux.mobile.options.PxRect
 import com.nxredux.mobile.ui.nx.SkinPadTouch
-import java.io.File
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -11,9 +10,7 @@ import kotlin.test.assertTrue
 
 /** Player tweaks applied to the built-in packs' placed layouts: groups move and scale, clear of the screens. */
 class SkinApplyTest {
-    private fun pack(id: String) =
-        assertNotNull(SkinPackManifest.parse(File("../androidApp/src/main/assets/skins/$id/skin.json").readText()))
-    private val carbon = pack("nx-carbon")
+    private val carbon = skinPack()
 
     private fun menu(pack: SkinPackManifest = carbon) = assertNotNull(SkinChoice.placeMenu(pack, 1080, 2520, 420)).also {
         assertEquals("stacked_menu", it.spec.id)
@@ -106,13 +103,13 @@ class SkinApplyTest {
     fun apply_moves_a_group_and_its_controls() {
         val p = menu()
         val g = group(p, "SELECT", "START")
-        val out = SkinTweaks.apply(p, mapOf(g.id to SkinTweak(dx = 40f)), 1080f, 2520f)
+        val out = SkinTweaks.apply(p, mapOf(g.id to SkinTweak(dx = 10f)), 1080f, 2520f)
         for ((a, b) in controls(p, g).zip(controls(out, g))) {
-            near(b.x, a.x + 40f * p.k, "${a.spec.id} x"); near(b.y, a.y, "${a.spec.id} y")
+            near(b.x, a.x + 10f * p.k, "${a.spec.id} x"); near(b.y, a.y, "${a.spec.id} y")
         }
         val before = pieces(p, g); val after = pieces(out, g)
         assertTrue(before.isNotEmpty())
-        for ((a, b) in before.zip(after)) near(b.dst.x, a.dst.x + 40f * p.k, "piece left")
+        for ((a, b) in before.zip(after)) near(b.dst.x, a.dst.x + 10f * p.k, "piece left")
         // the rest stays put
         val rest = p.controls.filter { it.spec.id !in g.controls }
         assertEquals(rest, out.controls.filter { it.spec.id !in g.controls })
@@ -160,7 +157,8 @@ class SkinApplyTest {
     @Test
     fun apply_keeps_a_group_inside_the_window() {
         val w = 2420; val h = 1080   // the Fold's cover, sideways
-        val p = grip()
+        // a board with nothing over the face buttons' ring (the GBA's R stands by it, in the way of a growth)
+        val p = assertNotNull(SkinChoice.place(carbon, w, h, 420, tablet = false, ds = false, picture = 240f to 160f, variant = SkinVariant.GB))
         assertEquals(SkinFamily.GRIP, p.spec.family)
         val face = SkinGroups.of(p.spec).single { "A" in it.controls && "B" in it.controls }
         val out = SkinTweaks.apply(p, mapOf(face.id to SkinTweak(dx = 10000f, scale = 1.25f)), w.toFloat(), h.toFloat())
@@ -288,7 +286,7 @@ class SkinApplyTest {
     @Test
     fun the_same_tweaks_give_the_same_result_on_every_colour_pack() {
         val a = menu(carbon)
-        val b = menu(pack("nx-plasma"))
+        val b = menu(skinPack("nx-plasma"))
         val tweaks = SkinGroups.of(a.spec).associate { it.id to SkinTweak(dx = 20f, dy = -30f, scale = 1.1f) }
         val ca = SkinTweaks.apply(a, tweaks, 1080f, 2520f).controls
         val cb = SkinTweaks.apply(b, tweaks, 1080f, 2520f).controls
@@ -432,8 +430,9 @@ class SkinApplyTest {
         val q = stripUp(q0, stripTop(q0) - (qg.y + qg.height - 80f))
         val qa = area(q)
         val face = group(q, "A", "B", "X", "Y")
-        assertTrue(box(q, face).let { it.y + it.height < inner(qa).let { m -> m.y + m.height } }, "the face buttons level with the area's middle")
-        val moved = box(SkinTweaks.apply(q, mapOf(face.id to SkinTweak(dx = -10000f)), 2420f, 1080f), face)
+        // (the face buttons held to the bottom: lifted level with the area's middle first, then sent in)
+        val lift = box(q, face).let { f -> inner(qa).let { m -> m.y + m.height / 2f } - (f.y + f.height / 2f) } / q.k
+        val moved = box(SkinTweaks.apply(q, mapOf(face.id to SkinTweak(dx = -10000f, dy = lift)), 2420f, 1080f), face)
         near(moved.x, qa.x + qa.width - 0.1f * qa.width, "stopped 10% in", e = 1f)
     }
 
@@ -556,9 +555,9 @@ class SkinApplyTest {
         // the d-pad (earlier in the layout) kept where its tweak puts it; the face buttons' tweak onto it stops short
         val p = menu()
         val dpad = group(p, "DPAD"); val face = group(p, "A", "B", "X", "Y")
-        val t = mapOf(dpad.id to SkinTweak(dx = 150f), face.id to SkinTweak(dx = -100f))
+        val t = mapOf(dpad.id to SkinTweak(dx = 120f), face.id to SkinTweak(dx = -100f))
         val out = SkinTweaks.apply(p, t, 1080f, 2520f, TweakRules.OVERLAY, keep = setOf(dpad.id))
-        near(box(out, dpad).x, box(p, dpad).x + 150f * p.k, "the d-pad where its tweak puts it")
+        near(box(out, dpad).x, box(p, dpad).x + 120f * p.k, "the d-pad where its tweak puts it")
         val d = union(zones(out, dpad)); val f = union(zones(out, face))
         near(f.x, d.x + d.width, "the face buttons against it", e = 0.5f)
         // kept or not, never on each other

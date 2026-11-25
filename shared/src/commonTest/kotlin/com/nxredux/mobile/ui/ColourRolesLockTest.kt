@@ -38,14 +38,14 @@ class ColourRolesLockTest {
         return t.startsWith("//") || t.startsWith("*") || t.startsWith("/*")
     }
 
-    private fun scan(skip: (String) -> Boolean, hit: (Regex, List<String>, String) -> List<Pair<Int, MatchResult>>, ok: (List<String>, Int, MatchResult) -> Boolean, rx: Regex): List<String> {
+    private fun scan(skip: (String) -> Boolean, ok: (List<String>, Int, MatchResult) -> Boolean, rx: Regex): List<String> {
         val root = sourceRoot()
         return sources(root).flatMap { f ->
             val rel = f.relativeTo(root).invariantSeparatorsPath
             if (skip(rel)) return@flatMap emptyList<String>()
             val text = f.readText()
             val lines = text.split("\n")
-            hit(rx, lines, text)
+            matches(rx, lines, text)
                 .filter { (i, m) -> !isProse(lines[i]) && !ok(lines, i, m) }
                 .map { (i, _) -> "$rel:${i + 1}: ${lines[i].trim()}" }
                 .distinct()
@@ -66,12 +66,12 @@ class ColourRolesLockTest {
     }
 
     @Test fun no_colour_literal_outside_the_theme() {
-        val bad = scan({ it in literalHomes }, ::matches, { _, _, _ -> false }, literal)
+        val bad = scan({ it in literalHomes }, { _, _, _ -> false }, literal)
         assertTrue(bad.isEmpty(), "Colour literals outside the theme files:\n" + bad.joinToString("\n"))
     }
 
     @Test fun every_alpha_names_its_role() {
-        val bad = scan({ it == themeFile }, ::matches, { lines, i, _ ->
+        val bad = scan({ it == themeFile }, { lines, i, _ ->
             "// role:" in lines[i] || (i > 0 && "// role:" in lines[i - 1])
         }, alphaCall)
         assertTrue(bad.isEmpty(), "Alphas without a role (add `// role: ...` on the line or the line above):\n" + bad.joinToString("\n"))

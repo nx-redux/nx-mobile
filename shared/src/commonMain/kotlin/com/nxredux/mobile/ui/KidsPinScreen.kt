@@ -73,7 +73,7 @@ internal fun kidsPinStatus(s: Screen.KidsPin, nowMs: Long): String? = when {
 }
 
 /**
- * Kids Mode's PIN prompt: its title, four dots (filled as digits are typed) and a 3 × 4 pad of 1–9, Back, 0 and Enter,
+ * Kids Mode's PIN prompt: its title, a dot per digit (filled as typed) and a 3 × 4 pad of 1–9, Back, 0 and Enter,
  * the keys named in words. A wrong PIN shakes the dots; the wait after the fifth counts down in place of the keys' use.
  * Taps press keys; the d-pad's key ([selectedIndex]) is lit as the menu's selection is.
  */
@@ -93,11 +93,13 @@ internal fun KidsPinScreen(
         shake.animateTo(0f, keyframes { durationMillis = 360; -14f at 60; 12f at 120; -8f at 180; 6f at 240; -3f at 300 })
     }
     BoxWithConstraints(modifier.fillMaxSize().background(colors.background), contentAlignment = Alignment.Center) {
-        val landscape = maxWidth > maxHeight
-        // Four rows of keys fit the height (beside the dots in landscape, under them in portrait) and three the width.
-        val keyRoom = if (landscape) maxHeight - 32.dp else maxHeight * 0.62f
         val gap = 12.dp
-        val key = min(((keyRoom - gap * 3) / 4).value, ((if (landscape) maxWidth / 2 else maxWidth - 32.dp) - gap * 2).value / 3).coerceIn(40f, 76f).dp
+        // Four rows of keys fit the height and three the width: beside the title and dots on a wide screen, or where
+        // under them the keys would be smaller than a thumb; under them on a screen near square (the Fold's cover) or tall.
+        fun keyFor(room: Dp, across: Dp) = min(((room - gap * 3) / 4).value, ((across - gap * 2) / 3).value)
+        val stacked = keyFor(maxHeight - 32.dp - PIN_HEAD - PIN_HEAD_GAP, maxWidth - 32.dp)
+        val beside = maxWidth > maxHeight * PIN_WIDE || (maxWidth > maxHeight && stacked < PIN_KEY_MIN.value)
+        val key = (if (beside) keyFor(maxHeight - 32.dp, maxWidth / 2) else stacked).coerceIn(40f, 76f).dp
         val head: @Composable () -> Unit = {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(kidsPinTitle(s.purpose), color = colors.listText, fontFamily = font, fontWeight = FontWeight.SemiBold, fontSize = 22.sp)
@@ -113,10 +115,15 @@ internal fun KidsPinScreen(
             }
         }
         val pad: @Composable () -> Unit = { PinPad(selectedIndex, key, gap, onKey) }
-        if (landscape) Row(verticalAlignment = Alignment.CenterVertically) { head(); Spacer(Modifier.width(48.dp)); pad() }
-        else Column(horizontalAlignment = Alignment.CenterHorizontally) { head(); Spacer(Modifier.height(28.dp)); pad() }
+        if (beside) Row(verticalAlignment = Alignment.CenterVertically) { head(); Spacer(Modifier.width(48.dp)); pad() }
+        else Column(horizontalAlignment = Alignment.CenterHorizontally) { head(); Spacer(Modifier.height(PIN_HEAD_GAP)); pad() }
     }
 }
+
+private val PIN_HEAD = 110.dp      // the title, the dots and the status line
+private val PIN_HEAD_GAP = 8.dp    // between them and the keys stacked
+private val PIN_KEY_MIN = 40.dp    // the smallest key: under it, side by side
+private const val PIN_WIDE = 1.3f  // wider than tall by this much: side by side
 
 /** The 3 × 4 keys, [key] square, [gap] apart. */
 @Composable

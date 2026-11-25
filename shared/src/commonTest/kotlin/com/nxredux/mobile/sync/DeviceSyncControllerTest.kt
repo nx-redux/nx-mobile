@@ -223,7 +223,7 @@ class DeviceSyncControllerTest {
 
     /** Old firmware (no v2, no c) is refused at pairing: no server, no rsync step, no role decision. */
     @Test fun an_old_firmware_peer_is_refused_without_rsync_or_a_server() = runTest {
-        for (ownIp in listOf("192.168.1.5", "192.168.1.20")) {   // whichever side the old IP rule would have chosen
+        for (ownIp in listOf("192.168.1.5", "192.168.1.20")) {   // below and above the handheld's IP
             val p = FakeSyncPlatform().apply { wifi = ownIp }
             val c = rig(p)
             c.pick(SyncLink.WIFI); c.press(NxButton.A); runCurrent()

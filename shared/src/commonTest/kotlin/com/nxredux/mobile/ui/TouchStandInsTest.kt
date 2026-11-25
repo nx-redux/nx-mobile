@@ -7,7 +7,6 @@ import com.nxredux.mobile.scraper.JobPhase
 import com.nxredux.mobile.shared.res.Res
 import com.nxredux.mobile.shared.res.nav_icon_delete
 import com.nxredux.mobile.shared.res.nav_icon_filter
-import com.nxredux.mobile.shared.res.nav_icon_new_folder
 import com.nxredux.mobile.storage.ResumeInfo
 import com.nxredux.mobile.ui.nx.FooterAction
 import com.nxredux.mobile.ui.nx.Hint
@@ -31,7 +30,6 @@ class TouchStandInsTest {
         assertEquals(HintTouch.Icon(Res.drawable.nav_icon_filter, lit = false), raGameFilterHint(lockedOnly = false).touch)
     }
 
-
     @Test fun artwork_progress_pause_or_resume_then_cancel_as_buttons() {
         assertEquals(
             listOf(FooterAction(NxButton.Y, "Pause", true), FooterAction(NxButton.X, "Cancel", false)),
@@ -43,7 +41,7 @@ class TouchStandInsTest {
 
     // New folder is a row (Create new folder): no title icon for it.
     @Test fun file_picker_new_folder_has_no_title_icon() {
-        val hint = filePickerHintsForTest(insideFolder = true).single { it.button == NxButton.X }
+        val hint = filePickerHintsForTest().single { it.button == NxButton.X }
         assertEquals(HintTouch.None, hint.touch)
     }
 }
@@ -54,6 +52,6 @@ internal fun switcherEntryForTest() = SwitcherEntry(
     ResumeInfo(1),
 )
 
-private fun filePickerHintsForTest(insideFolder: Boolean): List<Hint> = filePickerHints(
-    Screen.FilePicker(FilePickMode.ImportFolder, if (insideFolder) "/storage/emulated/0/Roms" else null, "Roms", emptyList()),
+private fun filePickerHintsForTest(): List<Hint> = filePickerHints(
+    Screen.FilePicker(FilePickMode.ImportFolder, "/storage/emulated/0/Roms", "Roms", emptyList()),
 )

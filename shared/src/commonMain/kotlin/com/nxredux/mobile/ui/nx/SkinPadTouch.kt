@@ -51,8 +51,11 @@ class SkinPadTouch(
     private sealed interface Hit
     private data class Btn(val b: NxButton, val id: String) : Hit
     private data class Act(val id: String) : Hit
-    private object Dpad : Hit
+    private class Dpad(val c: PlacedControl) : Hit
     private class Stick(val c: PlacedControl) : Hit
+
+    /** Pointer id -> the d-pad it steers (it keeps steering that one, and slides onto no other). */
+    private val steering = HashMap<Long, PlacedControl>()
 
     /** Pointer id -> the buttons it holds (the d-pad holds up to two directions), or the action it holds. */
     private val held = HashMap<Long, Set<NxButton>>()
@@ -64,16 +67,30 @@ class SkinPadTouch(
     private fun stickOf(finger: Long): String? = sticks.entries.firstOrNull { it.value.finger == finger }?.key
     private fun sendStick(stick: String, x: Float, y: Float) = if (stick == CSTICK) onCStick(x, y) else onStick(x, y)
 
+    /**
+     * A DS / 3DS touch screen under the bare pad (window px of the placement), or null: over it a control takes a touch
+     * only on itself (no slop round a rect or the d-pad, a stick within its ring), so a tap beside a button is the screen's.
+     */
+    var tightArea: com.nxredux.mobile.options.PxRect? = null
+
+    /**
+     * The second d-pad's (control `DPAD2`) directions as the buttons its core reads for them ([VB_SECOND_DPAD],
+     * [WS_SECOND_DPAD]); empty: the console has none and DPAD2 takes no touch.
+     */
+    var secondDpad: Map<NxButton, NxButton> = emptyMap()
+
     /** Whether [x], [y] (window px of the placement) is on one of the skin's controls. */
     fun hits(x: Float, y: Float): Boolean = hitAt(x, y) != null
 
     private fun hitAt(x: Float, y: Float): Hit? {
         val p = placement ?: return null
+        val tight = tightArea?.let { x >= it.x && x <= it.x + it.width && y >= it.y && y <= it.y + it.height } == true
         // the sticks first, over a touch area a little larger than their rings: one wins a touch on the d-pad's edge (the
-        // nearest, if two reach)
-        p.controls.filter { it.spec.shape == ControlShape.STICK && hypot(x - it.x, y - it.y) <= it.spec.r * TouchSlop.STICK }
+        // nearest, if two reach); over the touch screen ([tightArea]) their rings alone
+        val reach = if (tight) 1f else TouchSlop.STICK
+        p.controls.filter { it.spec.shape == ControlShape.STICK && hypot(x - it.x, y - it.y) <= it.spec.r * reach }
             .minByOrNull { hypot(x - it.x, y - it.y) }?.let { return Stick(it) }
-        val slop = TouchSlop.RECT * p.k
+        val slop = if (tight) 0f else TouchSlop.RECT * p.k
         for (c in p.controls) {
             val hit = when (c.spec.shape) {
                 ControlShape.DPAD -> abs(x - c.x) <= c.spec.r + slop && abs(y - c.y) <= c.spec.r + slop
@@ -87,7 +104,8 @@ class SkinPadTouch(
     }
 
     private fun hitOf(c: PlacedControl): Hit? = when (val id = c.spec.id) {
-        "DPAD" -> Dpad
+        "DPAD" -> Dpad(c)
+        "DPAD2" -> if (secondDpad.isEmpty()) null else Dpad(c)
         in ACTIONS -> Act(id)
         else -> BUTTONS[id]?.let { Btn(it, id) }
     }
@@ -108,10 +126,14 @@ class SkinPadTouch(
         }.map { it.spec.id }.toSet()
     }
 
-    /** The d-pad's directions at [x], [y]: eight ways by angle, nothing in the dead centre. */
-    private fun dpadAt(x: Float, y: Float): Set<NxButton> {
+    /** [pad]'s buttons at [x], [y]: eight ways by angle, nothing in the dead centre; the second's as [secondDpad] sends them. */
+    private fun dpadAt(pad: PlacedControl, x: Float, y: Float): Set<NxButton> {
+        val ways = directionsAt(pad, x, y)
+        return if (pad.spec.id == "DPAD2") ways.mapNotNull { secondDpad[it] }.toSet() else ways
+    }
+
+    private fun directionsAt(pad: PlacedControl, x: Float, y: Float): Set<NxButton> {
         val p = placement ?: return emptySet()
-        val pad = p.controls.firstOrNull { it.spec.shape == ControlShape.DPAD } ?: return emptySet()
         val dx = x - pad.x
         val dy = y - pad.y
         if (hypot(dx, dy) < 22f * p.k) return emptySet()
@@ -147,7 +169,7 @@ class SkinPadTouch(
         if (isUnder(h) && anyHeld()) { ignored += id; return true }
         when (h) {
             is Btn -> setHeld(id, setOf(h.b))
-            Dpad -> setHeld(id, dpadAt(x, y))
+            is Dpad -> { steering[id] = h.c; setHeld(id, dpadAt(h.c, x, y)) }
             is Act -> { heldAction[id] = h.id; onAction(h.id, true); tick(); onChange() }
             is Stick -> {
                 val sid = h.c.spec.id
@@ -179,11 +201,11 @@ class SkinPadTouch(
     fun move(id: Long, x: Float, y: Float) {
         stickOf(id)?.let { moveStick(it, x, y); return }
         if (id in heldAction) return
-        val cur = held[id] ?: return
-        val onDpad = cur.isEmpty() || cur.all { it.isDirection }
+        if (id !in held) return
         val over = hitAt(x, y).takeUnless(::isUnder)   // never slide onto an under cap: as if over nothing
-        if (onDpad && (over == Dpad || over == null)) setHeld(id, dpadAt(x, y))
-        else if (over is Btn) setHeld(id, setOf(over.b))
+        val pad = steering[id]
+        if (pad != null && (over == null || over is Dpad)) setHeld(id, dpadAt(pad, x, y))   // (over the other d-pad too: a thumb keeps its own pad)
+        else if (over is Btn) { steering.remove(id); setHeld(id, setOf(over.b)) }
     }
 
     fun release(id: Long) {
@@ -192,6 +214,7 @@ class SkinPadTouch(
         heldAction.remove(id)?.let { onAction(it, false); onChange() }
         held[id]?.let { setHeld(id, emptySet()) }
         held.remove(id)
+        steering.remove(id)
     }
 
     fun releaseAll() = (held.keys + heldAction.keys + ignored + sticks.values.map { it.finger }).toList().forEach(::release)
@@ -212,12 +235,13 @@ class SkinPadTouch(
                 // the knob, where it is now
                 ControlShape.STICK -> sticks[s.id]?.let { hold -> val knob = hold.knob; out += SkinPressShape.Circle(c.x + knob.first, c.y + knob.second, if (s.capR > 0f) s.capR else s.r - (if (s.knobTravel > 0f) s.knobTravel else s.travel)) }
                 ControlShape.DPAD -> {
+                    val ways = if (s.id == "DPAD2") secondDpad.filterValues { it in buttons }.keys else buttons
                     val a = if (s.arm > 0f) s.arm else s.r / 3f
                     val l = s.r
-                    if (NxButton.UP in buttons) out += SkinPressShape.Box(c.x - a, c.y - l, c.x + a, c.y - a, ARM_CORNER * p.k)
-                    if (NxButton.DOWN in buttons) out += SkinPressShape.Box(c.x - a, c.y + a, c.x + a, c.y + l, ARM_CORNER * p.k)
-                    if (NxButton.LEFT in buttons) out += SkinPressShape.Box(c.x - l, c.y - a, c.x - a, c.y + a, ARM_CORNER * p.k)
-                    if (NxButton.RIGHT in buttons) out += SkinPressShape.Box(c.x + a, c.y - a, c.x + l, c.y + a, ARM_CORNER * p.k)
+                    if (NxButton.UP in ways) out += SkinPressShape.Box(c.x - a, c.y - l, c.x + a, c.y - a, ARM_CORNER * p.k)
+                    if (NxButton.DOWN in ways) out += SkinPressShape.Box(c.x - a, c.y + a, c.x + a, c.y + l, ARM_CORNER * p.k)
+                    if (NxButton.LEFT in ways) out += SkinPressShape.Box(c.x - l, c.y - a, c.x - a, c.y + a, ARM_CORNER * p.k)
+                    if (NxButton.RIGHT in ways) out += SkinPressShape.Box(c.x + a, c.y - a, c.x + l, c.y + a, ARM_CORNER * p.k)
                 }
                 else -> {
                     val on = if (s.id in ACTIONS) s.id in actions else BUTTONS[s.id]?.let { it in buttons } == true
@@ -247,9 +271,15 @@ class SkinPadTouch(
             "HOME" to NxButton.HOME,   // the Wii's HOME
             "L3" to NxButton.L3, "R3" to NxButton.R3,   // the PlayStation's stick clicks
         )
-        val ACTIONS = setOf("MIC", "SWAP", "SAVE", "LOAD", "REWIND", "FAST", "TOUCH_1", "TOUCH_2", "TOUCH_3", "TOUCH_4", "TURBO_A", "TURBO_B", "STICK_SWAP", "MOTION")
+        val ACTIONS = setOf("MIC", "SWAP", "SAVE", "LOAD", "REWIND", "FAST", "TOUCH_1", "TOUCH_2", "TOUCH_3", "TOUCH_4", "TURBO_A", "TURBO_B", "STICK_SWAP", "MOTION", "KEYPAD")
     }
 }
+
+/** beetle-vb's right d-pad: up L2, down L3, left R2, right R3 (it reads no other buttons for it). */
+val VB_SECOND_DPAD = mapOf(NxButton.UP to NxButton.L2, NxButton.DOWN to NxButton.L3, NxButton.LEFT to NxButton.R2, NxButton.RIGHT to NxButton.R3)
+
+/** beetle-wswan's Y cursor on a horizontal game: up R2, down L2, left L, right R. */
+val WS_SECOND_DPAD = mapOf(NxButton.UP to NxButton.R2, NxButton.DOWN to NxButton.L2, NxButton.LEFT to NxButton.L1, NxButton.RIGHT to NxButton.R1)
 
 /** A held cap's outline in window px, shaded [SKIN_PRESS_SHADE] black while held. */
 sealed interface SkinPressShape {
@@ -260,6 +290,13 @@ sealed interface SkinPressShape {
 
 /** A control's label ([com.nxredux.mobile.skin.ControlSpec.label]): MiSans SemiBold, this grey (the skin's printed labels). */
 const val SKIN_LABEL_GREY = 0xFFC4C4C4.toInt()
+
+/** A word printed on a cap ([com.nxredux.mobile.skin.ControlSpec.mark]): MiSans SemiBold, this light grey (the renders' print). */
+const val SKIN_MARK_INK = 0xFFE8E8E8.toInt()
+
+/** [c]'s mark colour: its [com.nxredux.mobile.skin.ControlSpec.markColor] (`#RRGGBB`), else [SKIN_MARK_INK]. */
+fun markInk(c: com.nxredux.mobile.skin.ControlSpec): Int =
+    c.markColor?.removePrefix("#")?.takeIf { it.length == 6 }?.toLongOrNull(16)?.let { (0xFF000000 or it).toInt() } ?: SKIN_MARK_INK
 
 /** MiSans SemiBold's cap height in ems: the text size that gives a label its cap height. */
 const val SKIN_LABEL_CAP = 0.739f

@@ -11,7 +11,11 @@ import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.runner.GameSession
 import com.nxredux.mobile.runner.LibretroRunner
 import com.nxredux.mobile.runner.LiveGameStore
+import com.nxredux.mobile.settings.AndroidAppSettings
+import com.nxredux.mobile.storage.AndroidHomeLocator
 import com.nxredux.mobile.storage.FileRefs
+import com.nxredux.mobile.storage.GamePath
+import com.nxredux.mobile.storage.GameRef
 import com.nxredux.mobile.storage.FileRomsSource
 import com.nxredux.mobile.storage.Recent
 import com.nxredux.mobile.sync.DeviceSyncPage
@@ -40,11 +44,17 @@ import java.io.File
  *   pressed there, so an unattended run gets past it.
  * - SYNC_STOP: stops (or backs out of) that sync; sync.json state "stopped".
  * - GAME (`--es path <rom> --es tag <TAG> [--ei slot n] [--es game_path <library path>]`): launches the ROM as the
- *   launcher does (game_path: the game's identity, so a paused one is brought back, not started again); GameActivity writes
+ *   launcher does (game_path: the game's identity, so a paused one is brought back, not started again, and its game time,
+ *   per-game settings and custom GPU driver apply; by default the library's path of the file under the home's Roms or an
+ *   extra folder); GameActivity writes
  *   game.json, battery.json and resume.json. Send it with `am broadcast --allow-background-activity-starts`: a receiver
  *   may not start an activity from the background otherwise (Android 10+). The game shows over the lock screen and
  *   turns the screen on ([NxTestResults.markShowWhenLocked]).
  * - GAME_STOP: the live game quits as the menu's Quit does (battery save and auto state written); its process ends.
+ * - GAME_FF (`--ez on true|false`, default true): fast forward on or off in the live game, as the panel's tile sets it.
+ *   As an activity start use NxGameStopActivity with `--ez ff true|false`: it runs in the game's task.
+ * - NETPLAY: one Wi-Fi session through the real handshake, then the game ([NxNetplayHook]). Send it with
+ *   `--allow-background-activity-starts`, as GAME.
  */
 class NxTestReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -62,11 +72,19 @@ class NxTestReceiver : BroadcastReceiver() {
                 val tag = intent.getStringExtra("tag")
                 val slot = if (intent.hasExtra("slot")) intent.getIntExtra("slot", -1) else null
                 if (path == null || tag == null) NxTestResults.write(app, "game", "state" to "refused", "reason" to "path and tag are required")
-                else launchGame(app, path, tag, slot, intent.getStringExtra("game_path"))
+                else launchGame(app, path, tag, slot, intent.getStringExtra("game_path") ?: libraryPath(app, path))
             }
             // The game runs in the game process: handed on to its receiver there ([NxGameStopReceiver]).
             ACTION_GAME_STOP -> if (LiveGameStore.alive(app)) app.sendBroadcast(Intent(app, NxGameStopReceiver::class.java))
-                else NxLog.w(TAG, "GAME_STOP: no live game")
+            else NxLog.w(TAG, "GAME_STOP: no live game")
+            ACTION_GAME_FF -> if (LiveGameStore.alive(app)) {
+                app.sendBroadcast(Intent(app, NxGameStopReceiver::class.java).putExtra(NxGameStopReceiver.EXTRA_FF, intent.getBooleanExtra("on", true)))
+            } else NxLog.w(TAG, "GAME_FF: no live game")
+            ACTION_NETPLAY -> NxNetplayHook.start(
+                app, scope, intent.getStringExtra("role"), intent.getStringExtra("peer"), intent.getStringExtra("path"),
+                intent.getStringExtra("tag"), intent.getStringExtra("core"), intent.getStringExtra("pad"),
+                intent.getStringExtra("force_pad"),
+            )
         }
     }
 
@@ -77,6 +95,8 @@ class NxTestReceiver : BroadcastReceiver() {
         const val ACTION_SYNC_STOP = "com.nxredux.mobile.test.SYNC_STOP"
         const val ACTION_GAME = "com.nxredux.mobile.test.GAME"
         const val ACTION_GAME_STOP = "com.nxredux.mobile.test.GAME_STOP"
+        const val ACTION_GAME_FF = "com.nxredux.mobile.test.GAME_FF"
+        const val ACTION_NETPLAY = "com.nxredux.mobile.test.NETPLAY"
         const val SYNC_TIMEOUT_MS = 20 * 60 * 1000L
 
         /** Process-level: a hook's work outlives onReceive. Main thread, like the controller's own scope. */
@@ -143,6 +163,23 @@ class NxTestReceiver : BroadcastReceiver() {
         }
 
         /**
+         * The library's path of the ROM file [path]: `/Roms/…` under the home folder, `/Extra/<id>/…` under an extra
+         * folder; null elsewhere (the launch then has no game identity).
+         */
+        fun libraryPath(app: Context, path: String): String? {
+            val home = AndroidHomeLocator(app).current()?.takeIf(FileRefs::isFile)?.let(FileRefs::path)
+            if (home != null && path.startsWith("$home/Roms/")) return path.removePrefix(home)
+            for (extra in AndroidAppSettings(app).extraFolders) {
+                if (!FileRefs.isFile(extra.ref)) continue
+                val root = FileRefs.path(extra.ref)
+                if (!path.startsWith("$root/")) continue
+                val rel = path.removePrefix("$root/")
+                return GamePath.of(GameRef(extra.id, rel.substringBeforeLast('/', ""), rel.substringAfterLast('/')))
+            }
+            return null
+        }
+
+        /**
          * The launcher's path (AppState.launch → LibretroRunner) for a ROM read by path (a file ref): the tag's core,
          * a disc sheet's companions from its folder, [slot] as the resume slot, in its own task (the receiver has no
          * activity). Never in Recently Played; in game time only with a [gamePath].
@@ -155,6 +192,7 @@ class NxTestReceiver : BroadcastReceiver() {
                 return
             }
             val folder = FileRefs.of(file.parent ?: "/")
+            NxLog.i(TAG, "GAME $path as ${gamePath ?: "no library game"}")
             scope.launch {
                 val lookup = runCatching { DiscSheet.companions(FileRomsSource({ true }, { true }), folder, file.name) }
                     .getOrElse { CompanionLookup.Missing(it.message ?: "companions", file.name) }

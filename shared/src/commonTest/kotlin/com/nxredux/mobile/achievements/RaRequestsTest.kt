@@ -5,7 +5,15 @@ import kotlin.test.assertEquals
 
 class RaRequestsTest {
     @Test fun userAgentNamesNxRedux() {
-        assertEquals("NXRedux/0.5.1 (Android 14) rcheevos/12.2.1", RaRequests.userAgent("0.5.1", "Android 14"))
+        assertEquals("NXRedux/0.5.1 (Android 14)", RaRequests.userAgent("0.5.1", "Android 14"))
+        assertEquals("NXRedux/0.5.1 (Android 14) melonDS_DS/1.4.0", RaRequests.userAgent("0.5.1", "Android 14", "melonDS_DS/1.4.0"))
+    }
+    @Test fun coreTokenIsOneProductToken() {
+        assertEquals("melonDS_DS/1.4.0", RaRequests.coreToken("melonDS DS", "1.4.0"))
+        assertEquals("Flycast/v2.5", RaRequests.coreToken("Flycast", "v2.5 4cbc7d4"))
+        assertEquals("Beetle_PSX_HW/0.9.44.1", RaRequests.coreToken(" Beetle PSX HW ", "0.9.44.1"))
+        assertEquals("PPSSPP", RaRequests.coreToken("PPSSPP", ""))
+        assertEquals(null, RaRequests.coreToken("  ", "1.0"))
     }
     @Test fun login_forms() {
         assertEquals("r=login2&u=me&t=tok", RaRequests.login2("me", "tok"))

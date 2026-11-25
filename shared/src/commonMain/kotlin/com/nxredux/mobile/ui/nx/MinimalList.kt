@@ -256,6 +256,7 @@ internal fun MinimalScreen(
     toBoxBottom: Boolean = false, layoutKey: Any? = null, leaving: Boolean = false, tapOpens: (Int) -> Boolean = NxTapNeverOpens,
     onSwipeSelect: ((Int) -> Unit)? = null,   // a swipe's release: moves the highlight only (default: onSelect)
     onPageRows: ((Int) -> Unit)? = null,   // the names one screen shows under the selection (a game list's LEFT / RIGHT page)
+    anchorTop: Float? = null,   // dp in this box to anchor the selection from (null: the band's top); may be negative when a taller header sits above
     overlay: @Composable BoxScope.() -> Unit = {},
 ) {
     val inset = nxPageInset()   // the names on it, as every page's words
@@ -285,12 +286,15 @@ internal fun MinimalScreen(
     var area by remember { mutableStateOf<Rect?>(null) }
     var boxH by remember { mutableFloatStateOf(0f) }
     val band = area?.let { body -> if (toBoxBottom) body.copy(bottom = boxH) else body }
-    // The names' size from the band's height (a short band's smaller size), shared by the names and B's morph.
-    val size = minimalNameSize(with(LocalDensity.current) { (band?.height ?: 0f).toDp().value }, nxTextScale())
+    val density = LocalDensity.current
+    val anchorTopPx = anchorTop?.let { with(density) { it.dp.toPx() } }
+    // The names' size from the anchor band's height (a short band's smaller size), shared by the names and B's morph.
+    val sizeBandH = band?.let { b -> b.bottom - (anchorTopPx ?: b.top) } ?: 0f
+    val size = minimalNameSize(with(density) { sizeBandH.toDp().value }, nxTextScale())
     Box(modifier.fillMaxSize().onGloballyPositioned { box[0] = it; boxH = it.size.height.toFloat() }) {
         band?.let { a ->
             CompositionLocalProvider(LocalNxTapOpens provides tapOpens) {
-                MinimalNames(names, a, boxH, size, selection, onSelect, onOpen, onLongPress, selected, inset, layoutKey, motion, page, onSwipeSelect, onPageRows)
+                MinimalNames(names, a, boxH, size, selection, onSelect, onOpen, onLongPress, selected, inset, layoutKey, motion, page, onSwipeSelect, onPageRows, anchorTopPx)
             }
         }
         // B from a Minimal list: its title flies down into the selected row.
@@ -334,25 +338,19 @@ private class MinimalTexts(
         val tag = row.tag ?: return minimalText(row.label, null)
         val room = rowW - tagWidths.getValue(tag) - width(" ")
         if (width(row.label) <= room) return minimalText(row.label, tag)
-        // The longest start of the name that fits with an ellipsis.
-        var lo = 0
-        var hi = row.label.length
-        while (lo < hi) {
-            val m = (lo + hi + 1) / 2
-            if (width(row.label.substring(0, m).trimEnd() + "\u2026") <= room) lo = m else hi = m - 1
-        }
-        return minimalText(row.label.substring(0, lo).trimEnd() + "\u2026", tag)
+        return minimalText(ellipsizedToFit(row.label, row.label.length) { width(it) <= room }, tag)
     }
 }
 
 /**
- * The selected name's line (its centre), px down its box: [MINIMAL_ANCHOR_SHARE] of the way down the band from its top
- * edge [bandTop] (the stats row's bottom, or the content's top) to its bottom edge [bandBottom]. The list moves, the line
- * does not; the first name leaves the band's top empty.
+ * The selected name's line (its centre), px down its box: [MINIMAL_ANCHOR_SHARE] of the way from [anchorTop] (the band's
+ * [bandTop] by default, or the tabs' shared top when a taller header sits above) to [bandBottom], never above
+ * [halfPitch] below [bandTop] so the selection stays clear of the header on short bands.
  */
 private const val MINIMAL_ANCHOR_SHARE = .33f
 
-internal fun minimalAnchor(bandTop: Float, bandBottom: Float): Float = bandTop + MINIMAL_ANCHOR_SHARE * (bandBottom - bandTop)
+internal fun minimalAnchor(bandTop: Float, bandBottom: Float, anchorTop: Float = bandTop, halfPitch: Float = 0f): Float =
+    (anchorTop + MINIMAL_ANCHOR_SHARE * (bandBottom - anchorTop)).coerceAtLeast(bandTop + halfPitch)
 
 /**
  * The names over the whole box ([boxH] tall), the shown position's name centred on the band's ([area]) line
@@ -365,6 +363,7 @@ private fun MinimalNames(
     names: List<NxRow>, area: Rect, boxH: Float, size: Float, selection: () -> Int, onSelect: (Int) -> Unit, onOpen: (Int) -> Unit,
     onLongPress: ((Int) -> Unit)?, selected: MinimalSelected, inset: PageInset, layoutKey: Any?,
     motion: MinimalMotion, page: MinimalPage?, onSwipeSelect: ((Int) -> Unit)?, onPageRows: ((Int) -> Unit)?,
+    anchorTopPx: Float? = null,
 ) {
     val count = names.size
     if (count == 0) return
@@ -373,8 +372,8 @@ private fun MinimalNames(
     val font = LocalNxFont.current
     val pitch = size + 2f
     val pitchPx = with(density) { pitch.dp.toPx() }
-    // The selection's line a third of the way down the band, and the top of its row.
-    val line = minimalAnchor(area.top, area.bottom)
+    // The selection's line a third of the way down the anchor band, and the top of its row.
+    val line = minimalAnchor(area.top, area.bottom, anchorTop = anchorTopPx ?: area.top, halfPitch = pitchPx / 2)
     val anchorPx = line - pitchPx / 2
     // A page: the names from the selection down to the band's bottom.
     if (onPageRows != null) {

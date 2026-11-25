@@ -217,7 +217,7 @@ class SaveSyncPlanTest {
         }
     }
 
-    /** Follow-up 2: one game under two formats on the handheld is downloaded once, not on every sync. */
+    /** One game under two formats on the handheld is downloaded once, not on every sync. */
     @Test fun a_handhelds_two_formats_of_one_game_move_once() {
         val roms = mapOf("Game Boy Advance (GBA)" to setOf("Emerald.gba"), "Game Boy Advance (MGBA)" to emptySet<String>())
         val p = plan(roms, folders = roms.keys.toList())

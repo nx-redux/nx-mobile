@@ -173,6 +173,52 @@ class CheatDbControllerTest {
         assertEquals(listOf("/cache/cheats.zip"), fake.discarded)
     }
 
+    @Test fun a_cancelled_install_stays_cancelling_until_its_files_are_taken_back() = runTest {
+        val fake = FakeCheatDbPlatform().apply { installGate = CompletableDeferred(); undoGate = CompletableDeferred() }
+        val c = controller(fake, CoroutineScope(UnconfinedTestDispatcher(testScheduler)), ArrayList(), ArrayList())
+        c.refresh(); c.download()
+        assertIs<CheatDbState.Installing>(c.state.value)
+        c.cancel()
+        assertEquals(CheatDbState.Cancelling(null, 0, 16_000), c.state.value)   // not "Not installed" while files remain
+        assertTrue(c.busy)
+        val sweeps = fake.sweeps
+        c.download(); c.remove(); c.checkForUpdates(); c.cancel(); c.refresh()   // no new install can meet the old files
+        assertEquals(listOf(CheatDbSource.LIBRETRO), fake.downloads)
+        assertIs<CheatDbState.Cancelling>(c.state.value)
+        fake.undoGate!!.complete(Unit)
+        assertEquals(CheatDbState.NotInstalled, c.state.value)
+        assertEquals(sweeps + 1, fake.sweeps)   // the trash is emptied after the take-back
+        assertEquals(listOf("/cache/cheats.zip"), fake.discarded)
+    }
+
+    @Test fun reinstalling_while_the_trash_is_emptied_goes_ahead() = runTest {
+        val fake = FakeCheatDbPlatform().apply { installGate = CompletableDeferred(); sweepGate = CompletableDeferred() }
+        val c = controller(fake, CoroutineScope(UnconfinedTestDispatcher(testScheduler)), ArrayList(), ArrayList())
+        c.refresh(); c.download()
+        c.cancel()
+        // The live folders are clean once the job ended; the sweep only touches the trash, so it does not hold the state.
+        assertEquals(CheatDbState.NotInstalled, c.state.value)
+        assertTrue(!c.busy)
+        fake.installGate = null
+        c.download()
+        assertIs<CheatDbState.Installed>(c.state.value)
+        assertEquals(0, fake.sweeps)
+        fake.sweepGate!!.complete(Unit)
+        assertTrue(fake.sweeps >= 2)   // the startup sweep, then the cancel's
+    }
+
+    @Test fun a_failed_install_restores_after_its_take_back_and_empties_the_trash() = runTest {
+        val fake = FakeCheatDbPlatform().apply { installError = CheatDbException(CheatDbException.Kind.STORAGE) }
+        val messages = ArrayList<CheatDbMessage>()
+        val c = controller(fake, CoroutineScope(UnconfinedTestDispatcher(testScheduler)), ArrayList(), messages)
+        c.refresh()
+        val sweeps = fake.sweeps
+        c.download()
+        assertEquals(CheatDbState.NotInstalled, c.state.value)
+        assertEquals(sweeps + 1, fake.sweeps)
+        assertEquals(listOf<CheatDbMessage>(CheatDbMessage.Failure(CheatDbException.Kind.STORAGE.message)), messages)
+    }
+
     @Test fun check_for_updates_up_to_date_stale_and_unreachable() = runTest {
         val previous = CheatDbManifest("stamp-2", 1L, listOf("Cheats/FDS/old.cht"), table)
         val fake = FakeCheatDbPlatform().apply { manifestText = previous.render() }
@@ -356,6 +402,25 @@ class CheatDbControllerTest {
         assertEquals(listOf(previous.files), fake.deleted)
         assertEquals(CheatDbState.NotInstalled, c.state.value)
         assertEquals(listOf<CheatDbMessage>(CheatDbMessage.Notice("Cheats & Patches removed")), messages)
+    }
+
+    @Test fun remove_stays_removing_with_progress_until_the_files_are_gone() = runTest {
+        val previous = CheatDbManifest("s", 1L, listOf("Cheats/FDS/a.cht", "Cheats/GBA/b.cht"))
+        val fake = FakeCheatDbPlatform().apply { manifestText = previous.render(); removeGate = CompletableDeferred() }
+        val c = controller(fake, CoroutineScope(UnconfinedTestDispatcher(testScheduler)), ArrayList(), ArrayList())
+        c.refresh()
+        val sweeps = fake.sweeps
+        c.remove()
+        assertEquals(CheatDbState.Removing(previous, 1, 2), c.state.value)
+        c.remove(); c.download(); c.cancel(); c.refresh()   // removing again, reinstalling or cancelling would race the deletion
+        assertEquals(CheatDbState.Removing(previous, 1, 2), c.state.value)
+        assertTrue(fake.downloads.isEmpty())
+        fake.removeGate!!.complete(Unit)
+        assertEquals(CheatDbState.NotInstalled, c.state.value)
+        assertEquals(listOf(previous.files), fake.deleted)
+        assertEquals(sweeps + 1, fake.sweeps)
+        c.download()
+        assertIs<CheatDbState.Installed>(c.state.value)
     }
 
     @Test fun actions_while_busy_are_ignored() = runTest {

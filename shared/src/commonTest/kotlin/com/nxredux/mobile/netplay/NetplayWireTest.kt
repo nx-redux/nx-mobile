@@ -10,7 +10,7 @@ class NetplayWireTest {
     private val esc = "\u001f"
 
     @Test fun normalize_matches_the_handheld_fixtures() {
-        // nx-redux wiz_normalize_name, verified by compiling the C.
+        // nx-redux wiz_normalize_name's own results.
         val cases = mapOf(
             "Pokemon - FireRed (USA).gba" to "pokemonfireredgba",
             "Pokemon - FireRed (USA)" to "pokemonfirered",

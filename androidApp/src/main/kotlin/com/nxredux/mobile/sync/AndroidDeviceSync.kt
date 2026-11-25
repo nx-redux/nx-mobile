@@ -153,35 +153,27 @@ class AndroidDeviceSync(
         SyncFileTimes.check(saves)
     }
 
-    override suspend fun listRemoteRoms(peerIp: String): Pair<Int, List<String>> {
-        val rsync = withContext(Dispatchers.IO) { Rsync.find(app) } ?: return NO_RSYNC to emptyList()
-        val lines = ArrayList<String>()
-        val code = rsync.runStreaming(SyncCommands.listArgs(rsync.binary.absolutePath, peerIp)) { lines += it }
-        return code to lines
-    }
+    override suspend fun listRemoteRoms(peerIp: String): Pair<Int, List<String>> =
+        listRemote { SyncCommands.listArgs(it, peerIp) }
 
-    override suspend fun listRemoteHashes(peerIp: String): Pair<Int, List<String>> {
-        val rsync = withContext(Dispatchers.IO) { Rsync.find(app) } ?: return NO_RSYNC to emptyList()
-        val lines = ArrayList<String>()
-        val code = rsync.runStreaming(SyncCommands.listHashesArgs(rsync.binary.absolutePath, peerIp)) { lines += it }
-        return code to lines
-    }
+    override suspend fun listRemoteHashes(peerIp: String): Pair<Int, List<String>> =
+        listRemote { SyncCommands.listHashesArgs(it, peerIp) }
 
-    override suspend fun listRemoteBios(peerIp: String): Pair<Int, List<String>> {
-        val rsync = withContext(Dispatchers.IO) { Rsync.find(app) } ?: return NO_RSYNC to emptyList()
-        val lines = ArrayList<String>()
-        val code = rsync.runStreaming(SyncCommands.listArgs(rsync.binary.absolutePath, peerIp, "bios")) { lines += it }
-        return code to lines
-    }
+    override suspend fun listRemoteBios(peerIp: String): Pair<Int, List<String>> =
+        listRemote { SyncCommands.listArgs(it, peerIp, "bios") }
 
     override suspend fun listHomeBios(): List<String> = withContext(Dispatchers.IO) {
         homeBios().listFiles()?.filter { it.isDirectory }?.map { it.name }.orEmpty()
     }
 
-    override suspend fun listRemoteFolder(peerIp: String, folder: String): Pair<Int, List<String>> {
+    override suspend fun listRemoteFolder(peerIp: String, folder: String): Pair<Int, List<String>> =
+        listRemote { SyncCommands.listFolderArgs(it, peerIp, folder) }
+
+    /** The exit code and output lines of one rsync listing; [args] gets the rsync binary's path. */
+    private suspend fun listRemote(args: (String) -> List<String>): Pair<Int, List<String>> {
         val rsync = withContext(Dispatchers.IO) { Rsync.find(app) } ?: return NO_RSYNC to emptyList()
         val lines = ArrayList<String>()
-        val code = rsync.runStreaming(SyncCommands.listFolderArgs(rsync.binary.absolutePath, peerIp, folder)) { lines += it }
+        val code = rsync.runStreaming(args(rsync.binary.absolutePath)) { lines += it }
         return code to lines
     }
 

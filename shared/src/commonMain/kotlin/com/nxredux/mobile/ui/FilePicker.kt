@@ -21,8 +21,6 @@ internal const val BAD_FOLDER_NAME = "That name can't be used."
 internal const val FOLDER_EXISTS = "A folder with that name already exists."
 internal const val FOLDER_NOT_CREATED = "Could not create the folder."
 internal const val STORAGE_TITLE = "Storage"
-private const val USE_FOLDER = "Use this folder"
-private const val SAVE_HERE = "Save here"
 
 /** What the list-style picker ([FilePickerController]) picks. */
 sealed interface FilePickMode {
@@ -39,7 +37,7 @@ sealed interface FilePickMode {
 /** A row of [Screen.FilePicker]. */
 sealed interface PickerRow {
     val label: String
-    /** "Use this folder" / "Save here": picks the folder shown. */
+    /** "Use <folder>" / "Save in <folder>": picks the folder shown, named so a highlighted entry isn't mistaken for it. */
     data class Action(override val label: String) : PickerRow
     data class Volume(val volume: LocalVolume) : PickerRow { override val label: String get() = volume.name }
     /** Opens the New folder prompt, as X: below the action row, so a d-pad reaches it. */
@@ -57,14 +55,9 @@ sealed interface PickerRow {
 private val byName: Comparator<String> = compareBy<String> { it.lowercase() }.thenBy { it }
 
 /**
- * A folder's rows for [mode]: the action row and New folder (neither in [FilePickMode.ImportZip]), "..", the folders
- * A–Z ignoring case, then the files A–Z (in ImportZip only the `.zip` files, which pick; elsewhere every file, shown but
- * not picked); dot entries hidden; "Nothing here" when no folder or file is left.
- */
-/**
  * What a folder is as a home, for the home picker: empty (hidden names aside); an NX Redux folder (its `Roms`, with at
- * most `Bios`, `Saves`, `Collections` and hidden names beside it); else one holding other files, whose games setup will
- * sort into Roms.
+ * most `Bios`, `Saves`, `Collections`, `Cheats` and hidden names beside it); else one holding other files, whose games
+ * setup will sort into Roms.
  */
 internal fun homeFolderStatus(entries: List<LocalEntry>): String {
     val shown = entries.filter { !it.name.startsWith(".") }
@@ -74,13 +67,24 @@ internal fun homeFolderStatus(entries: List<LocalEntry>): String {
     return "Has other files: games found in it will be sorted into Roms"
 }
 
-/** [canPick] false: no "Use this folder" (the phone's storage root for a home or an extra folder; New folder stays). */
-internal fun pickerRows(mode: FilePickMode, entries: List<LocalEntry>, canPick: Boolean = true): List<PickerRow> {
-    val action = when (mode) {
-        FilePickMode.Home, FilePickMode.Extra, FilePickMode.ImportFolder -> PickerRow.Action(USE_FOLDER)
-        is FilePickMode.Export -> PickerRow.Action(SAVE_HERE)
-        FilePickMode.ImportZip -> null
-    }
+/**
+ * The action's words for [mode] naming [folder], the folder shown; null for [FilePickMode.ImportZip], which has none.
+ * A name too long for the row is cut where it is drawn ([SetupButtons]), so New folder beside it keeps its room.
+ */
+internal fun pickActionLabel(mode: FilePickMode, folder: String): String? = when (mode) {
+    FilePickMode.Home, FilePickMode.Extra, FilePickMode.ImportFolder -> "Use $folder"
+    is FilePickMode.Export -> "Save in $folder"
+    FilePickMode.ImportZip -> null
+}
+
+/**
+ * A folder's rows for [mode]: "..", the folders A–Z ignoring case, then the files A–Z (in ImportZip only the `.zip`
+ * files, which pick; elsewhere every file, shown but not picked), dot entries hidden, "Nothing here" when none is left;
+ * last the action row and New folder (neither in [FilePickMode.ImportZip]). [folder]: the shown folder's name, as the
+ * action says it. [canPick] false: no action (the phone's storage root for a home or an extra folder; New folder stays).
+ */
+internal fun pickerRows(mode: FilePickMode, entries: List<LocalEntry>, folder: String, canPick: Boolean = true): List<PickerRow> {
+    val action = pickActionLabel(mode, folder)?.let { PickerRow.Action(it) }
     val shown = entries.filter { !it.name.startsWith(".") }
     val folders = shown.filter { it.isDir }.map { it.name }.sortedWith(byName).map { PickerRow.Folder(it) }
     val files: List<PickerRow> = if (mode == FilePickMode.ImportZip) {
@@ -88,7 +92,7 @@ internal fun pickerRows(mode: FilePickMode, entries: List<LocalEntry>, canPick: 
     } else shown.filter { !it.isDir }.map { it.name }.sortedWith(byName).map { PickerRow.File(it) }
     val listed: List<PickerRow> = folders + files
     val newFolder = if (action != null) PickerRow.NewFolder else null
-    // The folder's entries first, the actions (Use this folder / Save here, New folder) last: pinned at the bottom.
+    // The folder's entries first, the actions (Use / Save in, New folder) last: pinned at the bottom.
     return listOf(PickerRow.Up) + listed.ifEmpty { listOf(PickerRow.Empty) } + listOfNotNull(action?.takeIf { canPick }, newFolder)
 }
 
@@ -150,7 +154,7 @@ internal class FilePickerController(
             else -> when (button) {
                 NxButton.UP -> step(p, -1)
                 NxButton.DOWN -> step(p, 1)
-                NxButton.LEFT, NxButton.RIGHT -> switchSide(p)   // either way, wrapping: entries ↔ actions
+                NxButton.LEFT, NxButton.RIGHT -> sideways(p, if (button == NxButton.RIGHT) 1 else -1)   // entries ↔ the actions, side by side
                 NxButton.A -> activate(p, p.rows.getOrNull(selection.value.index))
                 NxButton.B -> up(p)
                 NxButton.X -> { if (p.dir != null && p.mode != FilePickMode.ImportZip) screen.value = p.copy(prompt = "") }
@@ -186,8 +190,8 @@ internal class FilePickerController(
     private suspend fun show(mode: FilePickMode, dir: String?, focus: String? = null) {
         val entries = if (dir == null) emptyList() else files.list(dir)
         val rootPick = (mode == FilePickMode.Home || mode == FilePickMode.Extra) && dir != null && isInternalRoot(dir)
-        val rows = if (dir == null) volumes.map { PickerRow.Volume(it) } else pickerRows(mode, entries, canPick = !rootPick)
-        // The home pick: what "Use this folder" would take ([homeFolderStatus]).
+        val rows = if (dir == null) volumes.map { PickerRow.Volume(it) } else pickerRows(mode, entries, folderName(dir), canPick = !rootPick)
+        // The home pick: what the action would take ([homeFolderStatus]).
         val status = if (mode == FilePickMode.Home && dir != null) (if (isInternalRoot(dir)) INTERNAL_ROOT_STATUS else homeFolderStatus(entries)) else null
         screen.value = Screen.FilePicker(mode, dir, dir?.let(::titleOf) ?: STORAGE_TITLE, rows, status = status)
         val at = rows.indexOfFirst { r -> focus != null && ((r is PickerRow.Folder && r.label == focus) || (r is PickerRow.Volume && r.volume.path == focus)) }
@@ -234,36 +238,45 @@ internal class FilePickerController(
         finish(FileRefs.of(target))
     }
 
-    /** B: up one level; at a volume's root the volume list (with one storage, cancel); at the volume list, cancel. */
-    /** The entry the highlight left for the actions ([switchSide]), where the next sideways press takes it back. */
+    /** The entry the highlight left for the actions ([sideways]), where the next sideways press takes it back. */
     private var entryBeforeActions = -1
 
     /**
-     * LEFT or RIGHT: from the folder's entries to the actions pinned under them (Use this folder / Save here, else Create
-     * new folder), and from the actions back to the entry the highlight left (else the first entry), wrapping either way.
+     * LEFT ([by] -1) or RIGHT (+1). From the folder's entries: to the first action, pinned under them. On the actions,
+     * which sit side by side (Use / Save in, then New folder): to the one beside, and past either end back
+     * to the entry the highlight left (else the first folder or zip).
      */
-    private fun switchSide(p: Screen.FilePicker) {
-        val first = p.rows.indexOfFirst { it is PickerRow.Action || it == PickerRow.NewFolder }
+    private fun sideways(p: Screen.FilePicker, by: Int) {
+        val first = firstAction(p)
         if (first < 0) return
         val at = selection.value.index
-        val index = if (at < first) { entryBeforeActions = at; first } else {
-            entryBeforeActions.takeIf { it in 0 until first }
+        val index = when {
+            at < first -> { entryBeforeActions = at; first }
+            at + by in first..p.rows.lastIndex -> at + by
+            else -> entryBeforeActions.takeIf { it in 0 until first }
                 ?: p.rows.indexOfFirst { it is PickerRow.Folder || it is PickerRow.Zip }.takeIf { it >= 0 } ?: 0
         }
         selection.value = selection.value.copy(index = index)
     }
 
-    /** UP ([by] -1) or DOWN (+1), wrapping, over the rows that take the selection: a file is passed over. */
+    /** Where the actions (always the last rows) start; -1: none. */
+    private fun firstAction(p: Screen.FilePicker): Int = p.rows.indexOfFirst { it is PickerRow.Action || it == PickerRow.NewFolder }
+
+    /** UP ([by] -1) or DOWN (+1), wrapping, over the rows that take the selection: a file is passed over; the actions are one line. */
     private fun step(p: Screen.FilePicker, by: Int) {
         val n = p.rows.size
         if (n == 0) return
         var i = selection.value.index
+        // The side-by-side actions are one line: UP leaves from the first of them, DOWN from the last (wrapping to the top).
+        val first = firstAction(p)
+        if (first >= 0 && i >= first) i = if (by < 0) first else n - 1
         repeat(n) {
             i = (i + by + n) % n
             if (p.rows[i] !is PickerRow.File) { selection.value = selection.value.copy(index = i); return }
         }
     }
 
+    /** B: up one level; at a volume's root the volume list (with one storage, cancel); at the volume list, cancel. */
     private fun up(p: Screen.FilePicker) {
         val dir = p.dir ?: return finish(null)
         val volume = volumeOf(dir)
@@ -300,6 +313,10 @@ internal class FilePickerController(
         volumes.filter { path == it.path || path.startsWith(it.path.trimEnd('/') + "/") }.maxByOrNull { it.path.length }
 
     private fun parentOf(path: String): String? = path.substringBeforeLast('/', "").ifEmpty { null }
+
+    /** The folder's own name; a volume's root by the volume's ("SD card"). */
+    private fun folderName(dir: String): String =
+        volumeOf(dir)?.takeIf { it.path.trimEnd('/') == dir.trimEnd('/') }?.name ?: dir.trimEnd('/').substringAfterLast('/')
 
     /** The folder's path from its volume: "Internal storage/NXRedux/Roms". */
     private fun titleOf(dir: String): String = volumeOf(dir)?.let { it.name + dir.removePrefix(it.path) } ?: dir

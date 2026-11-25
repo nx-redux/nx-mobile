@@ -97,7 +97,7 @@ class NxPaths(
         const val GAME_TIME_DB = ".userdata/shared/game_time.db"
         const val SHORTCUTS = ".userdata/shared/.minui/shortcuts.txt"
         const val HIDDEN = ".userdata/$PLATFORM/hidden.txt"
-        fun romPath(systemFolder: String, fileName: String) = "/Roms/$systemFolder/$fileName"
+        const val BADGES = ".userdata/$PLATFORM/badges.txt"
     }
 }
 
@@ -107,8 +107,5 @@ internal fun minarchStem(name: String): String {
     return if (dot >= 0 && name.length - dot in 3..5) name.substring(0, dot) else name
 }
 
-private val RZIP_MAGIC = "#RZIPv".encodeToByteArray()
-
 /** True for RetroArch/minarch RZIP-compressed files. */
-fun isRzipCompressed(bytes: ByteArray): Boolean =
-    bytes.size >= RZIP_MAGIC.size && RZIP_MAGIC.indices.all { bytes[it] == RZIP_MAGIC[it] }
+fun isRzipCompressed(bytes: ByteArray): Boolean = Bytes.startsWithAscii(bytes, "#RZIPv")

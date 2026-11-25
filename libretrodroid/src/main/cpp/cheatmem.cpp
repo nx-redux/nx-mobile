@@ -21,7 +21,7 @@
 
 namespace libretrodroid {
 
-// Ported from nx-redux ma_cheat_mem.c. Mirrors RetroArch's cheat_manager_apply_retro_cheats (cheat_manager.c), with
+// The same logic as nx-redux's ma_cheat_mem.c. Mirrors RetroArch's cheat_manager_apply_retro_cheats (cheat_manager.c), with
 // three deliberate differences: reads use the cheat's own byte order (RetroArch
 // reads with its search setting, writes with the cheat's), repeated values wrap
 // with & instead of RetroArch's % (which turned a repeated 0xFF into 0), and a

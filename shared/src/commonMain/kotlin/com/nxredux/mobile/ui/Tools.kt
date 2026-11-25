@@ -4,8 +4,10 @@ import com.nxredux.mobile.cheats.db.CheatDatabase
 import com.nxredux.mobile.cheats.db.CheatDbSource
 import com.nxredux.mobile.cheats.db.CheatDbState
 
-/** [APPS]: the app drawer (every launchable app); [APP]: one Android app added to Tools or pinned on Home. */
-/** [KIDS_LOCK]: Kids Mode's Lock row, first in Tools while a parent has the full menu; never pinned, no menu. */
+/**
+ * [APPS]: the app drawer (every launchable app); [APP]: one Android app added to Tools or pinned on Home.
+ * [KIDS_LOCK]: Kids Mode's Lock row, first in Tools while a parent has the full menu; never pinned, no menu.
+ */
 enum class ToolKind { RETRO_ACHIEVEMENTS, GAME_TIME, ARTWORK, CHEAT_DB, DEVICE_SYNC, SETTINGS, APPS, APP, KIDS_LOCK }
 
 /** A row on the Tools screen: the tool's name and a one-line status. [appId]: an Android app's id ([ToolKind.APP] only). */
@@ -19,18 +21,18 @@ val ToolKind.toolName: String?
     get() = when (this) {
         ToolKind.RETRO_ACHIEVEMENTS -> "RetroAchievements"
         ToolKind.GAME_TIME -> "Game Tracker"
-        ToolKind.ARTWORK -> "Artwork"
+        ToolKind.ARTWORK -> "Artwork & Metadata"
         ToolKind.CHEAT_DB -> "Cheats & Patches"
         ToolKind.DEVICE_SYNC -> "Device Sync"
-        ToolKind.SETTINGS -> "Settings"
-        ToolKind.APPS -> "Apps"
+        ToolKind.SETTINGS -> "App Settings"
+        ToolKind.APPS -> "All Apps"
         ToolKind.APP -> null
         ToolKind.KIDS_LOCK -> "Lock Kids Mode"
     }
 
 /**
- * A page opened from inside a tool: the tool's name, then the page's ("RetroAchievements | Achievements"), the same
- * separator as a game list's [listTitle]. The tool's own top page keeps its plain name. [split]: a pane of a split
+ * A page opened from inside a tool: the tool's name, then the page's ("RetroAchievements | Achievements"). The
+ * tool's own top page keeps its plain name. [split]: a pane of a split
  * (two panes), whose left pane already shows where it came from: the page's own name alone ("Settings", not
  * "RetroAchievements | Settings").
  */
@@ -88,6 +90,7 @@ fun cheatDbStatus(state: CheatDbState?): String = when (state) {
     is CheatDbState.Installing -> "Installing…"
     is CheatDbState.Checking -> "Checking…"
     is CheatDbState.Removing -> "Removing…"
+    is CheatDbState.Cancelling -> "Cancelling…"
 }
 
 /** The details block on the Cheats & Patches page: first line is the headline, the rest are dim. [systems] = consoles the download covers. */
@@ -106,14 +109,21 @@ fun cheatDbProgressLine(state: CheatDbState): String? = when (state) {
     }
     is CheatDbState.Installing -> "Installing ${state.tag} (${state.index}/${state.count})"
     is CheatDbState.Checking -> "Checking for updates…"
-    is CheatDbState.Removing -> "Removing…"
+    is CheatDbState.Removing -> "Removing…" + filesLeft(state.done, state.total)
+    is CheatDbState.Cancelling -> "Cancelling…" + filesLeft(state.done, state.total)
     else -> null
 }
+
+/** " 120 / 16000 files" while files are deleted one by one; empty before the count is known. */
+private fun filesLeft(done: Int, total: Int): String = if (total > 0) " $done / $total files" else ""
+
 
 /** 0..1 for the bar, null when the total is unknown or the phase has no measure. */
 fun cheatDbProgressFraction(state: CheatDbState): Float? = when (state) {
     is CheatDbState.Downloading -> if (state.total > 0) (state.done.toFloat() / state.total).coerceIn(0f, 1f) else null
     is CheatDbState.Installing -> if (state.count > 0) state.index.toFloat() / state.count else null
+    is CheatDbState.Removing -> if (state.total > 0) state.done.toFloat() / state.total else null
+    is CheatDbState.Cancelling -> if (state.total > 0) state.done.toFloat() / state.total else null
     else -> null
 }
 

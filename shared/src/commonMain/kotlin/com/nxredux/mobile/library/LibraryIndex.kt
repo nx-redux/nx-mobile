@@ -39,7 +39,7 @@ data class LibraryIndex(
          * ([LibraryIndexCodec]). It goes up when an older index would show the library wrongly, not for a field that
          * defaults and fills on the next scan ([scannedAt], [IndexedGame.firstSeen]).
          */
-        const val VERSION = 12
+        const val VERSION = 13
     }
 }
 
@@ -111,7 +111,22 @@ data class IndexedGame(
      * Recents, pin or collection line written for one still resolves to this game.
      */
     val hiddenCopies: List<String> = emptyList(),
+    /**
+     * What the scan found that marks the kind of game this is, else null: [MsuSets.MSU1] or [MsuSets.MSU_MD] for a ROM
+     * whose MSU set lies beside it, whose files then go where it goes. The pill shown is [shownBadge].
+     */
+    val badge: String? = null,
+    /** The game's own badge choice from `badges.txt` ([GameBadges.CHOICES]: [GameBadges.NONE] or a fixed badge); null is Auto. */
+    val badgeChoice: String? = null,
 )
+
+/**
+ * The pill by this game's name ([GameBadges.shown]). The tags are read from what its name is made of: a disc or pack
+ * folder's name for a game in one, else the file's stem. Worked out here rather than stored, so an index from before
+ * a tag was known shows it too.
+ */
+val IndexedGame.shownBadge: String?
+    get() = GameBadges.shown(badgeChoice, badge, if (lookupDir != dir) dir.substringAfterLast('/') else Names.stripExtension(file))
 
 /** Library order: by display name, the tag breaking ties (GBA and MGBA share a name); Unassigned last. */
 internal fun List<IndexedSystem>.inLibraryOrder(): List<IndexedSystem> {
@@ -138,6 +153,9 @@ fun LibraryIndex.toSystems(hidden: Set<String> = emptySet()): List<SystemFolder>
                 subtitle = if (s.unassigned) g.dir.ifEmpty { "/" } else g.subtitle,
                 firstSeen = g.firstSeen,
                 hiddenCopies = g.hiddenCopies.mapNotNull(GamePath::split),
+                badge = g.shownBadge,
+                msuSet = g.badge,
+                badgeChoice = g.badgeChoice,
             )
         },
         artRef = s.art?.let { ContentRef(it) },
@@ -176,6 +194,18 @@ fun LibraryIndex.rename(game: GameEntry, name: String): LibraryIndex {
         val hit = s.games.firstOrNull { it.source == game.sourceId && it.dir == game.relativeDir && it.file == game.fileName } ?: return@map s
         changed = true
         s.copy(games = (s.games - hit + hit.copy(name = name)).inNameOrder())
+    }
+    return if (changed) copy(systems = next) else this
+}
+
+/** [game]'s badge choice set to [choice] (null: Auto). Unchanged (same instance) when [game] is not in the index or already has it. */
+fun LibraryIndex.setBadgeChoice(game: GameEntry, choice: String?): LibraryIndex {
+    var changed = false
+    val next = systems.map { s ->
+        val i = s.games.indexOfFirst { it.source == game.sourceId && it.dir == game.relativeDir && it.file == game.fileName }
+        if (i < 0 || s.games[i].badgeChoice == choice) return@map s
+        changed = true
+        s.copy(games = s.games.toMutableList().also { it[i] = it[i].copy(badgeChoice = choice) })
     }
     return if (changed) copy(systems = next) else this
 }

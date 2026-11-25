@@ -1,8 +1,5 @@
 package com.nxredux.mobile.ui
 
-import com.nxredux.mobile.library.GameEntry
-import com.nxredux.mobile.library.Names
-import com.nxredux.mobile.library.SystemFolder
 import com.nxredux.mobile.netplay.CableLinkRefused
 import com.nxredux.mobile.netplay.FakeLan
 import com.nxredux.mobile.netplay.FakeNetplayPlatform
@@ -18,15 +15,9 @@ import com.nxredux.mobile.netplay.usb.FakeUsbCable
 import com.nxredux.mobile.netplay.usb.NetplayLink
 import com.nxredux.mobile.netplay.wizard.CableLinkFiles
 import com.nxredux.mobile.netplay.wizard.CableLinkOffer
-import com.nxredux.mobile.runner.ContentRef
-import com.nxredux.mobile.runner.CoreRegistry
-import com.nxredux.mobile.storage.GamePath
 import com.nxredux.mobile.ui.nx.NxButton
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -37,23 +28,10 @@ import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class NetplayCableLinkControllerTest {
-    private fun entry(tag: String, file: String): Listed {
-        val s = SystemFolder(tag, tag, CoreRegistry.forTag(tag), emptyList())
-        val g = GameEntry(ContentRef("Home/Roms/X ($tag)/$file"), file, Names.stripExtension(file), folder = ContentRef("Home/Roms/X ($tag)"), sourceId = GamePath.HOME, relativeDir = "Roms/X ($tag)")
-        return Listed(s, g)
-    }
-
-    private val ruby = entry("GBA", "Pokemon Ruby (USA).gba")
-    private val sapphire = entry("GBA", "Pokemon Sapphire (USA).gba")
-    private val emerald = entry("MGBA", "Pokemon Emerald (USA).gba")
-    private val kart = entry("SFC", "Super Mario Kart (USA).sfc")
-
-    private class Launches { val all = ArrayList<Pair<Listed, NetplaySession>>() }
-
-    private fun TestScope.controller(platform: FakeNetplayPlatform, launches: Launches = Launches()): NetplayController =
-        NetplayController(backgroundScope as CoroutineScope, platform, { e, s -> launches.all += e to s }, work = StandardTestDispatcher(testScheduler))
-
-    private fun NetplayController.press(vararg buttons: NxButton) = buttons.forEach(::onButton)
+    private val ruby = netplayEntry("GBA", "Pokemon Ruby (USA).gba")
+    private val sapphire = netplayEntry("GBA", "Pokemon Sapphire (USA).gba")
+    private val emerald = netplayEntry("MGBA", "Pokemon Emerald (USA).gba")
+    private val kart = netplayEntry("SFC", "Super Mario Kart (USA).sfc")
 
     private class Files(val own: ByteArray) : CableLinkFiles {
         override val cache = LinkRomCache(MemoryCacheStore())
@@ -70,10 +48,10 @@ class NetplayCableLinkControllerTest {
 
     @Test fun cable_link_is_a_third_connection_for_gba_games_only() = runTest {
         val p = cablePlatform()
-        val c = controller(p)
+        val c = netplayController(p)
         c.open(ruby); runCurrent()
         val wifi = assertIs<NetplayPage.Role>(c.page.value)
-        assertEquals(NetplayLink.WIFI, wifi.connection)                    // a row now, even without a cable
+        assertEquals(NetplayLink.WIFI, wifi.connection)                    // a row even without a cable
         assertEquals(listOf(NetplayRoleRow.CONNECTION, NetplayRoleRow.EMULATOR, NetplayRoleRow.HOST, NetplayRoleRow.JOIN), wifi.rows)
         c.press(NxButton.UP, NxButton.UP, NxButton.RIGHT)
         val cable = assertIs<NetplayPage.Role>(c.page.value)
@@ -85,7 +63,7 @@ class NetplayCableLinkControllerTest {
 
         // With a cable: Wi-Fi, USB Cable, Cable Link over Wi-Fi.
         val withUsb = cablePlatform().apply { usbCable = FakeUsbCable() }
-        val u = controller(withUsb)
+        val u = netplayController(withUsb)
         u.open(ruby); runCurrent()
         u.press(NxButton.UP, NxButton.UP, NxButton.RIGHT)
         assertEquals(NetplayLink.USB, assertIs<NetplayPage.Role>(u.page.value).connection)
@@ -93,13 +71,13 @@ class NetplayCableLinkControllerTest {
         assertEquals(NetplayLink.CABLE_LINK_WIFI, assertIs<NetplayPage.Role>(u.page.value).connection)
 
         // Not for another console, whatever was picked last.
-        val other = controller(cablePlatform().apply { lastLink = NetplayLink.CABLE_LINK_WIFI })
+        val other = netplayController(cablePlatform().apply { lastLink = NetplayLink.CABLE_LINK_WIFI })
         other.open(kart)
         assertNull(assertIs<NetplayPage.Role>(other.page.value).connection)
     }
 
     @Test fun an_mgba_game_without_a_wifi_mode_offers_cable_link_without_a_cable() = runTest {
-        val c = controller(cablePlatform())
+        val c = netplayController(cablePlatform())
         c.open(emerald); runCurrent()
         val role = assertIs<NetplayPage.Role>(c.page.value)
         assertEquals(NetplayLink.CABLE_LINK_WIFI, role.connection)          // not the cable-only error page
@@ -110,9 +88,9 @@ class NetplayCableLinkControllerTest {
         val lan = FakeLan()
         val hostP = cablePlatform(lan, WifiInfo("10.0.0.1", "Host Phone"), ByteArray(3_000) { (it * 7).toByte() }).apply { lastLink = NetplayLink.CABLE_LINK_WIFI }
         val clientP = cablePlatform(lan, WifiInfo("10.0.0.2", "Client Phone"), ByteArray(2_500) { (it * 3).toByte() }).apply { lastLink = NetplayLink.CABLE_LINK_WIFI }
-        val hostLaunches = Launches(); val clientLaunches = Launches()
-        val host = controller(hostP, hostLaunches)
-        val client = controller(clientP, clientLaunches)
+        val hostLaunches = NetplayLaunches(); val clientLaunches = NetplayLaunches()
+        val host = netplayController(hostP, hostLaunches)
+        val client = netplayController(clientP, clientLaunches)
         val clientLines = ArrayList<String>()
         backgroundScope.launch { client.page.collect { (it as? NetplayPage.Progress)?.let { p -> clientLines += p.line } } }
 
@@ -141,7 +119,7 @@ class NetplayCableLinkControllerTest {
 
     @Test fun a_game_that_cant_be_offered_says_why() = runTest {
         val p = FakeNetplayPlatform().apply { cableLinkFor = { throw CableLinkRefused(NetplayText.CABLE_LINK_ARCHIVE) }; lastLink = NetplayLink.CABLE_LINK_WIFI }
-        val c = controller(p)
+        val c = netplayController(p)
         c.open(ruby); runCurrent()
         c.press(NxButton.A); runCurrent()
         val err = assertIs<NetplayPage.Error>(c.page.value)

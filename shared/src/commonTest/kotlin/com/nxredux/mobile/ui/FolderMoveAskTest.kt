@@ -11,9 +11,9 @@ class FolderMoveAskTest {
     private fun summary(extraId: String, sum: FolderSummary, move: Boolean = true) =
         Screen.FolderSummary(extraId, "Games", "NXRedux", sum, move = move)
 
-    @Test fun an_extra_folders_placed_games_are_moved_not_copied() {
-        val s = summary("x1", FolderSummary(games = 5, byConsole = emptyList(), unassigned = 2))
-        assertEquals("Move games?" to "3 games will be moved from Games into NXRedux/Roms. They are moved, not copied.", folderMoveAsk(s))
+    // An extra folder is only read: Continue never moves its games, so nothing is asked even with games placed.
+    @Test fun an_extra_folder_asks_nothing() {
+        assertNull(folderMoveAsk(summary("x1", FolderSummary(games = 5, byConsole = emptyList(), unassigned = 2))))
     }
 
     @Test fun the_homes_outside_games_move_in_and_split_consoles_merge() {

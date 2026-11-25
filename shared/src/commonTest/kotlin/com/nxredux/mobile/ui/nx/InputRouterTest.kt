@@ -75,4 +75,32 @@ class InputRouterTest {
         assertEquals(NxButton.RIGHT to false, presses.last())
         router.releaseAll()
     }
+
+    // The main menu's SELECT + START: SELECT and START alone act on their release; both held together are MENU.
+    @Test fun select_and_start_alone_act_on_release() = runTest {
+        val presses = ArrayList<NxButton>()
+        val router = InputRouter(this, { presses += it }, menuChord = true)
+        router.onEvent(PadEvent.Down(NxButton.SELECT)); runCurrent()
+        assertEquals(emptyList(), presses)                       // not yet: it may become the chord
+        router.onEvent(PadEvent.Up(NxButton.SELECT)); runCurrent()
+        assertEquals(listOf(NxButton.SELECT), presses)
+        router.onEvent(PadEvent.Down(NxButton.START)); router.onEvent(PadEvent.Up(NxButton.START)); runCurrent()
+        assertEquals(listOf(NxButton.SELECT, NxButton.START), presses)
+    }
+
+    @Test fun select_and_start_together_are_menu_once() = runTest {
+        val presses = ArrayList<NxButton>()
+        val router = InputRouter(this, { presses += it }, menuChord = true)
+        router.onEvent(PadEvent.Down(NxButton.START)); router.onEvent(PadEvent.Down(NxButton.SELECT)); runCurrent()
+        assertEquals(listOf(NxButton.MENU), presses)
+        router.onEvent(PadEvent.Up(NxButton.SELECT)); router.onEvent(PadEvent.Up(NxButton.START)); runCurrent()
+        assertEquals(listOf(NxButton.MENU), presses)            // neither release presses anything
+    }
+
+    @Test fun without_the_chord_select_and_start_press_on_down() = runTest {
+        val presses = ArrayList<NxButton>()
+        val router = InputRouter(this, { presses += it })
+        router.onEvent(PadEvent.Down(NxButton.START)); runCurrent()
+        assertEquals(listOf(NxButton.START), presses)
+    }
 }

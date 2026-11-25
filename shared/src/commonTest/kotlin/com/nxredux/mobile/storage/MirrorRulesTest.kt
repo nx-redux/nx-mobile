@@ -7,17 +7,17 @@ import kotlin.test.assertTrue
 
 class MirrorRulesTest {
     @Test fun newer_side_wins_missing_side_receives_equal_does_nothing() {
-        assertEquals(SyncAction.NONE, MirrorRules.decide(null, null))
-        assertEquals(SyncAction.IMPORT, MirrorRules.decide(null, 10))
-        assertEquals(SyncAction.EXPORT, MirrorRules.decide(10, null))
-        assertEquals(SyncAction.IMPORT, MirrorRules.decide(10, 20))
-        assertEquals(SyncAction.EXPORT, MirrorRules.decide(20, 10))
-        assertEquals(SyncAction.NONE, MirrorRules.decide(10, 10))
+        assertFalse(MirrorRules.treeIsNewer(null, null))
+        assertTrue(MirrorRules.treeIsNewer(null, 10))
+        assertFalse(MirrorRules.treeIsNewer(10, null))
+        assertTrue(MirrorRules.treeIsNewer(10, 20))
+        assertFalse(MirrorRules.treeIsNewer(20, 10))
+        assertFalse(MirrorRules.treeIsNewer(10, 10))
     }
     @Test fun after_an_import_the_local_mtime_equals_the_trees_so_a_future_tree_stamp_is_not_pushed_back() {
         val treeInFuture = 4_000_000_000_000L
-        assertEquals(SyncAction.IMPORT, MirrorRules.decide(1_700_000_000_000L, treeInFuture))
-        assertEquals(SyncAction.NONE, MirrorRules.decide(treeInFuture, treeInFuture))   // what the importer sets
+        assertTrue(MirrorRules.treeIsNewer(1_700_000_000_000L, treeInFuture))
+        assertFalse(MirrorRules.treeIsNewer(treeInFuture, treeInFuture))   // what the importer sets
     }
 
     @Test fun interrupted_write_leftovers_are_transient() {

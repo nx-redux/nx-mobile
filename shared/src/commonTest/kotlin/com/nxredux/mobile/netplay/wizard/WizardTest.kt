@@ -366,6 +366,77 @@ class WizardTest {
         assertEquals(ClientOutcome.Refused("The host is running a\ndifferent game."), job.await())
     }
 
+    // ---- Sega Controller Type: the host's when both sides send theirs ----
+
+    @Test fun phone_to_phone_both_play_the_hosts_controller_type() = runTest {
+        val (h, c) = PipeChannel.pair()
+        val hostJob = async { Wizard.host(h, hostMd.copy(pad = "6"), saves = { FakeHostSaves() }) }
+        val out = Wizard.client(c, joinMd.copy(pad = "3"), FakeSaveSink())
+        assertEquals(ClientOutcome.Started("picodrive", 2, emptySaves = false, pad = "6"), out)
+        assertEquals(HostOutcome.Started("picodrive", "10.0.0.2", emptySaves = false, pad = "6"), hostJob.await())
+    }
+
+    @Test fun the_joiner_sends_its_pad_and_the_host_answers_with_its_own() = runTest {
+        val (h, c) = PipeChannel.pair()
+        val hostJob = async { Wizard.host(h, hostMd.copy(pad = "auto"), saves = { FakeHostSaves() }) }
+        c.writeLine("HELLO 2 $sonicEsc client caps=core=picodrive,tag=MD,auto=1,pad=6")
+        assertEquals("HELLO 2 $sonicEsc host 2 caps=core=picodrive,tag=MD,pad=auto", c.readLine(1000))
+        assertEquals("START 2", c.readLine(1000))
+        c.writeLine("START")
+        assertEquals(HostOutcome.Started("picodrive", "10.0.0.2", emptySaves = false, pad = "auto"), hostJob.await())
+    }
+
+    @Test fun the_host_offers_the_pad_set_for_the_core_it_runs() = runTest {
+        val (h, c) = PipeChannel.pair()
+        val pads = mapOf("picodrive" to "6", "genesis_plus_gx" to "3")
+        val hostJob = async { Wizard.host(h, hostMd, saves = { FakeHostSaves() }, padFor = { pads[it] }) }
+        c.writeLine("HELLO 2 $sonicEsc client caps=core=genesis_plus_gx,tag=GPGX,pad=auto")   // an Auto host adopts this core
+        assertEquals("HELLO 2 $sonicEsc host 2 caps=core=genesis_plus_gx,tag=MD,pad=3", c.readLine(1000))
+        assertEquals("START 2", c.readLine(1000))
+        c.writeLine("START")
+        assertEquals(HostOutcome.Started("genesis_plus_gx", "10.0.0.2", emptySaves = false, pad = "3"), hostJob.await())
+    }
+
+    @Test fun a_joiner_without_pad_gets_no_pad_from_the_host_and_both_keep_the_old_one() = runTest {
+        val (h, c) = PipeChannel.pair()
+        val hostJob = async { Wizard.host(h, hostMd.copy(pad = "6"), saves = { FakeHostSaves() }) }
+        c.writeLine("HELLO 2 $sonicEsc client caps=core=picodrive,tag=MD")   // a handheld, or an older phone
+        assertEquals("HELLO 2 $sonicEsc host 2 caps=core=picodrive,tag=MD", c.readLine(1000))
+        assertEquals("START 2", c.readLine(1000))
+        c.writeLine("START")
+        assertEquals(HostOutcome.Started("picodrive", "10.0.0.2", emptySaves = false), hostJob.await())
+    }
+
+    @Test fun a_host_without_pad_leaves_the_joiner_on_the_old_pad() = runTest {
+        val (h, c) = PipeChannel.pair()
+        val job = async { Wizard.client(c, joinMd.copy(pad = "6"), FakeSaveSink()) }
+        assertEquals("HELLO 2 $sonicEsc client caps=core=picodrive,tag=MD,auto=1,pad=6", h.readLine(1000))
+        h.writeLine("HELLO 2 $sonicEsc host 2 caps=core=picodrive,tag=MD")
+        h.writeLine("START 2")
+        assertEquals("START", h.readLine(1000))
+        assertEquals(ClientOutcome.Started("picodrive", 2, emptySaves = false), job.await())
+    }
+
+    @Test fun a_host_pad_the_joiner_never_asked_for_is_ignored() = runTest {
+        val (h, c) = PipeChannel.pair()
+        val job = async { Wizard.client(c, joinMd, FakeSaveSink()) }
+        h.readLine(1000)
+        h.writeLine("HELLO 2 $sonicEsc host 2 caps=core=picodrive,tag=MD,pad=6")
+        h.writeLine("START 2")
+        assertEquals("START", h.readLine(1000))
+        assertEquals(ClientOutcome.Started("picodrive", 2, emptySaves = false), job.await())
+    }
+
+    @Test fun an_unknown_host_pad_value_is_no_pad() = runTest {
+        val (h, c) = PipeChannel.pair()
+        val job = async { Wizard.client(c, joinMd.copy(pad = "auto"), FakeSaveSink()) }
+        h.readLine(1000)
+        h.writeLine("HELLO 2 $sonicEsc host 2 caps=core=picodrive,tag=MD,pad=9")
+        h.writeLine("START 2")
+        assertEquals("START", h.readLine(1000))
+        assertEquals(ClientOutcome.Started("picodrive", 2, emptySaves = false), job.await())
+    }
+
     // ---- core check, hosting ----
 
     @Test fun an_auto_host_adopts_the_joiners_core() = runTest {
@@ -604,7 +675,7 @@ class WizardTest {
             com.nxredux.mobile.netplay.NetplayRole.CLIENT, "10.0.0.1", "mgba", "gpsp", overUsb = true, mixed = true, peerWl = "rfu",
         )
         assertEquals(mapOf("mgba_link_mode" to "auto_cable"), com.nxredux.mobile.netplay.NetplayLinkOptions.forSession(session, "cable"))
-        // Without a shared Wi-Fi mode the same switch is today's same-core session.
+        // Without a shared Wi-Fi mode the same switch is a same-core session.
         val (h2, c2) = PipeChannel.pair()
         val job2 = async { Wizard.client(c2, joinGba.copy(wl = "none"), FakeSaveSink()) }
         h2.readLine(1000)
@@ -623,7 +694,7 @@ class WizardTest {
         assertEquals("START 2", c.readLine(1000))
         c.writeLine("START")
         assertEquals(HostOutcome.Started("gpsp", "10.0.0.2", emptySaves = false, mixed = true, peerWl = "rfu"), hostJob.await())
-        // Over the cable a poke game is not a mixed pair: today's same-core rules.
+        // Over the cable a poke game is not a mixed pair: the same-core rules.
         val (h2, c2) = PipeChannel.pair()
         val hostJob2 = async { Wizard.host(h2, hostAutoUsb.copy(wl = "poke"), saves = { error("a link session copies no saves") }) }
         c2.writeLine("HELLO 2 $rubyEsc client caps=core=mgba,tag=MGBA,wl=poke,auto=1")

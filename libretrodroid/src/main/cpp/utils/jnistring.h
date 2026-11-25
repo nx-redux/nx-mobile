@@ -20,6 +20,7 @@
 
 #include <jni.h>
 #include <string>
+#include <vector>
 
 // A null jstring reads as "".
 class JniString {
@@ -27,7 +28,6 @@ public:
     JniString(JNIEnv *env, jstring javaString);
     ~JniString();
 
-    const char* cString();
     std::string stdString();
 
     JniString(const JniString& other) = delete;
@@ -47,5 +47,8 @@ private:
  */
 jstring newSafeJString(JNIEnv* env, const char* s);
 inline jstring newSafeJString(JNIEnv* env, const std::string& s) { return newSafeJString(env, s.c_str()); }
+
+// A Java String[] of values, each through newSafeJString.
+jobjectArray newSafeJStringArray(JNIEnv* env, const std::vector<std::string>& values);
 
 #endif //LIBRETRODROID_JNISTRING_H

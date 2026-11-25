@@ -9,6 +9,8 @@ interface EmulatorConfigStore {
     suspend fun writeConsole(tag: String, coreId: String, text: String)
     suspend fun writeGame(tag: String, coreId: String, romFileName: String, text: String)
     suspend fun deleteGame(tag: String, coreId: String, romFileName: String)
+    /** Drops the tag's console file, so its page and its games without their own file read the defaults again. */
+    suspend fun deleteConsole(tag: String, coreId: String)
 }
 
 object NoEmulatorConfigs : EmulatorConfigStore {
@@ -16,4 +18,5 @@ object NoEmulatorConfigs : EmulatorConfigStore {
     override suspend fun writeConsole(tag: String, coreId: String, text: String) {}
     override suspend fun writeGame(tag: String, coreId: String, romFileName: String, text: String) {}
     override suspend fun deleteGame(tag: String, coreId: String, romFileName: String) {}
+    override suspend fun deleteConsole(tag: String, coreId: String) {}
 }

@@ -385,7 +385,7 @@ class SyncRomsTest {
         ), runs)
     }
 
-    /** Follow-up 5: beside `Bios/GBA`, a leftover `Bios/MGBA` stays on the phone; pulls are unchanged. */
+    /** Beside `Bios/GBA`, a leftover `Bios/MGBA` stays on the phone; pulls are unchanged. */
     @Test fun bios_plan_mapped_pushes_only_the_console_tag_folder() {
         val runs = SyncRoms.biosPlanMapped(local = listOf("MGBA", "GBA", "PSX"), remote = listOf("GBA", "MGBA", "PS"))
         fun push(l: String, r: String) = RomRun(SyncStep.SEND_BIOS, l, RomEnd.Bios(l), RomEnd.Peer("bios", r), ignoreExisting = true, pair = "$l\u0000$r")

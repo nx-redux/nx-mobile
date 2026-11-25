@@ -1,15 +1,18 @@
 package com.nxredux.mobile.sync
 
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.io.File
 import kotlin.io.path.createTempDirectory
 
 class SyncLogTailTest {
-    private val dir = createTempDirectory("synclog").toFile().apply { deleteOnExit() }
+    private val dir = createTempDirectory("synclog").toFile()
     private val log = File(dir, "rsyncd.log")
     private val lines = mutableListOf<String>()
     private val tail = SyncLogTail(log) { lines += it }
+
+    @After fun cleanUp() { dir.deleteRecursively() }
 
     @Test fun a_missing_log_reads_nothing() {
         tail.readNew(); tail.flush()

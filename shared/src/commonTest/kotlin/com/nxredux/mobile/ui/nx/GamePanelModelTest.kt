@@ -3,10 +3,14 @@ package com.nxredux.mobile.ui.nx
 import com.nxredux.mobile.achievements.RaAchievement
 import com.nxredux.mobile.achievements.RaAchievementState
 import com.nxredux.mobile.cheats.CheatEntry
+import com.nxredux.mobile.netplay.NetplayRole
+import com.nxredux.mobile.netplay.NetplaySession
+import com.nxredux.mobile.netplay.NetplayText
 import com.nxredux.mobile.shortcuts.ShortcutAction
 import com.nxredux.mobile.shortcuts.TouchSlot
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -19,24 +23,42 @@ class GamePanelModelTest {
         touch: List<ShortcutAction> = emptyList(), slot: Int? = null,
     ) = GamePanelModel.shortcuts(discCount, discIndex, netplay, ff, rewind, mic, touch, slot)
 
+    @Test fun fast_forward_shows_its_speed() {
+        val ff = GamePanelModel.shortcuts(1, 0, netplay = false, ff = false, rewind = null, ffSpeed = 4).first { it.shortcut == Shortcut.FAST_FORWARD }
+        assertEquals("4x", ff.value)
+        assertNull(shortcuts().first { it.shortcut == Shortcut.FAST_FORWARD }.value)   // no speed given: no value line
+    }
+
     @Test fun tabs_shortcuts_only() {
-        assertEquals(listOf(GamePanelTab.SHORTCUTS), GamePanelModel.tabs(raAvailable = false, playerSlots = 1))
-        assertEquals(listOf(GamePanelTab.SHORTCUTS), GamePanelModel.tabs(raAvailable = false, playerSlots = 0))
+        assertEquals(listOf(GamePanelTab.SHORTCUTS), GamePanelModel.tabs(raAvailable = false, players = false))
+        assertEquals(listOf(GamePanelTab.SHORTCUTS), GamePanelModel.tabs(raAvailable = false, players = false))
     }
 
     @Test fun tabs_with_ra_and_players() {
-        assertEquals(listOf(GamePanelTab.SHORTCUTS, GamePanelTab.ACHIEVEMENTS, GamePanelTab.PLAYERS), GamePanelModel.tabs(raAvailable = true, playerSlots = 2))
-        assertEquals(listOf(GamePanelTab.SHORTCUTS, GamePanelTab.ACHIEVEMENTS), GamePanelModel.tabs(raAvailable = true, playerSlots = 1))
-        assertEquals(listOf(GamePanelTab.SHORTCUTS, GamePanelTab.PLAYERS), GamePanelModel.tabs(raAvailable = false, playerSlots = 4))
+        assertEquals(listOf(GamePanelTab.SHORTCUTS, GamePanelTab.ACHIEVEMENTS, GamePanelTab.PLAYERS), GamePanelModel.tabs(raAvailable = true, players = true))
+        assertEquals(listOf(GamePanelTab.SHORTCUTS, GamePanelTab.ACHIEVEMENTS), GamePanelModel.tabs(raAvailable = true, players = false))
+        assertEquals(listOf(GamePanelTab.SHORTCUTS, GamePanelTab.PLAYERS), GamePanelModel.tabs(raAvailable = false, players = true))
+    }
+
+    @Test fun players_show_with_more_than_one_controller() {
+        val two = listOf(PlayerSlotRow("a", "Pad A", true), PlayerSlotRow(null, "", false))
+        val padA = PlayerPadRow("a", "Pad A")
+        val padB = PlayerPadRow("b", "Pad B")
+        assertFalse(GamePanelModel.playersShown(two, emptyList()))
+        assertFalse(GamePanelModel.playersShown(two, listOf(padA)))             // the built-in controls alone
+        assertTrue(GamePanelModel.playersShown(two, listOf(padA, padB)))
+        assertFalse(GamePanelModel.playersShown(two.take(1), listOf(padA, padB)))   // a one-player core
+        // The only pad left is benched: the tab stays so it can be put back in play.
+        assertTrue(GamePanelModel.playersShown(listOf(PlayerSlotRow(null, "", false), PlayerSlotRow(null, "", false)), listOf(padA.copy(benched = true))))
     }
 
     @Test fun tabs_with_cheats_sit_before_players() {
-        assertEquals(listOf(GamePanelTab.SHORTCUTS, GamePanelTab.CHEATS), GamePanelModel.tabs(raAvailable = false, playerSlots = 1, cheats = true))
+        assertEquals(listOf(GamePanelTab.SHORTCUTS, GamePanelTab.CHEATS), GamePanelModel.tabs(raAvailable = false, players = false, cheats = true))
         assertEquals(
             listOf(GamePanelTab.SHORTCUTS, GamePanelTab.ACHIEVEMENTS, GamePanelTab.CHEATS, GamePanelTab.PLAYERS),
-            GamePanelModel.tabs(raAvailable = true, playerSlots = 2, cheats = true),
+            GamePanelModel.tabs(raAvailable = true, players = true, cheats = true),
         )
-        assertEquals(GamePanelTab.SHORTCUTS, GamePanelModel.resolveTab(GamePanelTab.CHEATS, GamePanelModel.tabs(raAvailable = true, playerSlots = 2)))
+        assertEquals(GamePanelTab.SHORTCUTS, GamePanelModel.resolveTab(GamePanelTab.CHEATS, GamePanelModel.tabs(raAvailable = true, players = true)))
     }
 
     @Test fun cheat_rows_take_the_source_from_the_info() {
@@ -67,10 +89,10 @@ class GamePanelModelTest {
     }
 
     @Test fun resolve_tab_falls_back_when_gone() {
-        val shortcutsOnly = GamePanelModel.tabs(raAvailable = false, playerSlots = 1)
+        val shortcutsOnly = GamePanelModel.tabs(raAvailable = false, players = false)
         assertEquals(GamePanelTab.SHORTCUTS, GamePanelModel.resolveTab(GamePanelTab.ACHIEVEMENTS, shortcutsOnly))
         assertEquals(GamePanelTab.SHORTCUTS, GamePanelModel.resolveTab(GamePanelTab.PLAYERS, shortcutsOnly))
-        val all = GamePanelModel.tabs(raAvailable = true, playerSlots = 2)
+        val all = GamePanelModel.tabs(raAvailable = true, players = true)
         assertEquals(GamePanelTab.PLAYERS, GamePanelModel.resolveTab(GamePanelTab.PLAYERS, all))
         assertEquals(GamePanelTab.ACHIEVEMENTS, GamePanelModel.resolveTab(GamePanelTab.ACHIEVEMENTS, all))
     }
@@ -80,7 +102,6 @@ class GamePanelModelTest {
         assertTrue(shortcuts(discCount = 0).none { it.shortcut == Shortcut.SWAP_DISC })
         assertTrue(shortcuts(discCount = 3, netplay = true).none { it.shortcut == Shortcut.SWAP_DISC })
         val swap = shortcuts(discCount = 3, discIndex = 1).single { it.shortcut == Shortcut.SWAP_DISC }
-        assertTrue(swap.enabled)
         assertEquals("2/3", swap.value)
         assertEquals("Swap disc", swap.label)
     }
@@ -102,7 +123,7 @@ class GamePanelModelTest {
         val list = shortcuts(discCount = 2, touch = listOf(ShortcutAction.SAVE_STATE, ShortcutAction.LOAD_STATE, ShortcutAction.HOLD_FF), slot = 2)
         assertEquals(listOf("Save", "Load", "Hold fast forward", "Swap disc", "Fast forward", "Rewind", "Reset"), list.map { it.label })
         assertEquals(listOf("Slot 2", "Slot 2", null), list.take(3).map { it.value })
-        assertTrue(list.take(3).all { it.shortcut == Shortcut.TOUCH && it.on == null && it.enabled })
+        assertTrue(list.take(3).all { it.shortcut == Shortcut.TOUCH && it.on == null })
         assertEquals(ShortcutAction.HOLD_FF, list[2].action)
         assertNull(shortcuts(touch = listOf(ShortcutAction.SAVE_STATE)).first().value)   // the slot not read yet
         assertNull(GamePanelModel.eventFor(list.first()))   // its press and release are the tile's own
@@ -113,7 +134,6 @@ class GamePanelModelTest {
         for (list in listOf(shortcuts(), shortcuts(discCount = 2))) {
             val tiles = list.filter { it.shortcut in speedTiles }
             assertEquals(speedTiles, tiles.map { it.shortcut })
-            assertTrue(tiles.all { it.enabled })
             assertEquals(listOf(false, false, null), tiles.map { it.on })   // FF and Rewind toggles; Reset an action
         }
         // Display order: the touch buttons, Swap disc, then Fast forward, Rewind, Mic and Reset.
@@ -125,8 +145,8 @@ class GamePanelModelTest {
 
     // The Settings tab is the second-screen panel's: after Shortcuts, only where asked for.
     @Test fun settings_tab_sits_after_shortcuts() {
-        assertEquals(listOf(GamePanelTab.SHORTCUTS, GamePanelTab.SETTINGS, GamePanelTab.ACHIEVEMENTS), GamePanelModel.tabs(raAvailable = true, playerSlots = 1, settings = true))
-        assertTrue(GamePanelTab.SETTINGS !in GamePanelModel.tabs(raAvailable = true, playerSlots = 2, cheats = true))
+        assertEquals(listOf(GamePanelTab.SHORTCUTS, GamePanelTab.SETTINGS, GamePanelTab.ACHIEVEMENTS), GamePanelModel.tabs(raAvailable = true, players = false, settings = true))
+        assertTrue(GamePanelTab.SETTINGS !in GamePanelModel.tabs(raAvailable = true, players = true, cheats = true))
     }
 
     // A Settings option: up to four values sit side by side, more step between two arrows (wrapping); a value not among
@@ -147,10 +167,6 @@ class GamePanelModelTest {
         assertEquals("scan lines", GamePanelModel.quickFileLabel("scan lines.png"))
     }
 
-    @Test fun noScreenshot() {
-        assertTrue(Shortcut.entries.none { it.name == "SCREENSHOT" })
-    }
-
     @Test fun rewindHiddenWithoutRewind() {
         val list = shortcuts(rewind = null)
         assertTrue(list.none { it.shortcut == Shortcut.REWIND })
@@ -163,14 +179,67 @@ class GamePanelModelTest {
         assertEquals(false, list.single { it.shortcut == Shortcut.MIC }.on)
     }
 
+    @Test fun micTileSaysWhetherTheButtonShows() {
+        assertEquals("Hidden", shortcuts(mic = false).single { it.shortcut == Shortcut.MIC }.value)
+        assertEquals("Shown", shortcuts(mic = true).single { it.shortcut == Shortcut.MIC }.value)
+    }
+
     @Test fun micTileHidden() {
         assertTrue(shortcuts(mic = null).none { it.shortcut == Shortcut.MIC })
-        assertTrue(shortcuts(netplay = true, mic = true).none { it.shortcut == Shortcut.MIC })
+    }
+
+    @Test fun sessionKeepsOnlyTheMicTile() {
+        assertEquals(listOf(Shortcut.MIC), shortcuts(netplay = true, mic = true, discCount = 2, touch = listOf(ShortcutAction.SAVE_STATE)).map { it.shortcut })
+    }
+
+    private fun np(role: NetplayRole = NetplayRole.HOST, core: String = "snes9x", usb: Boolean = false) =
+        NetplaySession(role, "192.168.1.2", core, core, overUsb = usb)
+
+    @Test fun sessionCardOutsideASession() {
+        assertNull(GamePanelModel.session(null, ended = false, dsWireless = false, wirelessNow = null))
+    }
+
+    @Test fun sessionCardLockstep() {
+        val host = GamePanelModel.session(np(), ended = false, dsWireless = false, wirelessNow = null)!!
+        assertEquals("Netplay", host.title)
+        assertEquals(listOf("Player 1 · Host", "Wi-Fi"), host.detail)
+        assertEquals(NetplayText.SYNC_LOCKED_NOTE, host.note)
+        assertEquals("Press MENU to leave", host.hint)
+        val guest = GamePanelModel.session(np(NetplayRole.CLIENT, usb = true), ended = false, dsWireless = false, wirelessNow = null)!!
+        assertEquals(listOf("Player 2 · Guest", "USB Cable"), guest.detail)
+    }
+
+    @Test fun sessionCardNamesTheOtherPlayer() {
+        val named = GamePanelModel.session(np().copy(peerName = "Nova"), ended = false, dsWireless = false, wirelessNow = null)!!
+        assertEquals(listOf("Player 1 · Host", "Playing with Nova", "Wi-Fi"), named.detail)
+    }
+
+    @Test fun sessionCardLink() {
+        val ds = GamePanelModel.session(np(NetplayRole.CLIENT, core = "melondsds"), ended = false, dsWireless = false, wirelessNow = null)!!
+        assertEquals(listOf("Guest", "Wi-Fi"), ds.detail)
+        assertEquals(NetplayText.LINK_LOCKED_NOTE, ds.note)
+        assertEquals("Press MENU to disconnect", ds.hint)
+    }
+
+    @Test fun sessionCardEnded() {
+        val over = GamePanelModel.session(np(), ended = true, dsWireless = false, wirelessNow = null)!!
+        assertEquals("Netplay ended", over.title)
+        assertEquals("Press MENU to quit", over.hint)
+        val cable = GamePanelModel.session(np().copy(cableLink = true), ended = true, dsWireless = false, wirelessNow = null)!!
+        assertEquals(NetplayText.CABLE_LINK_ENDED, cable.note)
+    }
+
+    @Test fun sessionCardDsWireless() {
+        val ds = GamePanelModel.session(null, ended = false, dsWireless = true, wirelessNow = "linked with 1 device")!!
+        assertEquals("Local wireless", ds.title)
+        assertEquals(listOf("Linked with 1 device"), ds.detail)
+        assertEquals("Press MENU to disconnect", ds.hint)
+        assertEquals(emptyList(), GamePanelModel.session(null, ended = false, dsWireless = true, wirelessNow = null)!!.detail)
     }
 
     @Test fun micTileFlips() {
-        assertEquals(GamePanelEvent.SetMic(on = false), GamePanelModel.eventFor(shortcuts(mic = true).single { it.shortcut == Shortcut.MIC }))
-        assertEquals(GamePanelEvent.SetMic(on = true), GamePanelModel.eventFor(shortcuts(mic = false).single { it.shortcut == Shortcut.MIC }))
+        assertEquals(GamePanelEvent.SetMicButton(shown = false), GamePanelModel.eventFor(shortcuts(mic = true).single { it.shortcut == Shortcut.MIC }))
+        assertEquals(GamePanelEvent.SetMicButton(shown = true), GamePanelModel.eventFor(shortcuts(mic = false).single { it.shortcut == Shortcut.MIC }))
     }
 
     @Test fun netplayHidesAll() {
@@ -189,12 +258,11 @@ class GamePanelModelTest {
         assertEquals(GamePanelEvent.Reset, GamePanelModel.eventFor(shortcuts().single { it.shortcut == Shortcut.RESET }))
     }
 
-    @Test fun disabled_shortcut_has_no_event() {
+    @Test fun the_event_follows_the_typed_state() {
         val list = shortcuts(discCount = 2)
-        for (s in list) assertNull(GamePanelModel.eventFor(s.copy(enabled = false)))
         assertEquals(GamePanelEvent.SwapDisc, GamePanelModel.eventFor(list.single { it.shortcut == Shortcut.SWAP_DISC }))
         // The event follows the typed state, not the display text.
-        val typed = ShortcutState(Shortcut.FAST_FORWARD, "Fast forward", enabled = true, value = "whatever", on = true)
+        val typed = ShortcutState(Shortcut.FAST_FORWARD, "Fast forward", value = "whatever", on = true)
         assertEquals(GamePanelEvent.SetFastForward(false), GamePanelModel.eventFor(typed))
     }
 

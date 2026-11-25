@@ -19,7 +19,7 @@ class AccentContrastTest {
 
     @Test fun theDefaultAccentKeepsBlackTextAndItsMutedShade() {
         val c = NxColors()
-        assertEquals(c.secondarySelected, c.onAccentMuted)          // 55% black
+        assertEquals(Color(0x8C000000), c.onAccentMuted)            // 55% black
         assertEquals(Color(0xFF006666), c.optionBar)               // NX teal
     }
 
@@ -41,8 +41,8 @@ class AccentContrastTest {
     @Test fun toneColoursOnTheAccentAreTheDarkOnes() {
         for (p in AccentPreset.entries) {
             val c = nxColorsFor(p)
-            assertEquals(c.successSelected, c.successOnAccent, p.label)
-            assertEquals(c.warningSelected, c.warningOnAccent, p.label)
+            assertEquals(Color(0xFF237A2E), c.successOnAccent, p.label)
+            assertEquals(Color(0xFF9A6500), c.warningOnAccent, p.label)
         }
     }
 }

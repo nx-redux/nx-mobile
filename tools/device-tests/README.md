@@ -1,7 +1,7 @@
 # Device tests: Brick driver
 
-Mac-side Python 3 (stdlib only) driver for a TrimUI Brick (tg5040) on NX Redux, over adb. Design:
-`docs/superpowers/specs/2026-10-16-device-test-automation-design.md`. Safety rules: nx-redux `.dev/TESTING.md`.
+Mac-side Python 3 (stdlib only) driver for a TrimUI Brick (tg5040) on NX Redux, over adb. Safety rules:
+nx-redux `.dev/TESTING.md`.
 
 - `brick.py`: the `Brick(serial)` class.
 - `state_roundtrip_smoke.py`: Brick-only proof of the state recipes (`--serial`, `--out DIR` for screenshots + log).
@@ -17,15 +17,25 @@ Mac-side Python 3 (stdlib only) driver for a TrimUI Brick (tg5040) on NX Redux, 
   (`--ab nx_graphics_api=gles,vulkan`) or a system property (`--ab-prop debug.nx.presenttime=0,1`). Prints frames,
   uneven frames, frames held 33 ms+, the core's work per frame (`--work`: Debug log on for the runs) and the temperature.
   Each run ends with the game's Quit (GAME_STOP, so saves a core writes itself finish) before the force-stop; the
-  game's auto state is set aside for the runs and put back. `test_pacing.py`: that teardown, no device.
+  game's auto state is set aside for the runs and put back. `--open-first <s>` opens the app before each launch: Android 11 (the
+  AYANEO) drops the GAME hook for a force-stopped app. `test_pacing.py`: that teardown, no device.
+- `slang_shaders.py`: slang presets from the home's `Shaders/shaders_slang` on a phone (`--only SFC,NDS`, `--presets`):
+  per console and preset, a launch through the GAME hook, a screenshot (`.local/device-tests/slang-shots/`), frame
+  pacing, the time the preset took to prepare and any shader error from the log. Game options, resume points and the
+  Debug log setting are put back.
 - `quit_loop.py`: boot a game, wait, GAME_STOP, check its :game process ends with no ANR or watchdog stop; repeat.
   GAME_STOP quits like Save & Quit, so the game's resume point moves.
+- `netplay_pads.py`: Sega netplay phone ↔ phone (`--host serial:romdir --client serial:romdir`, `--only`, `--seconds`):
+  per case a Wi-Fi session through the debug NETPLAY hook (the real handshake), then checks both phones' `pad.json`
+  (session pad, drawn pad, port devices) and the drift check (`debug.nx.netplay_pair=1`, debug builds only: both sides hash the work RAM
+  every 120 frames). The first case forces a pad mismatch and passes only if the drift check catches it. Needs Debug
+  log on both phones; report in `.local/device-tests/netplay-pads-<date>.md`.
 - `dolphin_sav.py`: wraps the libretro Dolphin core's state in standalone Dolphin's .sav headers, for comparing both
   apps from one moment.
 
 ### After a Dolphin pin bump
 
-1. `gmake -C cores dolphin`: the patches apply in order (`dolphin.patch`, `dolphin/0001…`, `dolphin/0002…`); on a
+1. `gmake -C cores dolphin`: the patches apply in order (`dolphin.patch`, then `dolphin/*.patch` in name order); on a
    clash regenerate them on the new head with `git apply -3`, and drop a backport the pin now has (0002 once the
    libretro fork includes upstream PR #14928). Keep each patch's licence header.
 2. Pacing, SMG2 from a state (Nova): `pacing.py --tag WII --core dolphin --rom <SMG2> --state <state> --runs 2 --work`;

@@ -7,13 +7,9 @@
 
 #include <cstdio>
 
+#include "check.h"
+
 using namespace libretrodroid;
-
-static int failures = 0;
-
-static void check(bool ok, const char* what) {
-    if (!ok) { std::printf("FAIL %s\n", what); failures++; }
-}
 
 static TimePoint at(double ms) {
     return TimePoint(std::chrono::duration_cast<TimePoint::duration>(std::chrono::duration<double, std::milli>(1000.0 + ms)));

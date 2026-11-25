@@ -10,9 +10,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
-import java.net.ServerSocket
-import java.net.Socket
-import java.util.concurrent.TimeUnit
 
 /**
  * Collections sync's pull, merge and push ([SyncCollectionFiles], [SyncCommands.collectionsArgs]) against a real rsync
@@ -20,46 +17,30 @@ import java.util.concurrent.TimeUnit
  */
 class SyncCollectionsRsyncTest {
     @get:Rule val tmp = TemporaryFolder()
-    private var daemon: Process? = null
+    private val daemon = RsyncDaemon()
 
     @After fun stopDaemon() {
-        daemon?.let { it.destroy(); if (!it.waitFor(5, TimeUnit.SECONDS)) it.destroyForcibly() }
-    }
-
-    private fun rsync(): String? = listOf("/opt/homebrew/bin/rsync", "/usr/local/bin/rsync", "/usr/bin/rsync").firstOrNull { path ->
-        File(path).canExecute() && runCatching {
-            val out = ProcessBuilder(path, "--version").redirectErrorStream(true).start().inputStream.bufferedReader().readText()
-            Regex("""version (\d+)\.(\d+)""").find(out)?.destructured?.let { (a, b) -> a.toInt() > 3 || (a.toInt() == 3 && b.toInt() >= 1) } == true
-        }.getOrDefault(false)
+        daemon.stop()
     }
 
     private class Served(val bin: String, val port: Int, val collections: File)
 
     /** The daemon, serving `[collections]` unless [withCollections] is false. */
     private fun serve(withCollections: Boolean = true): Served {
-        val bin = rsync()
+        val bin = hostRsync()
         assumeTrue("no rsync >= 3.1 on this machine", bin != null)
         val work = tmp.newFolder("work")
         val collections = tmp.newFolder("served-collections")
-        val port = ServerSocket(0).use { it.localPort }
         val conf = SyncCommands.daemonConf("127.0.0.1", shared = tmp.newFolder("sh").path, saves = tmp.newFolder("sv").path,
             pidFile = File(work, "rsyncd.pid").path, logFile = File(work, "sync.log").path,
             collections = collections.path.takeIf { withCollections })
-            .replace("port = ${SyncWire.RSYNC_PORT}\n", "port = $port\n")
-        val confFile = File(work, "rsyncd.conf").apply { writeText(conf) }
-        daemon = ProcessBuilder(bin!!, "--daemon", "--no-detach", "--config=${confFile.path}")
-            .redirectErrorStream(true).redirectOutput(File(work, "daemon.out")).start()
-        val deadline = System.currentTimeMillis() + 5_000
-        while (runCatching { Socket("127.0.0.1", port).close() }.isFailure) {
-            check(System.currentTimeMillis() < deadline) { "daemon did not listen: ${File(work, "daemon.out").readText()}" }
-            Thread.sleep(50)
-        }
+        val port = daemon.start(bin!!, work, conf)
         return Served(bin, port, collections)
     }
 
     /** Runs the args with the daemon's port swapped in. */
     private fun runner(port: Int): suspend (List<String>, (String) -> Unit) -> Int = { args, onLine ->
-        val p = ProcessBuilder(args.map { it.replace("127.0.0.1:${SyncWire.RSYNC_PORT}/", "127.0.0.1:$port/") }).redirectErrorStream(true).start()
+        val p = ProcessBuilder(swapPort(args, port)).redirectErrorStream(true).start()
         p.inputStream.bufferedReader().forEachLine(onLine)
         p.waitFor()
     }

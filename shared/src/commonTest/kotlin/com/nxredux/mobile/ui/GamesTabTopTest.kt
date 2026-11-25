@@ -23,7 +23,7 @@ class GamesTabTopTest {
     @Test fun theTitleIsTheHighlightedGamesConsole() {
         val entries = listOf(game(gba, "Advance Wars"), game(android, "Alto"), game(nameless, "Alex Kidd"))
         assertEquals("Game Boy Advance", gamesTabTitle(entries, 0))
-        assertEquals(listTitle(ListSource.Console(gba)), gamesTabTitle(entries, 0))
+        assertEquals(ListSource.Console(gba).title, gamesTabTitle(entries, 0))
         assertEquals("Android", gamesTabTitle(entries, 1))
         assertEquals("GPGX", gamesTabTitle(entries, 2))   // no display name: the tag, as the List's console line names it
         assertEquals("Games", gamesTabTitle(emptyList(), 0))

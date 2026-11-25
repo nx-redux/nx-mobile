@@ -17,7 +17,7 @@ class MenuSkinShownTest {
         }
     }
 
-    // No controller: exactly the rule before it (a skin, the pad shown, and flat or a two-screen layout when half-folded).
+    // No controller: a skin, the pad shown, and flat or a two-screen layout when half-folded.
     @Test fun without_a_controller_the_rule_is_unchanged() {
         for (skin in bools) for (pad in bools) for (canTwo in bools) for (tabletop in bools) {
             assertEquals(
@@ -28,13 +28,10 @@ class MenuSkinShownTest {
         }
     }
 
-    // The same pad flips with the controller, both ways.
-    @Test fun connecting_and_disconnecting_switches_it_both_ways() {
-        assertEquals(true, menuSkinShown(skinPicked = true, showPad = true, controllerConnected = false, canTwo = false, tabletop = false))
-        assertEquals(false, menuSkinShown(skinPicked = true, showPad = true, controllerConnected = true, canTwo = false, tabletop = false))
-        assertEquals(true, menuSkinShown(skinPicked = true, showPad = true, controllerConnected = false, canTwo = false, tabletop = false))
-        // the Fold half-open on its two-screen layout too
-        assertEquals(true, menuSkinShown(skinPicked = true, showPad = true, controllerConnected = false, canTwo = true, tabletop = true))
-        assertEquals(false, menuSkinShown(skinPicked = true, showPad = true, controllerConnected = true, canTwo = true, tabletop = true))
+    // A phone upright half-folded keeps the skin (its screen above the fold); anything else half-folded needs two screens.
+    @Test fun a_phone_upright_half_folded_shows_the_skin() {
+        assertEquals(true, menuSkinShown(skinPicked = true, showPad = true, controllerConnected = false, canTwo = false, tabletop = true, phoneUpright = true))
+        assertEquals(false, menuSkinShown(skinPicked = true, showPad = true, controllerConnected = false, canTwo = false, tabletop = true, phoneUpright = false))
+        assertEquals(false, menuSkinShown(skinPicked = true, showPad = true, controllerConnected = true, canTwo = false, tabletop = true, phoneUpright = true))
     }
 }

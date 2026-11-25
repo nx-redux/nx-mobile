@@ -1,9 +1,11 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.tryOrAny
 import com.nxredux.mobile.library.ArcadeCompanions
 import com.nxredux.mobile.library.CompanionLookup
 import com.nxredux.mobile.library.DiscSheet
 import com.nxredux.mobile.library.GameEntry
+import com.nxredux.mobile.library.MsuSets
 import com.nxredux.mobile.library.Names
 import com.nxredux.mobile.library.Sidecars
 import com.nxredux.mobile.library.SystemFolder
@@ -19,7 +21,6 @@ import com.nxredux.mobile.settings.SaveTransferRules
 import com.nxredux.mobile.storage.Recent
 import com.nxredux.mobile.storage.ResumeInfo
 import com.nxredux.mobile.ui.nx.ListSelection
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -83,7 +84,7 @@ internal class LaunchController(
     /** The context menu's Play from start (a game with a save state, which A resumes): [entry] from the start. */
     fun playFromStart(entry: Listed) {
         host.rememberMenuSelection()   // Home's game, as A on it (a game list has none to remember)
-        launch(entry, resumeSlot = null)
+        launch(entry, resumeSlot = null, fresh = true)
     }
 
     /**
@@ -92,10 +93,17 @@ internal class LaunchController(
      */
     fun resumeFromSave(entry: Listed, orPlay: Boolean = false): Job? {
         val e = entry.takeIf { !it.system.unassigned && !it.system.android } ?: return null
+        if (orPlay && !deps.settings.aResumes) return launch(e, resumeSlot = null, fresh = true)   // A starts fresh; the menu's Resume continues
         return scope.launch {   // ends with the launch's own job
             val info = deps.userData.resumeInfo(e.system.tag, e.game.fileName)
-            (if (info.canResume) launch(e, info.slot) else if (orPlay) launch(e, resumeSlot = null) else null)?.join()
+            (if (info.canResume) launch(e, info.slot, continuing = true) else if (orPlay) launch(e, resumeSlot = null) else null)?.join()
         }
+    }
+
+    /** The context menu's Resume (A starts games fresh): [entry] from its save, read now; without one nothing starts. */
+    fun resumeGame(entry: Listed): Job? {
+        host.rememberMenuSelection()   // Home's game, as A on it
+        return resumeFromSave(entry)
     }
 
     /**
@@ -108,7 +116,7 @@ internal class LaunchController(
     }
 
     /** Starts [entry] (see the steps inside); the start's job, or null when none began (an app, no core, one in flight). */
-    fun launch(entry: Listed, resumeSlot: Int?, coreOverride: CoreDescriptor? = null, netplay: NetplaySession? = null, fromSwitcher: Boolean = false): Job? {
+    fun launch(entry: Listed, resumeSlot: Int?, coreOverride: CoreDescriptor? = null, netplay: NetplaySession? = null, fromSwitcher: Boolean = false, fresh: Boolean = false, continuing: Boolean = false): Job? {
         if (host.kidsLocked()) return null   // Kids Mode: no game (nor Android game) while Locked
         val listed = entry.system
         val game = entry.game
@@ -130,10 +138,13 @@ internal class LaunchController(
             val core = coreOverride ?: sys.core ?: return@launch
             // A .cue/.m3u/.ccd/.toc loads the files it names from the same folder; all must be there before the core starts.
             val lookup = companionsOrNull { DiscSheet.companions(deps.source, game.folder, game.fileName) }
-            val companions = when (lookup) {
-                null -> { launchError(gone); return@launch }
-                is CompanionLookup.Missing -> { launchError("Missing ${lookup.name} next to ${lookup.sheet}"); return@launch }
-                is CompanionLookup.Found -> lookup.companions
+            // An MSU-1 or MSU-MD ROM's music (and an MSU-MD cue's tracks) lies beside it, under names the core derives from the ROM's.
+            val msu = companionsOrNull { MsuSets.companions(deps.source, game.folder, game.fileName, game.msuSet) }
+            val companions = when {
+                lookup == null || msu == null -> { launchError(gone); return@launch }
+                lookup is CompanionLookup.Missing -> { launchError("Missing ${lookup.name} next to ${lookup.sheet}"); return@launch }
+                msu is CompanionLookup.Missing -> { launchError("Missing ${msu.name} next to ${msu.sheet}"); return@launch }
+                else -> (lookup as CompanionLookup.Found).companions + (msu as CompanionLookup.Found).companions
             }
             // An fbneo set also loads its parent and BIOS sets: the ones beside it go along, a BIOS not beside it is checked in the system dir.
             // The set table is fbneo's: flycast's NAOMI/Atomiswave zips, loaded as is too, take none of it.
@@ -169,7 +180,7 @@ internal class LaunchController(
             host.dropPushedTab()
             switcher.onRunnerCalled(fromSwitcher)   // a refused launch never gets here (the runner keeps the return on disk)
             deps.runner.launch(GameSession(sys.tag, game.shownName, core, game.ref, game.folder, game.fileName, resumeSlot, all, systemSets = systemSets, gamePath = game.path,
-                artPath = panelArt(deps.settings.backdropArt, game), netplay = netplay, fromSwitcher = fromSwitcher), recent)
+                artPath = panelArt(deps.settings.backdropArt, game), netplay = netplay, fromSwitcher = fromSwitcher, fresh = fresh, continuing = continuing), recent)
         }
         launchJob = job
         job.invokeOnCompletion { if (launchJob === job) launchJob = null }
@@ -177,8 +188,7 @@ internal class LaunchController(
     }
 
     /** [load]'s companion lookup, or null when it fails: any failure, an Error too, is a game not found. */
-    private inline fun <T : Any> companionsOrNull(load: () -> T): T? =
-        try { load() } catch (e: CancellationException) { throw e } catch (e: Throwable) { null }
+    private inline fun <T : Any> companionsOrNull(load: () -> T): T? = tryOrAny({ null }, load)
 
     /** [launch]'s Problem, shown now. */
     private fun launchError(text: String) { error.value = text }
@@ -194,47 +204,30 @@ internal class LaunchController(
         val sys = entry.system
         val game = entry.game
         if (sys.tag != ClassicNes.GPSP_TAG) return null
-        val picked = try {
+        val picked = tryOrAny({ return null }) {
             sidecars.read(game.sourceId, game.folder, game.relativeDir)[game.fileName]
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Throwable) {
-            return null
         }?.takeIf { CoreRegistry.consoleTag(it) == CoreRegistry.consoleTag(sys.tag) }   // another console's tag is ignored, as by the scan
         // Only a ROM mGBA's core takes (a .gba): a .bin would list under GBA again on the next scan, and mGBA's unpack would refuse it.
         val mgba = CoreRegistry.forTag(ClassicNes.MGBA_TAG) ?: return null
         val tag = ClassicNes.launchTag(sys.tag, picked) {
-            try {
+            tryOrAny({ null }) {
                 if (Names.isArchive(game.fileName)) deps.archiveHead(game.ref, game.fileName, mgba.extensions, ClassicNes.HEAD_BYTES)
                 else if (Names.extensionOf(game.fileName) in mgba.extensions) deps.source.readHead(game.ref, ClassicNes.HEAD_BYTES)
                 else null
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Throwable) {
-                null
             }
         }
         if (tag == sys.tag) return null
         // A failed write still runs mGBA now; the next launch reads the header again.
-        val recorded = try {
+        val recorded = tryOrAny({ false }) {
             sidecars.set(game.sourceId, game.folder, game.relativeDir, game.fileName, tag)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Throwable) {
-            false
         }
         if (recorded && host.moveInIndex(game, sys, tag)) host.refreshOpenList(select = game.path)
         return sys.copy(tag = tag, core = mgba)
     }
 
     /** The file is still where the index says: a non-directory child of its folder. Any failure (a revoked tree) counts as gone. */
-    private suspend fun stillThere(game: GameEntry): Boolean = try {
-        deps.source.child(game.folder, game.fileName)?.isDirectory == false
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Throwable) {
-        false
-    }
+    private suspend fun stillThere(game: GameEntry): Boolean =
+        tryOrAny({ false }) { deps.source.child(game.folder, game.fileName)?.isDirectory == false }
 
     /** Re-reads the highlighted game's resume marker: a list's, Home's Continue card's, pinned or shelf game's (after returning from a game). */
     fun refreshResume() {
@@ -253,7 +246,8 @@ internal class LaunchController(
             else -> null
         }?.takeIf { !it.system.unassigned && !it.system.android } ?: run { _resumeInfo.value = ResumeInfo.NONE; return }
         resumeJob = scope.launch {
-            val info = deps.userData.resumeInfo(e.system.tag, e.game.fileName)
+            val read = deps.userData.resumeInfo(e.system.tag, e.game.fileName)
+            val info = if (deps.settings.aResumes) read else read.copy(slot = null)   // A starts fresh: its hint says so; the picture stays
             if (screen.value === s && selection.value.index == index) _resumeInfo.value = info   // drop stale reads
         }
     }

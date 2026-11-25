@@ -71,7 +71,7 @@ class LibraryIndexCodecTest {
     }
 
     @Test fun another_version_decodes_to_null() {
-        assertEquals(12, LibraryIndex.VERSION)
+        assertEquals(13, LibraryIndex.VERSION)
         assertNull(LibraryIndexCodec.decode(LibraryIndexCodec.encode(index.copy(version = LibraryIndex.VERSION + 1))))
         assertNull(LibraryIndexCodec.decode(LibraryIndexCodec.encode(index.copy(version = 0))))
         assertNull(LibraryIndexCodec.decode(LibraryIndexCodec.encode(index.copy(version = 3))))   // before archives listed
@@ -81,6 +81,7 @@ class LibraryIndexCodecTest {
         assertNull(LibraryIndexCodec.decode(LibraryIndexCodec.encode(index.copy(version = 8))))   // before copies in two folders kept clean names
         assertNull(LibraryIndexCodec.decode(LibraryIndexCodec.encode(index.copy(version = 9))))   // before wheel, mix and boxart2d/ (an extra's own art unknown)
         assertNull(LibraryIndexCodec.decode(LibraryIndexCodec.encode(index.copy(version = 10))))   // before hidden copies kept their paths
+        assertNull(LibraryIndexCodec.decode(LibraryIndexCodec.encode(index.copy(version = 12))))   // before MSU packs: folders unlisted, an MSU-MD set as its cue
     }
 
     @Test fun a_version_2_text_does_not_decode() {

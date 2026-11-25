@@ -48,20 +48,22 @@
 #include "errorcodes.h"
 #include "environment.h"
 #include "renderers/es3/framebufferrenderer.h"
-#include "renderers/es2/imagerendereres2.h"
 #include "renderers/es3/imagerendereres3.h"
 #include "utils/jnistring.h"
 #include "vulkanbridge.h"
 #include "achievements/achievements.h"
 #include "achievements/achievementshash.h"
 #include "microphone/microphoneinterface.h"
+// Outside the namespace block below: these headers open namespace libretrodroid themselves. Included inside it, the
+// exception would be libretrodroid::libretrodroid::LibretroDroidError, a type nothing throws, and every
+// catch (LibretroDroidError&) here would miss.
+#include "utils/utils.h"
+#include "utils/libretrodroidexception.h"
 
 namespace libretrodroid {
 
 extern "C" {
-#include "utils/utils.h"
 #include "../../libretro-common/include/libretro.h"
-#include "utils/libretrodroidexception.h"
 }
 
 namespace {
@@ -210,6 +212,19 @@ std::vector<File> virtualFilesFromJava(JNIEnv* env, jobject list) {
     return files;
 }
 
+// body() for a JNI call: a std::exception is logged under name and raised in Java as a RetroException with code, the
+// call then returning its type's zero (JNI_FALSE, null).
+template <typename Body>
+auto guarded(JNIEnv* env, const char* name, int code, Body&& body) -> decltype(body()) {
+    try {
+        return body();
+    } catch (std::exception &exception) {
+        LOGE("Error in %s: %s", name, exception.what());
+        JavaUtils::throwRetroException(env, code);
+        return decltype(body())();
+    }
+}
+
 // A Java exception from a GLRetroView callback is logged and dropped: the next JNI call must not see it pending.
 void dropJavaException(JNIEnv* env) {
     if (env->ExceptionCheck()) {
@@ -274,18 +289,6 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_updateVari
 
 namespace {
 
-jobjectArray toJavaStringArray(JNIEnv* env, const std::vector<std::string>& values) {
-    jclass stringClass = env->FindClass("java/lang/String");
-    jobjectArray result = env->NewObjectArray(values.size(), stringClass, nullptr);
-    for (size_t i = 0; i < values.size(); i++) {
-        jstring value = newSafeJString(env, values[i]);   // a core's option values and labels: any bytes
-        env->SetObjectArrayElement(result, i, value);
-        env->DeleteLocalRef(value);
-    }
-    env->DeleteLocalRef(stringClass);
-    return result;
-}
-
 void setStringField(JNIEnv* env, jobject obj, jfieldID field, const std::string& value) {
     jstring jValue = newSafeJString(env, value);   // a core's text: any bytes (Latin-1 labels)
     env->SetObjectField(obj, field, jValue);
@@ -336,11 +339,11 @@ JNIEXPORT jobjectArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_ge
             setStringField(env, jVariable, jCategoryInfoField, variable.categoryInfo);
             setStringField(env, jVariable, jDefaultValueField, variable.defaultValue);
 
-            jobjectArray jValues = toJavaStringArray(env, variable.values);
+            jobjectArray jValues = newSafeJStringArray(env, variable.values);
             env->SetObjectField(jVariable, jValuesField, jValues);
             env->DeleteLocalRef(jValues);
 
-            jobjectArray jValueLabels = toJavaStringArray(env, variable.valueLabels);
+            jobjectArray jValueLabels = newSafeJStringArray(env, variable.valueLabels);
             env->SetObjectField(jVariable, jValueLabelsField, jValueLabels);
             env->DeleteLocalRef(jValueLabels);
         }
@@ -350,38 +353,6 @@ JNIEXPORT jobjectArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_ge
         env->DeleteLocalRef(jVariable);
     }
     env->DeleteLocalRef(variableClass);
-    return result;
-}
-
-JNIEXPORT jobjectArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_getControllers(
-    JNIEnv* env,
-    jclass obj
-) {
-    jclass arrayClass = env->FindClass("[Lcom/swordfish/libretrodroid/Controller;");
-    jclass controllerClass = env->FindClass("com/swordfish/libretrodroid/Controller");
-    jmethodID controllerConstructor = env->GetMethodID(controllerClass, "<init>", "()V");
-    jfieldID jIdField = env->GetFieldID(controllerClass, "id", "I");
-    jfieldID jDescriptionField = env->GetFieldID(controllerClass, "description", "Ljava/lang/String;");
-
-    auto controllers = Environment::getInstance().getControllers();
-    jobjectArray result = env->NewObjectArray(controllers.size(), arrayClass, nullptr);
-
-    for (int i = 0; i < controllers.size(); i++) {
-        jobjectArray controllerArray = env->NewObjectArray(controllers[i].size(), controllerClass, nullptr);
-
-        for (int j = 0; j < controllers[i].size(); j++) {
-            jobject jController = env->NewObject(controllerClass, controllerConstructor);
-            env->SetIntField(jController, jIdField, (int) controllers[i][j].id);
-            setStringField(env, jController, jDescriptionField, controllers[i][j].description);
-            env->SetObjectArrayElement(controllerArray, j, jController);
-            env->DeleteLocalRef(jController);
-        }
-
-        env->SetObjectArrayElement(result, i, controllerArray);
-        env->DeleteLocalRef(controllerArray);
-    }
-    env->DeleteLocalRef(controllerClass);
-    env->DeleteLocalRef(arrayClass);
     return result;
 }
 
@@ -514,17 +485,6 @@ JNIEXPORT jobjectArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_ac
     return out;
 }
 
-JNIEXPORT jintArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_achievementsSummary(
-    JNIEnv* env,
-    jclass obj
-) {
-    auto s = LibretroDroid::getInstance().achievementsSummary();
-    jint values[3] = { (jint) s.unlocked, (jint) s.total, (jint) s.points };
-    jintArray out = env->NewIntArray(3);
-    env->SetIntArrayRegion(out, 0, 3, values);
-    return out;
-}
-
 JNIEXPORT jobjectArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_achievementsBuildAwardRequest(
     JNIEnv* env,
     jclass obj,
@@ -605,31 +565,22 @@ JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_unseri
     jclass obj,
     jbyteArray state
 ) {
-    try {
+    return guarded(env, "unserializeState", ERROR_SERIALIZATION, [&] {
         return withBytes(env, state, [](int8_t* data, size_t size) {
             return LibretroDroid::getInstance().unserializeState(data, size);
         });
-    } catch (std::exception &exception) {
-        LOGE("Error in unserializeState: %s", exception.what());
-        JavaUtils::throwRetroException(env, ERROR_SERIALIZATION);
-        return JNI_FALSE;
-    }
+    });
 }
 
 JNIEXPORT jbyteArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_serializeState(
     JNIEnv* env,
     jclass obj
 ) {
-    try {
+    return guarded(env, "serializeState", ERROR_SERIALIZATION, [&] {
         StateArray state(env);
         bool filled = LibretroDroid::getInstance().serializeState([&](size_t size) { return state.take(size); });
         return state.finish(filled);
-    } catch (std::exception &exception) {
-        LOGE("Error in serializeState: %s", exception.what());
-        JavaUtils::throwRetroException(env, ERROR_SERIALIZATION);
-    }
-
-    return nullptr;
+    });
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setCheat(
@@ -639,13 +590,10 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setCheat(
     jboolean enabled,
     jstring code
 ) {
-    try {
+    guarded(env, "setCheat", ERROR_CHEAT, [&] {
         auto codeString = JniString(env, code);
         LibretroDroid::getInstance().setCheat(index, enabled, codeString.stdString());
-    } catch (std::exception &exception) {
-        LOGE("Error in setCheat: %s", exception.what());
-        JavaUtils::throwRetroException(env, ERROR_CHEAT);
-    }
+    });
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setMemoryCheats(
@@ -655,7 +603,7 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setMemoryC
 ) {
     // 9 ints per patch, in CheatMemPatch order from address (MemoryPatch.packed()).
     constexpr jsize PER_PATCH = 9;
-    try {
+    guarded(env, "setMemoryCheats", ERROR_CHEAT, [&] {
         auto v = javaInts(env, fields);
         auto n = (jsize) v.size();
         std::vector<CheatMemPatch> patches;
@@ -675,22 +623,16 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setMemoryC
             patches.push_back(p);
         }
         LibretroDroid::getInstance().setMemoryCheats(std::move(patches));
-    } catch (std::exception &exception) {
-        LOGE("Error in setMemoryCheats: %s", exception.what());
-        JavaUtils::throwRetroException(env, ERROR_CHEAT);
-    }
+    });
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_resetCheat(
     JNIEnv* env,
     jclass obj
 ) {
-    try {
+    guarded(env, "resetCheat", ERROR_CHEAT, [&] {
         LibretroDroid::getInstance().resetCheat();
-    } catch (std::exception &exception) {
-        LOGE("Error in resetCheat: %s", exception.what());
-        JavaUtils::throwRetroException(env, ERROR_CHEAT);
-    }
+    });
 }
 
 JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_unserializeSRAM(
@@ -698,31 +640,22 @@ JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_unseri
     jclass obj,
     jbyteArray sram
 ) {
-    try {
+    return guarded(env, "unserializeSRAM", ERROR_SERIALIZATION, [&] {
         return withBytes(env, sram, [](int8_t* data, size_t size) {
             return LibretroDroid::getInstance().unserializeSRAM(data, size);
         });
-    } catch (std::exception &exception) {
-        LOGE("Error in unserializeSRAM: %s", exception.what());
-        JavaUtils::throwRetroException(env, ERROR_SERIALIZATION);
-        return JNI_FALSE;
-    }
+    });
 }
 
 JNIEXPORT jbyteArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_serializeSRAM(
     JNIEnv* env,
     jclass obj
 ) {
-    try {
+    return guarded(env, "serializeSRAM", ERROR_SERIALIZATION, [&] {
         return memoryToJava(env, [](const LibretroDroid::MemoryReader& read) {
             return LibretroDroid::getInstance().serializeSRAM(read);
         });
-    } catch (std::exception &exception) {
-        LOGE("Error in serializeSRAM: %s", exception.what());
-        JavaUtils::throwRetroException(env, ERROR_SERIALIZATION);
-    }
-
-    return nullptr;
+    });
 }
 
 JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_unserializeRTC(
@@ -730,43 +663,31 @@ JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_unseri
     jclass obj,
     jbyteArray rtc
 ) {
-    try {
+    return guarded(env, "unserializeRTC", ERROR_SERIALIZATION, [&] {
         return withBytes(env, rtc, [](int8_t* data, size_t size) {
             return LibretroDroid::getInstance().unserializeRTC(data, size);
         });
-    } catch (std::exception &exception) {
-        LOGE("Error in unserializeRTC: %s", exception.what());
-        JavaUtils::throwRetroException(env, ERROR_SERIALIZATION);
-        return JNI_FALSE;
-    }
+    });
 }
 
 JNIEXPORT jbyteArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_serializeRTC(
     JNIEnv* env,
     jclass obj
 ) {
-    try {
+    return guarded(env, "serializeRTC", ERROR_SERIALIZATION, [&] {
         return memoryToJava(env, [](const LibretroDroid::MemoryReader& read) {
             return LibretroDroid::getInstance().serializeRTC(read);
         });
-    } catch (std::exception &exception) {
-        LOGE("Error in serializeRTC: %s", exception.what());
-        JavaUtils::throwRetroException(env, ERROR_SERIALIZATION);
-    }
-
-    return nullptr;
+    });
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_reset(
     JNIEnv* env,
     jclass obj
 ) {
-    try {
+    guarded(env, "clear", ERROR_GENERIC, [&] {
         LibretroDroid::getInstance().reset();
-    } catch (std::exception &exception) {
-        LOGE("Error in clear: %s", exception.what());
-        JavaUtils::throwRetroException(env, ERROR_GENERIC);
-    }
+    });
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_onSurfaceChanged(
@@ -836,18 +757,14 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_onKeyEvent
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_create(
     JNIEnv* env,
     jclass obj,
-    jint GLESVersion,
     jstring soFilePath,
     jstring systemDir,
     jstring savesDir,
     jobjectArray jVariables,
     jobject shaderConfig,
     jfloat refreshRate,
-    jboolean preferLowLatencyAudio,
     jboolean enableVirtualFileSystem,
     jboolean enableMicrophone,
-    jboolean skipDuplicateFrames,
-    jobject immersiveMode,
     jstring language
 ) {
     try {
@@ -864,39 +781,15 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_create(
             env->DeleteLocalRef(jVariable);
         }
 
-        std::optional<ImmersiveMode::Config> parsedConfig = std::nullopt;
-        if (immersiveMode != nullptr) {
-            jclass configClass = env->GetObjectClass(immersiveMode);
-            jfieldID downscaledWidthField = env->GetFieldID(configClass, "downscaledWidth", "I");
-            jfieldID downscaledHeightField = env->GetFieldID(configClass, "downscaledHeight", "I");
-            jfieldID blurMaskSizeField = env->GetFieldID(configClass, "blurMaskSize", "I");
-            jfieldID blurBrightnessField = env->GetFieldID(configClass, "blurBrightness", "F");
-            jfieldID blurSkipUpdateField = env->GetFieldID(configClass, "blurSkipUpdate", "I");
-            jfieldID blendFactorField = env->GetFieldID(configClass, "blendFactor", "F");
-
-            ImmersiveMode::Config config {};
-            config.downscaledWidth = env->GetIntField(immersiveMode, downscaledWidthField);
-            config.downscaledHeight = env->GetIntField(immersiveMode, downscaledHeightField);
-            config.blurMaskSize = env->GetIntField(immersiveMode, blurMaskSizeField);
-            config.blurBrightness = env->GetFloatField(immersiveMode, blurBrightnessField);
-            config.blurSkipUpdate = env->GetIntField(immersiveMode, blurSkipUpdateField);
-            config.blendFactor = env->GetFloatField(immersiveMode, blendFactorField);
-            parsedConfig = config;
-        }
-
         LibretroDroid::getInstance().create(
-            GLESVersion,
             corePath.stdString(),
             systemDirectory.stdString(),
             savesDirectory.stdString(),
             variables,
             JavaUtils::shaderFromJava(env, shaderConfig),
             refreshRate,
-            preferLowLatencyAudio,
             enableVirtualFileSystem,
             enableMicrophone,
-            skipDuplicateFrames,
-            parsedConfig,
             deviceLanguage.stdString()
         );
 
@@ -916,12 +809,9 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_loadGameFr
 ) {
     auto gamePath = JniString(env, gameFilePath);
 
-    try {
+    guarded(env, "loadGameFromPath", ERROR_LOAD_GAME, [&] {
         LibretroDroid::getInstance().loadGameFromPath(gamePath.stdString());
-    } catch (std::exception &exception) {
-        LOGE("Error in loadGameFromPath: %s", exception.what());
-        JavaUtils::throwRetroException(env, ERROR_LOAD_GAME);
-    }
+    });
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_loadGameFromBytes(
@@ -929,7 +819,7 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_loadGameFr
     jclass obj,
     jbyteArray gameFileBytes
 ) {
-    try {
+    guarded(env, "loadGameFromBytes", ERROR_LOAD_GAME, [&] {
         size_t size = env->GetArrayLength(gameFileBytes);
         auto data = std::make_unique<int8_t[]>(size);
         env->GetByteArrayRegion(
@@ -940,10 +830,7 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_loadGameFr
         );
         // Owned by LibretroDroid until retro_unload_game.
         LibretroDroid::getInstance().loadGameFromBytes(std::move(data), size);
-    } catch (std::exception &exception) {
-        LOGE("Error in loadGameFromBytes: %s", exception.what());
-        JavaUtils::throwRetroException(env, ERROR_LOAD_GAME);
-    }
+    });
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_addVirtualFiles(
@@ -951,14 +838,11 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_addVirtual
         jclass obj,
         jobject virtualFileList
 ) {
-    try {
+    guarded(env, "addVirtualFiles", ERROR_LOAD_GAME, [&] {
         auto files = virtualFilesFromJava<VFSFile>(env, virtualFileList);
         if (env->ExceptionCheck()) return;
         LibretroDroid::getInstance().addVirtualFiles(std::move(files));
-    } catch (std::exception &exception) {
-        LOGE("Error in addVirtualFiles: %s", exception.what());
-        JavaUtils::throwRetroException(env, ERROR_LOAD_GAME);
-    }
+    });
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_loadGameFromVirtualFiles(
@@ -967,50 +851,38 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_loadGameFr
         jobject virtualFileList
 ) {
 
-    try {
+    guarded(env, "loadGameFromDescriptors", ERROR_LOAD_GAME, [&] {
         auto files = virtualFilesFromJava<VFSFile>(env, virtualFileList);
         if (env->ExceptionCheck()) return;
         LibretroDroid::getInstance().loadGameFromVirtualFiles(std::move(files));
-    } catch (std::exception &exception) {
-        LOGE("Error in loadGameFromDescriptors: %s", exception.what());
-        JavaUtils::throwRetroException(env, ERROR_LOAD_GAME);
-    }
+    });
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_destroy(
     JNIEnv* env,
     jclass obj
 ) {
-    try {
+    guarded(env, "destroy", ERROR_GENERIC, [&] {
         LibretroDroid::getInstance().destroy();
-    } catch (std::exception &exception) {
-        LOGE("Error in destroy: %s", exception.what());
-        JavaUtils::throwRetroException(env, ERROR_GENERIC);
-    }
+    });
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_resume(
     JNIEnv* env,
     jclass obj
 ) {
-    try {
+    guarded(env, "resume", ERROR_GENERIC, [&] {
         LibretroDroid::getInstance().resume();
-    } catch (std::exception &exception) {
-        LOGE("Error in resume: %s", exception.what());
-        JavaUtils::throwRetroException(env, ERROR_GENERIC);
-    }
+    });
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_pause(
     JNIEnv* env,
     jclass obj
 ) {
-    try {
+    guarded(env, "pause", ERROR_GENERIC, [&] {
         LibretroDroid::getInstance().pause();
-    } catch (std::exception &exception) {
-        LOGE("Error in pause: %s", exception.what());
-        JavaUtils::throwRetroException(env, ERROR_GENERIC);
-    }
+    });
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_step(
@@ -1029,6 +901,12 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_step(
         });
         LibretroDroid::getInstance().step();
         LibretroDroid::getInstance().setFrameDrawnHook(nullptr);
+    } catch (libretrodroid::LibretroDroidError& exception) {
+        // Its own code: a custom Vulkan driver that cannot share frames is ERROR_GL_NOT_COMPATIBLE, a failed start.
+        LibretroDroid::getInstance().setFrameDrawnHook(nullptr);
+        LOGE("Error in step: %s", exception.what());
+        JavaUtils::throwRetroException(env, exception.getErrorCode());
+        return;
     } catch (std::exception &exception) {
         LibretroDroid::getInstance().setFrameDrawnHook(nullptr);
         LOGE("Error in step: %s", exception.what());
@@ -1125,6 +1003,41 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setPreferV
     LibretroDroid::getInstance().setPreferVulkan(enabled);
 }
 
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setVulkanDriver(
+    JNIEnv* env,
+    jclass obj,
+    jstring driverDir,
+    jstring libraryName,
+    jstring hookLibDir,
+    jstring tmpDir,
+    jboolean reader
+) {
+    LibretroDroid::getInstance().setVulkanDriver(JniString(env, driverDir).stdString(),
+                                                 JniString(env, libraryName).stdString(),
+                                                 JniString(env, hookLibDir).stdString(),
+                                                 JniString(env, tmpDir).stdString(),
+                                                 reader);
+}
+
+JNIEXPORT jint JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_probeVulkanDriver(
+    JNIEnv* env,
+    jclass obj,
+    jstring driverDir,
+    jstring libraryName,
+    jstring hookLibDir,
+    jstring tmpDir
+) {
+    try {
+        return (jint) VulkanBridge::probeCustomDriver(JniString(env, driverDir).stdString(),
+                                                      JniString(env, libraryName).stdString(),
+                                                      JniString(env, hookLibDir).stdString(),
+                                                      JniString(env, tmpDir).stdString());
+    } catch (std::exception& exception) {
+        LOGE("Error in probeVulkanDriver: %s", exception.what());
+        return (jint) HandoffMode::None;
+    }
+}
+
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setVulkanSwapchainFrames(
     JNIEnv* env,
     jclass obj,
@@ -1139,6 +1052,13 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setVideoVi
     jboolean enabled
 ) {
     LibretroDroid::getInstance().setVideoViewsEnabled(enabled);
+}
+
+JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_keepsContextOnPause(
+    JNIEnv* env,
+    jclass obj
+) {
+    return debugPropertyOff("debug.nx.keepcontext") ? JNI_FALSE : JNI_TRUE;
 }
 
 JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_videoViewsOffered(
@@ -1208,6 +1128,21 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setPresent
     jlong nanos
 ) {
     LibretroDroid::getInstance().setPresentationDeadline(nanos);
+}
+
+JNIEXPORT jdouble JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_getContentFps(
+    JNIEnv* env,
+    jclass obj
+) {
+    return LibretroDroid::getInstance().getContentFps();
+}
+
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setScreenRefreshRate(
+    JNIEnv* env,
+    jclass obj,
+    jfloat rate
+) {
+    LibretroDroid::getInstance().setScreenRefreshRate(rate);
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setAudioBufferMs(
@@ -1311,12 +1246,9 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setShaderC
     jclass obj,
     jobject shaderConfig
 ) {
-    try {
+    guarded(env, "setShaderConfig", ERROR_GENERIC, [&] {
         LibretroDroid::getInstance().setShaderConfig(JavaUtils::shaderFromJava(env, shaderConfig));
-    } catch (std::exception &exception) {
-        LOGE("Error in setShaderConfig: %s", exception.what());
-        JavaUtils::throwRetroException(env, ERROR_GENERIC);
-    }
+    });
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setViewport(
@@ -1328,14 +1260,6 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setViewpor
     jfloat height
 ) {
     LibretroDroid::getInstance().setViewport(Rect(x, y, width, height));
-}
-
-JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setViewportAlignment(
-        JNIEnv* env,
-        jclass obj,
-        jint viewportAlignment
-) {
-    LibretroDroid::getInstance().setViewportAlignment(viewportAlignment);
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_refreshAspectRatio(
@@ -1362,6 +1286,36 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setScreenO
     LibretroDroid::getInstance().setScreenOffset(x, y);
 }
 
+static jbyteArray frameReadArray(JNIEnv* env, const std::optional<std::vector<uint8_t>>& pixels) {
+    if (!pixels) return nullptr;
+    jbyteArray result = env->NewByteArray((jsize) pixels->size());
+    if (result == nullptr) return nullptr;
+    if (!pixels->empty()) env->SetByteArrayRegion(result, 0, (jsize) pixels->size(), reinterpret_cast<const jbyte*>(pixels->data()));
+    return result;
+}
+
+JNIEXPORT jbyteArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_readFrame(
+    JNIEnv* env,
+    jclass obj,
+    jfloat left,
+    jfloat top,
+    jfloat right,
+    jfloat bottom,
+    jint width,
+    jint height,
+    jboolean afterDraw
+) {
+    if (width <= 0 || height <= 0) return env->NewByteArray(0);
+    return frameReadArray(env, LibretroDroid::getInstance().readFrame(left, top, right, bottom, (unsigned) width, (unsigned) height, afterDraw));
+}
+
+JNIEXPORT jbyteArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_takeFrameRead(
+    JNIEnv* env,
+    jclass obj
+) {
+    return frameReadArray(env, LibretroDroid::getInstance().takeFrameRead());
+}
+
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setPictureHeld(
     JNIEnv* env,
     jclass obj,
@@ -1379,6 +1333,15 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setComposi
 ) {
     auto data = javaFloats(env, packed);
     LibretroDroid::getInstance().setComposition(width, height, ScreenRegion::unpack(data.data(), data.size()));
+}
+
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setShaderSourceScale(
+    JNIEnv* env,
+    jclass obj,
+    jint scale,
+    jint frameHeight
+) {
+    LibretroDroid::getInstance().setShaderSourceScale(scale, frameHeight);
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setScreenRegions(
@@ -1433,6 +1396,77 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_renderSeco
     LibretroDroid::getInstance().renderSecondary((unsigned) width, (unsigned) height);
 }
 
+// The LUTs and parameters of a chain of either format, into chain. lutMipmap may be null (none mipmapped). False (logged)
+// when the arrays disagree.
+static bool readChainLutsAndParams(
+    JNIEnv* env,
+    PresetChain& chain,
+    jobjectArray lutIds,
+    jintArray lutWidth,
+    jintArray lutHeight,
+    jobjectArray lutRgba,
+    jbooleanArray lutLinear,
+    jintArray lutWrap,
+    jbooleanArray lutMipmap,
+    jobjectArray paramIds,
+    jfloatArray paramValues
+) {
+    jsize lutCount = javaArrayLength(env, lutIds);
+    for (jarray array : std::initializer_list<jarray> { lutWidth, lutHeight, lutRgba, lutLinear, lutWrap }) {
+        if (javaArrayLength(env, array) != lutCount) {
+            LOGE("setShaderChain: lut arrays differ in length");
+            return false;
+        }
+    }
+    if (javaArrayLength(env, paramValues) != javaArrayLength(env, paramIds)) {
+        LOGE("setShaderChain: param arrays differ in length");
+        return false;
+    }
+    if (lutMipmap != nullptr && javaArrayLength(env, lutMipmap) != lutCount) {
+        LOGE("setShaderChain: lut arrays differ in length");
+        return false;
+    }
+
+    auto lutIdValues = javaStrings(env, lutIds);
+    auto lutWidthValues = javaInts(env, lutWidth);
+    auto lutHeightValues = javaInts(env, lutHeight);
+    auto lutLinearValues = javaBooleans(env, lutLinear);
+    auto lutWrapValues = javaInts(env, lutWrap);
+    std::vector<jboolean> lutMipmapValues;
+    if (lutMipmap != nullptr) lutMipmapValues = javaBooleans(env, lutMipmap);
+
+    for (jsize i = 0; i < lutCount; i++) {
+        auto rgba = (jbyteArray) env->GetObjectArrayElement(lutRgba, i);
+        jsize rgbaLength = javaArrayLength(env, rgba);
+        int width = lutWidthValues[i];
+        int height = lutHeightValues[i];
+        if (width <= 0 || height <= 0 || (int64_t) rgbaLength != (int64_t) width * height * 4) {
+            LOGE("setShaderChain: lut %s has %d bytes for %dx%d", lutIdValues[i].c_str(), rgbaLength, width, height);
+            if (rgba != nullptr) env->DeleteLocalRef(rgba);
+            return false;
+        }
+
+        PresetLut lut;
+        lut.id = lutIdValues[i];
+        lut.width = (unsigned) width;
+        lut.height = (unsigned) height;
+        lut.rgba.resize(rgbaLength);
+        env->GetByteArrayRegion(rgba, 0, rgbaLength, reinterpret_cast<jbyte*>(lut.rgba.data()));
+        env->DeleteLocalRef(rgba);
+        lut.linear = lutLinearValues[i] == JNI_TRUE;
+        lut.wrap = lutWrapValues[i];
+        lut.mipmap = lutMipmap != nullptr && lutMipmapValues[i] == JNI_TRUE;
+        chain.luts.push_back(std::move(lut));
+    }
+
+    auto paramIdValues = javaStrings(env, paramIds);
+    auto paramFloatValues = javaFloats(env, paramValues);
+    for (size_t i = 0; i < paramIdValues.size(); i++) {
+        chain.params[paramIdValues[i]] = paramFloatValues[i];
+    }
+    return true;
+}
+
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setShaderChain(
     JNIEnv* env,
     jclass obj,
@@ -1454,7 +1488,7 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setShaderC
     jobjectArray paramIds,
     jfloatArray paramValues
 ) {
-    try {
+    guarded(env, "setShaderChain", ERROR_GENERIC, [&] {
         jsize passCount = javaArrayLength(env, sources);
         for (jarray array : std::initializer_list<jarray> {
             filterLinear, wrap, scaleTypeX, scaleTypeY, scaleX, scaleY, frameCountMod, alias
@@ -1464,18 +1498,6 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setShaderC
                 return;
             }
         }
-        jsize lutCount = javaArrayLength(env, lutIds);
-        for (jarray array : std::initializer_list<jarray> { lutWidth, lutHeight, lutRgba, lutLinear, lutWrap }) {
-            if (javaArrayLength(env, array) != lutCount) {
-                LOGE("setShaderChain: lut arrays differ in length");
-                return;
-            }
-        }
-        if (javaArrayLength(env, paramValues) != javaArrayLength(env, paramIds)) {
-            LOGE("setShaderChain: param arrays differ in length");
-            return;
-        }
-
         auto sourceValues = javaStrings(env, sources);
         auto filterValues = javaInts(env, filterLinear);
         auto wrapValues = javaInts(env, wrap);
@@ -1501,46 +1523,128 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setShaderC
             chain.passes.push_back(std::move(pass));
         }
 
-        auto lutIdValues = javaStrings(env, lutIds);
-        auto lutWidthValues = javaInts(env, lutWidth);
-        auto lutHeightValues = javaInts(env, lutHeight);
-        auto lutLinearValues = javaBooleans(env, lutLinear);
-        auto lutWrapValues = javaInts(env, lutWrap);
-
-        for (jsize i = 0; i < lutCount; i++) {
-            auto rgba = (jbyteArray) env->GetObjectArrayElement(lutRgba, i);
-            jsize rgbaLength = javaArrayLength(env, rgba);
-            int width = lutWidthValues[i];
-            int height = lutHeightValues[i];
-            if (width <= 0 || height <= 0 || (int64_t) rgbaLength != (int64_t) width * height * 4) {
-                LOGE("setShaderChain: lut %s has %d bytes for %dx%d", lutIdValues[i].c_str(), rgbaLength, width, height);
-                if (rgba != nullptr) env->DeleteLocalRef(rgba);
-                return;
-            }
-
-            PresetLut lut;
-            lut.id = lutIdValues[i];
-            lut.width = (unsigned) width;
-            lut.height = (unsigned) height;
-            lut.rgba.resize(rgbaLength);
-            env->GetByteArrayRegion(rgba, 0, rgbaLength, reinterpret_cast<jbyte*>(lut.rgba.data()));
-            env->DeleteLocalRef(rgba);
-            lut.linear = lutLinearValues[i] == JNI_TRUE;
-            lut.wrap = lutWrapValues[i];
-            chain.luts.push_back(std::move(lut));
-        }
-
-        auto paramIdValues = javaStrings(env, paramIds);
-        auto paramFloatValues = javaFloats(env, paramValues);
-        for (size_t i = 0; i < paramIdValues.size(); i++) {
-            chain.params[paramIdValues[i]] = paramFloatValues[i];
-        }
+        if (!readChainLutsAndParams(env, chain, lutIds, lutWidth, lutHeight, lutRgba, lutLinear, lutWrap, nullptr, paramIds, paramValues)) return;
 
         LibretroDroid::getInstance().setPresetChain(std::move(chain));
+    });
+}
+
+// A slang chain: each pass arrives translated (translateSlang), as the bytes that call returned.
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setSlangChain(
+    JNIEnv* env,
+    jclass obj,
+    jobjectArray programs,
+    jintArray filterLinear,
+    jintArray wrap,
+    jintArray scaleTypeX,
+    jintArray scaleTypeY,
+    jfloatArray scaleX,
+    jfloatArray scaleY,
+    jintArray frameCountMod,
+    jobjectArray alias,
+    jobjectArray format,
+    jbooleanArray mipmapInput,
+    jobjectArray lutIds,
+    jintArray lutWidth,
+    jintArray lutHeight,
+    jobjectArray lutRgba,
+    jbooleanArray lutLinear,
+    jintArray lutWrap,
+    jbooleanArray lutMipmap,
+    jobjectArray paramIds,
+    jfloatArray paramValues
+) {
+    guarded(env, "setSlangChain", ERROR_GENERIC, [&] {
+        jsize passCount = javaArrayLength(env, programs);
+        for (jarray array : std::initializer_list<jarray> {
+            filterLinear, wrap, scaleTypeX, scaleTypeY, scaleX, scaleY, frameCountMod, alias, format, mipmapInput
+        }) {
+            if (javaArrayLength(env, array) != passCount) {
+                LOGE("setSlangChain: pass arrays differ in length");
+                return;
+            }
+        }
+        if (passCount == 0) {
+            LOGE("setSlangChain: no passes");
+            return;
+        }
+
+        auto filterValues = javaInts(env, filterLinear);
+        auto wrapValues = javaInts(env, wrap);
+        auto scaleTypeXValues = javaInts(env, scaleTypeX);
+        auto scaleTypeYValues = javaInts(env, scaleTypeY);
+        auto scaleXValues = javaFloats(env, scaleX);
+        auto scaleYValues = javaFloats(env, scaleY);
+        auto frameCountModValues = javaInts(env, frameCountMod);
+        auto aliasValues = javaStrings(env, alias);
+        auto formatValues = javaStrings(env, format);
+        auto mipmapValues = javaBooleans(env, mipmapInput);
+
+        PresetChain chain;
+        for (jsize i = 0; i < passCount; i++) {
+            auto bytes = (jbyteArray) env->GetObjectArrayElement(programs, i);
+            jsize length = javaArrayLength(env, bytes);
+            std::string encoded((size_t) length, '\0');
+            if (length > 0) env->GetByteArrayRegion(bytes, 0, length, reinterpret_cast<jbyte*>(encoded.data()));
+            if (bytes != nullptr) env->DeleteLocalRef(bytes);
+
+            SlangPass pass;
+            if (!decodeSlangProgram(encoded, pass.program)) {
+                LOGE("setSlangChain: pass %d is not a translated program", (int) i);
+                return;
+            }
+            pass.filterLinear = filterValues[i] < 0 ? std::nullopt : std::optional<bool>(filterValues[i] != 0);
+            pass.wrap = wrapValues[i];
+            pass.scaleTypeX = scaleTypeXValues[i];
+            pass.scaleTypeY = scaleTypeYValues[i];
+            pass.scaleX = scaleXValues[i];
+            pass.scaleY = scaleYValues[i];
+            pass.frameCountMod = (unsigned) std::max(0, (int) frameCountModValues[i]);
+            pass.alias = aliasValues[i];
+            pass.format = formatValues[i];
+            pass.mipmapInput = mipmapValues[i] == JNI_TRUE;
+            chain.slangPasses.push_back(std::move(pass));
+        }
+
+        if (!readChainLutsAndParams(env, chain, lutIds, lutWidth, lutHeight, lutRgba, lutLinear, lutWrap, lutMipmap, paramIds, paramValues)) return;
+
+        LibretroDroid::getInstance().setPresetChain(std::move(chain));
+    });
+}
+
+// One slang pass (two "#version 450" stages) to GLSL ES esVersion (300, 310, 320), as bytes for setSlangChain and for a
+// disk cache. No GL: any thread. Null on failure, with the reason in error[0].
+JNIEXPORT jbyteArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_translateSlang(
+    JNIEnv* env,
+    jclass obj,
+    jstring vertex,
+    jstring fragment,
+    jint esVersion,
+    jobjectArray error
+) {
+    if (vertex == nullptr || fragment == nullptr) return nullptr;
+    std::string reason;
+    try {
+        JniString vertexString(env, vertex);
+        JniString fragmentString(env, fragment);
+        SlangProgram program;
+        if (translateSlang(vertexString.stdString(), fragmentString.stdString(), (unsigned) esVersion, program, reason)) {
+            std::string encoded = encodeSlangProgram(program);
+            jbyteArray result = env->NewByteArray((jsize) encoded.size());
+            if (result != nullptr) {
+                env->SetByteArrayRegion(result, 0, (jsize) encoded.size(), reinterpret_cast<const jbyte*>(encoded.data()));
+            }
+            return result;
+        }
     } catch (std::exception &exception) {
-        LOGE("Error in setShaderChain: %s", exception.what());
-        JavaUtils::throwRetroException(env, ERROR_GENERIC);
+        reason = exception.what();
     }
+    if (error != nullptr && javaArrayLength(env, error) > 0) {
+        jstring text = newSafeJString(env, reason);   // may quote the shader's own lines
+        env->SetObjectArrayElement(error, 0, text);
+        if (text != nullptr) env->DeleteLocalRef(text);
+    }
+    return nullptr;
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_clearShaderChain(
@@ -1567,6 +1671,18 @@ JNIEXPORT jstring JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_takeSha
 ) {
     auto error = LibretroDroid::getInstance().takePresetError();
     return error ? newSafeJString(env, *error) : nullptr;   // may quote a preset's file names and lines
+}
+
+JNIEXPORT jobjectArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_getCoreIdentity(
+    JNIEnv* env,
+    jclass obj
+) {
+    auto identity = LibretroDroid::getInstance().getCoreIdentity();
+    jobjectArray result = env->NewObjectArray(2, env->FindClass("java/lang/String"), nullptr);
+    if (result == nullptr) return nullptr;
+    env->SetObjectArrayElement(result, 0, newSafeJString(env, identity.first));   // a core's text: never straight to NewStringUTF
+    env->SetObjectArrayElement(result, 1, newSafeJString(env, identity.second));
+    return result;
 }
 
 JNIEXPORT jfloatArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_getGameGeometry(

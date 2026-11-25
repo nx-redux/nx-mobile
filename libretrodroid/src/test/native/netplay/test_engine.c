@@ -52,26 +52,17 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "test_util.h"
+
 #ifndef MSG_NOSIGNAL
 #define MSG_NOSIGNAL 0
 #endif
 
-/* ---------------------------------------------------------------- fake clock / real time */
+/* ---------------------------------------------------------------- fake clock */
 
 static _Atomic uint64_t fake_now = 1000000;
 static uint64_t fake_clock(void) { return atomic_load(&fake_now); }
 static void fake_set(uint64_t v) { atomic_store(&fake_now, v); }
-
-static uint64_t real_ms(void) {
-	struct timespec ts;
-	clock_gettime(CLOCK_MONOTONIC, &ts);
-	return (uint64_t)ts.tv_sec * 1000u + (uint64_t)ts.tv_nsec / 1000000u;
-}
-
-static void nap_ms(int ms) {
-	struct timespec ts = {ms / 1000, (long)(ms % 1000) * 1000000L};
-	nanosleep(&ts, NULL);
-}
 
 /* ---------------------------------------------------------------- fake core */
 
@@ -259,14 +250,6 @@ static void report(const char* name, int ok, const char* why) {
 	}
 	fflush(stdout);
 }
-
-#define CHECK(cond)                                                                    \
-	do {                                                                               \
-		if (!(cond)) {                                                                 \
-			fprintf(stderr, "  check failed %s:%d: %s\n", __FILE__, __LINE__, #cond); \
-			return -1;                                                                 \
-		}                                                                              \
-	} while (0)
 
 /* Both sides get (port, out pipe, in pipe). */
 typedef int (*side_fn)(uint16_t port, int out, int in);
@@ -1241,7 +1224,7 @@ static int wire_tail(int fd, capture* c) {
 	return 0;
 }
 
-/* Pair mode off: a 300-frame host session puts exactly the bytes the engine sent before pair mode existed. */
+/* Pair mode off: a 300-frame host session puts exactly the golden bytes, nothing of pair mode among them. */
 static int case_pair_off_wire_unchanged_host(void) {
 	uint16_t port = next_port++;
 	fake_set(1000000);
@@ -1444,7 +1427,7 @@ static int resync_host(uint16_t port, int out, int in) {
 		fprintf(stderr, "  checksum host %08x client %08x\n", core_checksum(), theirs);
 		return -1;
 	}
-	CHECK(unser_calls == 0);
+	CHECK(unser_calls == 2);	/* the host loads each state it sends (the sync, the resync), as the client does */
 	CHECK(np_last_verified_frame() == 240 && their_verified == 240);
 	return 0;
 }

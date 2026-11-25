@@ -67,6 +67,7 @@ import com.nxredux.mobile.R
 import com.nxredux.mobile.achievements.AchievementsService
 import com.nxredux.mobile.achievements.AndroidRaHasher
 import com.nxredux.mobile.achievements.RaAchievement
+import com.nxredux.mobile.achievements.RaNotices
 import com.nxredux.mobile.achievements.RaBadgeFolders
 import com.nxredux.mobile.achievements.RaConsoles
 import com.nxredux.mobile.achievements.RaFingerprintKeys
@@ -82,12 +83,14 @@ import com.nxredux.mobile.gametime.GameTimeStore
 import com.nxredux.mobile.launcher.bringHomeTaskToFront
 import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.library.Names
+import com.nxredux.mobile.netplay.LocalWirelessText
 import com.nxredux.mobile.netplay.NetplayLinkKind
 import com.nxredux.mobile.netplay.NetplayLinkOptions
 import com.nxredux.mobile.netplay.NetplayRole
 import com.nxredux.mobile.netplay.NetplayText
 import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.options.AudioOptions
+import com.nxredux.mobile.options.ShaderOptions
 import com.nxredux.mobile.options.FrameSkipOptions
 import com.nxredux.mobile.options.BottomScreenOptions
 import com.nxredux.mobile.options.ConfigFile
@@ -104,6 +107,10 @@ import com.nxredux.mobile.options.ScreenScaling
 import com.nxredux.mobile.options.SpeedOptions
 import com.nxredux.mobile.options.SpeedSettings
 import com.nxredux.mobile.options.VulkanFallback
+import com.nxredux.mobile.gpudriver.GpuDriver
+import com.nxredux.mobile.gpudriver.GpuDriverChoice
+import com.nxredux.mobile.gpudriver.GpuDriverCrash
+import com.nxredux.mobile.gpudriver.GpuDriverMarkerGuard
 import com.nxredux.mobile.settings.ProviderPreferences
 import com.nxredux.mobile.settings.Prefs
 import com.nxredux.mobile.settings.AndroidAppSettings
@@ -157,8 +164,10 @@ import com.nxredux.mobile.ui.nx.SlotUi
 import com.nxredux.mobile.ui.nx.PadMic
 import com.nxredux.mobile.ui.nx.PadMotion
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filter
@@ -180,6 +189,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     SaveSessionHost {
 
     companion object {
+        /** How long a quit waits for Save on quit's current value from the menu's process before using its own copy. */
+        private const val QUIT_SETTINGS_REFRESH_MS = 300L
+        /** Process-wide: false only until this process's first game screen; a process killed in the background starts over. */
+        private var screenShownInProcess = false
         /** The frontend rows a pad skin leaves out ([menuLocked]): it places the screens itself. */
         private val SKIN_HIDDEN_OPTIONS = setOf(
             com.nxredux.mobile.options.FrontendOptions.SCALING, com.nxredux.mobile.options.FrontendOptions.OVERLAY,
@@ -207,6 +220,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         private const val FINISH_WHEN_HIDDEN_MS = 1_500L   // a quit still on screen this long after asking for the menu finishes anyway
         const val EXTRA_OWN_TASK = "own_task"        // Boolean: launcher mode, the game runs in its own task
         const val EXTRA_FORCE_GLES = "force_gles"    // Boolean: the relaunch after Vulkan could not start (VulkanFallback)
+        const val EXTRA_FORCE_SYSTEM_DRIVER = "force_system_driver"   // Boolean: the relaunch after a custom driver could not start
         // netplay: a Wi-Fi netplay launch (GameSession.netplay); all absent for every other launch. The run core is EXTRA_CORE_ID.
         const val EXTRA_NETPLAY_ROLE = "netplay_role"            // NetplayRole name: "HOST" | "CLIENT"
         const val EXTRA_NETPLAY_PEER = "netplay_peer"            // the other device's IPv4 address
@@ -215,6 +229,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         const val EXTRA_NETPLAY_USB = "netplay_usb"              // Boolean: the session runs over the USB cable
         const val EXTRA_NETPLAY_MIXED = "netplay_mixed"          // Boolean: a GBA link with the other side on the other core
         const val EXTRA_NETPLAY_PEER_WL = "netplay_peer_wl"      // the other side's GBA link mode token; absent: it sent none
+        const val EXTRA_NETPLAY_PEER_NAME = "netplay_peer_name"  // the other player's name; absent: none traded
+        const val EXTRA_NETPLAY_SEGA_PAD = "netplay_sega_pad"  // the host's Sega Controller Type both play; absent: the fixed pad
+        const val EXTRA_NETPLAY_DC_HLE = "netplay_dc_hle"        // a Dreamcast session boots the HLE BIOS on both sides
         const val EXTRA_NETPLAY_USB_TOKEN = "netplay_usb_token"  // Long: the menu's cable start this session runs on (UsbCables.token)
         // Cable Link over Wi-Fi (NetplaySession.cableLink and what its handshake settled)
         const val EXTRA_NETPLAY_CABLE_LINK = "netplay_cable_link"        // Boolean
@@ -231,6 +248,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         private const val HUNG_FINISH_GRACE_MS = 500L
         /** [endProcess]: at most this long for the netplay engine's shutdown before the process goes anyway. */
         private const val PROCESS_END_WAIT_S = 5L
+        /** How long the process waits for its last log lines to reach the Debug log file before it ends. */
+        private const val LOG_DRAIN_MS = 1_000L
+        /** A quit's save of a large state (Wii, PS2) on a slow phone; past it the process ends without it. */
+        private const val QUIT_WRITE_WAIT_MS = 60_000L
 
         /** Debug builds only: the latest game screen, for the adb GAME_STOP hook ([debugQuit]). Main thread. */
         private var debugGame: java.lang.ref.WeakReference<GameActivity>? = null
@@ -243,6 +264,14 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             if (!BuildConfig.DEBUG) return false
             val game = debugGame?.get()?.takeIf { !it.isFinishing } ?: return false
             game.quitWithAutoState(chosen = true)
+            return true
+        }
+
+        /** Debug builds only (the adb GAME_FF hook): fast forward on or off, as the panel's tile sets it. Main thread. */
+        internal fun debugFastForward(on: Boolean): Boolean {
+            if (!BuildConfig.DEBUG) return false
+            val game = debugGame?.get()?.takeIf { !it.isFinishing } ?: return false
+            game.handleMenuEffect(MenuEffect.SetSpeed(ff = on, rewind = if (on) false else null))
             return true
         }
 
@@ -311,6 +340,13 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override val isDolphin: Boolean get() = gameCoreId == WiiDolphinController.DOLPHIN_ID
     /** This launch asked the core for Vulkan (Display → Graphics API): a failure to start it relaunches on GLES. */
     @Volatile private var launchedOnVulkan = false
+    /** The custom GPU driver this launch loads ([GpuDriverChoice]); null: the system driver (or not on Vulkan). */
+    @Volatile private var launchedDriver: GpuDriver? = null
+    /** This launch's custom-driver crash marker ([GpuDriverCrash]): written by the launch, cleared by this screen. */
+    private val driverMarker = GpuDriverMarkerGuard { settings.gpuDriverMarker = it }
+    /** Clears the marker once the game has presented frames for [GpuDriverCrash.CLEAR_AFTER_MS]. */
+    private var driverMarkerClear: Job? = null
+    private var presentedFrame = false   // the first frame is up (clearDriverMarkerLater has run): main thread
     /**
      * This screen is being recreated to start the game again on OpenGL ES ([relaunchOnGles]): it writes no auto state
      * and shows no failure dialog.
@@ -327,6 +363,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     override fun onInputDevicesChanged() {
         relayoutPad()
+        onPlayersChanged()
+    }
+
+    override fun onPlayersChanged() {
         if (menuOpen) menu.menuModel?.let(menu::publishPlayers)
         dual.refreshDualPanel()
     }
@@ -345,7 +385,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private val saves = SaveSession(this, renderer, menu, dual)
     private val wii = WiiDolphinController(this, input, saves)
     private val launchPipeline = LaunchPipeline(LaunchState())
-    private val dsRoom = DsRoomWatcher(lifecycleScope, { DsPresence.of(LibretroNetplay.dsPresence()) }, ::onDsPresenceChanged)
+    private val dsRoom = DsRoomWatcher(lifecycleScope, { DsPresence.of(LibretroNetplay.dsPresence()) }, ::onDsPresenceChanged,
+        readOthers = { LibretroNetplay.dsOthers() }, onOthers = ::onDsOthersChanged)
     private val dsCable = DsCable(this, lifecycleScope)
     // The cap is the Disconnect row pressed for the player: the automatic route leaves the room, a sheet session ends its link.
     private val dsMenuCap = DsMenuCap(lifecycleScope, onTick = { seconds -> withMenu { it.setIdleSeconds(seconds) } }) {
@@ -442,6 +483,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         private set
     override var ndsFellBack = false                        // OpenGL was asked for, the core draws in software ([NdsRenderer.showFallbackNotice])
         private set
+    override val secondPictureDisplay: Pair<Int, Int>? get() = dual.secondPictureDisplay()
 
     // ---- DS / 3DS 3D resolution (Nds3dResolution, N3ds3dResolution): melonDS's GL scale, Azahar's factor follow the layout ----
     private val res3d = Res3dController(this, renderer)
@@ -473,7 +515,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private var dolphinBuiltInPath: String? = null     // named after the ROM-cache copy Dolphin loads
     override var cheatsLoad: Job? = null               // done once cheatSet holds the resolved (and saved-state-applied) set
         private set
-    override var cheatsFolder = ""                     // the folder the empty Cheats tab names (Cheats.folder), set at start
+    override var cheatsFolder = ""                     // the folder the empty Cheats tab names (CheatFolders.primary), set at start
         private set
 
     // ---- netplay (Wi-Fi lockstep, see the "netplay" block) ----
@@ -481,9 +523,18 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override val netplay: NetplaySession? get() = gameNetplay.session
     override val netplayEnded: Boolean get() = gameNetplay.ended
     override val netplayQuitOnly: Boolean get() = gameNetplay.quitOnly
-    override val dsWireless: Boolean get() = launchPipeline.dsAutoRoute && dsRoom.current != DsPresence.OUT
+    /**
+     * The automatic route plays as a session: DS or 3DS with another device in the room (alone in one plays as on its
+     * own), PSP whenever it is in ad hoc (its core refuses states there anyway).
+     */
+    override val dsWireless: Boolean get() = launchPipeline.dsAutoRoute &&
+        if (gameCoreId == "ppsspp") dsRoom.current != DsPresence.OUT else dsRoom.current == DsPresence.ROOM
     override val dsIdleSeconds: Int? get() = dsMenuCap.secondsLeft
+    /** Beside the Local Wireless row on the automatic route (DS, 3DS); null elsewhere (PSP, a sheet session, no link). */
+    override val localWirelessNow: String? get() = if (!launchPipeline.dsAutoRoute || gameCoreId == "ppsspp") null else
+        LocalWirelessText.now(dsRoom.current == DsPresence.ROOM, dsRoom.current == DsPresence.SEEKING, dsRoom.others)
     override fun showMenu() { if (!menuOpen) menu.toggleMenu() }
+    override fun sessionChanged() = dual.refreshDualPanel()
     override val netplayNow: NetplaySession? get() = gameNetplay.now
     override val sessionLocked: Boolean get() = netplayNow != null || dsWireless
 
@@ -567,7 +618,11 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // Decided here, not after the launch's async setup, so a stop in between still records the slot.
         // A saved slot (recreated after a process kill) wins over the launch intent's.
         val savedSlot = savedInstanceState?.getInt(SaveSession.KEY_RESUME_SLOT, -1)?.takeIf { it in 0..NxPaths.AUTO_SLOT }
-        saves.startFrom(if (netplay != null) null else savedSlot ?: intent.getIntExtra(EXTRA_RESUME_SLOT, -1).takeIf { it in 0..NxPaths.AUTO_SLOT })
+        val launchSlot = intent.getIntExtra(EXTRA_RESUME_SLOT, -1).takeIf { it in 0..NxPaths.AUTO_SLOT }
+        // A bundle in a process that already showed a game screen is a recreate() (a driver relaunch), not a kill.
+        val afterKill = savedInstanceState != null && !screenShownInProcess
+        screenShownInProcess = true
+        saves.startFrom(SaveSession.startSlot(afterKill, savedSlot, launchSlot, settings.saveOnQuit, netplay != null))
         val claim = sessions.claim(::onSessionHandedOff).also { sessionClaim = it }
         // From the claim to the final release: the menu reads this as "a game screen is alive" (playing, suspended, closing).
         liveGameStore.write(LiveGame(
@@ -612,11 +667,13 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     }
 
     /**
-     * DS, 3DS and PSP local wireless: the game's radio went out, seeking (hosting or looking for a room) or into a room. The low-latency
-     * Wi-Fi lock is held only in a room and the broadcasts lock only while not out; a sheet session has both from its launch, a PSP game on the automatic route the broadcasts lock. On the automatic route, seeking and a room
-     * play as a session (no save, load, speed or reset shortcuts: they would break it for every member, or the room about
-     * to form) and the menu is Continue, Disconnect, Quit; out, the full menu and shortcuts return. A menu open meanwhile
-     * holds the core the way the room now asks: running for the members, or paused once alone.
+     * DS, 3DS and PSP local wireless: the game's radio went out, seeking (hosting or looking for a room, or alone in one) or
+     * into a room with another device. The low-latency Wi-Fi lock is held only in a room and the broadcasts lock only while
+     * not out; a sheet session has both from its launch, a PSP game on the automatic route the broadcasts lock. On the
+     * automatic route a room ([dsWireless]; for PSP seeking too) plays as a session (no save, load, speed or reset
+     * shortcuts: they would break it for every member) and the menu is Continue, Disconnect, Quit; otherwise the full
+     * menu and shortcuts. A menu open meanwhile holds the core the way the room now asks: running for the members, or
+     * paused once alone.
      */
     private fun onDsPresenceChanged(presence: DsPresence) {
         launchPipeline.dsRoomChanged(presence == DsPresence.ROOM)
@@ -629,6 +686,14 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
         if (menuOpen && !quitting) holdCore()
         syncDsMenuCap()
+        withMenu { it.setLocalWirelessNow(localWirelessNow) }
+    }
+
+    /** DS: a toast as devices join and leave the room (the 3DS core sends its own, with names). */
+    private fun onDsOthersChanged(before: Int, now: Int) {
+        if (launchPipeline.dsAutoRoute && gameCoreId == "melondsds") LocalWirelessText.change(before, now)?.let(dual::pictureToast)
+        dual.refreshDualPanel()   // the session card says how many are linked
+        withMenu { it.setLocalWirelessNow(localWirelessNow) }
     }
 
     /** The menu open in a room counts toward the cap; anything else stops the count. */
@@ -636,17 +701,34 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     /**
      * A sheet session's room again after a leave for the background or a lost focus. Never on the automatic route, where
-     * the room comes back with the game's wireless: a session that fell back to it may still be a session in Azahar until
+     * only switching Local Wireless on rejoins: a session that fell back to it may still be a session in Azahar until
      * its next frame, and a rejoin would put it back in the room it was left for.
      */
     private fun rejoinSessionRoom() {
         if (!launchPipeline.dsAutoRoute) LibretroNetplay.dsRejoin()
     }
 
-    /** Leaves the room with the game running; the check lands the full menu and the paused core at once. */
+    /** Leaves the room with the game running: on the automatic route, Local Wireless switched off (PSP has no row). */
     override fun disconnectDs() {
+        val values = if (launchPipeline.dsAutoRoute) localWirelessShownOff() else null
+        if (values != null) return switchLocalWireless(values)
         LibretroNetplay.dsLeaveNow()
         dsRoom.check()
+    }
+
+    /** The DS or 3DS console's Local Wireless row key; null for any other console. */
+    private val localWirelessKey: String? get() = when { isNds -> NdsOptions.LOCAL_WIRELESS; isN3ds -> N3dsOptions.LOCAL_WIRELESS; else -> null }
+
+    /**
+     * A leave shows Local Wireless Off for this launch (the stored setting untouched), so switching it on joins again.
+     * The new values; null with no row, or one already off.
+     */
+    private fun localWirelessShownOff(): Map<String, String>? {
+        val key = localWirelessKey ?: return null
+        if (frontendValues[key] == N3dsOptions.LOCAL_WIRELESS_OFF) return null
+        frontendValues = frontendValues + (key to N3dsOptions.LOCAL_WIRELESS_OFF)
+        withMenu { it.showFrontendValue(key, N3dsOptions.LOCAL_WIRELESS_OFF) }
+        return frontendValues
     }
 
     /**
@@ -672,6 +754,29 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             kidsGameBlocked(true, AndroidKidsPlatform.localNow(), KidsSchedule.decode(settings.kidsSchedule), settings.kidsUnlockUntil) {
                 runCatching { PrefsProvider.kidsParent(app) }.onFailure { NxLog.w(TAG_LOG, "Kids Mode: no answer on Parent mode", it) }.getOrDefault(false)
             }
+        }
+    }
+
+    /**
+     * Kids Mode hides this game's settings from a kid (the menu's Options, the second-screen Settings tab): this process's
+     * stored copy at first, then the main process's answer ([refreshKidsSettings]), which alone knows Parent mode.
+     */
+    override val kidsSettingsHidden: Boolean get() = kidsHidden ?: settings.kidsEnabled
+    private var kidsHidden: Boolean? = null
+    private var kidsSettingsJob: Job? = null
+
+    /** Asks the main process again (a resume, a menu opening: Parent mode or Kids Mode may have changed meanwhile). */
+    override fun refreshKidsSettings() {
+        if (kidsSettingsJob?.isActive == true) return
+        val app = applicationContext
+        kidsSettingsJob = lifecycleScope.launch {
+            val hidden = withContext(Dispatchers.IO) {
+                runCatching { PrefsProvider.kidsSettingsHidden(app) }.onFailure { NxLog.w(TAG_LOG, "Kids Mode: no answer on game settings", it) }.getOrNull()
+            } ?: return@launch
+            if (hidden == kidsHidden || isDestroyed) return@launch
+            kidsHidden = hidden
+            withMenu { it.setKidsLocked(hidden) }
+            dual.refreshDualPanel()
         }
     }
 
@@ -727,6 +832,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         wii.syncMotionSensors(foreground = true)
         shortcuts.onResume()
         dual.syncDual()   // Settings → Second screen may have changed meanwhile
+        refreshKidsSettings()
     }
 
     private var topResumed = true   // the last onTopResumedActivityChanged (API 29+); below that, always the top one
@@ -894,7 +1000,11 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // clears this screen. A quit writes its own; a game that never got ready writes nothing (writeAutoStateOnStop);
         // one that failed after starting and leaves through its dialog keeps the last good resume point.
         // API 26–27: onSaveInstanceState already ran; the outcome of the write is recorded in its bundle.
-        saves.onStop(writeAuto = !quitting && !wii.endedByCore && !relaunching && !(isFinishing && failShown) && !inRoom)
+        val saveOnQuit = settings.saveOnQuit
+        saves.onStop(
+            writeAuto = !quitting && !wii.endedByCore && !relaunching && !(isFinishing && failShown) && !inRoom && saveOnQuit,
+            unlinkAuto = !saveOnQuit,
+        )
         if (isFinishing) { input.gcClearTriggers(); stopAchievements() }
         input.onStop()   // the pen and 3DS hotkey ticks stop; onStart restarts them
         // A Presentation stays up while its activity is stopped: no second screen in the background.
@@ -968,8 +1078,16 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         rumbles.forEach { it.release() }
         wii.onDestroy()
         if (isFinishing || relaunching) endGameTime()   // Back/finish without Quit (quit already ended it), or the GLES relaunch
+        // A normal exit or a recreation: this launch did not die on its driver. Abandoned first, so a launch still writing
+        // its marker (Back while loading) writes none, or the clear below waits for that write and undoes it.
+        driverMarkerClear?.cancel()
+        driverMarkerClear = null
+        val clearMarker = driverMarker.abandon()
         if (isFinishing) launchRecords.drop(launchId)   // quit before the first frame: the launch never started
-        if (BuildConfig.DEBUG && isFinishing) debugReportStopped()
+        // A quit the system destroyed the screen under (stopped, low memory) before its own finish: the game is over all the same.
+        val quitCut = quitting && !isFinishing
+        val over = isFinishing || quitting
+        if (BuildConfig.DEBUG && over) debugReportStopped()
         input.gcClearTriggers()   // a latched soft press never outlives the game
         stopAchievements()
         inputManager?.unregisterInputDeviceListener(input.inputDeviceListener)
@@ -984,7 +1102,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         screens--
         if (latest?.get() === this) latest = null
         // The game process ends with its last screen's finish (not a recreation: the GLES relaunch, a config change).
-        val endsProcess = isFinishing && screens == 0 && AppProcess.isGame()
+        val endsProcess = over && screens == 0 && AppProcess.isGame()
         // Ending the process, the record stays until the process is gone: the menu waits for that before it starts another
         // game, which must never land in this dying process. It reads as stale then (its pid is gone).
         if (!endsProcess) liveGameStore.clear(Process.myPid(), launchId)
@@ -993,9 +1111,15 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val app = applicationContext
         if (endsProcess) { ending = true; GameHeartbeat.start(app) }   // a finish without Quit (Back) beats from here
         // After the core's last write (destroyed above); a Binder call to the menu process, so not on this thread.
-        if (endUse || endsProcess) thread(name = if (endsProcess) "game-process-end" else "data-use-end") {
+        if (endUse || endsProcess || clearMarker) thread(name = if (endsProcess) "game-process-end" else if (endUse) "data-use-end" else "gpu-marker-clear") {
+            // First: it may wait for a marker commit in flight, and its clear must be queued before endProcess waits for the sends.
+            if (clearMarker) driverMarker.clear()
             if (endUse) runCatching { DataRoot.useEnd(app) }.onFailure { NxLog.w(TAG_LOG, "could not end the data use", it) }
-            if (endsProcess) endProcess()
+            if (endsProcess) {
+                // The quit's write is still running (the finish it would end with never comes): the process waits for it.
+                if (quitCut && !saves.awaitQuitWrite(QUIT_WRITE_WAIT_MS)) NxLog.w(TAG_LOG, "the quit's save did not end in time")
+                endProcess()
+            }
         }
         coreWatchdog?.stop()   // last: a hung core also hangs the native destroy above, which it must still catch
         coreWatchdog = null
@@ -1013,6 +1137,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         runCatching { PairSaveFiles.writer.submit {}.get(PROCESS_END_WAIT_S, TimeUnit.SECONDS) }   // a Cable Link save's commit
         ProviderPreferences.awaitSends(TimeUnit.SECONDS.toMillis(PROCESS_END_WAIT_S))   // settings applied in the game's last moments
         NxLog.i(TAG_LOG, "the game has ended: ending its process")
+        com.nxredux.mobile.DebugLogFile.drain(LOG_DRAIN_MS)
         Process.killProcess(Process.myPid())
     }
 
@@ -1026,9 +1151,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      */
     private fun onCoreHung(stalledMillis: Long) {
         val title = intentTitle ?: "The game"
-        NxLog.e("GameActivity", "the core has been stuck in one frame for ${stalledMillis / 1000} s: closing $title")
+        NxLog.e(TAG_LOG, "the core has been stuck in one frame for ${stalledMillis / 1000} s: closing $title")
         runCatching { CoreHangNotice.record(applicationContext, title) }
-        runCatching { finish() }.onFailure { NxLog.w("GameActivity", "could not finish the hung game", it) }
+        runCatching { finish() }.onFailure { NxLog.w(TAG_LOG, "could not finish the hung game", it) }
         SystemClock.sleep(HUNG_FINISH_GRACE_MS)   // the finish reaches the system before the process goes
         android.os.Process.killProcess(android.os.Process.myPid())
     }
@@ -1075,14 +1200,54 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * live one the intent. The old screen's onDestroy (the core's native destroy, the session release) runs before the
      * new onCreate; not finishing, it keeps the launch for it.
      */
-    private fun relaunchOnGles() {
+    private fun relaunchOnGles(record: Boolean = true, notice: String = VulkanFallback.NOTICE) {
         if (isFinishing || relaunching || failShown) return
         relaunching = true
-        settings.recordVulkanFailure(gameCoreId)
+        clearDriverMarker()
+        // [record] false: a custom driver failed on a core whose system-driver failure is already recorded.
+        if (record) settings.recordVulkanFailure(gameCoreId)
         NxLog.w(TAG_LOG, "Vulkan could not start for $gameCoreId: starting again on OpenGL ES")
-        android.widget.Toast.makeText(applicationContext, VulkanFallback.NOTICE, android.widget.Toast.LENGTH_LONG).show()
+        android.widget.Toast.makeText(applicationContext, notice, android.widget.Toast.LENGTH_LONG).show()
         intent = Intent(intent).putExtra(EXTRA_FORCE_GLES, true)
         recreate()
+    }
+
+    /**
+     * The custom GPU driver ([launchedDriver]) could not start: as [relaunchOnGles], but the new screen runs Vulkan on the
+     * system driver ([EXTRA_FORCE_SYSTEM_DRIVER]); nothing is recorded, and the driver is not blamed for a crash. If that
+     * fails too, the relaunch after it goes to OpenGL ES ([GpuDriverChoice.afterStartFailure]).
+     */
+    private fun relaunchOnSystemDriver() {
+        if (isFinishing || relaunching || failShown) return
+        val driver = launchedDriver ?: return relaunchOnGles()
+        relaunching = true
+        clearDriverMarker()
+        NxLog.w(TAG_LOG, "the GPU driver ${driver.name} could not start for $gameCoreId: starting again on the system driver")
+        android.widget.Toast.makeText(applicationContext, GpuDriverChoice.named(GpuDriverChoice.SYSTEM_DRIVER_NOTICE, driver.name), android.widget.Toast.LENGTH_LONG).show()
+        intent = Intent(intent).putExtra(EXTRA_FORCE_SYSTEM_DRIVER, true)
+        recreate()
+    }
+
+    /** The game has presented its first frame: this launch's crash marker goes once it has run [GpuDriverCrash.CLEAR_AFTER_MS]. */
+    private fun clearDriverMarkerLater() {
+        presentedFrame = true
+        if (driverMarkerClear != null) return
+        driverMarkerClear = lifecycleScope.launch {
+            delay(GpuDriverCrash.CLEAR_AFTER_MS)
+            driverMarkerClear = null
+            if (driverMarker.clear()) NxLog.i(TAG_LOG, "the GPU driver ran ${GpuDriverCrash.CLEAR_AFTER_MS / 1000} s: its launch marker is cleared")
+        }
+    }
+
+    /**
+     * Forgets this launch's crash marker, and the timer that would have. Nothing when it wrote none. On the main thread:
+     * only once the launch's [GpuDriverMarkerGuard.mark] has returned (a relaunch comes after the view exists), so it
+     * never waits on the marker's commit; the clear itself is applied.
+     */
+    private fun clearDriverMarker() {
+        driverMarkerClear?.cancel()
+        driverMarkerClear = null
+        driverMarker.clear()
     }
 
     /** [title]: "Netplay failed" for a netplay session's failures, which may come mid-game. */
@@ -1095,6 +1260,14 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         launchRecords.drop(launchId)   // refused: the launcher must not record it
         if (isFinishing || isDestroyed || failShown) return   // observeErrors can report more than once: one dialog, never a stack
         failShown = true
+        // The game never presented a frame: whatever ends this screen now (Back, or a crash in the core's teardown, as
+        // mupen64plus_next's retro_deinit after a start that failed before context_reset) is not the driver's crash.
+        // The dialog only leaves by finishing, so the launch is abandoned here; off the main thread, as in onDestroy.
+        if (!presentedFrame) {
+            driverMarkerClear?.cancel()
+            driverMarkerClear = null
+            if (driverMarker.abandon()) thread(name = "gpu-marker-clear") { driverMarker.clear() }
+        }
         rumbles.forEach { it.release() }
         // A controller's A only focuses the button (Android clicks on ENTER): A, B and BACK leave on release. A release
         // needs its press here first, so a button held from the game as the dialog opens does not close it unseen.
@@ -1241,6 +1414,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun onN3dsPictureSpace() {
         if (!isN3ds || netplayLocks || DualScreen.n3dsForcedOptions(dual.dualMode, n3dsSkinStack()) != null) return
         val proportion = n3dsProportion()
+        if (proportion != renderer.n3dsProportion) NxLog.i(TAG_LOG, "3DS proportion ${renderer.n3dsProportion} -> $proportion " +
+            "(layout ${N3dsOptions.appLayoutFor(frontendValues, isLandscape(), renderer.ndsControllerMode(), screenClass())}, ${screenClass()}, space ${renderer.n3dsPictureSpace})")
         if (renderer.n3dsViews) {
             if (proportion != renderer.n3dsProportion) { renderer.n3dsProportion = proportion; renderer.relayoutFrontend() }
             return
@@ -1249,6 +1424,26 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         lastN3dsLayout = lastN3dsLayout?.plus(N3dsOptions.STACKED_SMALL_PROPORTION to proportion)
         renderer.watchGeometry(why = "3DS Large screen proportion $proportion sent")
         applyOptions(listOf(Variable(N3dsOptions.STACKED_SMALL_PROPORTION, proportion)))
+    }
+
+    /**
+     * Local Wireless switched in the game: the new mode reaches the core on its next frame; off also leaves the room at
+     * once, so the menu and locks follow now.
+     */
+    private fun switchLocalWireless(values: Map<String, String>) {
+        val on = if (isNds) NdsOptions.localWireless(values) else N3dsOptions.localWireless(values)
+        val vars = launchPipeline.localWirelessSwitched(on)
+        if (vars.isEmpty()) return
+        if (!on) {
+            LibretroNetplay.dsLeaveNow()
+            dsRoom.check()
+        }
+        retroView?.let { view ->
+            view.queueEvent { runCatching { view.updateVariables(*vars.map { (k, v) -> Variable(k, v) }.toTypedArray()) }.onFailure { NxLog.w(TAG_LOG, "switching local wireless failed", it) } }
+        }
+        // Directly: the menu holds frames, so an off and on there (or Disconnect then on) reach the core as no change.
+        if (on) LibretroNetplay.dsRejoin()
+        NxLog.i(TAG_LOG, "local wireless switched ${if (on) "on" else "off"}")
     }
 
     /** The core layout and touch-screen proportion last sent for the 3DS ([syncN3dsCore]); null before the first. */
@@ -1265,6 +1460,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun applyFrontend(values: Map<String, String>) {
         val oldSegaSetting = frontendValues[PadOptions.SEGA_PAD] ?: SegaPadType.AUTO
         val oldBottomScreen = frontendValues[BottomScreenOptions.KEY]
+        val oldLocalWireless = localWirelessKey?.let { frontendValues[it] }
         val res3dKeys = res3d.console?.keys.orEmpty()
         val old3d = res3dKeys.map { frontendValues[it] }
         frontendValues = values
@@ -1272,8 +1468,11 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (res3d.applies() && res3dKeys.map { values[it] } != old3d) res3d.offer(sizeChange = false)
         // Display → Bottom screen (the menu, live): the picture may move. Posted, as for the Sega pad.
         if (values[BottomScreenOptions.KEY] != oldBottomScreen) findViewById<View?>(R.id.root)?.post { dual.recheckPictureOn() }
+        // Multiplayer → Local Wireless (the menu, live).
+        if (localWirelessKey?.let { values[it] } != oldLocalWireless) switchLocalWireless(values)
         val segaSetting = values[PadOptions.SEGA_PAD] ?: SegaPadType.AUTO
-        if (segaSetting != oldSegaSetting && PadMap.isSegaPadTag(gameTag)) applySegaPad(segaSetting)
+        // In a session the pad is the session's (both phones agreed it): a Controller Type change waits for the next launch.
+        if (segaSetting != oldSegaSetting && PadMap.isSegaPadTag(gameTag) && netplayNow == null) applySegaPad(segaSetting)
         if (isN3ds) {
             applyN3dsNewControls(values[N3dsOptions.NEW_CONTROLS])
             syncN3dsCore()   // a layout row changed in the menu, or the hotkey's
@@ -1296,6 +1495,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val shader = renderer.shaderFor(s)
         if (view.shader != shader) view.shader = shader
         renderer.updateOverlay(s)
+        // A DS / 3DS layout change: a screen stack starts under a top cutout, the rest below it (the area's size follows).
+        padLayout.syncGameTop(resources.configuration.orientation)
         renderer.relayoutFrontend()
         renderer.setHud(s.debugHud)
     }
@@ -1390,7 +1591,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             val written = configWrites.withLock {
                 withContext(Dispatchers.IO) {
                     runCatching { save(store) }
-                        .onFailure { NxLog.w("GameActivity", "saving $key failed", it) }.getOrNull()
+                        .onFailure { NxLog.w(TAG_LOG, "saving $key failed", it) }.getOrNull()
                 }
             }
             if (written == null) { toast(failure); return@launch }
@@ -1399,7 +1600,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
     }
 
-    // ------------------------------------------------------------------ Nintendo 3DS controls
+    // ------------------------------------------------------------------ core options, cheats, quit
 
     /**
      * Sets core options on the emulation (GL) thread, where the core reads them; queued, so a later
@@ -1410,12 +1611,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val view = retroView ?: return
         if (vars.isEmpty()) return
         vars.firstOrNull { it.key == N3dsOptions.STACKED_SMALL_PROPORTION }?.value?.let { renderer.n3dsProportion = it }
-        view.queueEvent { runCatching { view.updateVariables(*vars.toTypedArray()) }.onFailure { NxLog.w("GameActivity", "setting options failed", it) } }
+        view.queueEvent { runCatching { view.updateVariables(*vars.toTypedArray()) }.onFailure { NxLog.w(TAG_LOG, "setting options failed", it) } }
     }
 
     private suspend fun readDolphinBuiltIn(): String? = withContext(Dispatchers.IO) {
         val file = File(dolphinBuiltInPath ?: return@withContext null)
-        if (file.isFile) runCatching { file.readText() }.onFailure { NxLog.w("GameActivity", "cannot read Dolphin's cheats", it) }.getOrNull() else null
+        if (file.isFile) runCatching { file.readText() }.onFailure { NxLog.w(TAG_LOG, "cannot read Dolphin's cheats", it) }.getOrNull() else null
     }
 
     /** First launch of a Wii/GameCube game: Dolphin has written its built-in list by the first frame, so combine again. */
@@ -1447,7 +1648,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                 LibretroDroid.resetCheat()
                 codes.forEachIndexed { i, code -> view.setCheat(i, true, code, useEmulationThread = false) }
                 LibretroDroid.setMemoryCheats(patches)
-            }.onFailure { NxLog.w("GameActivity", "applying cheats failed", it) }
+            }.onFailure { NxLog.w(TAG_LOG, "applying cheats failed", it) }
         }
     }
 
@@ -1472,7 +1673,16 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         ach?.detach()
         achievements = null
         if (view == null || !gameReady) { ach?.stop(); finish(); return }   // not running yet: no save to write
-        saves.writeOnQuit(view, chosen, autoState, release = { live -> ach?.stop(native = live) }, finish = ::finish)
+        // No auto state (Quit without resume, the Kids Mode lock): the resume point stays, the battery save is written.
+        if (!autoState) { saves.writeOnQuit(view, chosen, false, release = { live -> ach?.stop(native = live) }, finish = ::finish); return }
+        // The refresh is a blocking call into the menu's process: run apart, so the timeout can stop waiting for it.
+        // Not cancellable: onPause skipped its battery save for this quit, so the quit's write must not be lost to a destroy.
+        lifecycleScope.launch {
+            withContext(NonCancellable) {
+                val keep = SaveSession.readFresh(QUIT_SETTINGS_REFRESH_MS, refresh = { CoroutineScope(Dispatchers.IO).async { Prefs.refreshGame() }.await() }) { settings.saveOnQuit }
+                saves.writeOnQuit(view, chosen, keep, release = { live -> ach?.stop(native = live) }, finish = ::finish)
+            }
+        }
     }
 
     override fun refreshSlots() = saves.refreshSlots()
@@ -1494,6 +1704,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun leaveLinkSession(kind: NetplayLinkKind): Map<String, String> {
         val left = launchPipeline.leaveLinkSession(kind)
         if (kind != NetplayLinkKind.PSPLINK && launchPipeline.dsAutoRoute) {
+            localWirelessShownOff()
             LibretroNetplay.dsLeaveNow()
             dsRoom.check()
             if (launchPipeline.dsCableAuto) dsCable.watch(launchPipeline.dsCableWithGame)
@@ -1589,7 +1800,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun toggleMute(id: Int) {
         val b = achievements ?: return
         lifecycleScope.launch {
-            runCatching { b.toggleMute(id) }.onFailure { NxLog.w("GameActivity", "mute toggle failed", it) }
+            runCatching { b.toggleMute(id) }.onFailure { NxLog.w(TAG_LOG, "mute toggle failed", it) }
             refreshMenuAchievements()
         }
     }
@@ -1628,7 +1839,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             RaEvent.Disconnected -> if (shown) notice("RetroAchievements: connection lost")
             RaEvent.Reconnected -> if (shown) notice("RetroAchievements: reconnected")
             is RaEvent.GameLoaded -> notice("${e.title} · ${e.unlocked}/${e.total} achievements")
-            RaEvent.GameUnknown -> notice("No achievements for this game")
+            is RaEvent.GameUnknown -> notice(RaNotices.unknownGame(intent.getStringExtra(EXTRA_FILE_NAME), e.hashUnknown))
             is RaEvent.LoginFailed -> notice("RetroAchievements sign-in failed")
             RaEvent.SessionOffline -> notice("RetroAchievements: offline")
             RaEvent.SessionDisabled -> notice("RetroAchievements needs a network connection for first-time setup")
@@ -1637,7 +1848,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
         // The session changed what the menu shows (row, summary, the set): refresh it if it is open.
         when (e) {
-            is RaEvent.GameLoaded, RaEvent.GameUnknown, is RaEvent.LoginFailed, RaEvent.SessionDisabled, RaEvent.SessionOffline,
+            is RaEvent.GameLoaded, is RaEvent.GameUnknown, is RaEvent.LoginFailed, RaEvent.SessionDisabled, RaEvent.SessionOffline,
             is RaEvent.Unlocked, is RaEvent.Synced, RaEvent.BadgesReady -> refreshMenuAchievements()
             else -> Unit
         }
@@ -1688,8 +1899,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                         else WindowInsetsSides.Horizontal + WindowInsetsSides.Vertical
                     // Over the bare skin buttons and over a pad skin (their shoulders or shell hold the corners),
                     // top-centre below any cutout; elsewhere the corners.
-                    // In portrait over a pad (bare buttons or a skin) the overlay ends at the picture's bottom instead, so the
-                    // toasts sit bottom-left of the picture as in landscape, never over the pad under it.
+                    // In portrait over a pad (bare buttons or a skin) the pill and the toasts go top-centre too, the toasts
+                    // under the pill: at the top, never down on a DS / 3DS touch screen or over the pad.
                     val overPad = padLayout.overlayPadShown.value || padLayout.skinShownState.value
                     val picture = renderer.pictureBox.value
                     val onPicture = overPad && picture != null && config.orientation == Configuration.ORIENTATION_PORTRAIT
@@ -1704,7 +1915,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     // This view's own size: in landscape the root's.
                     var origin by remember { mutableStateOf(IntOffset.Zero) }   // this view's top-left in the window
                     BoxWithConstraints(Modifier.fillMaxSize().onGloballyPositioned { origin = it.positionInWindow().round() }) {
-                        val maxW = nxTopCentreMaxWidth(maxWidth.value, maxHeight.value, inset).dp
+                        // the landscape pad's system rows only; in portrait the whole width (less the margins)
+                        val maxW = if (onPicture) androidx.compose.ui.unit.Dp.Infinity else nxTopCentreMaxWidth(maxWidth.value, maxHeight.value, inset).dp
                         val underPicture = if (onPicture && picture != null) with(density) { (constraints.maxHeight - (picture.bottom - origin.y)).coerceAtLeast(0).toDp() } else 0.dp
                         NxNotifications(
                             toasts, pill, modifier = Modifier.padding(bottom = underPicture),
@@ -1771,7 +1983,6 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     }
     override fun onSkinPlaced() = dual.syncPanel()
     override fun onLayoutControllersChanged() = dual.recheckPictureOn()
-    override fun placeMainPanelHost() = dual.placeMainPanelHost()
 
     // The in-game menu's view, input and layout, owned by [menu].
     override val menuView: ComposeView? get() = menu.menuView
@@ -1802,11 +2013,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun menuCaptureKey(keyCode: Int, down: Boolean, repeat: Boolean): Boolean = menu.captureKey(keyCode, down, repeat)
 
     override fun speedTiles(): Pair<Boolean, Boolean?> = speed.tiles()
+    override fun ffSpeed(): Int = speed.ffSpeed
 
     override fun setSpeedToggle(ff: Boolean?, rewind: Boolean?) = speed.setToggle(ff, rewind)
     override fun micTile(): Boolean? = shortcuts.micTile()
 
-    override fun setMic(on: Boolean) = shortcuts.setMic(on)
+    override fun setMicButton(shown: Boolean) = shortcuts.setMicButton(shown)
 
     /**
      * A Reset shortcut or the dual-screen panel's Reset tile: reset always asks first, so the in-game menu opens on its
@@ -1822,7 +2034,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     /**
      * The Reset dialog's Reset: retro_reset on the emulation thread (the engine clears the rewind buffer and the frame
-     * timer with it, L18/L19), waited for off main as a disc change is. A toggled rewind would only run back to the reset
+     * timer with it), waited for off main as a disc change is. A toggled rewind would only run back to the reset
      * point: it ends first; a toggled FF stays.
      */
     override fun resetGame() {
@@ -1830,7 +2042,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val view = retroView ?: return
         speed.setToggle(rewind = false)
         lifecycleScope.launch(Dispatchers.IO) {
-            runCatching { view.reset() }.onFailure { NxLog.w("GameActivity", "reset failed", it) }
+            runCatching { view.reset() }.onFailure { NxLog.w(TAG_LOG, "reset failed", it) }
         }
     }
 
@@ -1860,7 +2072,6 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val picture = edit.picture.asImageBitmap()
         val parts = edit.parts?.asImageBitmap()
         val backdrop = frame?.asImageBitmap()
-        val alpha = padLayout.padLandscapeAlpha.value   // the bare buttons at the overlay's opacity, as in the game
         menu.menuRouter.releaseAll()
         val view = ComposeView(this).apply {
             setContent {
@@ -1879,7 +2090,6 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                                 relayoutPad()
                             },
                             onClose = ::closeSkinEdit,
-                            bareAlpha = alpha,
                         )
                     }
                 }
@@ -1920,9 +2130,14 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * the DS wireless is on: the reduced menu has no Options, and a menu opened in a room starts the cap.
      */
     override fun openOptions() {
-        if (quitting || !gameReady || dsWireless) return
+        if (quitting || !gameReady || dsWireless || kidsSettingsHidden) return
         if (!menuOpen) toggleMenu()
         withMenu { it.openOptions() }
+    }
+    override fun openShaderPicker() {
+        if (quitting || !gameReady || dsWireless || kidsSettingsHidden) return
+        if (!menuOpen) toggleMenu()
+        withMenu { it.openShaderPicker() }
     }
     override fun onPanelTouch(action: ShortcutAction, down: Boolean, slot: Int?) = shortcuts.onPanelTouch(action, down, slot)
     override fun placeMenu() = menu.placeMenu()
@@ -1944,6 +2159,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     override fun publishMenuShaders() {
         withMenu { it.setShaders(renderer.shaderValues, renderer.presetNames, renderer.shaderParams) }
+    }
+
+    override val shaderOn: Boolean get() = ShaderOptions.preset(renderer.shaderValues) != null
+
+    override fun onShaderPresetToggled() {
+        if (res3d.applies()) res3d.offer(sizeChange = false)
     }
 
     override fun publishMenuFrontend() {
@@ -2045,6 +2266,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         override var ndsRenderMode by game::ndsRenderMode
         override var ndsFellBack by game::ndsFellBack
         override var launchedOnVulkan by game::launchedOnVulkan
+        override var launchedDriver by game::launchedDriver
         override var launchEnv by game::launchEnv
         override var graphicsForcedOptions by game::graphicsForcedOptions
         override var frontendValues by game::frontendValues
@@ -2077,7 +2299,11 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
 
         override fun fail(message: String, title: String) = game.fail(message, title)
-        override fun relaunchOnGles() = game.relaunchOnGles()
+        override fun relaunchOnGles(record: Boolean, notice: String) = game.relaunchOnGles(record, notice)
+        override fun relaunchOnSystemDriver() = game.relaunchOnSystemDriver()
+        override fun clearDriverMarkerLater() = game.clearDriverMarkerLater()
+        override fun markDriverLaunch(marker: String) = game.driverMarker.mark(marker)
+        override fun clearDriverLaunchMarker() { game.driverMarker.clear() }
         override fun quitGame(chosen: Boolean, autoState: Boolean) = game.quitWithAutoState(chosen, autoState)
         override fun toast(msg: String) = game.toast(msg)
         override fun isLandscape() = game.isLandscape()

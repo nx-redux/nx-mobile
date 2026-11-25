@@ -1,0 +1,13 @@
+--- a/pcsx2-libretro/Main.cpp
++++ b/pcsx2-libretro/Main.cpp
+@@ -839,7 +839,9 @@
+ 	}
+ 
+ 	s_boot_pending.store(false, std::memory_order_release);
+-	if (VMManager::HasValidVM())
++	// retro_unload_game (and a shutdown asked for mid-Execute) leaves the VM in Stopping, which HasValidVM does not
++	// count: without the shutdown here the IOP thread is never stopped and runs on in the memory released below.
++	if (VMManager::HasValidVM() || VMManager::GetState() == VMState::Stopping)
+ 		VMManager::Shutdown(false);
+ 	if (MTGS::IsOpen())
+ 	{

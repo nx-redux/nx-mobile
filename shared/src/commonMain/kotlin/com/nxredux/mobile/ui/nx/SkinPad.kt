@@ -28,16 +28,23 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.input.pointer.changedToDown
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
+import com.nxredux.mobile.options.PxRect
 import com.nxredux.mobile.shared.res.Res
 import com.nxredux.mobile.shared.res.misans_semibold
 import org.jetbrains.compose.resources.Font
 import com.nxredux.mobile.skin.SkinCell
+import com.nxredux.mobile.skin.SkinSeam
+import com.nxredux.mobile.skin.SkinSeamDraw
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Paint
 import com.nxredux.mobile.skin.skinTiles
 import androidx.compose.ui.graphics.drawscope.scale
 import com.nxredux.mobile.skin.SkinPackManifest
@@ -109,6 +116,9 @@ fun SkinArt(placement: SkinPlacement, picture: ImageBitmap, parts: ImageBitmap?,
     val semibold = Font(Res.font.misans_semibold, FontWeight.SemiBold)
     val labelFont = remember(semibold) { FontFamily(semibold) }
     val measurer = rememberTextMeasurer()
+    val rounded = remember(placement) {   // the screens with their corners: what a frame's black leaves open
+        Path().apply { for (g in placement.glasses) addRoundRect(androidx.compose.ui.geometry.RoundRect(g.rect.x, g.rect.y, g.rect.x + g.rect.width, g.rect.y + g.rect.height, CornerRadius(g.corner))) }
+    }
     val holes = remember(placement) {
         Path().apply { for (g in placement.glasses) addRect(Rect(g.rect.x, g.rect.y, g.rect.x + g.rect.width, g.rect.y + g.rect.height)) }
     }
@@ -116,10 +126,35 @@ fun SkinArt(placement: SkinPlacement, picture: ImageBitmap, parts: ImageBitmap?,
         // the screens are holes in the background: what is under them shows through (it runs under them otherwise)
         clipPath(holes, ClipOp.Difference) {
             for (c in placement.cells) drawCell(picture, c, placement.k)
+            // not half-folded: the fold board as one slab
+            if (placement.slab) for (d in SkinSeam.draws(placement, SKIN_STRETCH_MAX)) drawSeam(picture, d, placement.k)
         }
         // the pieces and labels whole, over the screens as the game draws them: a button moved onto a screen's edge stays
         // on top (the frame's own hole is cut round in its art)
-        if (parts != null) for (p in placement.pieces) drawPiece(parts, p)
+        if (parts != null) for (p in placement.pieces) {
+            if (p.fill >= 0f) {   // black inside a frame where no screen is: the screens cut out of it
+                clipPath(rounded, ClipOp.Difference) {
+                    drawRoundRect(Color.Black, Offset(p.dst.x, p.dst.y), Size(p.dst.width, p.dst.height), CornerRadius(p.fill))   // role: a screen frame's black inside
+                }
+            } else drawPiece(parts, p)
+        }
+        // the marks on the caps (their art is blank): a word cap height markH, or art from the parts markH tall
+        for (c in placement.controls) {
+            if (c.spec.markH <= 0f) continue
+            if (c.spec.markSw > 0 && c.spec.markSh > 0) {
+                if (parts == null) continue
+                val h = c.spec.markH; val w = h * c.spec.markSw / c.spec.markSh; val cy = c.y + c.spec.markDy
+                drawImage(parts, IntOffset(c.spec.markSx, c.spec.markSy), IntSize(c.spec.markSw, c.spec.markSh),
+                    IntOffset((c.x - w / 2f).roundToInt(), (cy - h / 2f).roundToInt()), IntSize(w.roundToInt(), h.roundToInt()))
+                continue
+            }
+            val word = c.spec.mark ?: continue
+            val style = TextStyle(color = Color(markInk(c.spec)), fontFamily = labelFont, fontWeight = FontWeight.SemiBold,
+                fontSize = (c.spec.markH / SKIN_LABEL_CAP).toSp())   // role: a word printed on a button
+            val m = measurer.measure(word, style)
+            val capTop = c.y + c.spec.markDy - c.spec.markH / 2f
+            drawText(m, topLeft = Offset(c.x - m.size.width / 2f, capTop + c.spec.markH - m.firstBaseline))
+        }
         // the labels under the buttons (written here, not in the picture): cap height labelH, centred labelDy below
         for (c in placement.controls) {
             val text = c.spec.label ?: continue
@@ -146,31 +181,39 @@ private fun DrawScope.drawPressShape(shape: SkinPressShape) {
 
 /** A piece: its part of [parts] at its spot (the frame scaled, filtered). */
 private fun DrawScope.drawPiece(parts: ImageBitmap, p: SkinPiece) {
-    val sx = p.src.x.roundToInt()
-    val sy = p.src.y.roundToInt()
-    val dx = p.dst.x.roundToInt()
-    val dy = p.dst.y.roundToInt()
-    val src = IntSize((p.src.x + p.src.width).roundToInt() - sx, (p.src.y + p.src.height).roundToInt() - sy)
-    val dst = IntSize((p.dst.x + p.dst.width).roundToInt() - dx, (p.dst.y + p.dst.height).roundToInt() - dy)
-    if (src.width > 0 && src.height > 0 && dst.width > 0 && dst.height > 0) {
-        drawImage(parts, IntOffset(sx, sy), src, IntOffset(dx, dy), dst, filterQuality = FilterQuality.High)
-    }
+    val src = p.src.roundedPx()
+    val dst = p.dst.roundedPx()
+    if (src.isEmpty || dst.isEmpty) return
+    drawImage(parts, src.topLeft, src.size, dst.topLeft, dst.size, filterQuality = FilterQuality.High)
 }
 
-/** One slice: copied where its part is fixed, laid in mirrored tiles where it repeats ([skinTiles]). */
-private fun DrawScope.drawCell(pic: ImageBitmap, c: SkinCell, k: Float) {
+/** [this] on whole px, each edge rounded on its own: rects that share an edge still meet. */
+internal fun PxRect.roundedPx(): IntRect =
+    IntRect(x.roundToInt(), y.roundToInt(), (x + width).roundToInt(), (y + height).roundToInt())
+
+/** A [SkinSeam] draw: mirrored, or faded out downwards through its own layer. */
+private fun DrawScope.drawSeam(pic: ImageBitmap, d: SkinSeamDraw, k: Float) {
+    if (!d.fade) { drawCell(pic, d.cell, k, flipY = d.mirror); return }
+    val r = d.cell.dst
+    val bounds = Rect(r.x, r.y, r.x + r.width, r.y + r.height)
+    drawContext.canvas.saveLayer(bounds, Paint())
+    drawCell(pic, d.cell, k, flipY = d.mirror)
+    drawRect(Brush.verticalGradient(listOf(Color.Black, Color.Transparent), startY = r.y, endY = r.y + r.height),
+        Offset(r.x, r.y), Size(r.width, r.height), blendMode = BlendMode.DstIn)
+    drawContext.canvas.restore()
+}
+
+/** One slice: copied where its part is fixed, laid in mirrored tiles where it repeats ([skinTiles]); [flipY] all upside down. */
+private fun DrawScope.drawCell(pic: ImageBitmap, c: SkinCell, k: Float, flipY: Boolean = false) {
     for (t in skinTiles(c, k, SKIN_STRETCH_MAX)) {
-        val sx = t.src.x.roundToInt()
-        val sy = t.src.y.roundToInt()
-        val srcSize = IntSize((t.src.x + t.src.width).roundToInt() - sx, (t.src.y + t.src.height).roundToInt() - sy)
-        val dx = t.dst.x.roundToInt()
-        val dy = t.dst.y.roundToInt()
-        val dstSize = IntSize((t.dst.x + t.dst.width).roundToInt() - dx, (t.dst.y + t.dst.height).roundToInt() - dy)
-        if (srcSize.width <= 0 || srcSize.height <= 0 || dstSize.width <= 0 || dstSize.height <= 0) continue
-        if (!t.flipX && !t.flipY) { drawImage(pic, IntOffset(sx, sy), srcSize, IntOffset(dx, dy), dstSize); continue }
-        val pivot = Offset(dx + dstSize.width / 2f, dy + dstSize.height / 2f)
-        scale(if (t.flipX) -1f else 1f, if (t.flipY) -1f else 1f, pivot) {
-            this@drawCell.drawImage(pic, IntOffset(sx, sy), srcSize, IntOffset(dx, dy), dstSize)
+        val src = t.src.roundedPx()
+        val dst = t.dst.roundedPx()
+        if (src.isEmpty || dst.isEmpty) continue
+        val fy = t.flipY != flipY
+        if (!t.flipX && !fy) { drawImage(pic, src.topLeft, src.size, dst.topLeft, dst.size); continue }
+        val pivot = Offset(dst.left + dst.width / 2f, dst.top + dst.height / 2f)
+        scale(if (t.flipX) -1f else 1f, if (fy) -1f else 1f, pivot) {
+            this@drawCell.drawImage(pic, src.topLeft, src.size, dst.topLeft, dst.size)
         }
     }
 }

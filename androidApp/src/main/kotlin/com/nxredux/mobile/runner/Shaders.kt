@@ -5,7 +5,7 @@ import com.nxredux.mobile.options.ShaderOptions
 import java.io.File
 
 /**
- * The shader presets (RetroArch `.glslp` + `.glsl` layout): the bundled set on the private SD root (`Shaders/`),
+ * The shader presets (RetroArch `.glslp` + `.glsl` layout, and slang `.slangp`): the bundled set on the private SD root (`Shaders/`),
  * app-owned and replaced whole on APK update, so no place for user files; and the user's own in the home's `Shaders/`,
  * never touched by the app. A user preset's path carries [ShaderOptions.USER_PREFIX] ("User/glsl/x.glsl"), so the two
  * never collide and a stored choice says which folder it reads from.
@@ -40,8 +40,8 @@ object Shaders {
         presetsIn(File(roots.bundled, DIR)) + (roots.user?.let { presetsIn(File(it, DIR)) }.orEmpty()).map { ShaderOptions.USER_PREFIX + it }
 
     /**
-     * The presets in [root]: `*.glslp` anywhere under it, and bare `*.glsl` directly in it or in `glsl/` (the nx-redux
-     * layout). Relative paths, sorted case-insensitively; none for a missing folder.
+     * The presets in [root]: `*.glslp` and `*.slangp` anywhere under it, and bare `*.glsl` directly in it or in `glsl/`
+     * (the nx-redux layout). Relative paths, sorted case-insensitively; none for a missing folder.
      */
     internal fun presetsIn(root: File): List<String> {
         if (!root.isDirectory) return emptyList()
@@ -49,7 +49,7 @@ object Shaders {
         root.walkTopDown().filter { it.isFile && !it.name.startsWith("._") && it.name != ".DS_Store" }.forEach { f ->
             val rel = f.relativeTo(root).path.replace('\\', '/')
             val bare = rel.endsWith(".glsl", ignoreCase = true) && (!rel.contains('/') || rel.startsWith("glsl/") && rel.count { it == '/' } == 1)
-            if (rel.endsWith(".glslp", ignoreCase = true) || bare) out += rel
+            if (rel.endsWith(".glslp", ignoreCase = true) || rel.endsWith(".slangp", ignoreCase = true) || bare) out += rel
         }
         return out.sortedWith(String.CASE_INSENSITIVE_ORDER)
     }

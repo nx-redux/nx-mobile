@@ -74,7 +74,7 @@ class FolderMerge(private val source: RomsSource, private val home: ContentRef) 
                     } ?: continue
                 } else {
                     if ('/' in g.dir.removePrefix(prefix).trimStart('/')) continue
-                    MoveItem(from, listOf(g.file) + DiscSheet.loadedNames(source, from, g.file), split.main).also { items += it }
+                    MoveItem(from, listOf(g.file) + DiscSheet.loadedNames(source, from, g.file) + MsuSets.loadedNames(source, from, g.file, g.badge), split.main).also { items += it }
                 }
                 paths.getOrPut(item) { ArrayList() } += line(other, disc, g.file) to line(split.main, disc, g.file)
             }
@@ -125,6 +125,8 @@ class FolderMerge(private val source: RomsSource, private val home: ContentRef) 
                 } else if (Names.stripExtension(c.name).lowercase() in bases) {
                     val target = into() ?: continue
                     if (source.child(target, c.name) != null) continue
+                    // A copy whose original will not go is kept, unlike a game's: the art stays with its moved game, and
+                    // the leftover only keeps the old folder from being removed.
                     if (source.moveFile(dir, c.name, target) || (source.copyFile(dir, c.name, target) && source.delete(dir, c.name))) any = true
                 }
             }

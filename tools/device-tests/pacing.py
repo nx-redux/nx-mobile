@@ -21,7 +21,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from fold import Fold, q  # noqa: E402
+from fold import NS, PKG, Fold, q  # noqa: E402
 
 PREFS = "shared_prefs/nx-mobile.xml"
 
@@ -40,7 +40,8 @@ def parse_timestats(text, frame_ms):
     on = False
     frames = None
     for i, line in enumerate(text.splitlines()):
-        if line.startswith("layerName = ") and "SurfaceView[" in line and "GameActivity" in line:
+        # "SurfaceView[…GameActivity](BLAST)#n"; Android 11 writes "SurfaceView - …/…GameActivity#0".
+        if line.startswith("layerName = ") and "SurfaceView" in line and "GameActivity" in line:
             on = True
         elif on and line.startswith("totalFrames = "):
             frames = int(line.split("=")[1])
@@ -73,7 +74,7 @@ def work_from_log(log):
 class Pacing:
     def __init__(self, args):
         self.a = args
-        self.dev = Fold(args.serial, verbose=args.verbose)
+        self.dev = Fold(args.serial, verbose=args.verbose, activity_hooks=getattr(args, "activity_hooks", False))
         self.home = args.home
         self.cfg_dir = "%s/.userdata/android/%s-%s" % (self.home, args.tag, args.core)
         self.cfg = "%s/%s.cfg" % (self.cfg_dir, os.path.basename(args.rom))
@@ -90,7 +91,7 @@ class Pacing:
         self.dev.require_present()
         self.saved_cfg = self.sh("cat %s 2>/dev/null" % q(self.cfg)) or None
         if self.a.work:
-            self.sh("am force-stop com.nxredux.mobile.dev")
+            self.sh("am force-stop %s" % PKG)
             self.saved_prefs = self.dev.run_as("cat %s" % PREFS)
             prefs = self.saved_prefs
             if 'name="debug_log"' in prefs:
@@ -121,7 +122,7 @@ class Pacing:
         self.sh("rm -f %s" % tmp)
 
     def restore(self):
-        self.sh("am force-stop com.nxredux.mobile.dev")
+        self.sh("am force-stop %s" % PKG)
         self.sh("; ".join("rm -f %s; if [ -e %s ]; then mv %s %s; fi" % (q(f), q(f + ".nxpacing"), q(f + ".nxpacing"), q(f))
                           for f in self.auto_files()))
         if self.saved_cfg is None:
@@ -154,8 +155,13 @@ class Pacing:
             self.sh("rm -f %s" % q(self.cfg))
         if prop:
             self.sh("setprop %s %s" % prop)
-        self.sh("am force-stop com.nxredux.mobile.dev; input keyevent KEYCODE_WAKEUP; wm dismiss-keyguard; "
-                "settings put global stay_on_while_plugged_in 3")
+        self.sh("am force-stop %s; input keyevent KEYCODE_WAKEUP; wm dismiss-keyguard; "
+                "settings put global stay_on_while_plugged_in 3" % PKG)
+        if self.a.open_first:
+            # Android 11 holds a broadcast to a force-stopped app: open it so the GAME hook is heard.
+            self.sh("input keyevent KEYCODE_WAKEUP; wm dismiss-keyguard; "
+                    "am start -n %s/%s.LaunchActivity" % (PKG, NS))
+            time.sleep(self.a.open_first)
         try:
             self.dev.game(self.a.rom, self.a.tag, slot=self.a.slot if self.a.state else None, timeout=90)
             time.sleep(self.a.warmup)
@@ -164,7 +170,7 @@ class Pacing:
             time.sleep(self.a.seconds)
             stats = self.sh("dumpsys SurfaceFlinger --timestats -dump; dumpsys SurfaceFlinger --timestats -disable",
                             timeout=60)
-            log = self.sh("logcat -d | grep -E 'NXHITCH summary|SET_HW_RENDER: Vulkan accepted'", timeout=60)
+            log = self.sh("logcat -d adbd:S | grep -E 'NXHITCH summary|SET_HW_RENDER: Vulkan accepted'", timeout=60)
             temp = self.sh("cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null").strip()
         finally:
             try:
@@ -173,7 +179,7 @@ class Pacing:
                 quit_ok = None
             if not quit_ok:
                 print("the game did not quit: force-stopped", flush=True)
-            self.sh("am force-stop com.nxredux.mobile.dev; settings put global stay_on_while_plugged_in 0")
+            self.sh("am force-stop %s; settings put global stay_on_while_plugged_in 0" % PKG)
         frame_ms = 1000.0 / self.a.content_fps
         result = parse_timestats(stats, frame_ms) or {"frames": None, "uneven": None, "held33": None}
         result.update(work_from_log(log) or {})
@@ -190,8 +196,8 @@ class Pacing:
             key, values = self.a.ab.split("=", 1)
             variants = [("%s=%s" % (key, v), None) for v in values.split(",")]
         elif self.a.ab_prop:
-            name, values = self.a.ab_prop.split("=", 1)
-            variants = [(None, (name, v)) for v in values.split(",")]
+            name, values = self.props()[0]
+            variants = [(None, (name, v)) for v in values]
         for n in range(1, self.a.runs + 1):
             for option, prop in variants:   # alternated, so warming affects every variant alike
                 label = option or ("%s=%s" % prop if prop else "run")
@@ -222,6 +228,10 @@ def main():
     p.add_argument("--ab-prop", help="alternate one system property: debug.nx.presenttime=0,1")
     p.add_argument("--content-fps", type=float, default=60.0, help="the game's frame rate (steady frame length)")
     p.add_argument("--work", action="store_true", help="turn the Debug log on for the runs (core work per frame)")
+    p.add_argument("--open-first", type=float, default=0, metavar="SECONDS",
+                   help="open the app and wait before each launch (Android 11 drops the hook for a force-stopped app)")
+    p.add_argument("--activity-hooks", action="store_true",
+                   help="send the GAME hooks as activity starts (devices that drop adb broadcasts, e.g. the AYANEO)")
     p.add_argument("--verbose", action="store_true")
     a = p.parse_args()
 

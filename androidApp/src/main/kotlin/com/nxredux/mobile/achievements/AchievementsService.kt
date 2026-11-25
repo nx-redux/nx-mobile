@@ -1,7 +1,7 @@
 package com.nxredux.mobile.achievements
 
 import android.content.Context
-import android.content.pm.PackageManager
+import com.nxredux.mobile.BuildConfig
 import com.nxredux.mobile.library.LibraryIndexCodec
 import com.nxredux.mobile.runner.RomCache
 import com.nxredux.mobile.settings.AppSettings
@@ -36,7 +36,7 @@ object AchievementsService {
         val app = context.applicationContext
         val homes = AndroidHomeLocator(app)
         return RaPlatform(
-            AndroidRaStore(app), AndroidRaHttp(RaRequests.userAgent(versionName(app), "Android ${android.os.Build.VERSION.RELEASE}")),
+            AndroidRaStore(app), AndroidRaHttp(BuildConfig.VERSION_NAME, "Android ${android.os.Build.VERSION.RELEASE}"),
             AndroidRaHasher(app, AndroidRomsSources.of(app)), AndroidRaSigner, AndroidConnectivity(app),
             RaHomeTree(AndroidRomsSources.of(app)) { homes.current() },   // storage: an unmounted card is not available()
         )
@@ -80,12 +80,5 @@ object AchievementsService {
                 RaDownloadService.update(app, download)
             }
         }
-    }
-
-    private fun versionName(context: Context): String {
-        val pm = context.packageManager
-        val info = if (android.os.Build.VERSION.SDK_INT >= 33) pm.getPackageInfo(context.packageName, PackageManager.PackageInfoFlags.of(0))
-        else @Suppress("DEPRECATION") pm.getPackageInfo(context.packageName, 0)
-        return info.versionName ?: "?"
     }
 }

@@ -7,15 +7,11 @@
 #include <chrono>
 #include <cstdio>
 
+#include "check.h"
+
 using namespace libretrodroid;
 using std::chrono::microseconds;
 using std::chrono::milliseconds;
-
-static int failures = 0;
-
-static void check(bool ok, const char* what) {
-    if (!ok) { std::printf("FAIL %s\n", what); failures++; }
-}
 
 static TimePoint at(double ms) {
     return TimePoint(std::chrono::duration_cast<TimePoint::duration>(std::chrono::duration<double, std::milli>(1000.0 + ms)));

@@ -31,10 +31,6 @@ JniString::~JniString() {
     if (nativeString != nullptr) env->ReleaseStringUTFChars(javaString, nativeString);
 }
 
-const char* JniString::cString() {
-    return strdup(nativeString != nullptr ? nativeString : "");
-}
-
 std::string JniString::stdString() {
     return nativeString != nullptr ? std::string(nativeString) : std::string();
 }
@@ -45,4 +41,16 @@ jstring newSafeJString(JNIEnv* env, const char* s) {
     if (libretrodroid::Utf8::isJniSafe(s, n)) return env->NewStringUTF(s);
     std::u16string wide = libretrodroid::Utf8::toUtf16(s, n);
     return env->NewString(reinterpret_cast<const jchar*>(wide.data()), (jsize) wide.size());
+}
+
+jobjectArray newSafeJStringArray(JNIEnv* env, const std::vector<std::string>& values) {
+    jclass stringClass = env->FindClass("java/lang/String");
+    jobjectArray result = env->NewObjectArray((jsize) values.size(), stringClass, nullptr);
+    for (size_t i = 0; i < values.size(); i++) {
+        jstring value = newSafeJString(env, values[i]);
+        env->SetObjectArrayElement(result, (jsize) i, value);
+        env->DeleteLocalRef(value);
+    }
+    env->DeleteLocalRef(stringClass);
+    return result;
 }

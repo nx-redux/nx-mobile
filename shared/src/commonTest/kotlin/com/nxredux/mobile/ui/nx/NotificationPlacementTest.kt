@@ -8,7 +8,7 @@ import kotlin.test.assertEquals
 /**
  * Where the in-game notifications sit. Over the landscape overlay pad the top corners hold its system row
  * (STICK / MENU left, SELECT / START right) and the bottom-left its d-pad, so the pill and the toasts go top-centre, the
- * toasts under the pill; anywhere else (portrait band, tabletop, a controller attached) the corners.
+ * toasts under the pill, in portrait over a pad too; anywhere else (tabletop, a controller attached) the corners.
  */
 class NotificationPlacementTest {
     @Test fun overTheLandscapeOverlayPadEverythingIsTopCentre() {
@@ -23,9 +23,10 @@ class NotificationPlacementTest {
         assertEquals(Alignment.TopStart to Alignment.BottomStart, p.pill to p.toasts)
     }
 
-    @Test fun inPortraitOverThePictureTheCornersEvenWithAPad() {
-        assertEquals(NxNotificationPlacement.CORNERS, nxNotificationPlacement(overlayPadShown = true, onPicture = true))
-        assertEquals(NxNotificationPlacement.CORNERS, nxNotificationPlacement(overlayPadShown = false, onPicture = true))
+    // In portrait over a pad the toasts go top-centre with the pill, not down on a DS / 3DS touch screen.
+    @Test fun inPortraitOverAPadEverythingIsTopCentre() {
+        assertEquals(NxNotificationPlacement.TOP_CENTRE, nxNotificationPlacement(overlayPadShown = true, onPicture = true))
+        assertEquals(NxNotificationPlacement.TOP_CENTRE, nxNotificationPlacement(overlayPadShown = false, onPicture = true))
     }
 
     // A cutout on one side only would pad the column off centre, into the far row ([nxTopCentreMaxWidth] already keeps

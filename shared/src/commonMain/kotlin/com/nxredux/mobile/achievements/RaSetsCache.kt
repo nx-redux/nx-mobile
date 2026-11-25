@@ -12,13 +12,12 @@ data class RaSummaryAchievement(@SerialName("i") val id: Int, @SerialName("t") v
 /**
  * `cache/games/<md5>/summary.json`: what the menu, the browser's list and the sync read of a cached `sets.json` (up to
  * ~2 MB), a few KB: the game, its console and title, the core achievements that count ([SetsBody.coreAchievements]),
- * and every set's game id ([setGameIds]: `allprogress` counts a bonus or subset set under its own id). A summary
- * without [setGameIds] is rebuilt on read.
+ * and every set's game id ([setGameIds]: `allprogress` counts a bonus or subset set under its own id).
  */
 @Serializable
 data class RaSetsSummary(
     @SerialName("g") val gameId: Int, @SerialName("c") val consoleId: Int, @SerialName("t") val title: String,
-    @SerialName("a") val core: List<RaSummaryAchievement>, @SerialName("s") val setGameIds: List<Int>? = null,
+    @SerialName("a") val core: List<RaSummaryAchievement>, @SerialName("s") val setGameIds: List<Int> = emptyList(),
 ) {
     companion object {
         fun of(sets: SetsBody) = RaSetsSummary(
@@ -63,7 +62,7 @@ object RaSetsCache {
     }
 
     private suspend fun read(store: RaStore, hash: String): RaSetsSummary? =
-        store.readJson(RaPaths.summary(hash), RaSetsSummary.serializer())?.takeIf { it.setGameIds != null }
+        store.readJson(RaPaths.summary(hash), RaSetsSummary.serializer())
 
     private suspend fun writeSummary(store: RaStore, hash: String, s: RaSetsSummary) =
         store.writeAtomic(RaPaths.summary(hash), RaJson.json.encodeToString(RaSetsSummary.serializer(), s).encodeToByteArray())

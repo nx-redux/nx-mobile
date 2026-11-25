@@ -8,6 +8,7 @@ import com.nxredux.mobile.achievements.RaLaunchFingerprint
 import com.nxredux.mobile.achievements.RaLaunchHash
 import com.nxredux.mobile.achievements.RaLibraryView
 import com.nxredux.mobile.achievements.RaRequestKind
+import com.nxredux.mobile.achievements.RaRequests
 import com.nxredux.mobile.achievements.RaResponse
 import com.nxredux.mobile.achievements.RaSession
 import com.nxredux.mobile.achievements.RaSessionMode
@@ -46,7 +47,8 @@ sealed interface RaEvent {
     data object Disconnected : RaEvent
     data object Reconnected : RaEvent
     data class GameLoaded(val title: String, val unlocked: Int, val total: Int) : RaEvent
-    data object GameUnknown : RaEvent
+    /** No set for the game; [hashUnknown]: RA said it doesn't know the file (not an offline or failed load). */
+    data class GameUnknown(val hashUnknown: Boolean) : RaEvent
     data class LoginFailed(val message: String) : RaEvent
     data object SessionOffline : RaEvent
     data object SessionDisabled : RaEvent
@@ -151,6 +153,8 @@ class AchievementsBridge(private val controller: RaController, private val setti
     fun startSession() {
         val user = settings.raUsername
         val token = settings.raToken ?: return
+        // The core is created by the first frame; RA asks every request of a game to name it.
+        LibretroDroid.getCoreIdentity()?.takeIf { it.size == 2 }?.let { transport.core = RaRequests.coreToken(it[0] ?: "", it[1] ?: "") }
         safeLaunch {
             val h = hashJob?.await()
             NxLog.i(TAG, "hash ${h ?: "unidentified"} (console $consoleId)")
@@ -211,7 +215,7 @@ class AchievementsBridge(private val controller: RaController, private val setti
             }
             LibretroDroid.RA_EVENT_GAME_UNKNOWN, LibretroDroid.RA_EVENT_GAME_LOAD_FAILED -> {
                 NxLog.i(TAG, "game not loaded (${e.type}): ${e.extra}")
-                _events.tryEmit(RaEvent.GameUnknown)
+                _events.tryEmit(RaEvent.GameUnknown(hashUnknown = e.type == LibretroDroid.RA_EVENT_GAME_UNKNOWN))
                 // Only RA's "unknown hash" is an answer: a load failure is transport/offline, and offline the shim answers an
                 // uncached hash with GameID 0 itself (RaTransport), so neither says anything about the hash.
                 if (e.type == LibretroDroid.RA_EVENT_GAME_UNKNOWN && mode == RaSessionMode.ONLINE) safeLaunch(Dispatchers.IO) { hash?.let { answer(it) { 0 } } }

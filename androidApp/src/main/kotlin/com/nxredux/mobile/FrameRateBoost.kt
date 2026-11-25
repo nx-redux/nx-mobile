@@ -29,7 +29,7 @@ import com.swordfish.libretrodroid.NxLog
  * `Surface.setFrameRate`: the window's own surface is not reachable from an app. A mode change can show a blank frame
  * on some panels, so on 30-34 the boost lingers [LINGER_LEGACY_MS] instead, keeping a menu in use at the top mode
  * between presses (a little battery for no 60/120 flip-flop while browsing). API 26-29: nothing. Games (GameActivity,
- * its own window) are never touched: they run at the core's rate.
+ * its own window) are left alone here: their view asks for the core's rate (GLRetroView).
  */
 internal class FrameRateBoost(private val activity: Activity) {
     private val handler = Handler(Looper.getMainLooper())

@@ -2,7 +2,6 @@ package com.nxredux.mobile.ui.nx
 
 import kotlin.math.abs
 import kotlin.test.Test
-import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class PadMetricsTest {

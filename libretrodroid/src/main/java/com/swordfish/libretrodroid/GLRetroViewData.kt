@@ -35,12 +35,8 @@ class GLRetroViewData(context: Context) {
     /** The clock file's bytes, applied after the battery save. */
     var rtcState: ByteArray? = null
     var shader: ShaderConfig = ShaderConfig.Default()
-    var viewportAlignment = ViewportAlignment.CENTER
     var rumbleEventsEnabled: Boolean = true
-    var preferLowLatencyAudio: Boolean = true
-    var skipDuplicateFrames: Boolean = false
     var enableMicrophone: Boolean = false
-    var immersiveMode: ImmersiveMode? = null
     /** With Settings → System → Debug log on at launch: log GL driver messages to tag NXGL (GL_KHR_debug callback, else glGetError polling). */
     var glDebugOutput: Boolean = false
     /**
@@ -50,6 +46,18 @@ class GLRetroViewData(context: Context) {
     var preferVulkan: Boolean = false
     /** With [preferVulkan]: the core renders into a swapchain on the bridge's surface (Dolphin), so frames are bounded by it. */
     var vulkanSwapchainFrames: Boolean = false
+    /**
+     * With [preferVulkan]: the directory of a custom Vulkan driver (Turnip) loaded through libadrenotools, absolute and
+     * ending in '/', under the app's internal storage (not shared storage: the linker refuses it). Null: the system driver.
+     */
+    var vulkanDriverDir: String? = null
+    /** The driver's library file name in [vulkanDriverDir] (its meta.json libraryName). */
+    var vulkanDriverLibrary: String? = null
+    /**
+     * The driver cannot import a shared buffer, so its frames go through a swapchain on an image reader
+     * ([LibretroDroid.VULKAN_HANDOFF_READER] from [GLRetroView.probeVulkanDriver]).
+     */
+    var vulkanDriverReader: Boolean = false
     /** Offer libretro video views to the core (melonDS DS, Azahar), which then report where each screen is. */
     var videoViews: Boolean = false
     /**
@@ -64,12 +72,6 @@ class GLRetroViewData(context: Context) {
      * after the game loads and before the first retro_run, so a core that reads its pads at boot sees them.
      */
     var controllerPorts: Map<Int, Int> = emptyMap()
-}
-
-enum class ViewportAlignment(val value: Int) {
-    CENTER(0),
-    TOP(1),
-    BOTTOM(2)
 }
 
 /** How the picture fills the viewport: FIT keeps the core aspect, INTEGER uses whole multiples of the base size, STRETCH fills it. */

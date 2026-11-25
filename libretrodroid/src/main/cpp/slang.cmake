@@ -1,0 +1,35 @@
+# glslang (BSD-3-Clause and others, see its LICENSE.txt) and SPIRV-Cross (Apache-2.0): slang shader presets are Vulkan
+# GLSL, compiled to SPIR-V and written back out as GLSL ES for the device. Static, GLSL only: no optimizer, no HLSL / MSL
+# / C++ backends, no tools. Shared by the app's build and the host checker (src/test/native/slang).
+set(ENABLE_OPT OFF CACHE BOOL "" FORCE)
+set(ENABLE_HLSL OFF CACHE BOOL "" FORCE)
+set(ENABLE_GLSLANG_BINARIES OFF CACHE BOOL "" FORCE)
+set(ENABLE_GLSLANG_JS OFF CACHE BOOL "" FORCE)
+set(ENABLE_PCH OFF CACHE BOOL "" FORCE)
+set(GLSLANG_TESTS OFF CACHE BOOL "" FORCE)
+set(GLSLANG_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
+set(BUILD_EXTERNAL OFF CACHE BOOL "" FORCE)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/glslang ${CMAKE_CURRENT_BINARY_DIR}/glslang EXCLUDE_FROM_ALL)
+
+set(SPIRV_CROSS_CLI OFF CACHE BOOL "" FORCE)
+set(SPIRV_CROSS_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
+set(SPIRV_CROSS_ENABLE_HLSL OFF CACHE BOOL "" FORCE)
+set(SPIRV_CROSS_ENABLE_MSL OFF CACHE BOOL "" FORCE)
+set(SPIRV_CROSS_ENABLE_CPP OFF CACHE BOOL "" FORCE)
+set(SPIRV_CROSS_ENABLE_REFLECT OFF CACHE BOOL "" FORCE)
+set(SPIRV_CROSS_ENABLE_C_API OFF CACHE BOOL "" FORCE)
+set(SPIRV_CROSS_ENABLE_UTIL OFF CACHE BOOL "" FORCE)
+set(SPIRV_CROSS_SKIP_INSTALL ON CACHE BOOL "" FORCE)
+set(SPIRV_CROSS_FORCE_PIC ON CACHE BOOL "" FORCE)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/SPIRV-Cross ${CMAKE_CURRENT_BINARY_DIR}/SPIRV-Cross EXCLUDE_FROM_ALL)
+
+# Optimised for size in every build type: about half the bytes, and a debug build would otherwise take many seconds to
+# translate a large preset. Sections let the linker drop the parts of both libraries nothing reaches.
+foreach(target glslang glslang-default-resource-limits spirv-cross-core spirv-cross-glsl)
+    target_compile_options(${target} PRIVATE -Os -ffunction-sections -fdata-sections -fvisibility=hidden)
+endforeach()
+
+add_library(nxslangdeps INTERFACE)
+target_include_directories(nxslangdeps INTERFACE ${CMAKE_CURRENT_LIST_DIR}/glslang ${CMAKE_CURRENT_LIST_DIR}/SPIRV-Cross)
+target_link_libraries(nxslangdeps INTERFACE glslang glslang-default-resource-limits spirv-cross-glsl)

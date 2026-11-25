@@ -28,7 +28,7 @@ class CoreRegistryArcadeTest {
     }
     @Test fun new_core_settings() {
         val pico = CoreRegistry.forTag("32X")!!
-        assertEquals(LoadMode.REAL_PATH, pico.loadMode)
+        assertEquals(LoadMode.FILE_DESCRIPTOR, pico.loadMode)
         // The Sega consoles' default core: every extension their games use (valid_extensions at the pin, less sc, sgd, pco).
         assertEquals(setOf("32x", "bin", "md", "gen", "smd", "68k", "sms", "gg", "sg", "cue", "iso", "chd", "m3u"), pico.extensions)
         assertEquals("enabled", pico.defaultOptions["picodrive_drc"])

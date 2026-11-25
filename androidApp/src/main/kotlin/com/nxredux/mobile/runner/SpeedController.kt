@@ -75,6 +75,9 @@ internal class SpeedController(
         return (o.ffSpeed > 0) to o.rewinding.takeIf { rewindShown }
     }
 
+    /** The fast-forward speed the panel's Fast forward tile shows. */
+    val ffSpeed: Int get() = control.ffSpeed
+
     /** Rewind is offered now: the core can, the console's Rewind row is on, the engine hasn't given up, no session plays. */
     val rewindShown: Boolean get() = control.rewindOn && !netplay
 

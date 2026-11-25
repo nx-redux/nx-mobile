@@ -17,12 +17,14 @@
 
 package com.swordfish.libretrodroid
 
-import android.app.ActivityManager
 import android.content.Context
 import android.graphics.PointF
 import android.graphics.RectF
+import android.hardware.display.DisplayManager
 import android.opengl.GLSurfaceView
+import android.os.Build
 import android.os.SystemClock
+import android.view.SurfaceHolder
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -84,11 +86,6 @@ class GLRetroView(
     }
 
     /**
-     * Audio resampling quality: 0 Low (zero-order hold), 1 Medium (linear), 2 High (fast sinc), 3 Max (best sinc).
-     * Audible fast forward plays at Medium at most. Main thread; pushed straight to native, kept across games and
-     * re-applied after create().
-     */
-    /**
      * Frame Skip: true (Auto) runs two frames in a step when the phone can't keep up, holding the
      * game's speed; false shows every frame and lets the game slow down. Applied live.
      */
@@ -112,6 +109,11 @@ class GLRetroView(
             LibretroDroid.setFillAudioGaps(value)
         }
 
+    /**
+     * Audio resampling quality: 0 Low (zero-order hold), 1 Medium (linear), 2 High (fast sinc), 3 Max (best sinc).
+     * Audible fast forward plays at Medium at most. Main thread; pushed straight to native, kept across games and
+     * re-applied after create().
+     */
     var resamplingQuality: Int by Delegates.observable(2) { _, old, value ->
         if (old != value) pushResamplingQuality()
     }
@@ -180,11 +182,6 @@ class GLRetroView(
         queueEvent { LibretroDroid.setViewport(left, top, width, height) }
     }
 
-    /** Applied on the emulation thread, which owns the native Video. */
-    var viewportAlignment: ViewportAlignment by Delegates.observable(ViewportAlignment.CENTER) { _, _, value ->
-        queueEvent { LibretroDroid.setViewportAlignment(value.value) }
-    }
-
     /** Applied on the emulation thread; takes effect on the next rendered (or paused-redrawn) frame. */
     var scaleMode: ScaleMode by Delegates.observable(ScaleMode.FIT) { _, _, value ->
         queueEvent { LibretroDroid.setScaleMode(value.value) }
@@ -219,11 +216,6 @@ class GLRetroView(
     }
 
     /**
-     * Parts of the core frame drawn at places in the view (a DS screen each); empty = the single picture. While set,
-     * [scaleMode] and [screenOffset] don't apply; dst is relative to [viewport]. Touches map through the topmost region
-     * ([ScreenRegions.mapTouch]). Main thread; applied on the GL thread, and re-applied after create().
-     */
-    /**
      * A frame composed from the core's ([FrameComposition]) that replaces the core frame for every draw and for
      * touch (mapped back through its parts); null = the core frame as it is. Re-applied after create().
      */
@@ -235,6 +227,23 @@ class GLRetroView(
         queueEvent { LibretroDroid.setComposition(w, h, packed) }
     }
 
+    /**
+     * The whole scale the core draws its screens at (1 = native): a preset gets each shaded screen shrunk back to native
+     * size, the pixels it is written for, with the core frame height it was worked out for (0 = not known), so a frame
+     * of another height drawn before the next layout is shrunk by its own scale. Re-applied after create().
+     */
+    var shaderSourceScale: ShaderSourceScale by Delegates.observable(ShaderSourceScale()) { _, old, value ->
+        if (old == value) return@observable
+        queueEvent { LibretroDroid.setShaderSourceScale(value.scale, value.frameHeight) }
+    }
+
+    data class ShaderSourceScale(val scale: Int = 1, val frameHeight: Int = 0)
+
+    /**
+     * Parts of the core frame drawn at places in the view (a DS screen each); empty = the single picture. While set,
+     * [scaleMode] and [screenOffset] don't apply; dst is relative to [viewport]. Touches map through the topmost region
+     * ([ScreenRegions.mapTouch]). Main thread; applied on the GL thread, and re-applied after create().
+     */
     var screenRegions: List<ScreenRegion> by Delegates.observable(emptyList()) { _, old, value ->
         if (old == value) return@observable
         val packed = ScreenRegions.pack(value)
@@ -304,7 +313,7 @@ class GLRetroView(
         if (pressed) sendMotionEvent(MOTION_SOURCE_POINTER, x01, y01) else sendMotionEvent(MOTION_SOURCE_POINTER, -1f, -1f)
     }
 
-    /** A RetroArch GLSL chain drawn instead of [shader]; null = the built-in [shader]. Queued on the GL thread; survives create(). */
+    /** A RetroArch preset chain (GLSL or slang) drawn instead of [shader]; null = the built-in [shader]. Queued on the GL thread; survives create(). */
     var shaderChain: ShaderChainData? by Delegates.observable(null) { _, _, value ->
         shaderParameterOverrides.clear()
         queueEvent { pushShaderChain(value) }
@@ -337,10 +346,8 @@ class GLRetroView(
     @Volatile
     var afterStep: (() -> Unit)? = null
 
-    private val openGLESVersion: Int
-
     private var isGameLoaded = false
-    private var isEmulationReady = false
+    @Volatile private var isEmulationReady = false   // set on the lifecycle thread, read on the GL thread
     private var isAborted = false
 
     // Mirrors the GLThread's lifetime: GLSurfaceView exits it on detach and recreates it on re-attach.
@@ -382,9 +389,10 @@ class GLRetroView(
     private var lifecycle: Lifecycle? = null
 
     init {
-        openGLESVersion = getGLESVersion(context)
-        preserveEGLContextOnPause = true
-        setEGLContextClientVersion(openGLESVersion)
+        // debug.nx.keepcontext=0 gives the context up at every pause: a lost context on demand, for checking that the
+        // picture comes back (a phone otherwise keeps it through Home, screen off and a memory trim).
+        preserveEGLContextOnPause = LibretroDroid.keepsContextOnPause()
+        setEGLContextClientVersion(3)
         setRenderer(Renderer())
         // No keepScreenOn here: the host's window decides (nx-mobile's GameActivity holds the screen on while the game
         // runs, not under its in-game menu). A view's own flag would hold it whatever the window says.
@@ -396,27 +404,29 @@ class GLRetroView(
         LibretroDroid.setGlDebugOutput(data.glDebugOutput)
         LibretroDroid.setPreferVulkan(data.preferVulkan)
         LibretroDroid.setVulkanSwapchainFrames(data.vulkanSwapchainFrames)
+        // The hooks must come from nativeLibraryDir (libadrenotools); the temp directory is only used below API 29.
+        LibretroDroid.setVulkanDriver(
+            data.vulkanDriverDir,
+            data.vulkanDriverLibrary,
+            context.applicationInfo.nativeLibraryDir,
+            driverTmpDir(context),
+            data.vulkanDriverReader,
+        )
         LibretroDroid.setVideoViewsEnabled(data.videoViews)
         LibretroDroid.setKeepCoreLoaded(data.keepCoreLoaded)
         LibretroDroid.setUsername(data.username)
         LibretroDroid.create(
-            openGLESVersion,
             data.coreFilePath,
             data.systemDirectory,
             data.savesDirectory,
             data.variables,
             buildShader(shader),
             getDefaultRefreshRate(),
-            data.preferLowLatencyAudio,
             data.gameVirtualFiles.isNotEmpty() || data.extraVirtualFiles.isNotEmpty(),
             data.enableMicrophone,
-            data.skipDuplicateFrames,
-            data.immersiveMode,
             getDeviceLanguage()
         )
         LibretroDroid.setRumbleEnabled(data.rumbleEventsEnabled)
-        val alignment = data.viewportAlignment.value
-        queueEvent { LibretroDroid.setViewportAlignment(alignment) }
         reapplyDisplaySettings()
         pushFastForward()
         pushRewind()
@@ -440,6 +450,7 @@ class GLRetroView(
         val regions = ScreenRegions.pack(screenRegions)
         val composed = composition
         val composedParts = ScreenRegions.pack(composed?.parts.orEmpty())
+        val sourceScale = shaderSourceScale
         val secondary = ScreenRegions.pack(secondaryRegions)
         val sticky = stickyPointer
         val held = pictureHeld || mainCovered
@@ -451,6 +462,7 @@ class GLRetroView(
             LibretroDroid.setPictureHeld(held)
             LibretroDroid.setScreenRegions(regions)
             LibretroDroid.setComposition(composed?.width ?: 0, composed?.height ?: 0, composedParts)
+            LibretroDroid.setShaderSourceScale(sourceScale.scale, sourceScale.frameHeight)
             LibretroDroid.setSecondaryRegions(secondary)
             setStickyPointers(sticky)
             pushShaderChain(chain)
@@ -464,6 +476,32 @@ class GLRetroView(
     private fun pushShaderChain(chain: ShaderChainData?) = catchExceptions {
         if (chain == null) {
             LibretroDroid.clearShaderChain()
+        } else if (chain.slangPasses.isNotEmpty()) {
+            val passes = chain.slangPasses
+            val luts = chain.luts
+            val params = chain.params.entries.toList()
+            LibretroDroid.setSlangChain(
+                passes.map { it.program }.toTypedArray(),
+                passes.map { pass -> pass.filterLinear?.let { if (it) 1 else 0 } ?: -1 }.toIntArray(),
+                passes.map { it.wrap.value }.toIntArray(),
+                passes.map { it.scaleTypeX.value }.toIntArray(),
+                passes.map { it.scaleTypeY.value }.toIntArray(),
+                passes.map { it.scaleX }.toFloatArray(),
+                passes.map { it.scaleY }.toFloatArray(),
+                passes.map { it.frameCountMod }.toIntArray(),
+                passes.map { it.alias }.toTypedArray(),
+                passes.map { it.format }.toTypedArray(),
+                passes.map { it.mipmapInput }.toBooleanArray(),
+                luts.map { it.id }.toTypedArray(),
+                luts.map { it.width }.toIntArray(),
+                luts.map { it.height }.toIntArray(),
+                luts.map { it.rgba }.toTypedArray(),
+                luts.map { it.linear }.toBooleanArray(),
+                luts.map { it.wrap.value }.toIntArray(),
+                luts.map { it.mipmap }.toBooleanArray(),
+                params.map { it.key }.toTypedArray(),
+                params.map { it.value }.toFloatArray(),
+            )
         } else {
             val passes = chain.passes
             val luts = chain.luts
@@ -528,6 +566,58 @@ class GLRetroView(
         }.isSuccess
     }
 
+    // A frame read waiting for the next draw ([readFrame]) and what it asked for; GL thread only.
+    private var frameReadDone: ((ByteArray?) -> Unit)? = null
+    private var frameReadArgs: FloatArray? = null
+
+    /**
+     * The core's own frame, [src] (0..1 of it, y down) drawn at [width] x [height]: RGBA rows, top row first, with no
+     * shader, layout or overlay, whichever display shows the picture and also while the view is paused. [done] runs once
+     * on the GL thread, with null when there is no frame. False when it could not be queued (the GL thread is gone).
+     * A newer read replaces one still waiting (that one gets null).
+     */
+    fun readFrame(src: ScreenRect, width: Int, height: Int, done: (ByteArray?) -> Unit): Boolean {
+        if (emulationThreadGone || nativeDestroyed.get() || width <= 0 || height <= 0) return false
+        val args = floatArrayOf(src.left, src.top, src.right, src.bottom, width.toFloat(), height.toFloat())
+        return runCatching {
+            queueEvent {
+                frameReadDone?.let { frameReadDone = null; it(null) }
+                // A GL core's framebuffer is whole only right after its draw while it runs: read then ([takeFrameRead]).
+                val afterDraw = isEmulationReady && LibretroDroid.rendersInVideoCallback()
+                val bytes = readFrameNow(args, afterDraw)
+                if (afterDraw && bytes == null) {
+                    frameReadDone = done
+                    frameReadArgs = args
+                } else {
+                    done(bytes?.takeIf { it.isNotEmpty() })
+                }
+            }
+        }.isSuccess
+    }
+
+    private fun readFrameNow(args: FloatArray, afterDraw: Boolean): ByteArray? =
+        if (nativeDestroyed.get()) ByteArray(0)
+        else runCatching { LibretroDroid.readFrame(args[0], args[1], args[2], args[3], args[4].toInt(), args[5].toInt(), afterDraw) }
+            .onFailure { NxLog.e(TAG_LOG, "frame read failed", it) }.getOrDefault(ByteArray(0))
+
+    /** GL thread, after a step: hands a read waiting for that draw its pixels. */
+    private fun deliverFrameRead() {
+        val done = frameReadDone ?: return
+        val bytes = runCatching { LibretroDroid.takeFrameRead() }.getOrDefault(ByteArray(0)) ?: return
+        frameReadDone = null
+        frameReadArgs = null
+        done(bytes.takeIf { it.isNotEmpty() })
+    }
+
+    /** GL thread, the view paused: no draw comes, and the core no longer runs, so a waiting read is done now. */
+    private fun finishFrameReadPaused() {
+        val done = frameReadDone ?: return
+        val args = frameReadArgs ?: return
+        frameReadDone = null
+        frameReadArgs = null
+        done(readFrameNow(args, afterDraw = false)?.takeIf { it.isNotEmpty() })
+    }
+
     private fun destroyNative() {
         if (nativeDestroyed.compareAndSet(false, true)) LibretroDroid.destroy()
     }
@@ -589,12 +679,49 @@ class GLRetroView(
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         emulationThreadGone = false
-        display?.let { LibretroDroid.setPresentationDeadline(it.presentationDeadlineNanos) }
+        display?.let {
+            LibretroDroid.setPresentationDeadline(it.presentationDeadlineNanos)
+            LibretroDroid.setScreenRefreshRate(it.refreshRate)
+        }
+        context.getSystemService(DisplayManager::class.java)?.registerDisplayListener(displayListener, handler)
     }
 
     override fun onDetachedFromWindow() {
+        context.getSystemService(DisplayManager::class.java)?.unregisterDisplayListener(displayListener)
         emulationThreadGone = true
         super.onDetachedFromWindow()
+    }
+
+    override fun surfaceCreated(holder: SurfaceHolder) {
+        askedFps = 0.0   // a new surface has asked for nothing yet
+        super.surfaceCreated(holder)
+    }
+
+    // The game's frame rate as last asked of the display (0: not yet, on this surface), and frames since it was read.
+    @Volatile
+    private var askedFps = 0.0
+    private var framesSinceRateCheck = 0
+
+    /**
+     * Asks the display for a refresh rate the game's [fps] divides evenly: 60 or 120 Hz for a 60 fps game, never 90,
+     * where frames are shown for uneven times and some are dropped. Android 11+; the display may still say no. Main thread.
+     */
+    private fun askFrameRate(fps: Float) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        val surface = holder.surface
+        if (!surface.isValid) return
+        runCatching { surface.setFrameRate(fps, Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE) }
+            .onFailure { NxLog.w("GLRetroView", "frame rate request failed", it) }
+    }
+
+    // The display's rate changed (the request above, or the system): the pacer follows it.
+    private val displayListener = object : DisplayManager.DisplayListener {
+        override fun onDisplayChanged(displayId: Int) {
+            val shown = display ?: return
+            if (displayId == shown.displayId) LibretroDroid.setScreenRefreshRate(shown.refreshRate)
+        }
+        override fun onDisplayAdded(displayId: Int) {}
+        override fun onDisplayRemoved(displayId: Int) {}
     }
 
     // The finger that drives the pointer: the first one down; others are ignored until it lifts.
@@ -746,10 +873,6 @@ class GLRetroView(
      */
     fun getAchievementServerCalls(): Flow<AchievementServerCall> = achievementServerCalls.receiveAsFlow()
 
-    fun getControllers(): Array<Array<Controller>> {
-        return LibretroDroid.getControllers()
-    }
-
     fun setControllerType(port: Int, type: Int) {
         LibretroDroid.setControllerType(port, type)
     }
@@ -796,15 +919,6 @@ class GLRetroView(
 
     fun changeDisk(index: Int, useEmulationThread: Boolean = true) {
         runOnEmulationThread(useEmulationThread) { LibretroDroid.changeDisk(index) }
-    }
-
-    private fun getGLESVersion(context: Context): Int {
-        val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        return if (activityManager.deviceConfigurationInfo.reqGlEsVersion >= 0x30000) {
-            3
-        } else {
-            2
-        }
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
@@ -873,6 +987,7 @@ class GLRetroView(
             LibretroNetplay.linkUnblock()   // a held GBA link cable must not block the GL thread this pause waits on
             onPause()
             LibretroDroid.pause()
+            runCatching { queueEvent { finishFrameReadPaused() } }
         }
     }
 
@@ -882,6 +997,15 @@ class GLRetroView(
                 stepStartedAt = SystemClock.uptimeMillis()
                 try { LibretroDroid.step(this@GLRetroView) } finally { stepStartedAt = 0L }
                 afterStep?.invoke()
+                deliverFrameRead()
+                if (++framesSinceRateCheck >= RATE_CHECK_FRAMES) {
+                    framesSinceRateCheck = 0
+                    val fps = LibretroDroid.getContentFps()
+                    if (fps > 0.0 && kotlin.math.abs(fps - askedFps) > 0.01) {
+                        askedFps = fps
+                        post { askFrameRate(fps.toFloat()) }
+                    }
+                }
                 retroGLEventsSubject.tryEmit(GLRetroEvents.FrameRendered)
                 if (LibretroDroid.takeShutdownRequest()) shutdownRequests.tryEmit(Unit)
                 if (LibretroDroid.takeGameGeometryChanged()) gameGeometryChanges.tryEmit(Unit)
@@ -1020,79 +1144,8 @@ class GLRetroView(
                 LibretroDroid.SHADER_DEFAULT,
                 if (config.linear) emptyMap() else mapOf(LibretroDroid.SHADER_DEFAULT_PARAM_LINEAR to "0"),
             )
-            is ShaderConfig.CRT -> GLRetroShader(LibretroDroid.SHADER_CRT)
-            is ShaderConfig.LCD -> GLRetroShader(LibretroDroid.SHADER_LCD)
             is ShaderConfig.Sharp -> GLRetroShader(LibretroDroid.SHADER_SHARP)
-            is ShaderConfig.CUT -> GLRetroShader(
-                LibretroDroid.SHADER_UPSCALE_CUT,
-                buildParams(
-                    LibretroDroid.SHADER_UPSCALE_CUT_PARAM_USE_DYNAMIC_BLEND to toParam(config.useDynamicBlend),
-                    LibretroDroid.SHADER_UPSCALE_CUT_PARAM_BLEND_MIN_CONTRAST_EDGE to toParam(config.blendMinContrastEdge),
-                    LibretroDroid.SHADER_UPSCALE_CUT_PARAM_BLEND_MAX_CONTRAST_EDGE to toParam(config.blendMaxContrastEdge),
-                    LibretroDroid.SHADER_UPSCALE_CUT_PARAM_BLEND_MIN_SHARPNESS to toParam(config.blendMinSharpness),
-                    LibretroDroid.SHADER_UPSCALE_CUT_PARAM_BLEND_MAX_SHARPNESS to toParam(config.blendMaxSharpness),
-                    LibretroDroid.SHADER_UPSCALE_CUT_PARAM_STATIC_BLEND_SHARPNESS to toParam(config.staticSharpness),
-                    LibretroDroid.SHADER_UPSCALE_CUT_PARAM_EDGE_USE_FAST_LUMA to toParam(config.edgeUseFastLuma),
-                    LibretroDroid.SHADER_UPSCALE_CUT_PARAM_EDGE_MIN_VALUE to toParam(config.edgeMinValue),
-                    LibretroDroid.SHADER_UPSCALE_CUT_PARAM_EDGE_MIN_CONTRAST to toParam(config.edgeMinContrast),
-                )
-            )
-
-            is ShaderConfig.CUT2 -> GLRetroShader(
-                LibretroDroid.SHADER_UPSCALE_CUT2,
-                buildParams(
-                    LibretroDroid.SHADER_UPSCALE_CUT2_PARAM_USE_DYNAMIC_BLEND to toParam(config.useDynamicBlend),
-                    LibretroDroid.SHADER_UPSCALE_CUT2_PARAM_BLEND_MIN_CONTRAST_EDGE to toParam(config.blendMinContrastEdge),
-                    LibretroDroid.SHADER_UPSCALE_CUT2_PARAM_BLEND_MAX_CONTRAST_EDGE to toParam(config.blendMaxContrastEdge),
-                    LibretroDroid.SHADER_UPSCALE_CUT2_PARAM_BLEND_MIN_SHARPNESS to toParam(config.blendMinSharpness),
-                    LibretroDroid.SHADER_UPSCALE_CUT2_PARAM_BLEND_MAX_SHARPNESS to toParam(config.blendMaxSharpness),
-                    LibretroDroid.SHADER_UPSCALE_CUT2_PARAM_STATIC_BLEND_SHARPNESS to toParam(config.staticSharpness),
-                    LibretroDroid.SHADER_UPSCALE_CUT2_PARAM_EDGE_USE_FAST_LUMA to toParam(config.edgeUseFastLuma),
-                    LibretroDroid.SHADER_UPSCALE_CUT2_PARAM_SOFT_EDGES_SHARPENING to toParam(config.softEdgesSharpening),
-                    LibretroDroid.SHADER_UPSCALE_CUT2_PARAM_SOFT_EDGES_SHARPENING_AMOUNT to toParam(config.softEdgesSharpeningAmount),
-                    LibretroDroid.SHADER_UPSCALE_CUT2_PARAM_HARD_EDGES_SEARCH_MAX_ERROR to toParam(config.hardEdgesSearchMaxError),
-                )
-            )
-
-            is ShaderConfig.CUT3 -> GLRetroShader(
-                LibretroDroid.SHADER_UPSCALE_CUT3,
-                buildParams(
-                    LibretroDroid.SHADER_UPSCALE_CUT3_PARAM_USE_DYNAMIC_BLEND to toParam(config.useDynamicBlend),
-                    LibretroDroid.SHADER_UPSCALE_CUT3_PARAM_BLEND_MIN_CONTRAST_EDGE to toParam(config.blendMinContrastEdge),
-                    LibretroDroid.SHADER_UPSCALE_CUT3_PARAM_BLEND_MAX_CONTRAST_EDGE to toParam(config.blendMaxContrastEdge),
-                    LibretroDroid.SHADER_UPSCALE_CUT3_PARAM_BLEND_MIN_SHARPNESS to toParam(config.blendMinSharpness),
-                    LibretroDroid.SHADER_UPSCALE_CUT3_PARAM_BLEND_MAX_SHARPNESS to toParam(config.blendMaxSharpness),
-                    LibretroDroid.SHADER_UPSCALE_CUT3_PARAM_STATIC_BLEND_SHARPNESS to toParam(config.staticSharpness),
-                    LibretroDroid.SHADER_UPSCALE_CUT3_PARAM_EDGE_USE_FAST_LUMA to toParam(config.edgeUseFastLuma),
-                    LibretroDroid.SHADER_UPSCALE_CUT3_PARAM_SOFT_EDGES_SHARPENING to toParam(config.softEdgesSharpening),
-                    LibretroDroid.SHADER_UPSCALE_CUT3_PARAM_SOFT_EDGES_SHARPENING_AMOUNT to toParam(config.softEdgesSharpeningAmount),
-                    LibretroDroid.SHADER_UPSCALE_CUT3_PARAM_HARD_EDGES_SEARCH_MAX_ERROR to toParam(config.hardEdgesSearchMaxError),
-                    LibretroDroid.SHADER_UPSCALE_CUT3_PARAM_HARD_EDGES_SEARCH_MAX_DISTANCE to toParam(config.hardEdgesSearchMaxDistance),
-                )
-            )
         }
-    }
-
-    private fun toParam(param: Float): String {
-        return param.toString()
-    }
-
-    private fun toParam(param: Boolean): String {
-        return if (param) {
-            "1"
-        } else {
-            "0"
-        }
-    }
-
-    private fun toParam(param: Int): String {
-        return param.toString()
-    }
-
-    private fun buildParams(vararg pairs: Pair<String, String?>): Map<String, String> {
-        return pairs
-            .filter { (key, value) -> value != null }
-            .associate { (key, value) -> key to value!! }
     }
 
     /** This function gets called from the jni side.*/
@@ -1143,6 +1196,21 @@ class GLRetroView(
 
     companion object {
         private val TAG_LOG = GLRetroView::class.java.simpleName
+
+        // About once a second at 60 fps: a core changes its rate rarely (a PAL/NTSC switch).
+        private const val RATE_CHECK_FRAMES = 60
+
+        // Patched libraries for libadrenotools below API 29 (memfd from 29).
+        private fun driverTmpDir(context: Context): String = java.io.File(context.cacheDir, "gpu_driver_tmp").absolutePath + "/"
+
+        /**
+         * Before the view (and its core) exists: whether the custom Vulkan driver [library] in [driverDir] can start the
+         * bridge and how ([LibretroDroid.probeVulkanDriver]: one of its VULKAN_HANDOFF values), with the hook and temp
+         * directories a launch uses. Blocking: not on the main thread.
+         */
+        @JvmStatic
+        fun probeVulkanDriver(context: Context, driverDir: String, library: String): Int =
+            LibretroDroid.probeVulkanDriver(driverDir, library, context.applicationInfo.nativeLibraryDir, driverTmpDir(context))
         private const val EMULATION_THREAD_TIMEOUT_SECONDS = 10L
         private const val DESTROY_TIMEOUT_SECONDS = 5L
         private const val SECONDARY_TEARDOWN_TIMEOUT_MS = 500L

@@ -73,6 +73,10 @@ import com.nxredux.mobile.ui.nx.placeholderBoxSize
 /** How far a horizontal swipe travels before it moves to the next or previous game. */
 private val SWIPE_THRESHOLD = 24.dp
 
+/** The full-screen layout's picture: the resume frame, else the scraped screenshot unless it failed to load; null: the box chain. */
+internal fun switcherCardPicture(resumeFrame: String?, screenshot: String?, failed: Set<String>): String? =
+    resumeFrame ?: screenshot?.takeIf { it !in failed }
+
 /** The switcher's hints: B Back, and with a game Y Remove (touch: a trash icon) and A Resume (Start for one with no state to resume). */
 internal fun switcherHints(entry: SwitcherEntry?): List<Hint> =
     if (entry == null) listOf(Hint(NxButton.B, "Back"))
@@ -88,7 +92,7 @@ internal fun switcherHints(entry: SwitcherEntry?): List<Hint> =
  */
 internal fun switcherListRows(entries: List<SwitcherEntry>): List<NxRow> {
     val labels = MergedLabels.labels(entries.map { MergedLabels.Row(it.game.shownName, it.game.fileName, it.system.tag) })
-    return entries.mapIndexed { i, e -> NxRow(labels[i] ?: e.game.shownName, secondary = e.game.subtitle) }
+    return entries.mapIndexed { i, e -> NxRow(labels[i] ?: e.game.shownName, secondary = e.game.subtitle, tag = e.game.badge) }
 }
 
 /**
@@ -168,6 +172,13 @@ private fun KeepUntilLoaded(model: String, content: @Composable (shown: String, 
     }
 }
 
+/** [url] fitted in [modifier]'s box; a failed load reports it to [onFailed]. */
+@Composable
+private fun FitPicture(url: String, modifier: Modifier, onFailed: (String) -> Unit) = AsyncImage(
+    model = url, contentDescription = null, contentScale = ContentScale.Fit, modifier = modifier,
+    onState = { if (it is AsyncImagePainter.State.Error) onFailed(url) },
+)
+
 @Composable
 private fun RemoveDialog(entry: SwitcherEntry, onButton: (NxButton) -> Unit) = NxDialog(
     "Remove", "Remove \"${entry.game.shownName}\" from recents?",
@@ -206,36 +217,31 @@ private fun GameSwitcherFullScreen(screen: Screen.Switcher, onButton: (NxButton)
         } else {
             // Tapping the preview resumes; the hint bar drawn on top swallows its own taps (see below).
             Box(Modifier.fillMaxSize().pointerInput(entry) { detectTapGestures { onButton(NxButton.A) } })
-            // The resume preview; else the box chain by Backdrop art then 3D → 2D → wheel ([boxShown]): the 3D box or a
-            // wheel Fit, a 2D front in the case; else an Android game's screenshot Fit; else "No Preview".
-            val preview = entry.resume.previewPath
+            // The resume preview, else the scraped screenshot ([switcherCardPicture]); else the box chain by Backdrop art
+            // then 3D → 2D → wheel ([boxShown]): the 3D box or a wheel Fit, a 2D front in the case; else an Android game's
+            // screenshot Fit; else "No Preview".
             var failed by remember(entry) { mutableStateOf(emptySet<String>()) }
             val g = entry.game
+            val preview = switcherCardPicture(entry.resume.previewPath, g.screenshotRef?.value, failed)
             val box = boxShown(backdropArt, g.boxartRef?.value, g.box2dRef?.value, g.wheelRef?.value, failed)
             val androidShot = g.androidShot?.takeIf { it !in failed }
             when {
                 preview != null -> KeepUntilLoaded(preview) { shown, done ->
                     AsyncImage(
                         model = shown, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(),
-                        onState = { if (it is AsyncImagePainter.State.Success || it is AsyncImagePainter.State.Error) done() },
+                        onState = {
+                            if (it is AsyncImagePainter.State.Success || it is AsyncImagePainter.State.Error) done()
+                            if (it is AsyncImagePainter.State.Error && shown != entry.resume.previewPath) failed = failed + shown
+                        },
                     )
                 }
-                box is BoxShown.Art3d -> AsyncImage(
-                    model = box.url, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(),
-                    onState = { if (it is AsyncImagePainter.State.Error) failed = failed + box.url },
-                )
+                box is BoxShown.Art3d -> FitPicture(box.url, Modifier.fillMaxSize()) { failed = failed + it }
                 box is BoxShown.Cover -> BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     val (w, h) = placeholderBoxSize(maxWidth.value, maxHeight.value * 0.8f)
                     BoxCover(box.url, w, h, null) { failed = failed + box.url }
                 }
-                box is BoxShown.Wheel -> AsyncImage(
-                    model = box.url, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(0.6f).align(Alignment.Center),
-                    onState = { if (it is AsyncImagePainter.State.Error) failed = failed + box.url },
-                )
-                androidShot != null -> AsyncImage(
-                    model = androidShot, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize(),
-                    onState = { if (it is AsyncImagePainter.State.Error) failed = failed + androidShot },
-                )
+                box is BoxShown.Wheel -> FitPicture(box.url, Modifier.fillMaxSize(0.6f).align(Alignment.Center)) { failed = failed + it }
+                androidShot != null -> FitPicture(androidShot, Modifier.fillMaxSize()) { failed = failed + it }
                 else -> Text("No Preview", color = colors.hint, fontFamily = font, fontSize = 18.sp, modifier = Modifier.align(Alignment.Center))
             }
             // The title, and under it the game's system and its place among the recents, on a full-width fade mirroring the

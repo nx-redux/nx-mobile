@@ -96,6 +96,19 @@ class GameTimeStore(
         }
     }
 
+    /**
+     * [closeStale] for a caller that knows no game process is running (a killed one leaves its session open until
+     * [STALE_MS] passes): true when it closed any, so the screens can read play time again.
+     */
+    fun closeDead(seenBefore: Long): Boolean = db.transactionWithResult {
+        val open = q.countStaleSessions(deviceId = deviceId, seenBefore = seenBefore).executeAsOne() > 0
+        if (open) {
+            q.closeStaleSessions(deviceId = deviceId, seenBefore = seenBefore)
+            q.deleteImplausible(MIN_MS, MAX_MS)
+        }
+        open
+    }
+
     /** Per group: its time, plays (launches, however many returns from the background each had) and last play. */
     fun totals(): List<GameTotal> =
         q.groupTotals().executeAsList().map {

@@ -50,7 +50,7 @@ internal class TextEntryController(private val spec: () -> PromptSpec?, private 
     fun toggleReveal() { _entry.value?.let { _entry.value = it.toggleReveal() } }
 
     /** A physical keyboard's printable [text]. */
-    fun type(text: String): NxButton? = _entry.value?.let { apply(it.type(text)) }
+    fun type(text: String): NxButton? = _entry.value?.let { apply(it.insert(text)) }
 
     private fun apply(step: EntryStep): NxButton? {
         _entry.value = step.entry
@@ -58,7 +58,7 @@ internal class TextEntryController(private val spec: () -> PromptSpec?, private 
             is EntryOutcome.Edit -> { current?.setters?.getOrNull(o.field)?.invoke(o.text); null }
             EntryOutcome.Confirm -> NxButton.A
             EntryOutcome.Cancel -> NxButton.B
-            EntryOutcome.Paste -> clipboard()?.let { apply(step.entry.paste(it)) }
+            EntryOutcome.Paste -> clipboard()?.let { apply(step.entry.insert(it)) }
             EntryOutcome.None -> null
         }
     }

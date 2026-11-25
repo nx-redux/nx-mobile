@@ -1,6 +1,5 @@
 package com.nxredux.mobile.ui
 
-import com.nxredux.mobile.ui.nx.splitWindow
 import com.nxredux.mobile.ui.nx.valueHints
 import com.nxredux.mobile.ui.nx.HintTouch
 import androidx.compose.foundation.layout.Box
@@ -82,7 +81,7 @@ internal fun ArtworkPageBody(
             val touch = rows.getOrNull(selectedIndex)
             NxSettingsPage(
                 toolPageTitle(screen, split), rows, selectedIndex,
-                hints = hints(artworkSettingsHints(screen.rows.getOrNull(selectedIndex), touch, touch != null && nxShowsInfo(touch, truncated), rowEditTwoPane(screen, settingsSplit(splitWindow())))),
+                hints = hints(artworkSettingsHints(screen.rows.getOrNull(selectedIndex), touch, touch != null && nxShowsInfo(touch, truncated))),
                 onSelect = onSelect, onOpen = onOpen, onEvent = onSetting, modifier = modifier,
                 onTruncated = onTruncated, onHint = onHint, preview = !focused,
             )
@@ -223,9 +222,6 @@ internal fun artworkSettingTouchRow(row: ArtworkSettingRow): NxSettingRow {
 
 private val ART_ON_OFF = listOf("Off", "On")
 
-/** A compact row: no line, [text] (or a fuller [detail]) behind the info icon only. */
-private fun quiet(text: String, detail: String = "") = SettingText("", detail.ifEmpty { text })
-
 /**
  * [row]'s description, from the user guide's Artwork page: a line for a status (today's requests, the allowance left),
  * its fuller text behind the info icon; the rest compact ([quiet]), why a row is dimmed in its fuller text.
@@ -277,17 +273,17 @@ internal fun artworkSettingInfo(row: ArtworkSettingRow): SettingText = when (row
 }
 
 /**
- * Artwork Settings' hints for the highlighted row, as Settings' ([settingsHints]): an On/Off row A Toggle (and on one
- * page LEFT Change, [valueHints]); TheGamesDB's allowance and a dimmed row Back only; the rest A Select. X Info while its description is cut off
+ * Artwork Settings' hints for the highlighted row, as Settings' ([settingsHints]): an On/Off row A Toggle
+ * ([valueHints]); TheGamesDB's allowance and a dimmed row Back only; the rest A Select. X Info while its description is cut off
  * or says more ([info]).
  */
-internal fun artworkSettingsHints(row: ArtworkSettingRow?, touch: NxSettingRow?, info: Boolean, twoPane: Boolean = false): List<Hint> {
+internal fun artworkSettingsHints(row: ArtworkSettingRow?, touch: NxSettingRow?, info: Boolean): List<Hint> {
     val back = Hint(NxButton.B, "Back")
     val x = if (info) listOf(Hint(NxButton.X, "Info")) else emptyList()
     return when {
         row == null || !row.selectable -> listOf(back)
         !row.enabled || row.kind == ArtworkSettingKind.TGDB_LEFT -> listOf(back) + x
-        touch?.control == NxSettingControl.SWITCH -> listOf(back) + touch.valueHints(twoPane) + x
+        touch?.control == NxSettingControl.SWITCH -> listOf(back) + touch.valueHints + x
         else -> listOf(back, Hint(NxButton.A, "Select")) + x
     }
 }

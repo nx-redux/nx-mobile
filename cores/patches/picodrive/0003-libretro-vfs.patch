@@ -1,0 +1,26 @@
+# license: modifies PicoDrive (https://github.com/irixxxx/picodrive), non-commercial PicoDrive license (COPYING); this patch is distributed under the same license.
+# The NDK build left out USE_LIBRETRO_VFS (Makefile.libretro sets it): every fopen went to the real
+# filesystem, so a game needed a real path. With it, files open through the frontend's VFS.
+--- a/jni/Android.mk
++++ b/jni/Android.mk
+@@ -76,6 +76,10 @@
+              $(LIBRETRO_COMM_DIR)/encodings/encoding_utf.c \
+              $(LIBRETRO_COMM_DIR)/compat/compat_strcasestr.c \
+              $(LIBRETRO_COMM_DIR)/compat/compat_strl.c \
++             $(LIBRETRO_COMM_DIR)/compat/compat_posix_string.c \
++             $(LIBRETRO_COMM_DIR)/compat/fopen_utf8.c \
++             $(LIBRETRO_COMM_DIR)/streams/file_stream.c \
++             $(LIBRETRO_COMM_DIR)/streams/file_stream_transforms.c \
+              $(COMMON_DIR)/mp3.c \
+              $(COMMON_DIR)/mp3_sync.c \
+              $(COMMON_DIR)/mp3_dummy.c \
+@@ -120,6 +124,9 @@
+ 
+ COREFLAGS := $(addprefix -D,$(DEFINES)) -fno-strict-aliasing -DUSE_LIBCHDR=1 -DZ7_ST -DZSTD_DISABLE_ASM
+ COREFLAGS += -I$(LCHDR)/include -I$(LCHDR_LZMA)/include -I$(LCHDR_ZSTD) -I$(TREMOR) -DUSE_TREMOR
++# nx-redux: file access through the frontend's VFS, as Makefile.libretro builds it, so a game opens from the
++# descriptors the frontend serves (/rom/<name>) instead of a real path
++COREFLAGS += -DUSE_LIBRETRO_VFS -I$(LIBRETRO_COMM_DIR)/include/streams -I$(LIBRETRO_COMM_DIR)/include/compat -I$(LIBRETRO_COMM_DIR)/include/vfs
+ ifeq (,$(call gte,$(APP_PLATFORM_LEVEL),18))
+ ifneq ($(TARGET_ARCH_ABI),arm64-v8a)
+ # HACK

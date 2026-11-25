@@ -38,4 +38,16 @@ class SyncProgressTest {
         assertEquals(DaemonEntry("bios", true, "PS/scph5501.bin"), SyncProgress.daemonLine("2026/10/15 12:00:00 [9] bios recv PS/scph5501.bin"))
         assertEquals(DaemonEntry("collections", true, "RPGs.txt"), SyncProgress.daemonLine("2026/10/15 12:00:00 [9] collections recv RPGs.txt"))
     }
+
+    @Test fun daemonSessionOpensAndClosesByPid() {
+        assertEquals("812" to true, SyncProgress.daemonSession("2026/11/22 23:01:02 [812] connect from UNDETERMINED (192.168.1.13)"))
+        assertEquals("812" to false, SyncProgress.daemonSession("2026/11/22 23:01:09 [812] sent 1234 bytes  received 99 bytes  total size 5"))
+        assertEquals("812" to false, SyncProgress.daemonSession("2026/11/22 23:01:09 [812] rsync error: error in socket IO (code 10)"))
+    }
+
+    @Test fun daemonSessionIgnoresThisDevicesOwnListeningCheck() {
+        assertNull(SyncProgress.daemonSession("2026/11/22 23:01:00 [800] connect from UNDETERMINED (127.0.0.1)"))
+        assertNull(SyncProgress.daemonSession("2026/11/22 23:01:00 [800] connect from localhost (::1)"))
+        assertNull(SyncProgress.daemonSession("2026/11/22 23:01:00 [800] connect from UNDETERMINED (::ffff:127.0.0.1)"))
+    }
 }

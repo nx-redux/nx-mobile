@@ -26,7 +26,13 @@ sealed interface CheatDbState {
     data class Downloading(val done: Long, val total: Long, val previous: CheatDbManifest?, val source: CheatDbSource = CheatDbSource.LIBRETRO) : CheatDbState
     data class Installing(val tag: String, val index: Int, val count: Int, val previous: CheatDbManifest?) : CheatDbState
     data class Checking(val previous: CheatDbManifest) : CheatDbState
-    data class Removing(val previous: CheatDbManifest) : CheatDbState
+    /** [done] of [total] files deleted one by one (0 of 0 while whole folders go, or before the count is known). */
+    data class Removing(val previous: CheatDbManifest, val done: Int = 0, val total: Int = 0) : CheatDbState
+    /**
+     * A stopped download, install or update check is still unwinding: what the install wrote is being taken out of
+     * `Cheats/`. [previous] shows once it has; [done] of [total] as in [Removing].
+     */
+    data class Cancelling(val previous: CheatDbManifest?, val done: Int = 0, val total: Int = 0) : CheatDbState
 }
 
 /** One-shot results for the UI: a [Notice] goes to the pill, a [Failure] to the Problem dialog. */
@@ -54,9 +60,14 @@ class CheatDbController(
     private var job: Job? = null
     /** The running install has returned: its files are on disk and only the manifest that lists them is left to write. */
     private var committing = false
+    /** Empties the trash the platform moves taken-back files into; never part of [busy], it only touches the trash. */
+    private var sweep: Job? = null
 
     val busy: Boolean
-        get() = _state.value.let { it is CheatDbState.Downloading || it is CheatDbState.Installing || it is CheatDbState.Checking || it is CheatDbState.Removing }
+        get() = _state.value.let {
+            it is CheatDbState.Downloading || it is CheatDbState.Installing || it is CheatDbState.Checking ||
+                it is CheatDbState.Removing || it is CheatDbState.Cancelling
+        }
 
     private val installedManifest: CheatDbManifest? get() = (_state.value as? CheatDbState.Installed)?.manifest
     /** The table rows an install writes, per source; a manifest listing other rows is reinstalled by the next update check. */
@@ -71,6 +82,8 @@ class CheatDbController(
             // A job may have started while the manifest was read; its state wins.
             if (busy) return@launch
             _state.value = manifest?.let { CheatDbState.Installed(it) } ?: CheatDbState.NotInstalled
+            // A process that died while emptying it left the rest behind.
+            if (sweep?.isActive != true) sweepTrash()
         }
     }
 
@@ -111,23 +124,26 @@ class CheatDbController(
         }
     }
 
-    /** Deletes exactly the files the manifest lists, then the manifest. */
+    /** Deletes exactly the files the manifest lists, then the manifest; stays [CheatDbState.Removing] until they are out of `Cheats/`. */
     fun remove() {
         if (busy) return
         val current = installedManifest ?: return
         _state.value = CheatDbState.Removing(current)
         job = scope.launch {
             tryOr({ e -> failed(current, e) }) {
-                platform.deleteInstalled(current.files)
+                platform.deleteInstalled(current.files) { done, total -> _state.value = CheatDbState.Removing(current, done, total) }
                 _state.value = CheatDbState.NotInstalled
                 emit(CheatDbMessage.Notice("$NAME removed"))
+                sweepTrash()
             }
         }
     }
 
     /**
-     * Stops a download, install or update check and shows the previous state again. Removing can't be cancelled, and
-     * neither can an install whose files are already written (its manifest is being saved, so Remove finds them).
+     * Stops a download, install or update check. The state stays [CheatDbState.Cancelling] (busy) until the stopped job
+     * has taken its files back, so neither a new install nor Remove can meet them; then the previous state shows.
+     * Removing can't be cancelled, and neither can an install whose files are already written (its manifest is being
+     * saved, so Remove finds them).
      */
     fun cancel() {
         if (committing) return
@@ -137,9 +153,15 @@ class CheatDbController(
             is CheatDbState.Checking -> s.previous
             else -> return
         }
-        job?.cancel()
-        job = null
-        _state.value = previous?.let { CheatDbState.Installed(it) } ?: CheatDbState.NotInstalled
+        // Before the cancel: the unwinding install reports its progress over this state.
+        _state.value = CheatDbState.Cancelling(previous)
+        val stopped = job
+        stopped?.cancel()
+        job = scope.launch {
+            stopped?.join()
+            restore(previous)
+            sweepTrash()
+        }
     }
 
     private fun startDownload(previous: CheatDbManifest?, verb: String) {
@@ -164,7 +186,11 @@ class CheatDbController(
                         }
                     }
                     val result = withProgress { report ->
-                        platform.install(archives.map { CheatDbInstall(it, tableSources.getValue(it.source), bestEffort(it.source)) }) { tag, i, n ->
+                        platform.install(
+                            archives.map { CheatDbInstall(it, tableSources.getValue(it.source), bestEffort(it.source)) },
+                            // Straight to the state: on a cancel the progress forwarder is cancelled too.
+                            onUndo = { done, total -> _state.value = CheatDbState.Cancelling(previous, done, total) },
+                        ) { tag, i, n ->
                             report(CheatDbState.Installing(tag, i, n, previous))
                         }
                     }
@@ -213,6 +239,16 @@ class CheatDbController(
     private fun failed(previous: CheatDbManifest?, e: Exception) {
         restore(previous)
         emit(CheatDbMessage.Failure(if (e is CheatDbException) e.kind.message else "$NAME failed: ${e::class.simpleName}"))
+        sweepTrash()
+    }
+
+    /** One sweep at a time: a later one waits, then picks up what was moved into the trash meanwhile. */
+    private fun sweepTrash() {
+        val before = sweep
+        sweep = scope.launch {
+            before?.join()
+            tryOrNull { platform.emptyTrash() }
+        }
     }
 
     /**

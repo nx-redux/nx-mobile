@@ -101,7 +101,6 @@ class HomeShelvesTest {
         val rows = listOf(MainRow.Pin(g("P")), MainRow.Shelf(g("A"), HomeShelf.NEW), MainRow.Shelf(g("B"), HomeShelf.NEW), MainRow.Shelf(g("C"), HomeShelf.PICK_UP))
         assertEquals(listOf(HomeShelf.NEW to 2, HomeShelf.PICK_UP to 1), shelfBands(rows))
     }
-    // The shelves are computed once while the library, game info, recents, exclusions and day hold.
     // Most played: the most play time first, played games only; Continue's and the pinned games skipped, the next ones in their places.
     @Test fun mostPlayedIsByPlayTimeAndSkipsContinueAndPins() {
         val lib = listOf("A", "B", "C", "D", "E", "F", "Never").map { g(it) }

@@ -1,17 +1,8 @@
 package com.nxredux.mobile.ui
 
-import com.nxredux.mobile.achievements.RaSortOrder
 import com.nxredux.mobile.library.FakeRomsSource
 import com.nxredux.mobile.runner.ContentRef
-import com.nxredux.mobile.runner.EmulatorRunner
-import com.nxredux.mobile.runner.GameSession
-import com.nxredux.mobile.settings.AppSettings
-import com.nxredux.mobile.settings.ExtraFolder
-import com.nxredux.mobile.settings.FolderPicker
-import com.nxredux.mobile.settings.MenuCategory
-import com.nxredux.mobile.settings.MenuOrientation
-import com.nxredux.mobile.settings.MenuStyle
-import com.nxredux.mobile.settings.PadTheme
+import com.nxredux.mobile.settings.FakeAppSettings
 import com.nxredux.mobile.shortcuts.KeyCodes
 import com.nxredux.mobile.shortcuts.ShortcutAction
 import com.nxredux.mobile.shortcuts.ShortcutBinding
@@ -36,41 +27,12 @@ import kotlin.test.assertTrue
 /** Settings -> Controls -> Shortcuts in a real [AppState]: the rows, press to bind on raw key codes, saving on close. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ShortcutsSettingsTest {
-    private class Settings : AppSettings {
-        override var treeRef: ContentRef? = ContentRef("Home")
+    private class Settings : FakeAppSettings(ContentRef("Home"), androidGamesAsked = true) {
         override var onboardingDone: Boolean? = true
+        override var saveOnQuit = true
         override var onboardingStep: String? = null
-        override var extraFolders: List<ExtraFolder> = emptyList()
-        override var defaultTags: Map<String, String> = emptyMap()
-        override var padSkin = true
-        override var padTheme = PadTheme.DEFAULT
-        override var menuStyles: Map<MenuCategory, MenuStyle> = emptyMap()
-        override var gameListStyle: MenuStyle = com.nxredux.mobile.settings.MenuStyles.DEFAULT_GAME_LIST_STYLE
-        override var menuOrientations: Map<MenuCategory, MenuOrientation> = emptyMap()
-        override var gameListOrientation: MenuOrientation = com.nxredux.mobile.settings.MenuStyles.DEFAULT_ORIENTATION
-        override var gameListVerticalAlignment: com.nxredux.mobile.settings.VerticalListAlignment = com.nxredux.mobile.settings.VerticalListAlignment.DEFAULT
-        override var toolApps: List<String> = emptyList()
-        override var androidConsoleApps: List<String> = emptyList()
-        override var androidGamesAsked = true
-        override var androidPins: List<String> = emptyList()
-        override var raEnabled = false
-        override var raUsername = ""
-        override var raToken: String? = null
-        override var raShowNotifications = true
-        override var raNotificationSeconds = 3
-        override var raProgressSeconds = 1
-        override var raSortOrder = RaSortOrder.DEFAULT
-        override var ssUsername = ""
-        override var ssPassword: String? = null
-        override var sgdbApiKey: String? = null
-        override var tgdbApiKey: String? = null
-        override var artReplaceExisting = false
-        override var consoleArt = com.nxredux.mobile.settings.ConsoleArt.DEFAULT; override var gameListArt = com.nxredux.mobile.settings.GameListArt.DEFAULT; override var backdropArt = com.nxredux.mobile.settings.BackdropArt.DEFAULT; override var showHomeTab = true; override var showConsolesTab = true; override var showCollectionsTab = true; override var showToolsTab = true; override var showNewShelf = true; override var showNotStartedShelf = true; override var showNetplayHint = true; override var menuPageTitle = com.nxredux.mobile.settings.MenuStyles.DEFAULT_PAGE_TITLE; override var menuButtonHints = com.nxredux.mobile.settings.MenuStyles.DEFAULT_BUTTON_HINTS; override var menuExtraInfo = com.nxredux.mobile.settings.MenuStyles.DEFAULT_EXTRA_INFO; override var menuHomeStats = true; override var gameListLayoutOptions = true; override var gameListAchievementsPanel = true; override var padVibration = com.nxredux.mobile.settings.PadVibration.DEFAULT; override var gameRumble = com.nxredux.mobile.settings.GameRumble.DEFAULT; override var accent = com.nxredux.mobile.settings.AccentPreset.DEFAULT; override var secondaryAccent: com.nxredux.mobile.settings.SecondaryAccent = com.nxredux.mobile.settings.SecondaryAccent.DEFAULT
         override var shortcuts = ""
     }
-
-    private object Picker : FolderPicker { override fun pickHome() {}; override fun pickExtra() {}; override fun forget(ref: ContentRef) {} }
-    private class Runner : EmulatorRunner { override suspend fun launch(session: GameSession, recent: com.nxredux.mobile.storage.Recent) {} }
 
     private val source = FakeRomsSource(
         dirs = mapOf(
@@ -82,7 +44,7 @@ class ShortcutsSettingsTest {
 
     private fun TestScope.state(settings: Settings = Settings()): AppState {
         val state = AppState(
-            AppDeps(settings, source, Runner(), Picker, compute = UnconfinedTestDispatcher(testScheduler)),
+            AppDeps(settings, source, NoopRunner, NoopFolderPicker, compute = UnconfinedTestDispatcher(testScheduler)),
             CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
         )
         state.load(); runCurrent()
@@ -127,6 +89,15 @@ class ShortcutsSettingsTest {
         assertTrue(touch.all { it.secondary == "None" })
         assertEquals(SettingsRow(SettingsKind.RESET_DEFAULTS, "Clear all"), rows.last())
         assertEquals(binds + touch + rows.last(), rows)
+    }
+
+    @Test fun save_and_quit_is_named_quit_when_save_on_quit_is_off() = runTest {
+        val s = state(Settings().apply { saveOnQuit = false })
+        s.openShortcuts()
+        val binds = s.page().rows.filter { it.kind == SettingsKind.SHORTCUT_BIND }
+        assertEquals("Quit", binds.first { it.shortcut == ShortcutAction.SAVE_AND_QUIT }.label)
+        assertEquals(ShortcutAction.entries.filter { it != ShortcutAction.SAVE_AND_QUIT }.map { it.label },
+            binds.filter { it.shortcut != ShortcutAction.SAVE_AND_QUIT }.map { it.label })
     }
 
     @Test fun captureSingle() = runTest {
@@ -234,11 +205,11 @@ class ShortcutsSettingsTest {
         val s = state()
         s.openShortcuts()
         s.select(s.page().rows.indexOfFirst { it.label == "Touch button 1" })
-        s.onButton(NxButton.RIGHT)
+        s.padStep(NxButton.RIGHT)
         assertEquals("Toggle FF", s.row("Touch button 1").secondary)
-        s.onButton(NxButton.RIGHT)
+        s.padStep(NxButton.RIGHT)
         assertEquals("Hold FF", s.row("Touch button 1").secondary)
-        s.onButton(NxButton.LEFT); s.onButton(NxButton.LEFT)
+        s.padStep(NxButton.LEFT); s.padStep(NxButton.LEFT)   // its picker: None too
         assertEquals("None", s.row("Touch button 1").secondary)
         // Every action a touch button can do: Save & Quit is a controller's only.
         assertEquals(listOf("None") + ShortcutAction.entries.filter { it.touch }.map { it.label }, s.page().choices[s.selection.value.index]?.labels)
@@ -275,7 +246,7 @@ class ShortcutsSettingsTest {
         val s = state(settings)
         s.openShortcuts()
         s.bind(ShortcutAction.TOGGLE_FF); s.captureKey(110, true); s.captureKey(103, true)
-        s.select(s.page().rows.indexOfFirst { it.label == "Touch button 2" }); s.onButton(NxButton.RIGHT)
+        s.select(s.page().rows.indexOfFirst { it.label == "Touch button 2" }); s.padStep(NxButton.RIGHT)
         assertEquals("", settings.shortcuts)                    // not per change
         s.onButton(NxButton.B)
         assertEquals(SettingsSection.CONTROLS, s.page().section)
@@ -332,6 +303,20 @@ class ShortcutsSettingsTest {
         assertEquals("Touch button 1", s.page().rows[s.selection.value.index].label)   // never on the line
         s.onControllerConnected(true)   // the binding was kept
         assertEquals("R1", s.row("Toggle FF").secondary)
+    }
+
+    // A controller hides the on-screen pad: Appearance drops the pad's rows while one is connected, live.
+    @Test fun aControllerHidesThePadRowsInAppearance() = runTest {
+        val s = state(Settings().apply { padSkin = true })
+        val padRows = listOf("Pad skin", "Pad theme", "Button layout")
+        s.onControllerConnected(false)
+        s.openSettings(SettingsSection.APPEARANCE)
+        assertTrue(s.page().rows.map { it.label }.containsAll(padRows))
+        s.onControllerConnected(true)
+        assertTrue(s.page().rows.none { it.label in padRows })
+        assertEquals("Accent", s.page().rows[s.selection.value.index].label)
+        s.onControllerConnected(false)
+        assertTrue(s.page().rows.map { it.label }.containsAll(padRows))
     }
 
     @Test fun losingTheControllerEndsACapture() = runTest {

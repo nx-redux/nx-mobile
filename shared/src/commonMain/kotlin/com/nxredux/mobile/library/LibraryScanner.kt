@@ -12,6 +12,7 @@ import com.nxredux.mobile.storage.GamePath
 import com.nxredux.mobile.storage.GameRef
 import com.nxredux.mobile.storage.MemorySidecarStore
 import com.nxredux.mobile.storage.Recents
+import com.nxredux.mobile.tryOrAny
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlinx.coroutines.CancellationException
@@ -31,6 +32,7 @@ internal data class IndexedFile(
     val relativeDir: String,
     val lookupFolder: ContentRef = folder,
     val lookupDir: String = relativeDir,
+    val badge: String? = null,   // [IndexedGame.badge]
 )
 
 /** One console list, built from the index by [toSystems]: every game across the home and the extra folders that resolved to [tag]. */
@@ -65,6 +67,9 @@ data class GameEntry(
     val subtitle: String? = null,          // Unassigned list: where the file is
     val firstSeen: Long? = null,          // Home's New shelf ([IndexedGame.firstSeen])
     val hiddenCopies: List<GameRef> = emptyList(),   // extra copies hidden behind this home game ([IndexedGame.hiddenCopies])
+    val badge: String? = null,            // the pill by its name ([IndexedGame.shownBadge])
+    val msuSet: String? = null,           // its MSU set's kind, whose files go where it goes ([IndexedGame.badge])
+    val badgeChoice: String? = null,      // its own badge choice; null is Auto ([IndexedGame.badgeChoice])
 )
 
 /** The game's line in recent.txt, shortcuts.txt, hidden.txt and collection files. */
@@ -102,6 +107,8 @@ class LibraryScanner(
      * such a path is [ArtRefs.heroShot]. Read at most once per [scan] and [readArt] (again after a [legacyMove] changed a folder).
      */
     private val heroShots: suspend () -> Set<String> = { emptySet() },
+    /** The games' own badge choices (`badges.txt`, [GameBadges.parse]) by game path, read once per [scan]. */
+    private val badgeChoices: suspend () -> Map<String, String> = { emptyMap() },
     /**
      * The one-time `grid/` and `hero/` move, run on each `.media` listing the scan and [readArt] read (the home tree's,
      * the mirrors' and an extra folder's own) before it is mapped. A function, so the app can hand over a mover built
@@ -210,13 +217,14 @@ class LibraryScanner(
             if (files.isEmpty() && previous != null && reads.list(extra.ref).isEmpty()) hiddenRootCheck(extra, previous)
             scanned += extra
             for (f in files) {
-                val ix = IndexedFile(f.entry, f.folder, extra.id, f.relativeDir, f.lookupFolder, f.lookupDir)
+                val ix = IndexedFile(f.entry, f.folder, extra.id, f.relativeDir, f.lookupFolder, f.lookupDir, f.badge)
                 if (f.tag == null) unassigned += ix else byTag.getOrPut(f.tag) { ArrayList() } += ix
             }
         }
         val lookups = HashMap<ContentRef, FolderLookup>()
         val sets = ScanSets()
         val picked = pickedGames()
+        val badges = tryOrAny({ emptyMap() }) { badgeChoices() }
         val heroes = HeroShots()
         val extraNames = scanned.associate { it.id to source.displayName(it.ref) }
         val systems = ArrayList<IndexedSystem>()
@@ -228,10 +236,10 @@ class LibraryScanner(
                 folderName = hf?.folderName ?: "",
                 art = hf?.artRef?.value,
                 bg = hf?.bgRef?.value,
-                games = indexGames(reads, files, lookups, tag, sets, extraNames, picked, heroes),
+                games = indexGames(reads, files, lookups, tag, sets, extraNames, picked, badges, heroes),
             )
         }
-        if (unassigned.isNotEmpty()) systems += IndexedSystem(tag = "", displayName = UNASSIGNED, unassigned = true, games = indexGames(reads, unassigned, lookups, null, sets, extraNames, picked, heroes))
+        if (unassigned.isNotEmpty()) systems += IndexedSystem(tag = "", displayName = UNASSIGNED, unassigned = true, games = indexGames(reads, unassigned, lookups, null, sets, extraNames, picked, badges, heroes))
         LibraryIndex(
             LibraryIndex.VERSION, home.value, scanned.map { IndexedExtra(it.id, it.ref.value) }, defaultTags, systems.inLibraryOrder(), offline, lateMount,
             probes = probes.used, heads = heads.used,
@@ -304,17 +312,19 @@ class LibraryScanner(
             byTag.getOrPut(own) { ArrayList() }   // an empty skeleton folder is still indexed (count 0)
             val sidecar = reads.sidecars.read(Recents.HOME, relativeDir, children)
             val files = children.filter { !it.isDirectory && !Names.isHidden(it.name) }
-            val hidden = DiscSheet.hiddenNamed(files, heads::sheetNames)
+            val hidden = DiscSheet.hiddenNamed(files, heads::sheetNames) + MsuSets.hiddenSheets(files)
             val discs = CoreRegistry.forTag(own)?.extensions?.let { "m3u" in it || "cue" in it || "gdi" in it } == true
+            val msu = console?.id in MsuSets.CONSOLES
+            val sets = if (msu) MsuSets.Folder(files.map { it.name }) else null
             for (c in children) {
                 if (Names.isHidden(c.name)) continue
                 if (c.isDirectory) {
-                    if (discs) discFolder(reads, c, entry.ref, relativeDir, own, console)?.let { (t, f) -> byTag.getOrPut(t) { ArrayList() } += f }
+                    if (discs || msu) gameFolder(reads, c, entry.ref, relativeDir, own, console, discs, msu)?.let { (t, f) -> byTag.getOrPut(t) { ArrayList() } += f }
                     continue
                 }
                 if (c.name.lowercase() in hidden) continue
                 val fileTag = homeTag(c.name, sidecar[c.name], own, console) ?: continue
-                byTag.getOrPut(fileTag) { ArrayList() } += IndexedFile(c, entry.ref, Recents.HOME, relativeDir)
+                byTag.getOrPut(fileTag) { ArrayList() } += IndexedFile(c, entry.ref, Recents.HOME, relativeDir, badge = sets?.kind(c.name))
             }
         }
     }
@@ -339,17 +349,22 @@ class LibraryScanner(
     }
 
     /**
-     * NX Redux's disc folder: a subfolder `D/` of a system folder holding `D.m3u` (else `D.cue`, else `D.gdi`, any case;
-     * [DiscSheet.folderSheet]) is that one game. It is listed from `D/` (so the launch finds its discs and `D/systems.txt`
-     * holds its tag) with art and name from the system folder, keyed by `D`. Null when `D/` holds no such sheet or no tag
-     * of the console runs it.
+     * A game folder: a subfolder `D/` of a system folder that is one game. [msu]: an MSU pack, its only ROM with its set
+     * beside it ([MsuSets.folderRom]), checked first (a pack's cue would read as a disc folder's sheet); else, [discs]:
+     * NX Redux's disc folder, `D/` holding `D.m3u` (else `D.cue`, else `D.gdi`, any case; [DiscSheet.folderSheet]). It is
+     * listed from `D/` (so the launch finds its files and `D/systems.txt` holds its tag) with art and name from the
+     * system folder, keyed by `D`. Null when `D/` is neither, or no tag of the console runs it.
      */
-    private suspend fun discFolder(reads: ScanReads, dir: Entry, systemFolder: ContentRef, systemDir: String, ownTag: String, console: Console?): Pair<String, IndexedFile>? {
+    private suspend fun gameFolder(
+        reads: ScanReads, dir: Entry, systemFolder: ContentRef, systemDir: String, ownTag: String, console: Console?, discs: Boolean, msu: Boolean,
+    ): Pair<String, IndexedFile>? {
         val children = reads.list(dir.ref)
-        val sheet = DiscSheet.folderSheet(dir.name, children) ?: return null
+        val pack = if (msu) MsuSets.folderRom(children) else null
+        val file = pack ?: (if (discs) DiscSheet.folderSheet(dir.name, children) else null) ?: return null
         val dirPath = "$systemDir/${dir.name}"
-        val tag = homeTag(sheet.name, reads.sidecars.read(Recents.HOME, dirPath, children)[sheet.name], ownTag, console) ?: return null
-        return tag to IndexedFile(sheet, dir.ref, Recents.HOME, dirPath, lookupFolder = systemFolder, lookupDir = systemDir)
+        val tag = homeTag(file.name, reads.sidecars.read(Recents.HOME, dirPath, children)[file.name], ownTag, console) ?: return null
+        val badge = pack?.let { MsuSets.Folder(children.map { c -> c.name }).kind(it.name) }
+        return tag to IndexedFile(file, dir.ref, Recents.HOME, dirPath, lookupFolder = systemFolder, lookupDir = systemDir, badge = badge)
     }
 
     /** The arcade set tables for one scan: each resolved at most once, and only when a system that uses it is indexed. */
@@ -372,18 +387,18 @@ class LibraryScanner(
      */
     private suspend fun indexGames(
         reads: ScanReads, files: List<IndexedFile>, lookups: MutableMap<ContentRef, FolderLookup>, tag: String?, scanSets: ScanSets, extraNames: Map<String, String>,
-        picked: Map<String, Set<ArtSlot>>, heroes: HeroShots,
+        picked: Map<String, Set<ArtSlot>>, badges: Map<String, String>, heroes: HeroShots,
     ): List<IndexedGame> {
         for (f in files) if (f.lookupFolder !in lookups) lookups[f.lookupFolder] = lookup(reads, f, heroes)
         val core = tag?.let { CoreRegistry.forTag(it)?.id }
         val sets = if (core == ARCADE_CORE && files.isNotEmpty()) scanSets.get() else ArcadeSets.EMPTY
         val naomi = if (core == NAOMI_CORE && files.any { Names.isArchive(it.entry.name) }) scanSets.naomi() else NaomiSets.EMPTY
-        return buildGames(files, lookups, tag, core, sets, naomi, extraNames, picked)
+        return buildGames(files, lookups, tag, core, sets, naomi, extraNames, picked, badges)
     }
 
     private fun buildGames(
         files: List<IndexedFile>, lookups: Map<ContentRef, FolderLookup>, tag: String?, core: String?, sets: ArcadeSets, naomi: NaomiSets, extraNames: Map<String, String>,
-        picked: Map<String, Set<ArtSlot>>,
+        picked: Map<String, Set<ArtSlot>>, badges: Map<String, String>,
     ): List<IndexedGame> {
         val out = ArrayList<IndexedGame>()
         val plain = ArrayList<Boolean>()   // per out entry: named by a rule, not an alias
@@ -407,6 +422,8 @@ class LibraryScanner(
                     ?: (if (naomiSet) naomi.title(base)?.let(Names::plainTitle) else null) ?: Names.plainName(key),
                 lookupDir = f.lookupDir,
                 firstSeen = f.entry.lastModified,   // the file's date; withFirstSeen keeps a known game's
+                badge = f.badge,
+                badgeChoice = GameBadges.choiceOf(badges[GamePath.of(GameRef(f.sourceId, f.relativeDir, name))]),
             ).withArt(look.artFor(key, base, picked = pickedSlots(picked, f.sourceId, f.relativeDir, name)))
             plain += alias == null
         }
@@ -447,22 +464,24 @@ class LibraryScanner(
      * disc folder counts as the folder around it). When the name is shared across folders ([byFolder]; not Unassigned,
      * whose rows always show their dir, and where the whole list is one folder), a copy alone in its folder keeps its clean
      * name, and every copy in an extra folder shows that folder's last name as [IndexedGame.subtitle] ([folderLabel]); a
-     * home copy shows none.
+     * home copy shows none. Games with different badges ([IndexedGame.shownBadge]: an MSU pack beside its plain ROM, a
+     * hack beside its original) never share a name: the badge tells them apart.
      */
     private fun disambiguated(games: List<IndexedGame>, plain: List<Boolean>, byFolder: Boolean, extraNames: Map<String, String>): List<IndexedGame> {
         fun folder(g: IndexedGame) = if (byFolder) g.source to g.lookupDir else "" to ""
-        val folders = HashMap<String, MutableSet<Pair<String, String>>>()
-        val counts = HashMap<Pair<String, Pair<String, String>>, Int>()
+        fun shown(g: IndexedGame) = g.name to g.shownBadge
+        val folders = HashMap<Pair<String, String?>, MutableSet<Pair<String, String>>>()
+        val counts = HashMap<Pair<Pair<String, String?>, Pair<String, String>>, Int>()
         games.forEachIndexed { i, g ->
             if (!plain[i]) return@forEachIndexed
-            folders.getOrPut(g.name) { HashSet() } += folder(g)
-            val key = g.name to folder(g)
+            folders.getOrPut(shown(g)) { HashSet() } += folder(g)
+            val key = shown(g) to folder(g)
             counts[key] = (counts[key] ?: 0) + 1
         }
         return games.mapIndexed { i, g ->
             if (!plain[i]) return@mapIndexed g
-            val stem = counts.getValue(g.name to folder(g)) > 1
-            val elsewhere = folders.getValue(g.name).size > 1
+            val stem = counts.getValue(shown(g) to folder(g)) > 1
+            val elsewhere = folders.getValue(shown(g)).size > 1
             g.copy(
                 name = if (!stem) g.name else if (g.lookupDir != g.dir) g.dir.substringAfterLast('/') else Names.stripExtension(g.file),
                 subtitle = if (elsewhere) folderLabel(g, extraNames) else g.subtitle,
@@ -500,7 +519,7 @@ class LibraryScanner(
 
     /** The picked slots per game; a failed read is none (the folders' own files then). */
     private suspend fun pickedGames(): Map<String, Set<ArtSlot>> =
-        try { picks() } catch (e: CancellationException) { throw e } catch (_: Throwable) { emptyMap() }
+        tryOrAny({ emptyMap() }) { picks() }
 
     /** An extra folder's game's picked slots in [picked] (a home game's pick is in its own folder: nothing to prefer). */
     private fun pickedSlots(picked: Map<String, Set<ArtSlot>>, sourceId: String, dir: String, file: String): Set<ArtSlot> =
@@ -510,13 +529,13 @@ class LibraryScanner(
     private inner class HeroShots {
         private var shots: Set<String>? = null
         suspend fun get(): Set<String> = shots
-            ?: (try { heroShots() } catch (e: CancellationException) { throw e } catch (_: Throwable) { emptySet() }).also { shots = it }
+            ?: tryOrAny({ emptySet() }) { heroShots() }.also { shots = it }
         fun stale() { shots = null }
     }
 
     /**
      * The `.media` folder [media]'s listing after the [legacyMove] ([homeSegments]: its home-relative path, null for an
-     * extra folder's own), and whether the move changed it (then it is listed again).
+     * extra folder's own, which the move leaves alone), and whether the move changed it (then it is listed again).
      */
     private suspend fun mediaEntries(reads: ScanReads, media: ContentRef, homeSegments: List<String>?, heroes: HeroShots): Pair<List<Entry>, Boolean> {
         val listed = reads.list(media)
@@ -542,7 +561,9 @@ class LibraryScanner(
 
     /**
      * Only the typed folders: an untyped `.media/<name>.png` (NX Redux's old mix) is not a game's art. The 2D box is
-     * `boxart2d/`, else the legacy `box2d/` per name.
+     * `boxart2d/`, else the legacy `box2d/` per name. An extra folder's own `.media` ([heroDir] null) is only read, never
+     * moved to the typed names ([com.nxredux.mobile.scraper.LegacyArtMove]): its legacy `grid/` reads as the 2D box and
+     * `hero/` as the screenshot, each under the typed folder's file of the same name.
      */
     private suspend fun mediaLookup(
         media: List<Entry>, names: Map<String, String>, reuse: Boolean = false, heroes: HeroShots, heroDir: List<String>?,
@@ -556,8 +577,12 @@ class LibraryScanner(
             val at = (heroDir + "screenshot").joinToString("/")
             if (all.isEmpty()) emptySet() else shotFiles.filterTo(HashMap()) { (_, f) -> "$at/${f.name}" in all }.keys
         }
+        val extraOwn = heroDir == null
+        val legacyBox = if (extraOwn) sub("grid") else emptyMap()
+        val legacyShots = if (extraOwn) art.subArtFiles(media, "hero", artMaps, reuse).mapValues { it.value.ref } else emptyMap()
         return FolderLookup(
-            sub("boxart"), sub("box2d") + sub("boxart2d"), shotFiles.mapValues { it.value.ref }, names, sub("wheel"), sub("mix"), heroes = hero,
+            sub("boxart"), legacyBox + sub("box2d") + sub("boxart2d"), legacyShots + shotFiles.mapValues { it.value.ref }, names, sub("wheel"), sub("mix"),
+            heroes = hero,
         )
     }
 

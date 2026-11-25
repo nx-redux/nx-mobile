@@ -11,7 +11,6 @@ static const DiscApi* api = nullptr;
 struct Handle { void* disc; int64_t pos; int64_t size; };
 
 void setApi(const DiscApi* a) { api = a; }
-bool available() { return api != nullptr; }
 
 void* open(int fd) {
     if (!api || fd < 0) return nullptr;

@@ -6,13 +6,13 @@ import kotlin.math.min
 
 /** A frontend action an NDS input asks for. */
 sealed interface NdsAction {
-    /** L3, SELECT + L1 or R2: the other screen becomes the big one. */
+    /** L3, SELECT + L1 or L2: the other screen becomes the big one. */
     data object SwapScreens : NdsAction
     /** SELECT + Left (-1) / Right (+1): the next layout for the current orientation. */
     data class CycleLayout(val delta: Int) : NdsAction
     /** SELECT + Up (-1) / Down (+1): the picture-in-picture inset to the next corner, clockwise. */
     data class CycleCorner(val delta: Int) : NdsAction
-    /** SELECT + R1 or L2: stylus mode turned on or off. */
+    /** SELECT + R1 or R2: stylus mode turned on or off. */
     data class Stylus(val on: Boolean) : NdsAction
 }
 
@@ -28,10 +28,10 @@ data class NdsPen(val x: Float, val y: Float, val pressed: Boolean) {
 
 /**
  * NX Redux's DS controls (nxredux.com/emulators/nintendo-ds), before the core. As on the 3DS ([N3dsHotkeys]): L3 or
- * SELECT + L1 swaps screens, SELECT + R1 toggles stylus mode, SELECT + Left/Right cycles the layout; R2 (swap) and L2
- * (stylus) too, and SELECT + Up/Down moves the inset. In stylus mode the right stick, the left stick and the d-pad move
+ * SELECT + L1 swaps screens, SELECT + R1 toggles stylus mode, SELECT + Left/Right cycles the layout; L2 (swap) and R2
+ * (stylus) too (the left side the screens, the right side the stylus, as L3 and R3), and SELECT + Up/Down moves the inset. In stylus mode the right stick, the left stick and the d-pad move
  * a pen on the bottom screen (the d-pad faster the longer a direction is held, DraStic-like), and R3 or A touches at it.
- * A release always goes where its press went. L3, R2 and L2 never reach the core. Pure: the host feeds events and
+ * A release always goes where its press went. L3, L2 and R2 never reach the core. Pure: the host feeds events and
  * ticks, and applies actions.
  */
 class NdsHotkeys {
@@ -62,7 +62,7 @@ class NdsHotkeys {
     private var rightX = 0f
     private var rightY = 0f
 
-    /** Stylus mode on or off: SELECT + R1, L2, or the pad's STYLUS pill. Off lifts the pen. */
+    /** Stylus mode on or off: SELECT + R1, R2, or the pad's STYLUS pill. Off lifts the pen. */
     fun toggleStylus(): NdsAction.Stylus {
         stylus = !stylus
         resetPen()   // off: lift the pen; on: a stick already held does not move it at once
@@ -86,9 +86,9 @@ class NdsHotkeys {
             return NdsDecision(forward = !wasConsumed)
         }
         val decision = when {
-            button == NxButton.R2 || button == NxButton.L3 -> NdsDecision(false, NdsAction.SwapScreens)
+            button == NxButton.L2 || button == NxButton.L3 -> NdsDecision(false, NdsAction.SwapScreens)
             selectHeld && button == NxButton.L1 -> NdsDecision(false, NdsAction.SwapScreens)
-            button == NxButton.L2 -> NdsDecision(false, toggleStylus())
+            button == NxButton.R2 -> NdsDecision(false, toggleStylus())
             selectHeld && button == NxButton.R1 -> NdsDecision(false, toggleStylus())
             selectHeld && (button == NxButton.LEFT || button == NxButton.RIGHT) ->
                 if (skinShown && !skinLayouts) NdsDecision(false)   // the skin places the screens: kept, nothing to cycle

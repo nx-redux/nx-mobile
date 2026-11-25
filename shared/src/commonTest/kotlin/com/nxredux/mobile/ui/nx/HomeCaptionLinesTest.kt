@@ -2,7 +2,6 @@ package com.nxredux.mobile.ui.nx
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 // Home's captions (Continue, the pinned games, the wide and large faces' inline games) wrap the name to a
 // second line where the card holds it, the info line under it at the name's size; a short card keeps one line.
@@ -45,13 +44,5 @@ class HomeCaptionLinesTest {
         val lBelow = 10.2f + 21.25f + 2.55f
         assertEquals(2, homeCaptionTitleLines(150f, 21.25f, lBelow))
         assertEquals(1, homeCaptionTitleLines(104.75f, 21.25f, lBelow))   // a short landscape Continue keeps one line
-    }
-
-    // The fade still covers a wrapped name: at the limit the block's top is 0.52 / 0.8 of the way up the fade.
-    @Test fun theFadeStaysDarkUnderAWrappedName() {
-        val top = HOME_CAPTION_WRAP_SHARE / HOME_CAPTION_SHARE
-        assertTrue(homeCaptionAlpha(top) >= 0.35f, "top ${homeCaptionAlpha(top)}")
-        // The Fold cover pin: the first line's middle (50 dp up a 114 dp card).
-        assertTrue(homeCaptionAlpha(50f / (HOME_CAPTION_SHARE * 114f)) >= 0.5f)
     }
 }

@@ -1,5 +1,7 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.layout.DeviceTraits
+import com.nxredux.mobile.tryOrAny
 import com.nxredux.mobile.tryOrNull
 import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.netplay.NetplayCores
@@ -11,7 +13,12 @@ import com.nxredux.mobile.options.CoreOption
 import com.nxredux.mobile.options.CoreOptionFilter
 import com.nxredux.mobile.options.CoreOptionSource
 import com.nxredux.mobile.options.EmulatorPage
+import com.nxredux.mobile.gpudriver.GpuDriver
+import com.nxredux.mobile.gpudriver.GpuDriverChoice
+import com.nxredux.mobile.library.path
 import com.nxredux.mobile.options.EmulatorSettings
+import com.nxredux.mobile.options.GpuDriverOptions
+import com.nxredux.mobile.options.GraphicsApiOptions
 import com.nxredux.mobile.options.OptionGroup
 import com.nxredux.mobile.options.Ps2Options
 import com.nxredux.mobile.runner.CoreDescriptor
@@ -21,7 +28,6 @@ import com.nxredux.mobile.storage.EmulatorConfigStore
 import com.nxredux.mobile.ui.nx.InGameMenuModel
 import com.nxredux.mobile.ui.nx.ListSelection
 import com.nxredux.mobile.ui.nx.NxButton
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,6 +45,8 @@ sealed interface EmulatorRow {
     data class Header(val label: String) : EmulatorRow
     /** Game Settings with a game file: deletes it, so the game follows the emulator settings again. */
     data object UseEmulatorSettings : EmulatorRow
+    /** The emulator's own page (not a game's): asks, then deletes the console file, so every value is its default again. */
+    data object ResetDefaults : EmulatorRow
     data class Console(val row: ConsoleRow) : EmulatorRow
     data class Core(val option: CoreOption, val inCategory: Boolean) : EmulatorRow
     data class Category(val key: String, val label: String) : EmulatorRow
@@ -105,6 +113,8 @@ object EmulatorRows {
             }
             if (page.console.isNotEmpty() && coreRows.isNotEmpty()) add(EmulatorRow.Gap)   // space between the two groups
             addAll(coreRows)
+            // The emulator's page with values of its own: Reset to defaults after them, before the app-wide rows it leaves alone.
+            if (!page.forGame && (page.console.isNotEmpty() || !core.isNullOrEmpty())) { add(EmulatorRow.Gap); add(EmulatorRow.ResetDefaults) }
             if (app != null && app.rows.isNotEmpty()) {
                 if (isNotEmpty()) add(EmulatorRow.Gap)
                 add(EmulatorRow.Header(app.label))
@@ -122,7 +132,7 @@ object EmulatorRows {
         val n = rows.size
         if (n == 0) return 0
         for (k in 1..n) {
-            val i = ((index + k * delta) % n + n) % n
+            val i = (index + k * delta).mod(n)
             if (rows[i].selectable) return i
         }
         return index
@@ -136,6 +146,7 @@ object EmulatorRows {
                 is EmulatorRow.Core -> r is EmulatorRow.Core && r.option.key == previous.option.key
                 is EmulatorRow.Category -> r is EmulatorRow.Category && r.key == previous.key
                 EmulatorRow.UseEmulatorSettings -> r == EmulatorRow.UseEmulatorSettings
+                EmulatorRow.ResetDefaults -> r == EmulatorRow.ResetDefaults
                 is EmulatorRow.App -> r is EmulatorRow.App && r.row.kind == previous.row.kind
                 else -> false
             }
@@ -152,8 +163,11 @@ internal interface EmulatorSettingsHost {
     /** Back to the game list Game Settings was opened from ([screen] as it was), then rebuilt from its source on the same game. */
     fun restore(screen: Screen, selection: ListSelection)
 
-    /** The app-wide rows [page] shows last ([EmulatorRow.App]), as they stand now; null for a page without (all but mGBA's, with Cable Link). */
-    fun appSection(page: EmulatorPage): EmulatorAppSection?
+    /**
+     * The app's rows [page] shows last ([EmulatorRow.App]), as they stand now: mGBA's Cable Link, or [game]'s Badge on
+     * its Game Settings; null for a page without.
+     */
+    fun appSection(page: EmulatorPage, game: Listed?): EmulatorAppSection?
 
     /** Hosted row [row]'s setting stepped [delta] places, wrapping, as LEFT / RIGHT on its Settings page; the page is not left. */
     fun stepAppRow(row: SettingsRow, delta: Int)
@@ -163,6 +177,9 @@ internal interface EmulatorSettingsHost {
 
     /** A on hosted row [row] that has no values (Clear link ROM cache): what A does on its Settings page. */
     fun runAppRow(row: SettingsRow)
+
+    /** Page [key] rebuilt, the selected row from [from] to [to] (null: gone): the row being changed follows ([SettingsController.followRowEdit]). */
+    fun followRowEdit(key: Any?, from: Int, to: Int?) {}
 }
 
 /**
@@ -197,7 +214,18 @@ internal class EmulatorSettingsController(
      * session runs mGBA whatever Game Boy Advance's default is and its settings are on that page.
      */
     private val alwaysListed: () -> List<String> = { emptyList() },
+    /** The installed custom GPU drivers (null: the feature is unavailable, so no GPU driver row). */
+    private val gpuDrivers: () -> List<GpuDriver>? = { null },
+    /** The app-wide driver id (Settings -> Emulation -> GPU driver), null for the system driver. */
+    private val gpuDriverAppWide: () -> String? = { null },
+    /** The driver ids that crashed in the game at this library path ([com.nxredux.mobile.library.path]). */
+    private val gpuDriverCrashed: (gamePath: String) -> Set<String> = { emptySet() },
+    /** Forgets the driver crashes recorded for the game at this library path. */
+    private val clearGpuDriverCrash: (gamePath: String) -> Unit = {},
+    /** The phone's GPU name (GL_RENDERER; null: unknown), asked once, for a core with a Vulkan path. */
+    private val gpuName: suspend () -> String? = { null },
 ) {
+    private var gpu: String? = null   // [gpuName] once it answered
     private val lock = Mutex()
     private var listRows: List<EmulatorListRow> = emptyList()
     private var listRow: EmulatorListRow? = null          // the core whose picker or page is open
@@ -282,12 +310,13 @@ internal class EmulatorSettingsController(
             is Screen.EmulatorList -> host.showEmulatorsSettings()
             is Screen.EmulatorConsoles -> showList(listRow)
             is Screen.EmulatorOptions -> when {
+                s.confirmReset -> screen.value = s.copy(confirmReset = false)   // B on the question keeps everything
                 s.category != null -> {
-                    val rows = rows(s.page, null)
+                    val rows = rows(s.page, null, s.game)
                     screen.value = s.copy(rows = rows, category = null)
                     selection.value = ListSelection(rows.indexOf(rows.firstOrNull { it is EmulatorRow.Category && it.key == s.category }).coerceAtLeast(0), rows.size)
                 }
-                s.game != null -> gameReturn?.let { (to, at) -> gameReturn = null; host.restore(to, at) }
+                s.game != null -> closeGame(s)
                 fromPicker -> listRow?.let { showConsoles(it, s.page.tag) } ?: showList(null)
                 else -> showList(listRow)
             }
@@ -321,43 +350,72 @@ internal class EmulatorSettingsController(
     private fun defaults(d: CoreDescriptor) = coreDefaults(d.id) + d.defaultOptions
 
     /** [page]'s rows ([EmulatorRows.build]), the app's own rows ([EmulatorSettingsHost.appSection]) last at the top level. */
-    private fun rows(page: EmulatorPage, category: String?): List<EmulatorRow> =
-        EmulatorRows.build(page, category, if (category == null) host.appSection(page) else null)
+    private fun rows(page: EmulatorPage, category: String?, game: Listed?): List<EmulatorRow> =
+        EmulatorRows.build(page, category, if (category == null) host.appSection(page, game) else null)
 
     private fun build(tag: String, d: CoreDescriptor, game: Listed?, files: Pair<ConfigFile?, ConfigFile?>): EmulatorPage {
         val screen = screenClass()
-        return EmulatorSettings.page(
+        val drivers = gpuDrivers()
+        fun page(resolved: Boolean = false, crashNote: String? = null) = EmulatorSettings.page(
             tag, d, coreOptions.table(d.id), defaults(d), files.first, files.second, forGame = game != null, vulkanFailed = vulkanFailed(d.id),
             secondScreen = secondScreen(), screen = screen, displayMax = Res3dConsole.forTag(tag)?.displayMaxOf(windowPx(), screen),
             biosFiles = if (Ps2Options.appliesTo(tag)) ps2BiosFiles() else emptyList(),
+            gpuDrivers = drivers, gpuDriverResolved = resolved, gpuDriverCrashNote = crashNote,
+            autoVulkan = GraphicsApiOptions.autoIsVulkan(d.vulkan, gpu, customDriver(d, game, files, drivers)),
+            mali = DeviceTraits.isMali(gpu),
         )
+        val first = page()
+        // The GPU driver row shows only on Vulkan, so its presence says the page's Graphics API is Vulkan and what it shows is what the launch reads.
+        val shown = first.console.firstOrNull { it.option.key == GpuDriverOptions.KEY }
+        if (drivers == null || shown == null) return first
+        val installed = drivers.map { it.id }.toSet()
+        val crashed = game?.let { gpuDriverCrashed(it.game.path) }.orEmpty()
+        val wanted = GpuDriverChoice.resolve(shown.value, gpuDriverAppWide(), installed, emptySet())
+        val note = wanted?.takeIf { it in crashed }?.let { id -> GpuDriverOptions.CRASH_NOTE.replace("%s", drivers.first { it.id == id }.name) }
+        val resolved = GpuDriverChoice.resolve(shown.value, gpuDriverAppWide(), installed, crashed) != null
+        return if (resolved || note != null) page(resolved, note) else first
     }
 
-    private suspend fun readPage(tag: String, d: CoreDescriptor, game: Listed?): EmulatorPage =
-        build(tag, d, game, configs.read(tag, d.id, game?.game?.fileName))
+    /** Whether the game (or, with no [game], the console's games) would load a custom GPU driver: the stored pick, else app-wide. */
+    private fun customDriver(d: CoreDescriptor, game: Listed?, files: Pair<ConfigFile?, ConfigFile?>, drivers: List<GpuDriver>?): Boolean {
+        if (drivers == null || d.vulkan?.maliNeedsCustomDriver != true) return false
+        val stored = (if (game != null) files.second ?: files.first else files.first)?.values?.get(GpuDriverOptions.KEY)
+        val crashed = game?.let { gpuDriverCrashed(it.game.path) }.orEmpty()
+        return GpuDriverChoice.resolve(stored, gpuDriverAppWide(), drivers.mapTo(HashSet()) { it.id }, crashed) != null
+    }
+
+    private suspend fun readPage(tag: String, d: CoreDescriptor, game: Listed?): EmulatorPage {
+        // Every Vulkan core asks: Auto follows it on some, and a Mali's Graphics API row says more on all.
+        if (d.vulkan != null && gpu == null) gpu = gpuName()?.also { DeviceTraits.gpu = it }
+        return build(tag, d, game, configs.read(tag, d.id, game?.game?.fileName))
+    }
 
     /** Reads and shows [tag]'s page when [still] holds (the user has not moved on meanwhile); [opened] runs just before it shows. */
     private fun openPage(tag: String, d: CoreDescriptor, game: Listed?, still: () -> Boolean, opened: () -> Unit) {
         scope.launch {
             val page = lock.withLock {
-                try {
-                    withContext(work) { readPage(tag, d, game) }
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Throwable) {
+                tryOrAny({
                     error.value = "Could not read the settings"
                     null
-                }
+                }) { withContext(work) { readPage(tag, d, game) } }
             } ?: return@launch
             if (!still()) return@launch
             opened()
-            val rows = rows(page, null)
+            val rows = rows(page, null, game)
             screen.value = Screen.EmulatorOptions(page, rows, null, game)
             selection.value = ListSelection(EmulatorRows.firstSelectable(rows), rows.size)
         }
     }
 
     private fun onPageButton(s: Screen.EmulatorOptions, button: NxButton) {
+        if (s.confirmReset) {   // the question takes every button: A resets, B keeps
+            when (button) {
+                NxButton.A -> { screen.value = s.copy(confirmReset = false); resetDefaults(s) }
+                NxButton.B -> back(s)
+                else -> Unit
+            }
+            return
+        }
         val row = s.rows.getOrNull(selection.value.index)
         when (button) {
             NxButton.UP -> selection.value = ListSelection(EmulatorRows.step(s.rows, selection.value.index, -1), s.rows.size)
@@ -374,6 +432,7 @@ internal class EmulatorSettingsController(
                     selection.value = ListSelection(0, rows.size)
                 }
                 EmulatorRow.UseEmulatorSettings -> useEmulatorSettings(s)
+                EmulatorRow.ResetDefaults -> screen.value = s.copy(confirmReset = true)   // asks first
                 else -> Unit
             }
             NxButton.B -> back(s)
@@ -433,7 +492,10 @@ internal class EmulatorSettingsController(
         scope.launch {
             lock.withLock {
                 val page = withContext(work) {
-                    try {
+                    tryOrAny({
+                        error.value = "Could not save the setting"
+                        tryOrNull { readPage(tag, d, game) }
+                    }) {
                         val files = configs.read(tag, d.id, rom)
                         val page = build(tag, d, game, files)
                         val value = next(page, key) ?: return@withContext page
@@ -444,13 +506,9 @@ internal class EmulatorSettingsController(
                         } else {
                             val text = EmulatorSettings.gameWrite(page, files.first, files.second, key, value)
                             configs.writeGame(tag, d.id, rom, text)
+                            if (key == GpuDriverOptions.KEY) game?.let { clearGpuDriverCrash(it.game.path) }
                             build(tag, d, game, files.first to CoreConfig.parse(text))
                         }
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Throwable) {
-                        error.value = "Could not save the setting"
-                        tryOrNull { readPage(tag, d, game) }
                     }
                 }
                 page?.let { show(s, it) }
@@ -469,7 +527,7 @@ internal class EmulatorSettingsController(
             lock.withLock {
                 val page = withContext(work) { tryOrNull { readPage(s.page.tag, d, s.game) } } ?: return@withLock
                 val cur = screen.value as? Screen.EmulatorOptions
-                if (cur != null && samePage(cur, s) && rows(page, null).isEmpty()) back(cur.copy(category = null))
+                if (cur != null && samePage(cur, s) && rows(page, null, s.game).isEmpty()) back(cur.copy(category = null))
                 else show(s, page)
             }
         }
@@ -479,16 +537,26 @@ internal class EmulatorSettingsController(
     private fun useEmulatorSettings(s: Screen.EmulatorOptions) {
         val game = s.game ?: return
         val d = descriptorOf(s) ?: return
+        deleteThenShow(s, d, game, "Could not save the setting") {
+            configs.deleteGame(s.page.tag, d.id, game.game.fileName)
+        }
+    }
+
+    /** The confirmed Reset to defaults: deletes the console file and shows the page as the defaults have it. */
+    private fun resetDefaults(s: Screen.EmulatorOptions) {
+        if (s.game != null) return
+        val d = descriptorOf(s) ?: return
+        deleteThenShow(s, d, null, "Could not reset the settings") { configs.deleteConsole(s.page.tag, d.id) }
+    }
+
+    /** Runs [delete] on a settings file (a failure says [failed]), then shows the page as the disk has it for [game]. */
+    private fun deleteThenShow(
+        s: Screen.EmulatorOptions, d: CoreDescriptor, game: Listed?, failed: String, delete: suspend () -> Unit,
+    ) {
         scope.launch {
             lock.withLock {
                 val page = withContext(work) {
-                    try {
-                        configs.deleteGame(s.page.tag, d.id, game.game.fileName)
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Throwable) {
-                        error.value = "Could not save the setting"
-                    }
+                    tryOrAny({ error.value = failed }) { delete() }
                     tryOrNull { readPage(s.page.tag, d, game) }
                 }
                 page?.let { show(s, it) }
@@ -501,7 +569,7 @@ internal class EmulatorSettingsController(
             val values = r.option.values
             if (values.isEmpty()) return null
             val i = values.indexOf(r.value)
-            return if (i < 0) (if (delta >= 0) values.first() else values.last()) else values[((i + delta) % values.size + values.size) % values.size]
+            return if (i < 0) (if (delta >= 0) values.first() else values.last()) else values[(i + delta).mod(values.size)]
         }
         return page.core?.firstOrNull { it.key == key }?.let { CoreOptionFilter.cycle(it, delta) }
     }
@@ -523,12 +591,16 @@ internal class EmulatorSettingsController(
     private fun show(was: Screen.EmulatorOptions, page: EmulatorPage) {
         val cur = screen.value as? Screen.EmulatorOptions ?: return
         if (!samePage(cur, was)) return
-        val previous = cur.rows.getOrNull(selection.value.index)
-        val rows = rows(page, cur.category)
-        screen.value = cur.copy(page = page, rows = rows)
-        val at = EmulatorRows.indexOfSame(rows, previous)
-            ?: selection.value.index.takeIf { rows.getOrNull(it)?.selectable == true }
+        val from = selection.value.index
+        val previous = cur.rows.getOrNull(from)
+        val rows = rows(page, cur.category, cur.game)
+        val next = cur.copy(page = page, rows = rows)
+        screen.value = next
+        val same = EmulatorRows.indexOfSame(rows, previous)
+        val at = same
+            ?: from.takeIf { rows.getOrNull(it)?.selectable == true }
             ?: EmulatorRows.firstSelectable(rows)
         selection.value = ListSelection(at, rows.size)
+        host.followRowEdit(rowEditKey(next), from, same)
     }
 }

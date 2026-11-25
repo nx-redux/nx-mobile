@@ -14,6 +14,7 @@ Stdlib only. Every recipe follows nx-redux/.dev/TESTING.md:
 Test files are always named nxtest-*; cleanup_nxtest() removes them.
 """
 
+import hashlib
 import os
 import shlex
 import struct
@@ -32,6 +33,7 @@ EV_DIR = "/tmp/nxtest-ev"
 SHOT_REMOTE = "/tmp/nxtest-shot.bmp"
 LIBS = "/mnt/SDCARD/.system/lib:/mnt/SDCARD/.system/shared/lib:/usr/trimui/lib"
 DEVICE_SYNC_LAUNCH = TOOLS + "/Device Sync.pak/launch.sh"
+DEFAULT_SERIAL = "5c000c8997414781d1d"
 
 PAD_DEV = "/dev/input/event3"
 POWER_DEV = "/dev/input/event1"
@@ -75,7 +77,7 @@ class BrickGone(BrickError):
 
 
 def q(s):
-    """Single-quote for the device's /bin/sh."""
+    """Single-quote for the device's sh."""
     return "'" + str(s).replace("'", "'\\''") + "'"
 
 
@@ -90,6 +92,14 @@ def nxtest_targets(files, dirs):
     top = [d for d in found if not any(d.startswith(o + "/") for o in found)]
     inside = lambda p: any(p.startswith(d + "/") for d in top)
     return [d + "/" for d in top] + [f for f in dict.fromkeys(names(files)) if not inside(f)]
+
+
+def remove_nxtest_targets(sh, files, dirs):
+    """Removes what nxtest_targets lists, through sh (a device's shell call). Returns the paths removed."""
+    targets = nxtest_targets(files, dirs)
+    for p in targets:
+        sh(("rm -rf %s" if p.endswith("/") else "rm -f %s") % q(p.rstrip("/")))
+    return targets
 
 
 def _event(etype, code, value):
@@ -148,7 +158,27 @@ def bmp_to_png(bmp_path, png_path):
         f.write(png)
 
 
-class Brick:
+class AdbDevice:
+    """The adb calls that are the same for the Brick and the phone. A device class brings serial and _adb()."""
+
+    def present(self):
+        p = subprocess.run(["adb", "-s", self.serial, "get-state"], capture_output=True)
+        return p.returncode == 0 and p.stdout.strip() == b"device"
+
+    def sh(self, cmd, timeout=60):
+        """One adb shell command (as the shell user); stdout with \\r stripped."""
+        p = self._adb(["shell", cmd], timeout=timeout, check=False)
+        return p.stdout.decode("utf-8", "replace").replace("\r", "")
+
+    def md5(self, path):
+        out = self.sh("md5sum %s 2>/dev/null" % q(path)).split()
+        return out[0] if out else None
+
+    def exists(self, path):
+        return self.sh("[ -e %s ] && echo Y" % q(path)).strip() == "Y"
+
+
+class Brick(AdbDevice):
     def __init__(self, serial, verbose=True):
         self.serial = serial
         self.verbose = verbose
@@ -174,31 +204,15 @@ class Brick:
             raise BrickError("adb %s failed (%d): %s" % (args[0], p.returncode, err.strip()))
         return p
 
-    def present(self):
-        p = subprocess.run(["adb", "-s", self.serial, "get-state"], capture_output=True)
-        return p.returncode == 0 and p.stdout.strip() == b"device"
-
     def require_present(self):
         if not self.present():
             raise BrickGone("Brick %s is not on adb - it may have powered off" % self.serial)
-
-    def sh(self, cmd, timeout=60):
-        """One adb shell command; stdout with \\r stripped."""
-        p = self._adb(["shell", cmd], timeout=timeout, check=False)
-        return p.stdout.decode("utf-8", "replace").replace("\r", "")
 
     def push(self, local, remote):
         self._adb(["push", local, remote], timeout=300)
 
     def pull(self, remote, local):
         self._adb(["pull", remote, local], timeout=300)
-
-    def md5(self, path):
-        out = self.sh("md5sum %s 2>/dev/null" % q(path)).split()
-        return out[0] if out else None
-
-    def exists(self, path):
-        return self.sh("[ -e %s ] && echo Y" % q(path)).strip() == "Y"
 
     def mtime(self, path):
         """Seconds since epoch, or None (busybox has no stat: date -r)."""
@@ -218,9 +232,7 @@ class Brick:
         end = time.time() + timeout
         while True:
             v = fn()
-            if v:
-                return v
-            if time.time() >= end:
+            if v or time.time() >= end:
                 return v
             time.sleep(interval)
 
@@ -246,7 +258,6 @@ class Brick:
             for fn in sorted(os.listdir(local)):
                 self.push(os.path.join(local, fn), EV_DIR + "/" + fn)
             self.sh("chmod 755 %s/press.sh" % EV_DIR)
-            import hashlib
             want = hashlib.md5(files["A"][0]).hexdigest()
         if self.md5(EV_DIR + "/A.down") != want:
             raise BrickError("event files did not land in %s" % EV_DIR)
@@ -495,9 +506,7 @@ class Brick:
             find = "[ -d %s ] && find %s -xdev -name 'nxtest-*' " % (q(root), q(root))
             files = self.sh(find + "-type f", timeout=180)
             dirs = self.sh(find + "-type d -prune", timeout=180)
-            for path in nxtest_targets(files, dirs):
-                self.sh(("rm -rf %s" if path.endswith("/") else "rm -f %s") % q(path.rstrip("/")))
-                removed.append(path)
+            removed += remove_nxtest_targets(self.sh, files, dirs)
         self.drop_nxtest_auto_resume()
         if self._set_resume:
             self.sh("rm -f %s" % RESUME_SLOT_PATH)

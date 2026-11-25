@@ -16,12 +16,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
-/** What [controller]'s build and keys turn on (Settings). */
-internal fun artSources(controller: ArtworkController) = ArtSources(
-    ss = controller.ssAvailable, tgdb = controller.tgdbAvailable, sgdb = controller.sgdbAvailable,
-    sgdbKey = controller.sgdbKeySet, tgdbBuilt = controller.tgdbSupported,
-)
-
 /** What the Artwork pages need from [AppState]: its notice, the Tools page and the library as it stands. */
 internal interface ArtworkScreenHost {
     fun showNotice(text: String)

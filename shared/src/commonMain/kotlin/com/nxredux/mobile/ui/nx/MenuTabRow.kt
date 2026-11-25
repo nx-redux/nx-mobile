@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui.nx
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
@@ -102,6 +103,7 @@ fun MenuTabRow(
     onLongPress: (() -> Unit)? = null, underline: Boolean = true, trailing: (@Composable () -> Unit)? = null,
     labelSize: TextUnit = NxTextSizes.pageTitle.pinned() * nxTextScale(),   // the words' size: the page title's, or (the bottom tabs) a hint's
     hints: (@Composable (room: Dp) -> Unit)? = null,   // at the row's right end, given the room the words leave ([TAB_HINTS_GAP] clear of them)
+    gutter: Dp? = null,   // the first word's inset and the row's end, in place of the page's (a panel's own gutter)
 ) {
     val colors = LocalNxColors.current
     val portrait = LocalPortrait.current
@@ -135,8 +137,7 @@ fun MenuTabRow(
         scroll.animateScrollTo(to, tween(NX_MENU_GLIDE_MS, easing = NxMenuEasing))
     }
     val gap = if (portrait) 14.dp else 20.dp
-    val inset = nxPageInset()   // the first word on it, the row's end too
-    val size = labelSize   // Appearance → Text size
+    val inset = nxPageInset().let { if (gutter == null) it else it.copy(start = gutter, end = gutter) }   // the first word on it, the row's end too
     var rowPx by remember { mutableIntStateOf(0) }   // the row's width inside its padding, for [hints]' room
     Row(
         // The gutter less the pill's side room, which the words' box takes back inside (so the pill is never clipped).
@@ -150,20 +151,31 @@ fun MenuTabRow(
         // The first word starts on the gutter (as a Grid game list's MenuTitleRow name does). The words scroll when they
         // do not fit (five tabs on a narrow portrait phone); the pill scrolls with them, and the selected tab is scrolled
         // into view. A word cut at the room's edge fades out there.
+        val wordBottom = if (underline) TAB_WORD_BOTTOM else 0.dp
         Box(Modifier.weight(1f)) { Box(Modifier.nxScrollEdgeFade(scroll).horizontalScroll(scroll).padding(horizontal = TAB_PLATE_X, vertical = TAB_PLATE_Y)) {
             Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
                 val shadow = if (overArt) overArtShadow(colors.background) else null
                 labels.forEachIndexed { i, label ->
                     val lit = focused && i == selected
+                    val tabColor by animateColorAsState(
+                        when {
+                            lit -> colors.onAccent
+                            i == selected -> if (underline) colors.main else colors.accent
+                            overArt -> colors.main
+                            else -> colors.inkDim
+                        },
+                        tween(NX_MENU_GLIDE_MS, easing = NxMenuEasing),
+                        label = "tabColor",
+                    )
                     Text(
-                        label, color = when { lit -> colors.onAccent; i == selected || overArt -> colors.main; else -> colors.inkDim },
-                        fontFamily = LocalNxFont.current, fontSize = size, maxLines = 1,
+                        label, color = tabColor,
+                        fontFamily = LocalNxFont.current, fontSize = labelSize, maxLines = 1,
                         style = if (shadow == null || lit) LocalTextStyle.current else LocalTextStyle.current.copy(shadow = shadow),
                         // role: an unselected word over art, brighter than inkDim; the alpha fades its shadow with it
                         modifier = Modifier.alpha(if (i != selected && overArt) 0.62f else 1f)
                             .onGloballyPositioned { val v = it.positionInParent().x.toInt() to it.size.width; if (bounds[i] != v) bounds[i] = v }
                             .combinedClickable(onClick = { onTab(i) }, onLongClick = onLongPress)
-                            .padding(bottom = TAB_WORD_BOTTOM)
+                            .padding(bottom = wordBottom)
                             .then(if (lit) Modifier.tabPlate(colors.accent) else Modifier),
                     )
                 }
@@ -180,8 +192,8 @@ fun MenuTabRow(
             val plate = with(density) { TAB_PLATE_X.roundToPx() }
             val wordsPx = (bounds.values.maxOfOrNull { it.first + it.second } ?: 0) + plate * 2
             val room = with(density) { (rowPx - wordsPx - TAB_HINTS_GAP.roundToPx() - plate).coerceAtLeast(0).toDp() }
-            // The words' own room under them ([TAB_WORD_BOTTOM]), so the hints sit level with them.
-            Box(Modifier.padding(end = TAB_PLATE_X, bottom = TAB_WORD_BOTTOM)) { h(room) }
+            // Match the words' bottom room so the hints sit level with them.
+            Box(Modifier.padding(end = TAB_PLATE_X, bottom = wordBottom)) { h(room) }
         }
     }
 }

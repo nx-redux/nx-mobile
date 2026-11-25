@@ -62,11 +62,12 @@ data class LiveGame(
 }
 
 /**
- * [session] is the very game this process already runs, started fresh or from its auto save (a Continue): the menu may
- * bring that screen back. A slot pick, another game or core, netplay (either side), or a screen already quitting (its
- * task would come forward only to finish) starts a new process instead, once the old one has ended.
+ * [session] is the very game this process already runs, started fresh or continued ([GameSession.continuing], from any
+ * slot its resume pointer names): the menu may bring that screen back. A fresh start ([GameSession.fresh]), a slot pick,
+ * another game or core, netplay (either side), or a screen already quitting (its task would come forward only to finish)
+ * starts a new process instead, once the old one has ended.
  */
 fun LiveGame.canBringBack(session: GameSession): Boolean =
-    !closing && gamePath != null && gamePath == session.gamePath && coreId == session.core.id &&
+    !closing && !session.fresh && gamePath != null && gamePath == session.gamePath && coreId == session.core.id &&
         session.netplay == null && !netplay &&
-        (session.resumeSlot == null || session.resumeSlot == NxPaths.AUTO_SLOT)
+        (session.continuing || session.resumeSlot == null || session.resumeSlot == NxPaths.AUTO_SLOT)

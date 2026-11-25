@@ -1,6 +1,5 @@
 package com.nxredux.mobile.skin
 
-import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -9,9 +8,7 @@ import kotlin.test.assertTrue
 
 /** The closest layout, scaled, for windows no layout fits. */
 class SkinClosestTest {
-    private val carbon = assertNotNull(
-        SkinPackManifest.parse(File("../androidApp/src/main/assets/skins/nx-carbon/skin.json").readText()),
-    )
+    private val carbon = skinPack()
     private val gba = 240f to 160f
 
     @Test

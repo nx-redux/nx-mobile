@@ -7,7 +7,7 @@ and credit is appreciated (THIRD_PARTY_ART.md). The logos are trademarks of thei
 
 What it does: every visible filled shape (all white) becomes one <path> with its transforms baked into the coordinates
 (svgelements' abs(Path)), arcs as cubics, 2 decimals; one white fill (#FFFFFFFF), evenodd kept; Pico-8's pixel squares
-merged into one path so no seams show. The drawable is sized to fit 512 x 128 dp, the old PNGs' box.
+merged into one path so no seams show. The drawable is sized to fit 512 x 128 dp.
 Doom (menu_logo_prboom.xml) is not in the pack: it is the project's own drawing, traced from an earlier PNG.
 
     pip install svgelements

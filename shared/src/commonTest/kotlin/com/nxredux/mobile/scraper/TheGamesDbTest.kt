@@ -13,6 +13,9 @@ import kotlin.test.assertTrue
  * hand to record live ones). No key values anywhere.
  */
 object TgdbFixtures {
+    /** The API's answer to a made-up key. */
+    const val unknownKey = """{"remaining_monthly_allowance":0,"allowance_refresh_timer":0}"""
+
     fun byName(left: Int = 249, extra: Int = 0) = """
     {"code":200,"status":"Success","remaining_monthly_allowance":$left,"extra_allowance":$extra,"allowance_refresh_timer":2592000,
      "data":{"count":3,"games":[
@@ -54,7 +57,6 @@ object TgdbFixtures {
 
 class TheGamesDbTest {
     private val sonic = Scrape.homeGame("Sonic the Hedgehog (USA, Europe).md", "MD").copy(name = "Sonic the Hedgehog")
-    private fun ok(s: String) = HttpResult(200, s.encodeToByteArray())
 
     private class Rig(var key: String = "K") {
         var clock = 0L
@@ -176,14 +178,14 @@ class TheGamesDbTest {
             "images":{"53":[{"id":1,"type":"screenshot","side":null,"filename":"screenshots/1.jpg"}]}}}"""
         assertEquals("https://cdn.thegamesdb.net/images/thumb/", Tgdb.parseImages(body).thumbBase)
         val r = Rig()
-        r.http.on("Games/ByGameName", ok(TgdbFixtures.byName()))
-        r.http.on("Games/Images", ok(body))
+        r.http.on("Games/ByGameName", Scrape.json(TgdbFixtures.byName()))
+        r.http.on("Games/Images", Scrape.json(body))
         val shot = r.src.find(sonic, setOf(ArtSlot.SCREENSHOT)).single()
         assertEquals("https://cdn.thegamesdb.net/images/thumb/screenshots/1.jpg", shot.thumb)
         assertEquals("https://cdn.thegamesdb.net/images/original/screenshots/1.jpg", shot.url)
         // The boxart's answer carries no thumb base here: the documented thumb CDN.
         val r2 = Rig()
-        r2.http.on("Games/ByGameName", ok(TgdbFixtures.byName()))
+        r2.http.on("Games/ByGameName", Scrape.json(TgdbFixtures.byName()))
         val box = r2.src.find(sonic, setOf(ArtSlot.BOX_2D)).first()
         assertEquals("https://cdn.thegamesdb.net/images/thumb/boxart/front/53-1.jpg", box.thumb)
         assertEquals("https://cdn.thegamesdb.net/images/original/boxart/front/53-1.jpg", box.url)
@@ -191,8 +193,8 @@ class TheGamesDbTest {
 
     @Test fun findReturnsOriginalUrlsAndOrigins() = runTest {
         val r = Rig()
-        r.http.on("Games/ByGameName", ok(TgdbFixtures.byName()))
-        r.http.on("Games/Images", ok(TgdbFixtures.images()))
+        r.http.on("Games/ByGameName", Scrape.json(TgdbFixtures.byName()))
+        r.http.on("Games/Images", Scrape.json(TgdbFixtures.images()))
         val hits = r.src.find(sonic, setOf(ArtSlot.BOX_2D, ArtSlot.SCREENSHOT))
         assertEquals(
             listOf(
@@ -211,8 +213,8 @@ class TheGamesDbTest {
 
     @Test fun screenshotCallOnlyWhenWanted() = runTest {
         val r = Rig()
-        r.http.on("Games/ByGameName", ok(TgdbFixtures.byName()))
-        r.http.on("Games/Images", ok(TgdbFixtures.images()))
+        r.http.on("Games/ByGameName", Scrape.json(TgdbFixtures.byName()))
+        r.http.on("Games/Images", Scrape.json(TgdbFixtures.images()))
         val hits = r.src.find(sonic, setOf(ArtSlot.BOX_2D))
         assertEquals(0, r.http.count("Games/Images"))
         assertTrue(hits.all { it.slot == ArtSlot.BOX_2D })
@@ -230,8 +232,8 @@ class TheGamesDbTest {
         )
         val r = Rig()
         assertTrue(ArtSlot.WHEEL in r.src.slots && r.src.wheelLast)
-        r.http.on("Games/ByGameName", ok(TgdbFixtures.byName()))
-        r.http.on("Games/Images", ok(TgdbFixtures.imagesWithLogos()))
+        r.http.on("Games/ByGameName", Scrape.json(TgdbFixtures.byName()))
+        r.http.on("Games/Images", Scrape.json(TgdbFixtures.imagesWithLogos()))
         val hits = r.src.find(sonic, setOf(ArtSlot.SCREENSHOT, ArtSlot.WHEEL))
         assertEquals(1, r.http.count("Games/Images"))
         assertTrue(r.http.calls.last().endsWith("filter%5Btype%5D=screenshot%2Cclearlogo"))
@@ -250,8 +252,8 @@ class TheGamesDbTest {
         assertEquals(hits.drop(1).map { it.url }, again.map { it.url })
         // The wheel alone with nothing remembered: the search, then only clear logos asked for.
         val r2 = Rig()
-        r2.http.on("Games/ByGameName", ok(TgdbFixtures.byName()))
-        r2.http.on("Games/Images", ok(TgdbFixtures.imagesWithLogos()))
+        r2.http.on("Games/ByGameName", Scrape.json(TgdbFixtures.byName()))
+        r2.http.on("Games/Images", Scrape.json(TgdbFixtures.imagesWithLogos()))
         val wheelOnly = r2.src.find(sonic, setOf(ArtSlot.WHEEL))
         assertTrue(r2.http.calls.last().endsWith("filter%5Btype%5D=clearlogo"))
         assertEquals(listOf(ArtSlot.WHEEL, ArtSlot.WHEEL), wheelOnly.map { it.slot })
@@ -259,8 +261,8 @@ class TheGamesDbTest {
 
     @Test fun aWheelBesideOtherSlotsSpendsNoRequestOfItsOwn() = runTest {
         val r = Rig()
-        r.http.on("Games/ByGameName", ok(TgdbFixtures.byName()))
-        r.http.on("Games/Images", ok(TgdbFixtures.imagesWithLogos()))
+        r.http.on("Games/ByGameName", Scrape.json(TgdbFixtures.byName()))
+        r.http.on("Games/Images", Scrape.json(TgdbFixtures.imagesWithLogos()))
         // A 2D box and the wheel: no Images call for the wheel (it rides only on a screenshot call).
         val box = r.src.find(sonic, setOf(ArtSlot.BOX_2D, ArtSlot.WHEEL))
         assertEquals(0, r.http.count("Games/Images"))
@@ -281,24 +283,24 @@ class TheGamesDbTest {
 
     @Test fun stopsAtOneLeft() = runTest {
         val r = Rig()
-        r.http.on("API/Limit", ok(TgdbFixtures.limit(left = 1)))
-        r.http.on("Games/ByGameName", ok(TgdbFixtures.byName()))
+        r.http.on("API/Limit", Scrape.json(TgdbFixtures.limit(left = 1)))
+        r.http.on("Games/ByGameName", Scrape.json(TgdbFixtures.byName()))
         r.src.startJob()
         val e = assertFailsWith<SourceStop> { r.src.find(sonic, setOf(ArtSlot.BOX_2D)) }
         assertEquals(TheGamesDbSource.LIMIT_REACHED, e.note)
         assertEquals(0, r.http.count("Games/ByGameName"))
         // Extra allowance counts.
         val r2 = Rig()
-        r2.http.on("API/Limit", ok(TgdbFixtures.limit(left = 0, extra = 50)))
-        r2.http.on("Games/ByGameName", ok(TgdbFixtures.byName()))
+        r2.http.on("API/Limit", Scrape.json(TgdbFixtures.limit(left = 0, extra = 50)))
+        r2.http.on("Games/ByGameName", Scrape.json(TgdbFixtures.byName()))
         r2.src.startJob()
         assertTrue(r2.src.find(sonic, setOf(ArtSlot.BOX_2D)).isNotEmpty())
     }
 
     @Test fun boxKeptWhenTheScreenshotCallHitsTheLimit() = runTest {
         val r = Rig()
-        r.http.on("Games/ByGameName", ok(TgdbFixtures.byName(left = 1)))
-        r.http.on("Games/Images", ok(TgdbFixtures.images()))
+        r.http.on("Games/ByGameName", Scrape.json(TgdbFixtures.byName(left = 1)))
+        r.http.on("Games/Images", Scrape.json(TgdbFixtures.images()))
         val hits = r.src.find(sonic, setOf(ArtSlot.BOX_2D, ArtSlot.SCREENSHOT))
         assertTrue(hits.isNotEmpty() && hits.all { it.slot == ArtSlot.BOX_2D })
         assertEquals(0, r.http.count("Games/Images"))
@@ -317,7 +319,7 @@ class TheGamesDbTest {
     @Test fun oneServerErrorIsAskedAgainBeforeTheSourceStops() = runTest {
         for (status in listOf(429, 502)) {
             val r = Rig()
-            r.http.on("Games/ByGameName", HttpResult(status, null), ok(TgdbFixtures.byName()))
+            r.http.on("Games/ByGameName", HttpResult(status, null), Scrape.json(TgdbFixtures.byName()))
             assertTrue(r.src.find(sonic, setOf(ArtSlot.BOX_2D)).isNotEmpty())
             assertEquals(2, r.http.count("Games/ByGameName"))
             assertTrue(r.clock >= TheGamesDbSource.BUSY_WAIT_MS)
@@ -337,8 +339,8 @@ class TheGamesDbTest {
 
     @Test fun limitReadOnceAtJobStart() = runTest {
         val r = Rig()
-        r.http.on("API/Limit", ok(TgdbFixtures.limit(left = 1820)))
-        r.http.on("Games/ByGameName", ok(TgdbFixtures.byName(left = 1819)))
+        r.http.on("API/Limit", Scrape.json(TgdbFixtures.limit(left = 1820)))
+        r.http.on("Games/ByGameName", Scrape.json(TgdbFixtures.byName(left = 1819)))
         val fs = Scrape.homeTree()
         val engine = ScrapeEngine(r.http, FakeFitter(), fs, Scrape.home, listOf(r.src), { _, _ -> }, {})
         val games = listOf(Scrape.homeGame("Sonic.md", "MD"), Scrape.homeGame("Tetris.gb"), Scrape.homeGame("Zelda.gb"))
@@ -351,11 +353,10 @@ class TheGamesDbTest {
     }
 
     @Test fun validateKeyResults() = runTest {
-        val unknownKey = """{"remaining_monthly_allowance":0,"allowance_refresh_timer":0}"""   // the API's answer to a made-up key
         val spent = """{"remaining_monthly_allowance":0,"extra_allowance":0,"allowance_refresh_timer":86400}"""
         for ((answer, result) in listOf(
-            ok(TgdbFixtures.limit()) to KeyResult.OK, ok(spent) to KeyResult.OK, ok(unknownKey) to KeyResult.BAD_KEY,
-            ok("<html>") to KeyResult.UNAVAILABLE, HttpResult(401, null) to KeyResult.BAD_KEY, HttpResult(403, null) to KeyResult.BAD_KEY,
+            Scrape.json(TgdbFixtures.limit()) to KeyResult.OK, Scrape.json(spent) to KeyResult.OK, Scrape.json(TgdbFixtures.unknownKey) to KeyResult.BAD_KEY,
+            Scrape.json("<html>") to KeyResult.UNAVAILABLE, HttpResult(401, null) to KeyResult.BAD_KEY, HttpResult(403, null) to KeyResult.BAD_KEY,
             HttpResult(-1, null) to KeyResult.OFFLINE, HttpResult(500, null) to KeyResult.UNAVAILABLE, HttpResult(429, null) to KeyResult.UNAVAILABLE,
         )) {
             val r = Rig(key = "")
@@ -364,14 +365,14 @@ class TheGamesDbTest {
             assertEquals(listOf("https://api.thegamesdb.net/v1/API/Limit?apikey=NEW"), r.http.calls)
         }
         assertEquals(true, Tgdb.keyAccepted(TgdbFixtures.limit()))
-        assertEquals(false, Tgdb.keyAccepted(unknownKey))
+        assertEquals(false, Tgdb.keyAccepted(TgdbFixtures.unknownKey))
         assertEquals(null, Tgdb.keyAccepted("{}"))
     }
 
     @Test fun allowanceBelongsToTheKeyItWasReadWith() = runTest {
         val r = Rig(key = "BUILD")
-        r.http.on("apikey=BUILD", ok(TgdbFixtures.limit(left = 900)))
-        r.http.on("apikey=MINE", ok(TgdbFixtures.limit(left = 2000)))
+        r.http.on("apikey=BUILD", Scrape.json(TgdbFixtures.limit(left = 900)))
+        r.http.on("apikey=MINE", Scrape.json(TgdbFixtures.limit(left = 2000)))
         assertEquals(900, r.src.allowance())
         assertEquals(900, r.src.left())
         r.key = "MINE"
@@ -394,8 +395,8 @@ class TheGamesDbTest {
     }
     @Test fun regionalVariantsShareOneSearchPerJob() = runTest {
         val r = Rig()
-        r.http.on("Games/ByGameName", ok(TgdbFixtures.byName(left = 249)))
-        r.http.on("Games/Images", ok(TgdbFixtures.images(left = 248)))
+        r.http.on("Games/ByGameName", Scrape.json(TgdbFixtures.byName(left = 249)))
+        r.http.on("Games/Images", Scrape.json(TgdbFixtures.images(left = 248)))
         val usa = Scrape.homeGame("Sonic the Hedgehog (USA).md", "MD").copy(name = "Sonic the Hedgehog (USA)")
         val eur = Scrape.homeGame("Sonic the Hedgehog (Europe).md", "MD").copy(name = "Sonic the Hedgehog (Europe)")
         r.src.startJob()
@@ -413,7 +414,7 @@ class TheGamesDbTest {
 
     @Test fun aFailedSearchIsNotKept() = runTest {
         val r = Rig()
-        r.http.on("Games/ByGameName", HttpResult(404, null), ok(TgdbFixtures.byName()))
+        r.http.on("Games/ByGameName", HttpResult(404, null), Scrape.json(TgdbFixtures.byName()))
         r.src.startJob()
         assertEquals(emptyList(), r.src.find(sonic, setOf(ArtSlot.BOX_2D)))
         assertTrue(r.src.find(sonic, setOf(ArtSlot.BOX_2D)).isNotEmpty())

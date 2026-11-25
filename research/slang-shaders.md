@@ -1,9 +1,8 @@
-# Slang shader support — exploration (2026-09-24, deferred)
+# Slang shader support — exploration (2026-09-24) and what was built (2026-11-14)
 
-Status: **deferred**. The in-game Shaders page runs RetroArch legacy `.glslp`/`.glsl` presets
-(the `libretrodroid` module's `presetchain.cpp`, app `GlslPreset`/`ShaderOptions`). This note records what adding
-RetroArch's modern `.slangp`/`.slang` format would take, so the decision can be revisited without
-redoing the research. Sources: RetroArch `98a05c5` (`gfx/drivers_shader/slang_process.c`,
+Status: **built** on `feat/slang-shaders` (see "What was built" at the end). The exploration below is kept as it was
+written, when the in-game Shaders page ran only RetroArch legacy `.glslp`/`.glsl` presets (the `libretrodroid` module's
+`presetchain.cpp`, app `GlslPreset`/`ShaderOptions`). Sources: RetroArch `98a05c5` (`gfx/drivers_shader/slang_process.c`,
 `glslang_util.c`, `glslang.cpp`, `shader_gl3.c`, `video_shader_parse.c`), libretro `slang-shaders`
 `afb1416`, `glsl-shaders` `f8e23ff`, glslang `ca70aa3`, SPIRV-Cross `aa217ae`.
 
@@ -81,8 +80,8 @@ redoing the research. Sources: RetroArch `98a05c5` (`gfx/drivers_shader/slang_pr
   EXCLUDE_FROM_ALL)`. SPIRV-Tools is not needed with `ENABLE_OPT=OFF`. Include glslang as
   `<SPIRV/GlslangToSpv.h>` with the glslang root on the include path.
 - The NDK's bundled `shaderc` (older glslang, no SPIRV-Cross, no prebuilt) is not useful; vendor both.
-- Licences: glslang BSD-3, SPIRV-Cross Apache-2.0 (compatible with GPL-3.0); RetroArch code is
-  GPL-3.0 and can be adapted.
+- Licences: glslang BSD-3, SPIRV-Cross Apache-2.0 (compatible with GPL-3.0). RetroArch's code is not
+  taken: other projects are a source of ideas only, so the runner is written from the format's behaviour.
 - Compile time on the Mac: `crt-guest-advanced` (12 passes, 24 stages) ≈ 2 s through the CLIs. Not
   measured on the phone; assume a few seconds for big presets → cache.
 
@@ -157,3 +156,39 @@ Planned production device: Retroid Pocket Nova (Android 13, Snapdragon QCS8550 �
 Deferred in favour of the remaining in-game menu pages (Cheats, Controls, Shortcuts, Rewind /
 fast-forward, Achievements). If picked up: option A with C's build-time pre-translation for the
 bundled set; ES 3.20 target; ~1 MB APK growth and a cached first-load compile were accepted.
+
+## What was built (2026-11-14)
+
+Option A, written from the format's behaviour (no RetroArch code), on the existing OpenGL ES presentation. A Vulkan
+presentation layer is a separate later project; the translate half below is API-neutral and carries over.
+
+- **Preset parser** (`shared`, `SlangPreset`): `.slangp` with `#reference` chains (a path is relative to the file that
+  set it), per-pass keys, LUTs, parameter overrides; `.slang` with `#include` / `#pragma include_optional` expanded, the
+  two stages split, `#pragma name / format / parameter` read. 2,656 of the library's 2,662 presets parse (the other 6
+  are parameter-only fragments meant to be referenced).
+- **Translator** (`libretrodroid`, `slangtranslate`): glslang 16.6.0 → SPIR-V → SPIRV-Cross (vulkan-sdk-1.4.363.0) →
+  GLSL ES at the device's version, plus the list of block members and samplers. Each stage gets its own block and
+  push names and one varying name per location. 1,331 of the library's 1,333 distinct passes translate and validate
+  at ES 3.1 and 3.2, 1,289 at ES 3.0 (`slangcheck`, host). No GL: runs off the GL thread, the result cached on disk per
+  pass (`SlangCache`, keyed by the pass text, the ES version and the app version).
+- **Renderer** (`libretrodroid`, `slangchain`): any number of passes; per-pass formats (float, sRGB, 10-bit, integer)
+  with a fallback when a format is not renderable; mipmapped inputs; feedback (double-buffered); frame history (a ring of
+  copies of the frame, which also normalises its orientation); sampler objects per binding (border clamp where GLES has
+  it); one uniform buffer per stage; LUT mipmaps. State (history, feedback, outputs) is kept per screen region, so the
+  two DS screens have their own. The presentation is unchanged: Vulkan cores' frames arrive through the bridge as before.
+- **Bundled set**: 50 slang presets from libretro `slang-shaders` under `assets/shaders/slang` (`tools/bundle_slang.py`
+  holds the list and rebuilds the folder and its origins list). The 21 bundled GLSL shaders that have a slang version
+  were removed; a stored value naming one loads its slang preset (`ShaderOptions.REPLACED`). 18 shaders with no slang
+  version stay GLSL.
+- **Picker** (`ShaderBrowse`, the in-game menu's `ShaderBrowse` pages): the Shader row opens None, the bundled presets
+  in groups by effect (CRT, Handheld, Smoothing, NTSC, Effects, each with a line saying what it does) under readable
+  names, and Personal, the home's `Shaders/` browsed a folder at a time. A on a preset uses it and shows its preview
+  strip, LEFT / RIGHT stepping through that level. The second screen's Shader row opens the same picker.
+- **Not done**: rotation / HDR / sensor / sub-frame semantics (zero or neutral values), `FrameDirection` under rewind
+  (always 1), a program-binary cache (the driver's own cache is relied on).
+- **Cost measured**: the stripped arm64 runner grows from 4.2 MB to 6.4 MB (2.3 MB → 3.1 MB compressed) with both
+  libraries built for size and unreached code dropped.
+- **Checked**: on the emulator (GLES 3.1) and the Nova (GLES 3.2) with `tools/device-tests/slang_shaders.py`: a set of
+  presets across SNES, Game Boy, a rotated arcade game, N64, GameCube, PSP, PS2, DS and 3DS; every bundled preset and
+  every replaced GLSL name on SNES. Mega Bezel STD and SMOOTH-ADV draw at about 36 fps on the Nova. What is still owed
+  is listed in `TODO_LIST.md`.

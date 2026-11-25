@@ -45,7 +45,7 @@ class SaveStates(private val root: File, private val paths: NxPaths) {
 
     private fun encode(bytes: ByteArray) = if (paths.stateCompressed) Rzip.encode(bytes) else bytes
 
-    /** As minarch reads a state (ma_saves.c:177-291): RZIP or raw, a RetroArch RASTATE header skipped; null when malformed. */
+    /** As minarch reads a state (ma_saves.c): RZIP or raw, a RetroArch RASTATE header skipped; null when malformed. */
     private fun decode(raw: ByteArray): ByteArray? = Rzip.decode(raw)?.let(StateBytes::stripRaStateHeader)
 
     fun stateFile(slot: Int) = File(root, paths.state(slot - 1))   // where a save writes
@@ -86,6 +86,18 @@ class SaveStates(private val root: File, private val paths: NxPaths) {
     /** Deletes the auto resume state and its thumbnail: a launch with the pointer on it then boots fresh. */
     fun dropAuto() {
         paths.stateCandidates(NxPaths.AUTO_SLOT).forEach { File(root, it).delete() }
+        File(root, paths.thumb(NxPaths.AUTO_SLOT)).delete()
+    }
+
+    /**
+     * Save on quit off: the hidden state is never refreshed, so a pointer left on it would later resume a stale state
+     * whose battery save can overwrite newer in-game saves. Drops that pointer (a manual slot's is kept) and the hidden
+     * frame Home shows, keeping the state file itself.
+     */
+    fun unlinkAuto(): Unit = synchronized(slotPointerLock) {
+        val file = File(root, paths.lastSlot)
+        val current = runCatching { file.takeIf { it.exists() }?.readText()?.trim()?.toIntOrNull() }.getOrNull()
+        if (current == NxPaths.AUTO_SLOT) file.delete()
         File(root, paths.thumb(NxPaths.AUTO_SLOT)).delete()
     }
 

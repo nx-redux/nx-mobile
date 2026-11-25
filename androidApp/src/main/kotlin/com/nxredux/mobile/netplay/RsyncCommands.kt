@@ -1,7 +1,7 @@
 package com.nxredux.mobile.netplay
 
 /**
- * netplay: the rsync command lines and daemon config, exactly the handheld's (nx-redux wizard_sync.c at 8f5a760b),
+ * netplay: the rsync command lines and daemon config, exactly the handheld's (nx-redux wizard_sync.c),
  * minus its `uid = 0`/`gid = 0` and `log file` lines, plus `reverse lookup = no`. Pure, so they are unit-tested. Every
  * value that reaches a config line or a URL is checked: a newline would start a directive the caller never wrote.
  */
@@ -12,7 +12,7 @@ object RsyncCommands {
     /** `rsync -t --inplace --no-perms --timeout=8 --contimeout=4 rsync://<host>:18731/sync/<name> <dest>/` (no shell). */
     fun pullArgs(binary: String, hostIp: String, wireName: String, destDir: String): List<String> {
         require(NetplayAddress.ipv4(hostIp) == hostIp) { "not a dotted IPv4 address: $hostIp" }
-        require(wireName in NetplaySaves.WIRE_NAMES) { "not a save name: $wireName" }
+        require(wireName in NetplaySaves.ALL_WIRE_NAMES) { "not a save name: $wireName" }
         return listOf(
             binary, "-t", "--inplace", "--no-perms", "--timeout=8", "--contimeout=4",
             "rsync://$hostIp:$PORT/$MODULE/$wireName", destDir.trimEnd('/') + "/",

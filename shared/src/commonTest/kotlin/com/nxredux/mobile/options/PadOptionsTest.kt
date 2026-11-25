@@ -24,14 +24,7 @@ class PadOptionsTest {
     }
 
     @Test fun nds_keeps_its_rows_and_gains_the_layout_row() {
-        assertEquals(NdsOptions.table + NdsOptions.localWirelessRow + BottomScreenOptions.row + PadOptions.layoutRow + (SpeedOptions.table + AudioOptions.rows), ConsoleSettings.tableFor("NDS"))
-    }
-
-    // Portrait Pad is gone: portrait always lays the see-through overlay over the full-screen game (no band to hide).
-    @Test fun no_console_offers_portrait_pad() {
-        for (tag in listOf("NDS", "3DS", "FBN", "WSC", "LYNX", "GBA", "MD", ""))
-            assertFalse(ConsoleSettings.tableFor(tag).any { it.key == "nx_portrait_pad" }, tag)
-        assertNull(FrontendOptions.option("nx_portrait_pad"))
+        assertEquals(NdsOptions.table + NdsOptions.shaderScreensRow + NdsOptions.localWirelessRow + BottomScreenOptions.row + PadOptions.layoutRow + (SpeedOptions.table + AudioOptions.rows), ConsoleSettings.tableFor("NDS"))
     }
 
     @Test fun keys_are_unique_and_findable() {
@@ -50,7 +43,6 @@ class PadOptionsTest {
         assertNull(PadOptions.printedLayout(mapOf(PadOptions.LAYOUT to "xbox"), null))   // an injected key is sent as is
     }
 
-    // Carried over from the retired DcOptionsTest.
     @Test fun the_layout_row_reads_as_before() {
         val row = PadOptions.layoutRow
         assertEquals("nx_pad_layout", row.key)

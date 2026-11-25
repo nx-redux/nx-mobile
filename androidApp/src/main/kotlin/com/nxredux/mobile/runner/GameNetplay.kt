@@ -37,6 +37,7 @@ import kotlin.concurrent.thread
  * and the screen's ways out (the failure dialog, Quit, the local game a link session's end leaves).
  */
 internal interface GameNetplayHost : GameScreenHost {
+    val settings: AndroidAppSettings
     val menuOpen: Boolean
     val focusPaused: Boolean
     val cheatsSupported: Boolean
@@ -51,6 +52,8 @@ internal interface GameNetplayHost : GameScreenHost {
     fun leaveLinkSession(kind: NetplayLinkKind): Map<String, String>
     /** Opens the in-game menu (nothing when it is open). */
     fun showMenu()
+    /** The session's state changed: the dual-screen panel's session card redraws. */
+    fun sessionChanged()
 }
 
 /**
@@ -129,7 +132,9 @@ internal class GameNetplay(private val host: GameNetplayHost) {
             intent.getBooleanExtra(GameActivity.EXTRA_NETPLAY_MIXED, false),
             intent.getStringExtra(GameActivity.EXTRA_NETPLAY_PEER_WL),
             cableLinkFrom(intent),
-        )
+            intent.getStringExtra(GameActivity.EXTRA_NETPLAY_PEER_NAME),
+            intent.getStringExtra(GameActivity.EXTRA_NETPLAY_SEGA_PAD),
+        )?.copy(dcHle = intent.getBooleanExtra(GameActivity.EXTRA_NETPLAY_DC_HLE, true))
         // netplay link: recreated after a process kill once its session had ended: the local game it had become, as a
         // normal launch (its resume slot below), not a session.
         local = launchSession?.endsAsLocalGame == true && savedInstanceState?.getBoolean(KEY_NETPLAY_LOCAL) == true
@@ -169,7 +174,7 @@ internal class GameNetplay(private val host: GameNetplayHost) {
 
     /**
      * netplay: the saves a session plays on, before the battery load. A host on its folder's own core keeps its
-     * real saves but loses the game's auto-resume state (handheld 19d3a5e1), so a later resume cannot roll back battery
+     * real saves but loses the game's auto-resume state (as on the handheld), so a later resume cannot roll back battery
      * saves written in the session; manual slots stay. A host on another core plays on a fresh copy of its own battery
      * saves in the session folder; one whose saves were not served (emptySaves) on an empty copy. A client plays on the
      * host's saves, committed there before launch (an empty folder when the host had none).
@@ -238,9 +243,11 @@ internal class GameNetplay(private val host: GameNetplayHost) {
      */
     private suspend fun start(np: NetplaySession): Boolean {
         holdWifi(np)
+        // Dreamcast: flycast met the other device inside its load (GGPO); only the goodbye and the pause limit run here.
+        if (np.ggpo) return GgpoGame(np, host.lifecycleScope, onPeerLeft = { ggpoEnded() }, onGraceOver = ::leave).also { run = it }.start()
         return when (np.linkKind) {
             null -> {
-                val settings = AndroidAppSettings(host.activity)
+                val settings = host.settings
                 val overlay = np.cableLink && settings.cableLinkDelayOverlay
                 NetplayGame(
                     np, host.lifecycleScope, SystemClock::elapsedRealtime, ::onNotice,
@@ -252,6 +259,23 @@ internal class GameNetplay(private val host: GameNetplayHost) {
             NetplayLinkKind.NETPACKET -> (run as? NetplayLinkGame)?.let { it.begin(); it.live } ?: false
             NetplayLinkKind.GBLINK, NetplayLinkKind.N3DSLINK, NetplayLinkKind.NDSLINK, NetplayLinkKind.PSPLINK -> true
         }
+    }
+
+    /**
+     * A Dreamcast session is over from the other side: its goodbye arrived, or flycast stopped itself once the other
+     * device went silent (the core's shutdown request). The game cannot play on (the core has stopped, and its state is
+     * the session's), so it ends behind a "Netplay ended" dialog, as the handheld quits to the list. True when this
+     * handled the end (false: no Dreamcast session, or it had ended already).
+     */
+    fun ggpoEnded(): Boolean {
+        if (session?.ggpo != true || ended || run?.live == false) return false   // not live: this side left (Leave)
+        ended = true
+        run?.detach()
+        releaseWifi()
+        host.retroView?.frameSpeed = 0
+        host.retroView?.audioEnabled = false
+        host.fail(NetplayText.ENDED_DETAIL, NetplayText.ENDED)
+        return true
     }
 
     /** netplay link: the GBA link engine, started before the core loads; the raw link mode the core runs with, or null. */
@@ -299,6 +323,7 @@ internal class GameNetplay(private val host: GameNetplayHost) {
                     if (host.menuOpen || host.focusPaused) host.retroView?.frameSpeed = 0
                     ended = true
                     host.withMenu { it.endNetplay(local = false) }
+                    host.sessionChanged()
                 }
             }
             is NetplayNotice.Failed -> {
@@ -325,10 +350,10 @@ internal class GameNetplay(private val host: GameNetplayHost) {
      * detaches it first, so no Ended notice follows. GB link has no engine: gambatte's network serial stops on its mode's
      * variable update, read at the next frame (the menu holds frames, so on Continue). A DS game leaves the runner's room,
      * a 3DS game Azahar's room (on its next frame) and the runner takes a PSP game out of ad hoc (its presence goes out, so
-     * states work again): for good, or, with the console's Local Wireless on, onto the automatic route, back once the
-     * game turns its wireless off and on, or leaves and re-enters ad hoc ([GameNetplayHost.leaveLinkSession]). Set past
-     * [GameActivity.applyOptions]' guard and not stored: the link options are this launch's
-     * ([GameActivity.graphicsForcedOptions]), never the user's config.
+     * states work again): for good, or, with the console's Local Wireless on, onto the automatic route, out of rooms
+     * until Local Wireless is switched on in the game (DS, 3DS) or the game leaves and re-enters ad hoc (PSP)
+     * ([GameNetplayHost.leaveLinkSession]). Set past [GameActivity.applyOptions]' guard and not stored: the link options
+     * are this launch's ([GameActivity.graphicsForcedOptions]), never the user's config.
      */
     private fun leaveLink() {
         run?.leave()
@@ -340,7 +365,7 @@ internal class GameNetplay(private val host: GameNetplayHost) {
             else -> emptyList()
         }
         if (off.isNotEmpty()) host.retroView?.let { view ->
-            view.queueEvent { runCatching { view.updateVariables(*off.toTypedArray()) }.onFailure { NxLog.w("GameActivity", "ending the link failed", it) } }
+            view.queueEvent { runCatching { view.updateVariables(*off.toTypedArray()) }.onFailure { NxLog.w(TAG_LOG, "ending the link failed", it) } }
         }
         linkEnded()
     }
@@ -372,6 +397,7 @@ internal class GameNetplay(private val host: GameNetplayHost) {
         host.retroView?.audioEnabled = false
         host.showMenu()
         host.withMenu { it.endNetplay(local = false, quitOnly = true) }
+        host.sessionChanged()
     }
 
     /** Cable Link's session ended: the game stays stopped and the menu stays open on Quit alone. */

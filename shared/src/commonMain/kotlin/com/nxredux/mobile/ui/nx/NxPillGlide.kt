@@ -117,21 +117,8 @@ internal fun nxStaleSizeKeys(sizes: Map<Int, *>, count: Int): List<Int> = sizes.
  * highlighted. A new list (another [identity], as on a folder change) starts a fresh glide at its selection, so it snaps
  * there instead of gliding from the old list's row; the first composition likewise starts at rest. Measured sizes of
  * the rows the new list still has survive, since rows re-report theirs only when they change; the rest are dropped.
- */
-@Composable
-internal fun rememberNxPillGlide(identity: Any, selectedIndex: Int, count: Int, visibleRows: Int): NxPillGlide {
-    val sizes = remember { mutableStateMapOf<Int, IntSize>() }
-    val glide = remember(identity) {
-        nxStaleSizeKeys(sizes, count).forEach { sizes.remove(it) }
-        NxPillGlide(selectedIndex, sizes)
-    }
-    LaunchedEffect(glide, selectedIndex) { glide.moveTo(selectedIndex, count, visibleRows) }
-    return glide
-}
-
-/**
- * [rememberNxPillGlide] with the selection as a lambda, read only by the glide's own effect ([PillGlideFollow]), so a
- * selection step does not recompose the caller (smooth scrolling at 120 Hz).
+ * The selection is a lambda read only by the glide's own effect ([PillGlideFollow]), so a selection step does not
+ * recompose the caller (smooth scrolling at 120 Hz).
  */
 @Composable
 internal fun rememberNxPillGlide(identity: Any, selectedIndex: () -> Int, count: Int, visibleRows: Int): NxPillGlide {

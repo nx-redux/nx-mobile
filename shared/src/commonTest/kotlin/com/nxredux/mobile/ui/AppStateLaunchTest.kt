@@ -1,21 +1,12 @@
 package com.nxredux.mobile.ui
 
-import com.nxredux.mobile.achievements.RaSortOrder
 import com.nxredux.mobile.library.FakeRomsSource
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.runner.EmulatorRunner
 import com.nxredux.mobile.runner.GameSession
-import com.nxredux.mobile.settings.AccentPreset
-import com.nxredux.mobile.settings.AppSettings
-import com.nxredux.mobile.settings.ExtraFolder
-import com.nxredux.mobile.settings.FolderPicker
+import com.nxredux.mobile.settings.FakeAppSettings
 import com.nxredux.mobile.settings.MenuCategory
-import com.nxredux.mobile.settings.MenuOrientation
 import com.nxredux.mobile.settings.MenuStyle
-import com.nxredux.mobile.settings.MenuStyles
-import com.nxredux.mobile.settings.PadTheme
-import com.nxredux.mobile.settings.SecondaryAccent
-import com.nxredux.mobile.settings.VerticalListAlignment
 import com.nxredux.mobile.storage.MemoryPrivateFiles
 import com.nxredux.mobile.storage.Recent
 import com.nxredux.mobile.storage.ResumeInfo
@@ -40,9 +31,10 @@ import kotlin.test.assertTrue
 /** A on a Minimal page's game or tool opens it at once, as on any other page; a folder still fades first. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppStateLaunchTest {
-    private class MemorySettings(override var treeRef: ContentRef? = null) : AppSettings {
-        override var extraFolders: List<ExtraFolder> = emptyList()
-        override var defaultTags: Map<String, String> = emptyMap()
+    // Home Minimal (its default); the other tabs and the game lists too.
+    private class MemorySettings(treeRef: ContentRef? = null) : FakeAppSettings(
+        treeRef, menuStyles = MenuCategory.entries.associateWith { MenuStyle.MINIMAL }, gameListStyle = MenuStyle.MINIMAL,
+    ) {
         override var debugLog = false
         override var secondScreen = true
         override var pauseWhenUnfocused = true
@@ -50,35 +42,9 @@ class AppStateLaunchTest {
         override var saveFormat = SaveFormat.DEFAULT
         override var stateFormat = StateFormat.DEFAULT
         override var useExtractedFileName = false
-        override var padSkin: Boolean = true
-        override var padTheme: PadTheme = PadTheme.DEFAULT
-        // Home Minimal (its default); the other tabs and the game lists too.
-        override var menuStyles: Map<MenuCategory, MenuStyle> = MenuCategory.entries.associateWith { MenuStyle.MINIMAL }
-        override var gameListStyle: MenuStyle = MenuStyle.MINIMAL
-        override var menuOrientations: Map<MenuCategory, MenuOrientation> = emptyMap()
-        override var gameListOrientation: MenuOrientation = MenuStyles.DEFAULT_ORIENTATION
-        override var gameListVerticalAlignment: VerticalListAlignment = VerticalListAlignment.DEFAULT
-        override var toolApps: List<String> = emptyList()
-        override var androidConsoleApps: List<String> = emptyList()
-        override var androidGamesAsked = false
         override var allFilesAsked = false
         override var onboardingDone: Boolean? = true
         override var onboardingStep: String? = null
-        override var androidPins: List<String> = emptyList()
-        override var raEnabled = false
-        override var raUsername = ""
-        override var raToken: String? = null
-        override var raShowNotifications = true
-        override var raNotificationSeconds = 3
-        override var raProgressSeconds = 1
-        override var raSortOrder = RaSortOrder.DEFAULT
-        override var ssUsername = ""
-        override var ssPassword: String? = null
-        override var sgdbApiKey: String? = null
-        override var tgdbApiKey: String? = null
-        override var artReplaceExisting = false
-        override var consoleArt = com.nxredux.mobile.settings.ConsoleArt.DEFAULT; override var gameListArt = com.nxredux.mobile.settings.GameListArt.DEFAULT; override var backdropArt = com.nxredux.mobile.settings.BackdropArt.DEFAULT; override var showHomeTab = true; override var showConsolesTab = true; override var showCollectionsTab = true; override var showToolsTab = true; override var showNewShelf = true; override var showNotStartedShelf = true; override var showNetplayHint = true; override var menuPageTitle = MenuStyles.DEFAULT_PAGE_TITLE; override var menuButtonHints = MenuStyles.DEFAULT_BUTTON_HINTS; override var menuExtraInfo = com.nxredux.mobile.settings.MenuStyles.DEFAULT_EXTRA_INFO; override var menuHomeStats = true; override var gameListLayoutOptions = true; override var gameListAchievementsPanel = true; override var padVibration = com.nxredux.mobile.settings.PadVibration.DEFAULT; override var gameRumble = com.nxredux.mobile.settings.GameRumble.DEFAULT; override var accent = AccentPreset.DEFAULT
-        override var secondaryAccent: SecondaryAccent = SecondaryAccent.DEFAULT
         override var switcherLayout = com.nxredux.mobile.settings.SwitcherLayout.DEFAULT
         override var optionTextSize = com.nxredux.mobile.settings.OptionTextSize.DEFAULT
     }
@@ -87,11 +53,6 @@ class AppStateLaunchTest {
         /** Set: each launch suspends until it completes (the runner waiting for a previous game's process to end). */
         var gate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
         override suspend fun launch(session: GameSession, recent: com.nxredux.mobile.storage.Recent) { launched += session; gate?.await() }
-    }
-    private class NoopPicker : FolderPicker {
-        override fun pickHome() = Unit
-        override fun pickExtra() = Unit
-        override fun forget(ref: ContentRef) = Unit
     }
     private class FakeUserData(var recents: List<Recent> = emptyList(), var pins: List<Shortcut> = emptyList()) : UserDataStore {
         override suspend fun readRecents() = recents
@@ -120,7 +81,7 @@ class AppStateLaunchTest {
         val runner = RecordingRunner()
         val data = FakeUserData(recents = listOf(Recent(tetris)))
         val files = MemoryPrivateFiles().apply { files[ToolPins.FILE] = ToolPins.encode(listOf("SETTINGS")) }
-        val deps = AppDeps(MemorySettings(ContentRef("Home")), source, runner, NoopPicker(), data, privateFiles = files,
+        val deps = AppDeps(MemorySettings(ContentRef("Home")), source, runner, NoopFolderPicker, data, privateFiles = files,
             now = { testScheduler.currentTime }, compute = UnconfinedTestDispatcher(testScheduler))
         val state = AppState(deps, CoroutineScope(UnconfinedTestDispatcher(testScheduler))).also { it.load(); advanceUntilIdle() }
         return Rig(state, runner, data)

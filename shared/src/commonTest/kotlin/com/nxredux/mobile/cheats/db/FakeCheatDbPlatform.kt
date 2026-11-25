@@ -1,6 +1,9 @@
 package com.nxredux.mobile.cheats.db
 
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 
 /** Scriptable platform for controller and AppState tests: set the fields, then read the recorded calls. */
 class FakeCheatDbPlatform : CheatDbPlatform {
@@ -29,12 +32,21 @@ class FakeCheatDbPlatform : CheatDbPlatform {
     var readGate: CompletableDeferred<Unit>? = null
     /** When set, `writeManifest` suspends on it before storing the text. */
     var manifestGate: CompletableDeferred<Unit>? = null
+    /** When set, a cancelled `install` takes its files back one by one (reporting 0 of [undoTotal]) until it completes. */
+    var undoGate: CompletableDeferred<Unit>? = null
+    var undoTotal = 16_000
+    /** When set, `deleteInstalled` reports half its files deleted, then suspends on it. */
+    var removeGate: CompletableDeferred<Unit>? = null
+    /** When set, `emptyTrash` suspends on it. */
+    var sweepGate: CompletableDeferred<Unit>? = null
     var reportedTotal: Long = 1000L
 
     val discarded = ArrayList<String>()
     val deleted = ArrayList<List<String>>()
     val pruned = ArrayList<List<String>>()
     var remoteCalls = 0
+    /** `emptyTrash` calls finished. */
+    var sweeps = 0
     val downloads = ArrayList<CheatDbSource>()
     val installs = ArrayList<List<CheatDbSource>>()
     /** The sources installs were asked to treat as best effort. */
@@ -56,12 +68,19 @@ class FakeCheatDbPlatform : CheatDbPlatform {
         return if (source == CheatDbSource.PCSX2) CheatDbArchive("/cache/patches.zip", patchesDownloadStamp, source)
         else CheatDbArchive("/cache/cheats.zip", downloadStamp, source)
     }
-    override suspend fun install(installs: List<CheatDbInstall>, onProgress: (String, Int, Int) -> Unit): CheatDbInstallResult {
+    override suspend fun install(installs: List<CheatDbInstall>, onUndo: (Int, Int) -> Unit, onProgress: (String, Int, Int) -> Unit): CheatDbInstallResult {
         installError?.let { throw it }
         this.installs += installs.map { it.archive.source }
         this.optional += installs.filter { it.optional }.map { it.archive.source }
         val tags = installs.flatMap { it.folders.keys }
-        tags.forEachIndexed { i, tag -> onProgress(tag, i + 1, tags.size); if (i == 0) installGate?.await() }
+        try {
+            tags.forEachIndexed { i, tag -> onProgress(tag, i + 1, tags.size); if (i == 0) installGate?.await() }
+        } catch (e: CancellationException) {
+            undoGate?.let { gate ->
+                withContext(NonCancellable) { onUndo(0, undoTotal); gate.await(); onUndo(undoTotal, undoTotal) }
+            }
+            throw e
+        }
         // A failing source: an optional one is skipped (its files taken back), a required one fails the whole call.
         val failed = installs.filter { it.archive.source == failInstallSource }
         if (failed.any { !it.optional }) throw CheatDbException(CheatDbException.Kind.CORRUPT)
@@ -71,6 +90,10 @@ class FakeCheatDbPlatform : CheatDbPlatform {
     override suspend fun discard(archive: CheatDbArchive) { discarded += archive.path }
     override suspend fun readManifest(): String? { readGate?.await(); return manifestText }
     override suspend fun writeManifest(text: String) { manifestGate?.await(); manifestText = text }
-    override suspend fun deleteInstalled(files: List<String>) { deleted += files; manifestText = null }
+    override suspend fun deleteInstalled(files: List<String>, onProgress: (Int, Int) -> Unit) {
+        removeGate?.let { onProgress(files.size / 2, files.size); it.await() }
+        deleted += files; manifestText = null
+    }
     override suspend fun deleteFiles(files: List<String>) { pruned += files }
+    override suspend fun emptyTrash() { sweepGate?.await(); sweeps++ }
 }

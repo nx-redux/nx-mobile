@@ -38,8 +38,7 @@ public:
     const std::string& getFileName() const;
     int getFD() const;
 
-    // Relinquish ownership of the fd so this VFSFile won't close it on destruction.
-    // Call after the fd has already been closed elsewhere to avoid a double close.
+    // Gives up the fd, so this VFSFile won't close it: for an fd another owner closes (no double close).
     void releaseFD();
 
 private:

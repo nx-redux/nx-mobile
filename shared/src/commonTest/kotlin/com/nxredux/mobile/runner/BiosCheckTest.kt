@@ -66,7 +66,7 @@ class BiosCheckTest {
     @Test fun every_emulator_imports_the_console_bios_folder_before_its_own() {
         assertEquals(listOf("GBA", "SGB", "MGBA"), BiosFolders.forTag("MGBA"))   // SGB shares the mGBA core
         assertEquals(listOf("GBA"), BiosFolders.forTag("GBA"))
-        assertEquals(listOf("FC", "FDS"), BiosFolders.forTag("FDS"))   // unchanged: core sharing still adds FC
+        assertEquals(listOf("FC", "FDS"), BiosFolders.forTag("FDS"))   // core sharing adds FC
         assertEquals(listOf("PS", "PSX"), BiosFolders.forTag("PSX"))
     }
     @Test fun the_message_names_the_console_folder() {
@@ -80,5 +80,18 @@ class BiosCheckTest {
     }
     @Test fun anySuffixMessage() {
         assertEquals("Sony PlayStation 2 needs a BIOS: put a .bin file in Bios/PS2/", BiosCheck.message("PS2", BiosNeed(emptyList(), anySuffix = ".bin")))
+    }
+
+    @Test fun a_pc_engine_cd_needs_the_system_card_its_cd_bios_option_picks() {
+        fun card(value: String?) = CoreRegistry.requiredBios("PCE") { if (it == CoreRegistry.PCE_CARD_KEY) value else null }.single()
+        assertEquals(listOf("syscard3.pce"), card(null).anyOf)
+        assertEquals(listOf("syscard3u.pce"), card("System Card 3 US").anyOf)
+        assertEquals(listOf("gexpress.pce"), card("Games Express").anyOf)
+        assertEquals(listOf("syscard3.pce"), card("unknown").anyOf)
+        assertEquals(setOf("cue", "ccd", "chd", "toc", "m3u"), card("System Card 1").forExtensions)
+        assertEquals(listOf(card("System Card 3 US")), BiosCheck.missing(listOf(card("System Card 3 US")), "cue", setOf("syscard3.pce")))
+        assertEquals(emptyList(), BiosCheck.missing(listOf(card("System Card 3 US")), "cue", setOf("syscard3u.pce")))
+        assertEquals(CoreRegistry.requiredBios("MD"), CoreRegistry.requiredBios("MD") { "System Card 1" })
+        assertTrue("gexpress.pce" in CoreRegistry.biosFileNames)
     }
 }

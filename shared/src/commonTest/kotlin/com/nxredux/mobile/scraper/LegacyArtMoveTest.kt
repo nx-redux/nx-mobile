@@ -11,7 +11,6 @@ import kotlinx.coroutines.test.runTest
 
 class LegacyArtMoveTest {
     private val media = "Home/Roms/GB/.media"
-    private val segments = listOf("Roms", "GB", ".media")
     private val sgdbGrid = ArtOrigin(SourceId.SGDB, "7", "11")
     private val sgdbHero = ArtOrigin(SourceId.SGDB, "7", "12")
 
@@ -96,14 +95,15 @@ class LegacyArtMoveTest {
         assertEquals(1, r.src.listings)   // only the test's own listing of .media
     }
 
-    @Test fun extraOwnMediaMoves() = runTest {
+    // An extra folder is only read: even writable, its own legacy folders stay where they are (the scan reads them there).
+    @Test fun extraOwnMediaUntouched() = runTest {
         val own = "sd/Ext/GB/.media"
-        val r = Rig(mapOf(own to listOf("grid"), "$own/grid" to listOf("A.png")))
-        assertTrue(r.run(own, homeSegments = null))
-        assertEquals(listOf("A.png"), r.src.childNames("$own/boxart2d"))
-        assertNull(r.src.childNames("$own/grid"))
-        assertNull(r.host.files[ArtworkController.LOG_FILE])   // nothing logged
-        assertEquals("$own\n", r.marker())
+        val r = Rig(mapOf(own to listOf("grid", "hero"), "$own/grid" to listOf("A.png"), "$own/hero" to listOf("B.jpg")))
+        assertFalse(r.run(own, homeSegments = null))
+        assertEquals(listOf("A.png"), r.src.childNames("$own/grid"))
+        assertEquals(listOf("B.jpg"), r.src.childNames("$own/hero"))
+        assertNull(r.src.childNames("$own/boxart2d"))
+        assertNull(r.marker())
     }
 
     @Test fun readOnlyExtraUntouched() = runTest {

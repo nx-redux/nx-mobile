@@ -1,6 +1,5 @@
 package com.nxredux.mobile.ui.nx
 
-import androidx.compose.foundation.Canvas
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.DrawableResource
 import androidx.compose.ui.graphics.ColorFilter
@@ -44,7 +43,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
@@ -114,9 +112,10 @@ fun NxList(
     edgeMargin: Int = 0,          // rows kept in view past the selection: 1 under a scroll fade
     restInk: Color? = null,       // the unlit rows' label and icon ink (the folder picker's: inkName, its actions inkDim); null the list text
     wordInk: Color? = null,       // a word list (Settings' sections): no pill, regular weight, the selected row's label in this ink
+    greyPill: Boolean = false,    // the pill a fixed grey, the lit row's words in the list text: the accent kept for a page's actions (the folder picker)
 ) = NxList(
     rows, { selectedIndex }, onSelect, onOpen, modifier, listState, rowHeightOverride, pillPaddingOverride, textSizeOverride,
-    onLongPress, endPadOverride, outlined, edgeMargin = edgeMargin, restInk = restInk, wordInk = wordInk,
+    onLongPress, endPadOverride, outlined, edgeMargin = edgeMargin, restInk = restInk, wordInk = wordInk, greyPill = greyPill,
 )
 
 /**
@@ -142,8 +141,9 @@ internal fun NxList(
     edgeMargin: Int = 0,   // rows kept in view past the selection ([NxKeepSelectedInView]): 1 under a scroll fade
     restInk: Color? = null,
     wordInk: Color? = null,
+    greyPill: Boolean = false,
 ) {
-    val colors = LocalNxColors.current
+    val colors = LocalNxColors.current.let { if (greyPill) it.copy(onAccent = it.listText) else it }
     val font = LocalNxFont.current
     val state = listState
     val tapOpens = LocalNxTapOpens.current
@@ -161,7 +161,7 @@ internal fun NxList(
         val identity = remember(rows) { nxPillListIdentity(rows) }
         val glide = rememberNxPillGlide(identity, selectedIndex, rows.size, nxWholeRows(maxHeight, rowHeight, pxSlack = 1f / density.density))
         val pitch = with(density) { rowHeight.roundToPx() }
-        val highlight = nxHighlight()
+        val highlight = if (greyPill) colors.main.copy(alpha = NX_GREY_PILL_ALPHA) else nxHighlight()   // role: a list's grey selection pill
         // A word list ([wordInk]) draws no pill: the selected row's ink alone marks it.
         val pill = remember(glide, state, pitch, highlight, wordInk) { if (wordInk != null) Modifier.fillMaxSize() else Modifier.fillMaxSize().nxPillGlide(glide, state, pitch, highlight) }
         // The rows read the selection through this State, each in its own scope ([NxListRow]): a step recomposes the rows
@@ -196,6 +196,9 @@ internal const val NX_LIST_END_SHARE = 0.044f
 
 /** A word list's line box as a share of its size, as Settings' section words. */
 internal const val NX_WORD_LINE = 1.2f
+
+/** A [NxList]'s grey pill ([NxList]'s greyPill): the list text's grey, faint on black, so its words stay light. */
+internal const val NX_GREY_PILL_ALPHA = 0.22f
 
 /** What every row of one [NxList] shares: its pitch, label size, margins, font and colours. */
 internal data class NxListRowStyle(
@@ -437,31 +440,6 @@ internal fun NxKeepSelectedInView(state: LazyListState, selectedIndex: Int, coun
             is NxKeepInView.ToItem ->
                 if (animate) state.animateScrollToItem(scroll.index, scroll.offset) else state.scrollToItem(scroll.index, scroll.offset)
         }
-    }
-}
-
-/** The list scroll arrows' width: a fixed physical size, like the row pitch and the pill inset, so it matches on every screen. */
-val NxScrollArrowWidth = 28.dp
-
-/** Every scroll arrow's opacity: one quiet standard across lists, the main menu and the in-game menu. */
-const val NX_SCROLL_ARROW_ALPHA = 0.2f
-
-/** A wide, short scroll chevron (NX Redux's 24x6 = 4:1 arrow), drawn subtly; the caller centres it on the full screen width. */
-@Composable
-fun NxScrollArrow(up: Boolean, width: Dp, modifier: Modifier = Modifier, opacity: Float = NX_SCROLL_ARROW_ALPHA) {
-    val color = LocalNxColors.current.listText
-    Canvas(modifier.size(width = width, height = width / 4)) {
-        val w = size.width
-        val h = size.height
-        val path = Path().apply {
-            if (up) {
-                moveTo(0f, h); lineTo(w, h); lineTo(w / 2f, 0f)
-            } else {
-                moveTo(0f, 0f); lineTo(w, 0f); lineTo(w / 2f, h)
-            }
-            close()
-        }
-        drawPath(path, color, alpha = opacity)
     }
 }
 

@@ -75,9 +75,9 @@ enum class NxSettingControl {
     SEGMENTED,
     /** More or longer values: "Value ›", a tap opens the picker. */
     PICKER,
-    /** No list (or a single value): the value only (in-game, LEFT/RIGHT still step it). */
+    /** No list (or a single value): the value only. */
     VALUE,
-    /** A colour per value (Appearance's accents): a row of circles under the text, a tap picks one; A steps, as RIGHT. */
+    /** A colour per value (Appearance's accents): a row of circles under the text, a tap picks one; A, then LEFT / RIGHT step it. */
     SWATCHES,
 }
 
@@ -414,7 +414,7 @@ const val NX_SWATCH_AUTO = 0
 
 /** The info icon: a question mark in a circle, sized from the description; a tap ([onClick], null none) shows the full text. */
 @Composable
-private fun NxInfoIcon(textSize: TextUnit, onClick: (() -> Unit)?) {
+internal fun NxInfoIcon(textSize: TextUnit, onClick: (() -> Unit)?) {
     val colors = LocalNxColors.current
     val disc = with(LocalDensity.current) { (textSize * 1.25f).toDp() }
     // The padding widens the tap target past the small disc.

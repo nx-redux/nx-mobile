@@ -39,8 +39,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.LineBreak
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -86,9 +84,7 @@ import com.nxredux.mobile.ui.nx.NxRow
 import com.nxredux.mobile.ui.nx.NxHintsBand
 import com.nxredux.mobile.ui.nx.NxScreenScaffold
 import com.nxredux.mobile.ui.nx.NxTapNeverOpens
-import com.nxredux.mobile.ui.nx.NxTextSizes
 import com.nxredux.mobile.ui.nx.NxTileGrid
-import com.nxredux.mobile.ui.nx.nxListInset
 import com.nxredux.mobile.ui.nx.nxTopBandFade
 import com.nxredux.mobile.ui.nx.LocalMinimalPage
 import com.nxredux.mobile.ui.nx.MINIMAL_MORPH_MS
@@ -104,10 +100,8 @@ import com.nxredux.mobile.ui.nx.LocalNxHintBarStart
 import com.nxredux.mobile.ui.nx.MainListBody
 import com.nxredux.mobile.ui.nx.pageFixed
 import androidx.compose.ui.layout.layout
-import androidx.compose.ui.text.rememberTextMeasurer
 import com.nxredux.mobile.ui.nx.nxTextScale
 import com.nxredux.mobile.ui.nx.HOME_STRIP_TYPE
-import com.nxredux.mobile.ui.nx.GameFactsLines
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.zIndex
@@ -174,9 +168,10 @@ fun GameListScreen(
         GameListFrame(
             title, style, hints, { index.value() }, dataKey = listOf(entries, showTag, backdropArt), orientation = orientation, alignment = alignment,
             gridTiles = { gameGridTiles(entries) }, backdropGames = { backdropGames(entries, backdropArt) },
-            listRows = { entries.map { NxRow(it.shown, secondary = if (showTag) tagLine(it) else it.game.subtitle) } },
+            listRows = { entries.map { NxRow(it.shown, secondary = if (showTag) tagLine(it) else it.game.subtitle, tag = it.game.badge) } },
             minimalRows = { entries.map { NxRow(it.shown) } },
             captionTitle = { entries.getOrNull(index.value())?.shown },
+            captionBadge = { entries.getOrNull(index.value())?.game?.badge },
             onSelect = onSelect, onOpen = onOpen, modifier = modifier, onHint = onHint, onLongPress = onLongPress,
             info = info, onGridLayout = onGridLayout, onPageRows = onPageRows, tileInfo = tileInfo, layoutKey = layoutKey,
             emptyText = emptyText.takeIf { entries.isEmpty() }, artBox = artBox,
@@ -228,6 +223,7 @@ internal fun GameListFrame(
     title: String, style: MenuStyle, hints: State<List<Hint>>, selectedIndex: () -> Int, dataKey: Any?,
     gridTiles: () -> List<GridTile>, backdropGames: () -> List<BackdropGame>,
     listRows: () -> List<NxRow>, captionTitle: () -> String?, minimalRows: () -> List<NxRow> = listRows,
+    captionBadge: () -> String? = { null },   // a pill after the caption's name: the selected game's badge
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, modifier: Modifier = Modifier,
     onHint: ((NxButton) -> Unit)? = null, onLongPress: ((Int) -> Unit)? = null,
     info: () -> List<InfoLine> = { emptyList() }, onGridLayout: (Int) -> Unit = {},
@@ -287,7 +283,11 @@ internal fun GameListFrame(
                 // Words and bars on the page inset in every layout, as Home's stats and tab words: the title, its facts line,
                 // the names, the hint bar. Backdrop: the title over the selected game's screenshot.
                 val textStart = inset.start
-                val titleStart = inset.start
+                // Where a B morph back to a Minimal tab starts (while this page shows); hidden while the name flies in.
+                fun titleModifier(title: String, titleStyle: TextStyle) = Modifier.onGloballyPositioned {
+                    titleText[0] = it
+                    if (minimalPage?.live?.value == true) morphPlace(it).let { (at, s) -> minimalPage.morph.title = MorphText(title, at, it.size.width.toFloat(), s, titleStyle) }
+                }.graphicsLayer { alpha = if (flown.value < 1f) 0f else 1f }
                 // The page's icons at the title's right ([gameListTitleIcons]).
                 // With the selected game's info shown under it ([gameListTopStats]: List, Minimal and Grid), the main menu's
                 // two-line header instead, as Consoles' name over its count ([GridTitleLines]): the name in Home's strip type
@@ -296,6 +296,7 @@ internal fun GameListFrame(
                 // [onAchievements]) a third line is kept for the next goal ("Next: …"), whatever is selected, so the list
                 // never moves; without, the header is two lines and the list has that room. A game with no lines to show:
                 // the title alone, on the icons' centre line, in the same header.
+                var headerExtraTop = 0f
                 if (chrome.listTitle && topStats) {
                     val k = nxTextScale()
                     val frame = HomeFrame(0f, 0f, LocalPortrait.current, textScale = LocalDensity.current.fontScale, stripScale = k)
@@ -304,6 +305,7 @@ internal fun GameListFrame(
                     val next = onAchievements != null
                     val block = (if (next) 2 else 1) * pitch + lh
                     val height = maxOf(MENU_TAB_ROW_HEIGHT.value, block + 2 * HOME_GRID_HEADER_PAD)
+                    headerExtraTop = height - MENU_TAB_ROW_HEIGHT.value
                     val size = (HOME_STRIP_TYPE.sp * k).sp
                     val titleStyle = TextStyle(fontFamily = LocalNxFont.current, fontWeight = FontWeight.SemiBold, fontSize = size, lineHeight = (HOME_STRIP_TYPE.lineH * k).sp, color = LocalNxColors.current.listText)
                     val iconsRoom = MENU_TAB_ROW_HEIGHT * titleIcons.size - TOP_ICON_INSET
@@ -315,15 +317,11 @@ internal fun GameListFrame(
                     // anyway, so the shift is a plain value, not deferred to layout.
                     val titleShift = gameListTitleTop(facts, next, height, block, lh, pitch) - blockTop
                     Box(Modifier.fillMaxWidth().height(height.dp)) {
-                        Column(Modifier.fillMaxWidth().padding(start = titleStart, end = inset.end + iconsRoom, top = blockTop.dp)) {
+                        Column(Modifier.fillMaxWidth().padding(start = textStart, end = inset.end + iconsRoom, top = blockTop.dp)) {
                             Box(Modifier.offset(y = titleShift.dp).height(lh.dp), contentAlignment = Alignment.CenterStart) { WithTitle(titleOf) { title ->
                                 Text(
                                     title, style = titleStyle, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                    // Where a B morph back to a Minimal tab starts (while this page shows); hidden while the name flies in.
-                                    modifier = Modifier.onGloballyPositioned {
-                                        titleText[0] = it
-                                        if (minimalPage?.live?.value == true) morphPlace(it).let { (at, s) -> minimalPage.morph.title = MorphText(title, at, it.size.width.toFloat(), s, titleStyle) }
-                                    }.graphicsLayer { alpha = if (flown.value < 1f) 0f else 1f },
+                                    modifier = titleModifier(title, titleStyle),
                                 )
                             } }
                             // Each line [pitch] under the last: the boxes may overlap, as the main menu's.
@@ -335,12 +333,8 @@ internal fun GameListFrame(
                 } else if (chrome.listTitle) {
                     val titleStyle = menuTitleStyle()
                     WithTitle(titleOf) { title -> MenuTitleRow(
-                        title, overArt = style == MenuStyle.BACKDROP, textStart = titleStart,
-                        // Where a B morph back to a Minimal tab starts (while this page shows); hidden while the name flies in.
-                        textModifier = Modifier.onGloballyPositioned {
-                            titleText[0] = it
-                            if (minimalPage?.live?.value == true) morphPlace(it).let { (at, s) -> minimalPage.morph.title = MorphText(title, at, it.size.width.toFloat(), s, titleStyle) }
-                        }.graphicsLayer { alpha = if (flown.value < 1f) 0f else 1f },
+                        title, overArt = style == MenuStyle.BACKDROP, textStart = textStart,
+                        textModifier = titleModifier(title, titleStyle),
                         trailing = { NxTopIcons(titleIcons) },
                     ) }
                 }
@@ -382,11 +376,11 @@ internal fun GameListFrame(
                             // Vertical: the tiles stacked on end, Backdrop's three-row caption beside them.
                             if (orientation == MenuOrientation.VERTICAL) NxCarouselStack(
                                 tiles, selectedIndex, onSelect = onSelect, onOpen = onOpen, onLongPress = onLongPress,
-                                captionTitle = captionTitle, captionInfo = info, modifier = m, layoutKey = layoutKey, alignment = alignment,
+                                captionTitle = captionTitle, captionInfo = info, captionBadge = captionBadge, modifier = m, layoutKey = layoutKey, alignment = alignment,
                                 titleRoom = titleRoom, onPageRows = onPageRows, drained = true,
                             ) else NxCarousel(
                                 tiles, selectedIndex, onSelect = onSelect, onOpen = onOpen, onLongPress = onLongPress,
-                                captionTitle = captionTitle, captionInfo = info, modifier = m, layoutKey = layoutKey, titleRoom = titleRoom,
+                                captionTitle = captionTitle, captionInfo = info, captionBadge = captionBadge, modifier = m, layoutKey = layoutKey, titleRoom = titleRoom,
                                 gameList = true, gameDetails = chrome.extraInfo, drained = true,   // Extra info off: no details to keep room for
                             )
                         }
@@ -397,11 +391,11 @@ internal fun GameListFrame(
                             // Vertical: the box art stacked on end, the caption beside it; the picture behind is the same.
                             if (orientation == MenuOrientation.VERTICAL) NxBackdropStack(
                                 games, emptyList(), selectedIndex, onSelect = onSelect, onOpen = onOpen, onLongPress = onLongPress,
-                                captionTitle = captionTitle, captionInfo = info, modifier = m, layoutKey = layoutKey, alignment = alignment,
+                                captionTitle = captionTitle, captionInfo = info, captionBadge = captionBadge, modifier = m, layoutKey = layoutKey, alignment = alignment,
                                 titleRoom = titleRoom, onPageRows = onPageRows,
                             ) else NxBackdrop(
                                 games, emptyList(), selectedIndex, onSelect = onSelect, onOpen = onOpen, onLongPress = onLongPress,
-                                captionTitle = captionTitle, captionInfo = info, modifier = m, layoutKey = layoutKey, titleRoom = titleRoom,
+                                captionTitle = captionTitle, captionInfo = info, captionBadge = captionBadge, modifier = m, layoutKey = layoutKey, titleRoom = titleRoom,
                             )
                         }
                     }
@@ -414,6 +408,7 @@ internal fun GameListFrame(
                             Modifier.weight(1f).zIndex(-1f), hideHints = noBar, toBoxBottom = noBar,
                             layoutKey = layoutKey, leaving = minimalOpening != null, tapOpens = LocalNxTapOpens.current,
                             onPageRows = onPageRows,
+                            anchorTop = if (headerExtraTop > 0f) -headerExtraTop else null,
                         )
                     }
                     // List: the rows fade where more scrolls in (no band, no arrows), between a main menu List's gaps.
@@ -581,12 +576,12 @@ internal fun gameListInfoInRow(barHidden: Boolean, extraInfo: Boolean, topStats:
 
 /**
  * The Games tab's title: the highlighted game's ([index] in [entries]) console, as that console's own list is titled
- * ([listTitle]: a merged console's shared display name, "Android" for Android games); a system with no name, its tag as
+ * ([ListSource.title]: a merged console's shared display name, "Android" for Android games); a system with no name, its tag as
  * the List's console line shows it ([tagLine]); "Games" with no game highlighted.
  */
 internal fun gamesTabTitle(entries: List<Listed>, index: Int): String {
-    val system = entries.getOrNull(index)?.system ?: return listTitle(ListSource.AllGames)
-    return listTitle(ListSource.Console(system)).ifBlank { CoreRegistry.handheldTag(system.tag) }
+    val system = entries.getOrNull(index)?.system ?: return ListSource.AllGames.title
+    return ListSource.Console(system).title.ifBlank { CoreRegistry.handheldTag(system.tag) }
 }
 
 /**

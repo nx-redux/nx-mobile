@@ -7,8 +7,7 @@
 # from the Makefile) and the shipped system files ($SYSTEM_DIR, default ../androidApp/src/main/assets/system: the Makefile's ASSETS_DIR) to /data/local/tmp/nxprobe/,
 # runs the probe (with the rom as its game when given: FBNeo declares its options in retro_load_game), pulls the JSON, adds soSha256 and probedAt,
 # and writes <outdir>/<coreId>.json. PROBE_SKIP_INIT=1 runs nxprobe with NXPROBE_SKIP_INIT=1 (no retro_init). On any failure an existing <outdir>/<coreId>.json is left untouched and the
-# script exits 1. Run from cores/ (gmake -C cores options-<core>); see
-# docs/superpowers/specs/2026-09-29-emulator-settings-design.md, section 1.
+# script exits 1. Run from cores/ (gmake -C cores options-<core>).
 set -u
 
 [ "$#" -ge 5 ] && [ "$#" -le 6 ] || { echo "usage: $0 <adb> <serial> <so> <coreId> <outdir> [rom]" >&2; exit 1; }

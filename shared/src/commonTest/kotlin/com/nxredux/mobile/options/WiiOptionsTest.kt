@@ -1,5 +1,7 @@
 package com.nxredux.mobile.options
 
+import com.nxredux.mobile.layout.DeviceTraits
+import com.nxredux.mobile.runner.Res3dConsole
 import com.nxredux.mobile.runner.WiiController
 import com.nxredux.mobile.runner.WiiMotion
 import kotlin.test.Test
@@ -13,14 +15,14 @@ class WiiOptionsTest {
         assertEquals(
             listOf(
                 WiiOptions.CONTROLLER, WiiOptions.MOTION, WiiOptions.SCREEN, WiiOptions.POINTER_WIDTH, WiiOptions.POINTER_HEIGHT,
-                WiiOptions.POINTER_OFFSET, GraphicsApiOptions.KEY, BottomScreenOptions.KEY, PadOptions.LAYOUT,
-            ) + (SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.row).map { it.key },
+                WiiOptions.POINTER_OFFSET,
+            ) + DolphinOptions.wiiResolutionRows(null).map { it.key } + listOf(GraphicsApiOptions.KEY, BottomScreenOptions.KEY, PadOptions.LAYOUT) + (SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.row).map { it.key },
             ConsoleSettings.tableFor("WII").map { it.key },
         )
     }
 
     @Test fun gameCubeGetsNeither() {
-        assertEquals(listOf(GraphicsApiOptions.KEY, BottomScreenOptions.KEY, PadOptions.LAYOUT) + (SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.row).map { it.key }, ConsoleSettings.tableFor("GC").map { it.key })
+        assertEquals(DolphinOptions.resolutionRows(null).map { it.key } + listOf(GraphicsApiOptions.KEY, BottomScreenOptions.KEY, PadOptions.LAYOUT) + (SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.row).map { it.key }, ConsoleSettings.tableFor("GC").map { it.key })
         assertFalse(WiiOptions.appliesTo("GC"))
         assertTrue(WiiOptions.appliesTo(" wii "))
     }
@@ -109,5 +111,18 @@ class WiiOptionsTest {
             "This save is in 4:3. Wii Screen 16:9 applies when the game starts fresh.",
             WiiScreen.keptShapeNote(gameWide = false, launchWide = true),
         )
+    }
+
+    @Test fun wiiStartsAtTwoXWhereGameCubeStartsAtThree() {
+        val key = Res3dConsole.DOLPHIN.maxScaleKey
+        assertEquals("2", FrontendOptions.fromConfig(emptyMap(), "WII")[key])
+        assertEquals("3", FrontendOptions.fromConfig(emptyMap(), "GC")[key])
+        assertEquals("3", FrontendOptions.fromConfig(mapOf(key to "3"), "WII")[key])
+        try {
+            DeviceTraits.gpu = "Mali-G76 MC4"
+            assertEquals("1", FrontendOptions.fromConfig(emptyMap(), "WII")[key])
+        } finally {
+            DeviceTraits.gpu = null
+        }
     }
 }

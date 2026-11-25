@@ -24,9 +24,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * What Settings' pages need from [AppState]: each page's rows and values ([settingsRows], [settingValue]: they read and
- * write state all over the app), the menu row to come back to, leaving a page, and what a reset touches beyond
- * the settings.
+ * What Settings' pages need from [AppState]: the menu row to come back to, leaving a page, and what a reset touches
+ * beyond the settings.
  */
 internal interface SettingsHost {
     fun kidsToolsAllowed(): Boolean
@@ -40,11 +39,6 @@ internal interface SettingsHost {
     fun back(): Boolean
     fun rememberMenuSelection()
     fun refreshInstalled()
-    fun settingsRows(section: SettingsSection): List<SettingsRow>
-    fun settingValue(row: SettingsRow): SettingValue<*>?
-    fun settingsDetails(section: SettingsSection): List<String>
-    fun layoutShot(section: SettingsSection): LayoutShot?
-    fun settingsBanner(section: SettingsSection): String?
     /** The art layout the screens draw follows the settings again. */
     fun syncArtLayout()
     fun rebuildHomeTab()
@@ -52,22 +46,23 @@ internal interface SettingsHost {
     fun clearShortcuts()
     /** System buttons' Reset: the connected pad model's SELECT / START / MENU back to its defaults. */
     fun resetSystemButtons()
-    fun resetButtonLayoutConsole()
 }
 
 /**
- * Settings' pages as screens: the section menu and each page (built from [SettingsHost.settingsRows]), the row each
+ * Settings' pages as screens: the section menu and each page (built from [SettingsRows.settingsRows]), the row each
  * remembers, a sub-page and back, a refresh keeping the highlight on its row, the two-pane taps and the row edit, the
  * value chooser and a row's info popup, and Reset to defaults.
  */
 internal class SettingsController(
     private val screen: MutableStateFlow<Screen>,
     private val selection: MutableStateFlow<ListSelection>,
-    /** The row being changed on a two-pane page ([AppState.rowEdit]); AppState clears it when the screen changes. */
+    /** The row being changed ([AppState.rowEdit]); AppState clears it when the screen changes. */
     private val rowEdit: MutableStateFlow<RowEdit?>,
     private val deps: AppDeps,
     /** Kids Mode can run here: its category shows. */
     private val kidsAvailable: Boolean,
+    /** Every page's rows and values. */
+    private val content: SettingsRows,
     private val host: SettingsHost,
 ) {
     private val sectionSelections = HashMap<SettingsSection, ListSelection>()   // each section's row, remembered across visits
@@ -141,7 +136,7 @@ internal class SettingsController(
             deps.launcher?.takeIf { (index == 1) != it.isHome() }?.let { it.setHome(index == 1); refreshSettings() }
             return
         }
-        host.settingValue(r)?.changeTo(index)
+        content.settingValue(r)?.changeTo(index)
     }
 
     /** Settings row [row]'s picker ([ValueChooser]): every value, the current one under the cursor; a pick sets it ([chooseSetting]). */
@@ -150,10 +145,9 @@ internal class SettingsController(
         if (s.rows.getOrNull(row)?.enabled != true) return
         val c = s.choices.getOrNull(row)?.takeIf { it.labels.size >= 2 } ?: return
         host.select(row)
-        _chooser.value = ValueChooser(s.rows[row].label, c.labels, c.index.coerceAtLeast(0), current = c.index)
         val label = s.rows[row].label
         // By its label: a refresh while the picker is open can move the rows (a dependent row shown or hidden).
-        chooserApply = { i ->
+        openPicker(label, c.labels, c.index) { i ->
             ((screen.value as? Screen.Settings)?.rows?.let { rows -> row.takeIf { rows.getOrNull(it)?.label == label } ?: rows.indexOfFirst { it.label == label } })
                 ?.takeIf { it >= 0 }?.let { chooseSetting(it, i) }
         }
@@ -178,35 +172,39 @@ internal class SettingsController(
         is Screen.EmulatorOptions -> s.rows.getOrNull(row)?.takeIf { it.selectable }?.let(::emulatorTouchRow)
         is Screen.RaSettings -> s.rows.getOrNull(row)?.takeIf { it.selectable }?.let(::raSettingsTouchRow)
         is Screen.ArtworkSettings -> s.rows.getOrNull(row)?.takeIf { it.selectable }?.let(::artworkSettingTouchRow)
+        is Screen.Onboarding -> s.touchRows?.getOrNull(row)
         else -> null
     }
 
     /**
-     * The pad on a page of setting rows ([rowEditKey]) drawn beside another ([rowEditTwoPane]); one page keeps LEFT /
-     * RIGHT for its values (the page's own handling). Two panes: LEFT and RIGHT go between pages (LEFT as B; RIGHT opens a `›`
-     * row, as A) and never change a value. A on a row of segments, swatches or a stepped value ([NxPadA.EDIT]) starts
-     * changing it: then LEFT / RIGHT step it (the page's own LEFT / RIGHT), A or B stop, UP / DOWN stop and move. A
-     * switch's A flips it and a picker's opens it, as before (the page's own A). Returns the press the page hears
-     * ([button] itself, or LEFT's B and RIGHT's A); null when it is taken here.
+     * The pad on a page of setting rows ([rowEditKey]). A on a row of segments, swatches or a stepped value
+     * ([NxPadA.EDIT]) starts changing it: then LEFT / RIGHT step it (the page's own LEFT / RIGHT), only A or B stop (UP / DOWN
+     * do nothing meanwhile). A switch's A flips it and a picker's opens it (the page's own A). Until A, LEFT / RIGHT never change a
+     * value: drawn beside another page ([rowEditTwoPane]) they go between pages (LEFT as B; RIGHT opens a `›` row, as A),
+     * on one page they do nothing on a value row. Returns the press the page hears ([button] itself, or LEFT's B and
+     * RIGHT's A); null when it is taken here.
      */
     fun onRowEditButton(s: Screen, button: NxButton): NxButton? {
         val key = rowEditKey(s) ?: return button
         if (rowEditBlocked(s)) return button
-        if (!rowEditTwoPane(s, settingsSplit)) { rowEdit.value = null; return button }
         val i = selection.value.index
         if (rowEdit.value == RowEdit(key, i)) return when (button) {
             NxButton.A, NxButton.B -> { rowEdit.value = null; null }
-            NxButton.UP, NxButton.DOWN -> { rowEdit.value = null; button }
-            else -> button   // LEFT / RIGHT: the page steps the value; X: its info
+            NxButton.UP, NxButton.DOWN -> null   // only A or B end the change
+            // LEFT / RIGHT: the page steps the value, while the row still steps (a refresh can leave another row here).
+            NxButton.LEFT, NxButton.RIGHT -> if (settingTouchRow(i)?.padA == NxPadA.EDIT) button else { rowEdit.value = null; null }
+            else -> button   // X: its info
         }
         rowEdit.value = null
+        if (button != NxButton.A && button != NxButton.LEFT && button != NxButton.RIGHT) return button
         val row = settingTouchRow(i)
-        return when (button) {
-            NxButton.A -> if (row?.padA == NxPadA.EDIT) { rowEdit.value = RowEdit(key, i); null } else button
-            NxButton.LEFT -> NxButton.B
+        if (button == NxButton.A) return if (row?.padA == NxPadA.EDIT) { rowEdit.value = RowEdit(key, i); null } else button
+        return when {
+            !rowEditTwoPane(s, settingsSplit) -> if (row != null && row.padA != NxPadA.NONE) null else button
+            button == NxButton.LEFT -> NxButton.B
             // A `›` row has no values (its A opens), so its A never starts an edit here.
-            NxButton.RIGHT -> if (row?.opens == true) NxButton.A else null
-            else -> button
+            row?.opens == true -> NxButton.A
+            else -> null
         }
     }
 
@@ -275,9 +273,6 @@ internal class SettingsController(
      */
     fun onSettingsSplit(split: Boolean) { settingsSplit = split }
 
-    /** [section]'s page as the unfocused right pane shows it while its category is highlighted on the left. */
-    fun settingsPreview(section: SettingsSection): Screen.Settings = settingsPage(section)
-
     /**
      * A tap on the section list's [index]: one tap opens that section. From a right-pane page the pane's own back stack
      * unwinds as B would (each page keeping its row; a Library reload or rescan lands on the root by itself), then the
@@ -285,7 +280,7 @@ internal class SettingsController(
      */
     fun settingsCategoryTap(index: Int) {
         if (host.loaderActive()) return
-        if ((screen.value as? Screen.Settings)?.let { it.confirmRemove != null || it.confirmReset || it.nameDraft != null } == true) return   // a dialog answers first
+        if ((screen.value as? Screen.Settings)?.let(::rowEditBlocked) == true) return   // a dialog answers first
         // One tap opens the section, from the root or from another section's page.
         if (screen.value is Screen.SettingsMenu) {
             host.select(index)
@@ -325,15 +320,15 @@ internal class SettingsController(
 
     /** [section]'s page as it stands now; [confirm]: the remove dialog over it. */
     fun settingsPage(section: SettingsSection, confirm: ExtraFolder? = null): Screen.Settings {
-        val rows = host.settingsRows(section)
-        return Screen.Settings(section, rows, confirm, host.settingsDetails(section), host.layoutShot(section), host.settingsBanner(section), rows.map(::settingChoices))
+        val rows = content.settingsRows(section)
+        return Screen.Settings(section, rows, confirm, content.settingsDetails(section), content.layoutShot(section), content.settingsBanner(section), rows.map(::settingChoices))
     }
 
     /** [row]'s values for its touch control: its [settingValue]'s labels and current one; Use as home screen's and All files access's Off / On. */
     fun settingChoices(row: SettingsRow): SettingChoices? {
         if (row.kind == SettingsKind.HOME_SCREEN) return deps.launcher?.let { SettingChoices(ON_OFF, if (it.isHome()) 1 else 0) }
         if (row.kind == SettingsKind.ALL_FILES || row.kind == SettingsKind.MIC_ACCESS) return SettingChoices(ON_OFF, if (row.secondary == "On") 1 else 0)   // as granted when the row was built
-        val v = host.settingValue(row) ?: return null
+        val v = content.settingValue(row) ?: return null
         return v.labels?.let { SettingChoices(it, v.index) }
     }
 
@@ -358,14 +353,10 @@ internal class SettingsController(
         sel.step(delta) { rows.getOrNull(it)?.selectable != false }
 
     /**
-     * Appearance's, Layouts' or Controls' "Reset to defaults" (NX Redux settings.c): the page's own options back to their
-     * defaults. Appearance: Pad theme, Pad buttons, Accent, Secondary accent, Text size, Button layout. Layouts: every
-     * tab's style and orientation unset (so [MenuStyles.styleOf] and [MenuStyles.orientationOf] give theirs), the game lists', the tabs', shelves'
-     * and hints' Show/Hide, Consoles background, List art, Backdrop art, Page title, Button hints, Extra info, Home stats,
-     * Layout options, Achievements panel and Game Switcher layout. Controls: Pad vibration, Game rumble and every pad
-     * layout. At once, no confirm, as NX Redux. Through the settings' own setters, then the page is republished like any
-     * cycled row's (App re-reads the theme, accent and scale with it), the highlight kept on the reset row, which the
-     * orientation rows coming or going may have moved.
+     * A page's "Reset to defaults" (Shortcuts' Clear all, System buttons' Reset), once confirmed: the page's own options
+     * back to their defaults. Layouts' tab styles and orientations are unset, so [MenuStyles.styleOf] and
+     * [MenuStyles.orientationOf] give theirs. The page is republished like any cycled row's, the highlight kept on the
+     * reset row, which the orientation rows coming or going may have moved.
      */
     private fun resetToDefaults(section: SettingsSection) {
         val s = deps.settings
@@ -374,13 +365,15 @@ internal class SettingsController(
         } else if (section == SettingsSection.SYSTEM_BUTTONS) {
             host.resetSystemButtons()
         } else if (section == SettingsSection.APPEARANCE) {
-            s.padSkin = true
-            s.padTheme = PadTheme.DEFAULT
+            if (!content.controllerConnected) {   // the pad's rows hidden: a reset leaves what the page doesn't show
+                s.padSkin = true
+                s.padTheme = PadTheme.DEFAULT
+                s.skinTweaks = ""
+                s.overlayTweaks = ""
+            }
             s.accent = AccentPreset.DEFAULT
             s.secondaryAccent = SecondaryAccent.DEFAULT
             s.optionTextSize = OptionTextSize.DEFAULT
-            s.skinTweaks = ""
-            s.overlayTweaks = ""
         } else if (section == SettingsSection.MAIN_MENU) {
             s.menuStyles = emptyMap()
             s.menuOrientations = emptyMap()
@@ -396,7 +389,7 @@ internal class SettingsController(
             s.menuPageTitle = MenuStyles.DEFAULT_PAGE_TITLE
             s.menuButtonHints = MenuStyles.DEFAULT_BUTTON_HINTS
             s.menuExtraInfo = MenuStyles.DEFAULT_EXTRA_INFO
-            s.menuInfoAchievements = false
+            s.menuInfoAchievements = MenuStyles.DEFAULT_INFO_ACHIEVEMENTS
             s.menuHomeStats = MenuStyles.DEFAULT_HOME_STATS
             s.gameListLayoutOptions = true
             s.gameListAchievementsPanel = true
@@ -423,18 +416,29 @@ internal class SettingsController(
             page.rows.indices.filter { sameSettingsRow(page.rows[it], was) }.singleOrNull()
         }
         selection.value = selectableOn(page, if (moved != null && moved != sel.index) sel.copy(index = moved) else sel)
+        followRowEdit(section, sel.index, moved)
+    }
+
+    /**
+     * Page [key] rebuilt with the selection's row, at [from] before, now at [to] (null: gone, or no longer found once): the
+     * row being changed goes with it, or the change ends rather than land on another row.
+     */
+    fun followRowEdit(key: Any?, from: Int, to: Int?) {
+        rowEdit.value?.takeIf { it.key == key }?.let { e ->
+            rowEdit.value = if (e.index == from && to != null) e.copy(index = to) else null
+        }
     }
 
     /** Whether [a] and [b] are the same Settings row across a refresh: its kind and what it is for, not its value or label. */
     private fun sameSettingsRow(a: SettingsRow, b: SettingsRow): Boolean =
         a.kind == b.kind && a.category == b.category && a.shelf == b.shelf && a.hint == b.hint && a.consoleId == b.consoleId &&
-            a.shortcut == b.shortcut && a.touchSlot == b.touchSlot && a.systemRole == b.systemRole && a.landscape == b.landscape && a.extra?.id == b.extra?.id
+            a.shortcut == b.shortcut && a.touchSlot == b.touchSlot && a.systemRole == b.systemRole && a.landscape == b.landscape && a.extra?.id == b.extra?.id && a.gpuDriver == b.gpuDriver
 
     /** The confirmed reset of [page]'s selected row: Reset to defaults (Shortcuts' Clear all) or Button layout's Reset console. */
     fun runSettingsReset(page: Screen.Settings) {
         when (page.rows.getOrNull(selection.value.index)?.kind) {
             SettingsKind.RESET_DEFAULTS -> resetToDefaults(page.section)
-            SettingsKind.BUTTON_LAYOUT_RESET -> host.resetButtonLayoutConsole()
+            SettingsKind.BUTTON_LAYOUT_RESET -> content.resetButtonLayoutConsole()
             else -> Unit
         }
     }

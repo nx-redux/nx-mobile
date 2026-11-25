@@ -6,20 +6,24 @@ import com.nxredux.mobile.netplay.cablelink.LinkRomCache
  * What this device hosts: its game token, folder [tag], the core it runs ([pick] or the tag's default) and the Emulator
  * pick (null = Auto); [usb]: over the USB cable (the sheet's Connection), which cable-only cores need; [wl]: the GBA
  * game's link mode token ([com.nxredux.mobile.netplay.GbaWifiLink]), null for other games; [cableLink]: this side picked
- * Cable Link over Wi-Fi (null for every other connection).
+ * Cable Link over Wi-Fi (null for every other connection); [name]: this player's name, traded after START with a side that
+ * trades names too (null: none offered); [dcBios]: a Dreamcast game's BIOS fingerprint (`dcbios=`); [pad]: the game's Sega
+ * Controller Type ([com.nxredux.mobile.runner.SegaPadType]), null for other games.
  */
 data class HostOffer(
     val game: String, val tag: String, val core: String, val pick: String?, val usb: Boolean, val wl: String? = null,
-    val cableLink: CableLinkOffer? = null,
+    val cableLink: CableLinkOffer? = null, val name: String? = null, val dcBios: String? = null, val pad: String? = null,
 )
 
 /**
  * What this device joins with; [usb]: over the USB cable; [mayRetry]: a `REJECT core-<c>` may still be answered by one
- * reconnect with `c`; [wl]: as [HostOffer.wl].
+ * reconnect with `c`; [wl], [name] and [pad]: as [HostOffer]'s. Only whether [pad] is there counts: the session plays the host's.
  */
 data class ClientOffer(
     val game: String, val any: Boolean, val tag: String, val core: String, val pick: String?, val usb: Boolean,
-    val mayRetry: Boolean = true, val wl: String? = null, val cableLink: CableLinkOffer? = null,
+    val mayRetry: Boolean = true, val wl: String? = null, val cableLink: CableLinkOffer? = null, val name: String? = null,
+    val dcBios: String? = null,
+    val pad: String? = null,
 )
 
 /** How a host handshake ended. */
@@ -27,11 +31,13 @@ sealed interface HostOutcome {
     /**
      * Both sides start [core]; [peer] is the joiner's address; [emptySaves]: saves were due but not served (no rsync).
      * [mixed]: the two sides' caps named different GBA link cores and the games' modes allow a mixed link (each side then
-     * runs the game's own mode); [peerWl]: the joiner's `wl=` (null: none sent).
+     * runs the game's own mode); [peerWl]: the joiner's `wl=` (null: none sent); [peerName]: the joiner's name (null:
+     * none traded); [pad]: the Sega Controller Type both sides play (the host's), null when either side sent none (both
+     * then play the old fixed pad, [com.nxredux.mobile.netplay.NetplayPads]).
      */
     data class Started(
         val core: String, val peer: String, val emptySaves: Boolean, val mixed: Boolean = false, val peerWl: String? = null,
-        val cableLink: CableLinkSetup? = null,
+        val cableLink: CableLinkSetup? = null, val peerName: String? = null, val peerDcBios: String? = null, val pad: String? = null,
     ) : HostOutcome
 
     /**
@@ -54,12 +60,12 @@ sealed interface ClientOutcome {
     /**
      * The host starts [core]; this device plays as [player]. [emptySaves] is always false from [Wizard.client]: a client
      * never declines offered saves (without rsync it sends SYNC-FAIL), and when the host skips SYNC-READY this device
-     * cannot tell whether it had saves; its empty session copy matches the host either way. [mixed] and [peerWl]: as
-     * [HostOutcome.Started], for the host.
+     * cannot tell whether it had saves; its empty session copy matches the host either way. [mixed], [peerWl] and [pad]: as
+     * [HostOutcome.Started], for the host; [peerName]: the host's name (null: none traded).
      */
     data class Started(
         val core: String, val player: Int, val emptySaves: Boolean, val mixed: Boolean = false, val peerWl: String? = null,
-        val cableLink: CableLinkSetup? = null,
+        val cableLink: CableLinkSetup? = null, val peerName: String? = null, val peerDcBios: String? = null, val pad: String? = null,
     ) : ClientOutcome
 
     /** The join failed; [message] is the user-facing text. */

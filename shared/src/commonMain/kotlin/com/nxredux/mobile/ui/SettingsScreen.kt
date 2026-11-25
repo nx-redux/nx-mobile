@@ -1,12 +1,17 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.ui.nx.NxInfoIcon
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.PlaceholderVerticalAlign
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.foundation.text.InlineTextContent
 import com.nxredux.mobile.ui.nx.NX_SWATCH_AUTO
 import com.nxredux.mobile.settings.SecondaryAccent
 import com.nxredux.mobile.settings.AccentPreset
 import com.nxredux.mobile.ui.nx.LocalNxHintBarHidden
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -26,15 +31,12 @@ import com.nxredux.mobile.ui.nx.NxRowKind
 import com.nxredux.mobile.ui.nx.NxBanner
 import com.nxredux.mobile.ui.nx.NxScreenScaffold
 import com.nxredux.mobile.ui.nx.NX_EDIT_HINTS
-import com.nxredux.mobile.ui.nx.splitWindow
 import com.nxredux.mobile.ui.nx.valueHints
 import com.nxredux.mobile.ui.nx.NxSettingEvent
 import com.nxredux.mobile.ui.nx.NxSettingRow
 import com.nxredux.mobile.ui.nx.NxSettingsList
 import com.nxredux.mobile.ui.nx.NxSettingsPage
-import com.nxredux.mobile.ui.nx.control
 import com.nxredux.mobile.ui.nx.hasMoreInfo
-import com.nxredux.mobile.ui.nx.nxDialogBody
 import com.nxredux.mobile.ui.nx.LocalNxFontWeights
 import com.nxredux.mobile.ui.nx.nxListInset
 import com.nxredux.mobile.ui.nx.nxListLabel
@@ -47,15 +49,13 @@ import com.nxredux.mobile.ui.nx.nxOptionsLabelSize
  * plain rows under their name. A page of only navigation rows uses list rows, one with a value row NX Redux's options rows
  * ([listRowKind]). A page with a value row ([settingsTouchPage]) draws touch rows instead, as the in-game menu's options
  * ([NxSettingsList]): [onSetting] takes their controls' and info icons' taps, [onTruncated] whether the selected row's
- * description fits. [titled]: the two-pane Settings' right pane (the split draws the remove dialog); [hints] (null: its
- * own) the pane's.
+ * description fits. [hints] (null: its own): the two-pane Settings' right pane's.
  */
 @Composable
 fun SettingsScreen(
     screen: Screen.Settings, selectedIndex: Int,
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, modifier: Modifier = Modifier,
     onHint: ((NxButton) -> Unit)? = null,
-    titled: Boolean = false,
     hints: List<Hint>? = null,
     dialog: Boolean = true,   // false: the two-pane Settings draws the remove dialog over both panes
     onSetting: ((NxSettingEvent) -> Unit)? = null,   // null: a preview, its controls take no taps
@@ -74,8 +74,8 @@ fun SettingsScreen(
         if (screen.section.layoutGroup) {
             // A Layouts group: its values above a picture of them (B goes back).
             LayoutPreviewPage(
-                screen.section.label, emptyList(), rows, screen.shot?.let(::layoutShotPicture), LAYOUT_PICTURE_AR, selectedIndex,
-                shownHints, onSelect, onOpen, onHint ?: {}, landscapeWidth = 1f, titleAction = false,   // the rows across the page, as the other Settings pages'
+                screen.section.label, rows, screen.shot?.let(::layoutShotPicture), LAYOUT_PICTURE_AR, selectedIndex,
+                shownHints, onSelect, onOpen, onHint ?: {},
             )
         } else if (screen.section.detailed) {
             NxDetailListBody(
@@ -95,6 +95,7 @@ fun SettingsScreen(
         }
         if (dialog && screen.confirmRemove != null) SettingsRemoveDialog(onHint)
         if (dialog && screen.confirmReset) settingsResetAsk(screen, selectedIndex)?.let { SettingsResetDialog(it, onHint) }
+        if (dialog) screen.confirmDriver?.let { GpuDriverRemoveDialog(it.name, onHint) }
     }
 }
 
@@ -112,26 +113,24 @@ private fun SettingsTouchPage(
     val rows = remember(screen, editing) {
         screen.rows.mapIndexed { i, r -> settingsTouchRow(r, screen.choices.getOrNull(i), screen.section).let { if (i == editing) it.copy(editing = true) else it } }
     }
-    val report = onTruncated
     val selected = rows.getOrNull(selectedIndex)
     val infoShown = selected != null && nxShowsInfo(selected, truncated)
-    val twoPane = rowEditTwoPane(screen, settingsSplit(splitWindow()))
-    val shownHints = hints ?: if (editing >= 0) NX_EDIT_HINTS else settingsHints(screen.rows, selectedIndex, selected, infoShown, twoPane)
+    val shownHints = hints ?: if (editing >= 0) NX_EDIT_HINTS else settingsHints(screen.rows, selectedIndex, selected, infoShown)
     val preview = onSetting == null
     val events = onSetting ?: {}
     Box(modifier.fillMaxSize()) {
         if (screen.section.layoutGroup) {
             LayoutPreviewPage(
-                screen.section.label, emptyList(), emptyList(), screen.shot?.let(::layoutShotPicture), LAYOUT_PICTURE_AR, selectedIndex,
-                shownHints, onSelect, onOpen, onHint ?: {}, landscapeWidth = 1f, titleAction = false,
-                touchRows = { m, footer -> NxSettingsList(rows, selectedIndex, onSelect, onOpen, events, m, report, preview, footer) },
+                screen.section.label, emptyList(), screen.shot?.let(::layoutShotPicture), LAYOUT_PICTURE_AR, selectedIndex,
+                shownHints, onSelect, onOpen, onHint ?: {},
+                touchRows = { m, footer -> NxSettingsList(rows, selectedIndex, onSelect, onOpen, events, m, onTruncated, preview, footer) },
             )
         } else {
             // Shortcuts' binding keeps its bar: A Bind, X Clear and B Cancel are no console menu's, and a wrong press rebinds.
             CompositionLocalProvider(LocalNxHintBarHidden provides (LocalNxHintBarHidden.current && screen.section != SettingsSection.SHORTCUTS)) {
                 NxSettingsPage(
                     screen.section.label, rows, selectedIndex, shownHints, onSelect, onOpen, events,
-                    onTruncated = report, onHint = onHint, preview = preview,
+                    onTruncated = onTruncated, onHint = onHint, preview = preview,
                     header = when {
                         screen.banner != null -> ({ NxBanner(screen.banner) })
                         screen.details.isNotEmpty() -> ({ SettingsDetailLines(screen.details) })
@@ -142,6 +141,7 @@ private fun SettingsTouchPage(
         }
         if (dialog && screen.confirmRemove != null) SettingsRemoveDialog(onHint)
         if (dialog && screen.confirmReset) settingsResetAsk(screen, selectedIndex)?.let { SettingsResetDialog(it, onHint) }
+        if (dialog) screen.confirmDriver?.let { GpuDriverRemoveDialog(it.name, onHint) }
     }
 }
 
@@ -152,12 +152,28 @@ private fun SettingsTouchPage(
 internal fun nxShowsInfo(row: NxSettingRow, truncated: String?): Boolean =
     row.hasMoreInfo || (row.info.isNotBlank() && row.info == truncated)
 
-/** A touch page's lines under its title (Default emulators' caption), in the hint grey. */
+// the info icon's place in a page's lines ([SettingsDetailLines])
+private const val MORE_ICON = "more"
+
+/**
+ * A touch page's lines under its title (Default emulators' caption), in the hint grey. [onMore]: the info icon after the
+ * first line, a tap on it the fuller text (a setup step's warning kept off the page).
+ */
 @Composable
-internal fun SettingsDetailLines(lines: List<String>, separator: String = " ") {
+internal fun SettingsDetailLines(lines: List<String>, separator: String = " ", onMore: (() -> Unit)? = null) {
     val body = nxOptionsLabelSize(nxListLabel())
+    val text = buildAnnotatedString {
+        lines.forEachIndexed { i, line ->
+            if (i > 0) append(separator)
+            append(line)
+            if (i == 0 && onMore != null) { append(" "); appendInlineContent(MORE_ICON, "?") }
+        }
+    }
+    val icon = onMore?.let { open ->
+        mapOf(MORE_ICON to InlineTextContent(Placeholder(body * 1.9f, body * 1.4f, PlaceholderVerticalAlign.TextCenter)) { NxInfoIcon(body, open) })
+    }.orEmpty()
     Text(
-        lines.joinToString(separator), color = LocalNxColors.current.hint, fontFamily = LocalNxFontWeights.current, fontWeight = FontWeight.Normal,   // Regular, as a row's description
+        text, inlineContent = icon, color = LocalNxColors.current.hint, fontFamily = LocalNxFontWeights.current, fontWeight = FontWeight.Normal,   // Regular, as a row's description
         // The body size: an options row's label (16 sp at Large, under Appearance → Text size), the help note's line height.
         fontSize = body, lineHeight = body * 1.45f,
         modifier = Modifier.fillMaxWidth().padding(horizontal = nxListInset(), vertical = 4.dp),
@@ -173,22 +189,22 @@ internal fun SettingsDetailLines(lines: List<String>, separator: String = " ") {
 internal fun settingsTouchPage(screen: Screen.Settings): Boolean =
     screen.choices.any { it != null } || screen.section == SettingsSection.DEFAULT_EMULATORS ||
         screen.section == SettingsSection.LIBRARY || screen.section == SettingsSection.SYSTEM ||
-        screen.section == SettingsSection.SYSTEM_BUTTONS
+        screen.section == SettingsSection.SYSTEM_BUTTONS || screen.section == SettingsSection.GPU_DRIVER
 
 /** The Settings rows that open a page or an editor: their touch row ends in `›`. */
 private val OPENER_KINDS = setOf(
-    SettingsKind.HOME, SettingsKind.DEFAULTS, SettingsKind.EMULATORS, SettingsKind.SAVES, SettingsKind.IMPORT_SAVES,
+    SettingsKind.HOME, SettingsKind.DEFAULTS, SettingsKind.EMULATORS, SettingsKind.SAVES, SettingsKind.IMPORT_SAVES, SettingsKind.IMPORT_BIOS,
     SettingsKind.BUTTON_LAYOUT, SettingsKind.BUTTON_LAYOUT_ORIENTATION, SettingsKind.SHORTCUTS, SettingsKind.SYSTEM_BUTTONS, SettingsKind.ANDROID_GAMES, SettingsKind.HIDDEN, SettingsKind.UNASSIGNED,
     SettingsKind.LAYOUT_HOME, SettingsKind.LAYOUT_GAMES_TAB, SettingsKind.LAYOUT_CONSOLES, SettingsKind.LAYOUT_COLLECTIONS, SettingsKind.LAYOUT_TOOLS,
     SettingsKind.LAYOUT_GAME_LISTS, SettingsKind.LAYOUT_TITLE_HINTS, SettingsKind.LAYOUT_SWITCHER,
-    SettingsKind.KIDS_PIN, SettingsKind.KIDS_DAY, SettingsKind.KIDS_APPS,
+    SettingsKind.KIDS_PIN, SettingsKind.KIDS_DAY, SettingsKind.KIDS_APPS, SettingsKind.GPU_DRIVER,
 )
 
 /** Rows whose values are a segmented button however many or long they are (Game lists' layout: its five styles side by side; the Game Switcher's Full screen / List). */
 private val SEGMENTED_KINDS = setOf(SettingsKind.GAME_LIST_STYLE, SettingsKind.SWITCHER_LAYOUT)
 
 /** Rows whose secondary (a path, a state, a count, the last scan) is their description, not a value. */
-private val DESCRIBED_KINDS = setOf(SettingsKind.HOME, SettingsKind.EXTRA, SettingsKind.RESCAN, SettingsKind.UNASSIGNED, SettingsKind.HIDDEN)
+private val DESCRIBED_KINDS = setOf(SettingsKind.HOME, SettingsKind.EXTRA, SettingsKind.RESCAN, SettingsKind.UNASSIGNED, SettingsKind.HIDDEN, SettingsKind.GPU_DRIVER_ITEM)
 
 /** Rows whose secondary is their description line ([settingsInfo]), with more behind the info icon: Kids Mode's warnings and flag path. */
 private val LINE_KINDS = setOf(SettingsKind.KIDS_GUARD, SettingsKind.KIDS_ALARMS, SettingsKind.KIDS_HOME, SettingsKind.KIDS_FORGOT)
@@ -209,7 +225,9 @@ internal fun settingsTouchRow(row: SettingsRow, choices: SettingChoices?, sectio
         row.label, info = text.line, detail = text.detail,
         choices = values?.labels.orEmpty(), index = values?.index ?: -1,
         // The link's URL: behind its info icon; [LINE_KINDS]' secondary: their description ([settingsInfo]).
-        value = if (values == null && !described && row.kind != SettingsKind.LICENSES_LINK && row.kind !in LINE_KINDS) row.secondary else null,
+        // A GPU driver page row: "In use" on the driver in use.
+        value = if (row.kind == SettingsKind.GPU_DRIVER_ITEM) GPU_DRIVER_IN_USE.takeIf { row.current }
+            else if (values == null && !described && row.kind != SettingsKind.LICENSES_LINK && row.kind !in LINE_KINDS) row.secondary else null,
         opens = row.kind in OPENER_KINDS, enabled = row.enabled,
         segmented = row.kind in SEGMENTED_KINDS,
         warning = row.warning,
@@ -220,7 +238,7 @@ internal fun settingsTouchRow(row: SettingsRow, choices: SettingChoices?, sectio
             SettingsKind.SECONDARY_ACCENT -> SecondaryAccent.entries.map { if (it is SecondaryAccent.Preset) it.preset.argb else NX_SWATCH_AUTO }
             else -> null
         }.takeIf { values != null },
-        adds = row.kind == SettingsKind.ADD_EXTRA,   // Library's Add ROM folder: a "+" before its name
+        adds = row.kind == SettingsKind.ADD_EXTRA || row.kind == SettingsKind.GPU_DRIVER_ADD,   // Library's Add ROM folder, GPU driver's Add driver: a "+" before its name
     )
 }
 
@@ -236,6 +254,7 @@ internal fun settingsRowAction(row: SettingsRow, section: SettingsSection?): Str
     SettingsKind.RESET_DEFAULTS -> if (section == SettingsSection.SHORTCUTS) "Clear all" else "Reset"
     SettingsKind.BUTTON_LAYOUT_RESET -> "Reset"
     SettingsKind.EXTRA -> "Remove"
+    SettingsKind.GPU_DRIVER_ITEM -> if (row.gpuDriver == com.nxredux.mobile.gpudriver.GpuDriverChoice.SYSTEM) (if (row.current) null else "Use") else "Options"
     SettingsKind.KIDS_GUARD, SettingsKind.KIDS_ALARMS -> "Grant"
     SettingsKind.KIDS_HOME -> "Set"
     else -> null
@@ -252,7 +271,7 @@ internal fun settingsResetAsk(page: Screen.Settings, selected: Int): SettingsRes
     SettingsKind.RESET_DEFAULTS -> when (page.section) {
         SettingsSection.SHORTCUTS -> SettingsResetAsk("Clear all shortcuts?", "Every action goes back to None and both touch buttons come off the pad.", "Clear all")
         SettingsSection.SYSTEM_BUTTONS -> SettingsResetAsk("Reset this controller's buttons?", "SELECT, START and MENU go back to the controller's own buttons.", "Reset")
-        SettingsSection.APPEARANCE -> SettingsResetAsk("Reset to defaults?", "Pad theme, Pad buttons, Accent, Secondary accent, Text size and Button layout go back to their defaults.", "Reset")
+        SettingsSection.APPEARANCE -> SettingsResetAsk("Reset to defaults?", "${page.rows[selected].note ?: appearanceResetScope(true)} go back to their defaults.", "Reset")
         SettingsSection.MAIN_MENU -> SettingsResetAsk("Reset to defaults?", "Every Layouts group and Extra info go back to their defaults.", "Reset")
         SettingsSection.CONTROLS -> SettingsResetAsk("Reset to defaults?", "Pad vibration and Game rumble go back to their defaults.", "Reset")
         else -> SettingsResetAsk("Reset to defaults?", "This page's settings go back to their defaults.", "Reset")
@@ -273,6 +292,15 @@ internal fun SettingsResetDialog(ask: SettingsResetAsk, onHint: ((NxButton) -> U
     )
 }
 
+/** "Remove driver?" over Emulation → GPU driver ([Screen.Settings.confirmDriver]) for the driver [name]: A removes it, B keeps it. */
+@Composable
+internal fun GpuDriverRemoveDialog(name: String, onHint: ((NxButton) -> Unit)?) {
+    NxDialog(
+        "Remove driver", gpuDriverRemoveText(name),
+        onConfirm = { onHint?.invoke(NxButton.A) }, confirmLabel = "Remove", onCancel = { onHint?.invoke(NxButton.B) },
+    )
+}
+
 /** "Remove folder?" over Library ([Screen.Settings.confirmRemove]): A removes, B keeps it. */
 @Composable
 internal fun SettingsRemoveDialog(onHint: ((NxButton) -> Unit)?) {
@@ -286,7 +314,7 @@ internal fun SettingsRemoveDialog(onHint: ((NxButton) -> Unit)?) {
  * The hint bar for the row at [selected]: no A on a read-only row (About's info rows, or a page of only those), "A Copy"
  * on About's Copy device info, "A Open" on Full list of licenses, "A Check" or "A Update" on its update row (none while busy), "A Select" elsewhere.
  */
-internal fun settingsHints(rows: List<SettingsRow>, selected: Int, touch: NxSettingRow? = null, info: Boolean = false, twoPane: Boolean = false): List<Hint> {
+internal fun settingsHints(rows: List<SettingsRow>, selected: Int, touch: NxSettingRow? = null, info: Boolean = false): List<Hint> {
     val back = Hint(NxButton.B, "Back")
     val kind = rows.getOrNull(selected)?.kind
     val infoHint = if (info) listOf(Hint(NxButton.X, "Info")) else emptyList()
@@ -300,10 +328,8 @@ internal fun settingsHints(rows: List<SettingsRow>, selected: Int, touch: NxSett
             else listOf(back, Hint(NxButton.A, "Bind"), Hint(NxButton.X, "Clear"))
         // System buttons' press to bind: B cancels a wait ([SettingsRow.note] set), else A binds.
         kind == SettingsKind.SYSTEM_BUTTON_BIND -> if (rows[selected].note != null) listOf(Hint(NxButton.B, "Cancel")) else listOf(back, Hint(NxButton.A, "Bind"))
-        // A touch value row ([valueHints]): two panes, A toggles a switch, opens a picker or starts changing segments;
-        // one page, LEFT / RIGHT change it. Use as home screen and All files access are Android's to change: A alone.
-        touch != null && touch.choices.size >= 2 -> listOf(back) +
-            touch.valueHints(twoPane, side = kind != SettingsKind.HOME_SCREEN && kind != SettingsKind.ALL_FILES && kind != SettingsKind.MIC_ACCESS) + infoHint
+        // A touch value row ([valueHints]): A toggles a switch, opens a picker or starts changing segments.
+        touch != null && touch.choices.size >= 2 -> listOf(back) + touch.valueHints + infoHint
         touch != null && !touch.enabled -> listOf(back) + infoHint
         else -> listOf(back, Hint(NxButton.A, "Select")) + infoHint
     }
@@ -328,7 +354,7 @@ internal fun settingsNxRow(row: SettingsRow): NxRow = NxRow(
         SettingsKind.PAD_SKIN, SettingsKind.PAD_THEME,
         SettingsKind.DEFAULT_TAG, SettingsKind.MENU_STYLE, SettingsKind.GAME_LIST_STYLE,
         SettingsKind.MENU_ORIENTATION, SettingsKind.GAME_LIST_ORIENTATION, SettingsKind.GAME_LIST_VERTICAL_ALIGNMENT,
-        SettingsKind.CONTROLLER_ART, SettingsKind.TAB_SHOWN, SettingsKind.SHELF_SHOWN, SettingsKind.HINT_SHOWN, SettingsKind.LIST_ART, SettingsKind.BACKDROP_ART, SettingsKind.PAGE_TITLE, SettingsKind.BUTTON_HINTS, SettingsKind.EXTRA_INFO, SettingsKind.GAME_INFO, SettingsKind.HOME_STATS, SettingsKind.LAYOUT_OPTIONS, SettingsKind.ACHIEVEMENTS_PANEL, SettingsKind.SWITCHER_LAYOUT, SettingsKind.PAD_VIBRATION, SettingsKind.GAME_RUMBLE, SettingsKind.BUTTON_LAYOUT_CONSOLE, SettingsKind.BUTTON_LAYOUT_WII_PAD, SettingsKind.BUTTON_LAYOUT_N3DS_PAD, SettingsKind.SHORTCUT_TOUCH, SettingsKind.ACCENT, SettingsKind.SECONDARY_ACCENT, SettingsKind.TEXT_SIZE, SettingsKind.DEBUG_LOG, SettingsKind.KEYBOARD, SettingsKind.CABLE_LINK_DELAY, SettingsKind.CABLE_LINK_DELAY_OVERLAY, SettingsKind.SECOND_SCREEN_ENABLE, SettingsKind.BOTTOM_SCREEN, SettingsKind.PAUSE_UNFOCUSED, SettingsKind.SCREEN_CARE, SettingsKind.SAVE_FORMAT, SettingsKind.STATE_FORMAT, SettingsKind.EXTRACTED_NAME -> true
+        SettingsKind.CONTROLLER_ART, SettingsKind.TAB_SHOWN, SettingsKind.SHELF_SHOWN, SettingsKind.HINT_SHOWN, SettingsKind.LIST_ART, SettingsKind.BACKDROP_ART, SettingsKind.PAGE_TITLE, SettingsKind.BUTTON_HINTS, SettingsKind.EXTRA_INFO, SettingsKind.GAME_INFO, SettingsKind.HOME_STATS, SettingsKind.LAYOUT_OPTIONS, SettingsKind.ACHIEVEMENTS_PANEL, SettingsKind.SWITCHER_LAYOUT, SettingsKind.PAD_VIBRATION, SettingsKind.GAME_RUMBLE, SettingsKind.BUTTON_LAYOUT_CONSOLE, SettingsKind.BUTTON_LAYOUT_WII_PAD, SettingsKind.BUTTON_LAYOUT_N3DS_PAD, SettingsKind.BUTTON_LAYOUT_SEGA_PAD, SettingsKind.SHORTCUT_TOUCH, SettingsKind.ACCENT, SettingsKind.SECONDARY_ACCENT, SettingsKind.TEXT_SIZE, SettingsKind.DEBUG_LOG, SettingsKind.KEYBOARD, SettingsKind.CABLE_LINK_DELAY, SettingsKind.CABLE_LINK_DELAY_OVERLAY, SettingsKind.SECOND_SCREEN_ENABLE, SettingsKind.BOTTOM_SCREEN, SettingsKind.PAUSE_UNFOCUSED, SettingsKind.SCREEN_CARE, SettingsKind.SAVE_ON_QUIT, SettingsKind.A_RESUMES, SettingsKind.SAVE_FORMAT, SettingsKind.STATE_FORMAT, SettingsKind.EXTRACTED_NAME -> true
         else -> false
     },
 )

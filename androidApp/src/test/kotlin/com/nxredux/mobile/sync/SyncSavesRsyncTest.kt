@@ -10,9 +10,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
-import java.net.ServerSocket
-import java.net.Socket
-import java.util.concurrent.TimeUnit
 
 /**
  * Battery saves against a handheld through staging ([SyncSaveFiles], [SaveSyncPlan], [SyncCommands.clientArgs] with a
@@ -20,7 +17,7 @@ import java.util.concurrent.TimeUnit
  */
 class SyncSavesRsyncTest {
     @get:Rule val tmp = TemporaryFolder()
-    private var daemon: Process? = null
+    private val daemon = RsyncDaemon()
     private val t1 = 1_700_000_000_000L
     private val t2 = t1 + 3_600_000L
     private val t3 = t2 + 3_600_000L
@@ -28,43 +25,25 @@ class SyncSavesRsyncTest {
     private val mgba = "Game Boy Advance (MGBA)"
 
     @After fun stopDaemon() {
-        daemon?.let { it.destroy(); if (!it.waitFor(5, TimeUnit.SECONDS)) it.destroyForcibly() }
+        daemon.stop()
     }
-
-    private fun rsync(): String? = listOf("/opt/homebrew/bin/rsync", "/usr/local/bin/rsync", "/usr/bin/rsync").firstOrNull { path ->
-        File(path).canExecute() && runCatching {
-            val out = ProcessBuilder(path, "--version").redirectErrorStream(true).start().inputStream.bufferedReader().readText()
-            Regex("""version (\d+)\.(\d+)""").find(out)?.destructured?.let { (a, b) -> a.toInt() > 3 || (a.toInt() == 3 && b.toInt() >= 1) } == true
-        }.getOrDefault(false)
-    }
-
-    private fun freePort(): Int = ServerSocket(0).use { it.localPort }
 
     private class Served(val bin: String, val port: Int, val saves: File)
 
     /** Starts the daemon serving a fresh handheld `Saves/`; the test is skipped without a usable rsync. */
     private fun serve(): Served {
-        val bin = rsync()
+        val bin = hostRsync()
         assumeTrue("no rsync >= 3.1 on this machine", bin != null)
         val work = tmp.newFolder("work")
         val saves = tmp.newFolder("handheld-saves")
-        val port = freePort()
         val conf = SyncCommands.daemonConf("127.0.0.1", shared = tmp.newFolder("sh").path, saves = saves.path,
             pidFile = File(work, "rsyncd.pid").path, logFile = File(work, "sync.log").path)
-            .replace("port = ${SyncWire.RSYNC_PORT}\n", "port = $port\n")
-        val confFile = File(work, "rsyncd.conf").apply { writeText(conf) }
-        daemon = ProcessBuilder(bin!!, "--daemon", "--no-detach", "--config=${confFile.path}")
-            .redirectErrorStream(true).redirectOutput(File(work, "daemon.out")).start()
-        val deadline = System.currentTimeMillis() + 5_000
-        while (runCatching { Socket("127.0.0.1", port).close() }.isFailure) {
-            check(System.currentTimeMillis() < deadline) { "daemon did not listen: ${File(work, "daemon.out").readText()}" }
-            Thread.sleep(50)
-        }
+        val port = daemon.start(bin!!, work, conf)
         return Served(bin, port, saves)
     }
 
     private fun exec(args: List<String>, port: Int): String {
-        val p = ProcessBuilder(args.map { it.replace("127.0.0.1:${SyncWire.RSYNC_PORT}/", "127.0.0.1:$port/") }).redirectErrorStream(true).start()
+        val p = ProcessBuilder(swapPort(args, port)).redirectErrorStream(true).start()
         val out = p.inputStream.bufferedReader().readText()
         assertEquals(out, 0, p.waitFor())
         return out
@@ -208,6 +187,27 @@ class SyncSavesRsyncTest {
         write(saves, "GBA/._Emerald.srm", "MAC", t1)
         val files = SyncSaveFiles(saves, File(phone, "send"), File(phone, "recv"))
         assertEquals(listOf("GBA/Emerald.srm"), files.listSaves().map { it.path })
+    }
+
+    @Test fun per_device_files_neither_reach_the_handheld_nor_fold_back() {
+        val s = serve()
+        write(s.saves, "PSP/SYSTEM/ppsspp.ini", "HANDHELD", t3)
+        write(s.saves, "PSP/SAVEDATA/ULUS10160DATA00/DATA.BIN", "HANDHELD SAVE", t3)
+        val phone = tmp.newFolder("phone")
+        val saves = File(phone, "Saves")
+        write(saves, "PSP/SYSTEM/ppsspp.ini", "PHONE", t1)
+        write(saves, "PSP/SYSTEM/CACHE/x.cache", "PHONE", t1)
+        write(saves, "PSP/SAVEDATA/ULUS10469DATA00/DATA.BIN", "PHONE SAVE", t1)
+        val send = File(phone, "send")
+        val recv = File(phone, "recv")
+        val files = SyncSaveFiles(saves, send, recv)
+        assertEquals(listOf("PSP/SAVEDATA/ULUS10469DATA00/DATA.BIN"), files.listSaves().map { it.path })
+        sync(s, files, saves, send, recv, mapOf("PlayStation Portable (PSP)" to emptySet()))
+        assertEquals("HANDHELD", File(s.saves, "PSP/SYSTEM/ppsspp.ini").readText())
+        assertFalse(File(s.saves, "PSP/SYSTEM/CACHE/x.cache").exists())
+        assertEquals("PHONE SAVE", File(s.saves, "PSP/SAVEDATA/ULUS10469DATA00/DATA.BIN").readText())
+        assertEquals("PHONE", File(saves, "PSP/SYSTEM/ppsspp.ini").readText())
+        assertEquals("HANDHELD SAVE", File(saves, "PSP/SAVEDATA/ULUS10160DATA00/DATA.BIN").readText())
     }
 
     @Test fun a_plan_path_outside_its_root_is_refused_before_any_write() {

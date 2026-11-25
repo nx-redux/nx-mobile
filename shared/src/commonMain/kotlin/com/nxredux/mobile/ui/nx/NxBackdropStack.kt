@@ -41,6 +41,7 @@ fun NxBackdropStack(
     tiles: List<GridTile>, selectedIndex: () -> Int,
     onSelect: (Int) -> Unit, onOpen: (Int) -> Unit, onLongPress: ((Int) -> Unit)?,
     captionTitle: () -> String?, captionInfo: () -> List<InfoLine>,
+    captionBadge: () -> String? = { null },   // a pill after the caption's name (the game's badge, [com.nxredux.mobile.library.GameEntry.badge])
     modifier: Modifier = Modifier,
     layoutKey: Any? = null,
     alignment: VerticalListAlignment = VerticalListAlignment.LEFT,
@@ -70,14 +71,15 @@ fun NxBackdropStack(
                 LaunchedEffect(shown) { report(shown) }
             }
             NxStack(
-                games.size, selectedIndex, g, RowStyle.BACKDROP, edgeFade = true,
+                games.size, selectedIndex, g, RowStyle.BACKDROP,
                 onSelect = onSelect, onOpen = onOpen, onLongPress = onLongPress,
                 layoutKey = layoutKey, dataKey = games, edgeFadeHeight = BACKDROP_STACK_EDGE_FADE,
                 // The unselected boxes in greyscale, as the row's ([backdropSaturation]).
                 item = { i, _, distance -> Box(Modifier.matchParentSize().nxSaturation(BOX_SHADOW_REACH) { backdropSaturation(distance()) }) { BoxArt(games[i]) } },
                 overlay = { StackCaption(
                     captionTitle(), captionInfo(), g, bodyW, bodyH, shadow = true, nameSp = 18f * nxTextScale(),   // Appearance → Text size
-                    splitNext = stackPortraitFamily(screenW, screenH, portrait), alignment = alignment, infoShare = 0.8f,
+                    splitNext = stackPortraitFamily(screenW, screenH, portrait), alignment = alignment,
+                    badge = captionBadge(),
                 ) },
             )
             return@BoxWithConstraints
@@ -98,13 +100,13 @@ fun NxBackdropStack(
             val base = if (res == null) StackReach(g.slotH / 2, g.slotH / 2)
                 else key(res) { logoReach(logoDrawnHeight(g.slotW, g.slotH, logoAspect(res)), if (logo.count != null) countLine else 0f) }
             val pad = logo?.pad
-            if (pad == null) base else base.withPad(stackPadBox(g.slotW, g.slotH, base), padAspect(pad.res))
+            if (pad == null) base else base.withPad(stackPadBox(g.slotH, base), padAspect(pad.res))
         }
         val itemRow = g.asItemRow()
         val k = backdropContentScale(itemRow, slot, portrait && slot != BackdropSlot.LOGO)   // a console: the row's slot, so its scale
         val toolNameSp = backdropToolNameSp(itemRow, k, slot)
         NxStack(
-            count, selectedIndex, g, RowStyle.BACKDROP, edgeFade = true,
+            count, selectedIndex, g, RowStyle.BACKDROP,
             onSelect = onSelect, onOpen = onOpen, onLongPress = onLongPress,
             layoutKey = layoutKey, dataKey = tiles, marks = true,
             reach = reaches?.let { r -> { i: Int -> r[i] } },
@@ -113,7 +115,7 @@ fun NxBackdropStack(
                 SlotTile(
                     tiles[i], k, g.slotW, scale = { stackItem(RowStyle.BACKDROP, distance(), g).scale }, toolLines = backdropToolNameLines(slot), toolNameSp = toolNameSp,
                     toolNamePad = backdropToolNamePad(slot), toolSplit = slot == BackdropSlot.TOOL, toolGap = backdropToolGap(slot),
-                    pad = reaches?.get(i)?.let { r -> PadFrame(stackPadBox(g.slotW, g.slotH, r)) { padAlpha(distance()) } },
+                    pad = reaches?.get(i)?.let { r -> PadFrame(stackPadBox(g.slotH, r)) { padAlpha(distance()) } },
                     lit = { slotLitness(distance()) },   // the selected item in the accent
                 )
             },

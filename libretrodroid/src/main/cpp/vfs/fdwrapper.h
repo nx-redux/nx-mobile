@@ -24,7 +24,7 @@ namespace libretrodroid {
 
 class FDWrapper {
 public:
-    // Delete copy and move to make sure the close function is never called.
+    // No copy or move: the fd is closed exactly once.
     FDWrapper(const FDWrapper& other) = delete;
     FDWrapper(FDWrapper&& other) = delete;
     FDWrapper& operator=(const FDWrapper&) = delete;
@@ -32,8 +32,7 @@ public:
 
     int getFD();
 
-    // Relinquish ownership of the fd so the destructor won't close it. Used when
-    // the fd has already been closed by another owner (e.g. an fdopen'd FILE*).
+    // Gives up the fd, so the destructor won't close it: another owner (an fdopen'd FILE*) closes it.
     void release() { fd = -1; }
 
     FDWrapper(int fd) : fd(fd) { }

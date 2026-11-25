@@ -1,7 +1,6 @@
 package com.nxredux.mobile.skin
 
 import com.nxredux.mobile.options.PxRect
-import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -9,7 +8,7 @@ import kotlin.test.assertTrue
 
 /** The in-game menu's room over a skin: its screen glass and the touch shortcut strip under it (hidden while it is open). */
 class SkinMenuRectTest {
-    private val carbon = assertNotNull(SkinPackManifest.parse(File("../androidApp/src/main/assets/skins/nx-carbon/skin.json").readText()))
+    private val carbon = skinPack()
 
     @Test
     fun the_menu_takes_the_glass_and_the_strip_under_it() {
@@ -64,7 +63,7 @@ class SkinMenuRectTest {
             val glass = u.glasses.single()
             assertEquals(room, glass.rect, "$variant")
             assertEquals(assertNotNull(p.glass(GlassScreen.TOP)).corner, glass.corner, "$variant")
-            val frame = u.pieces.filter { it.piece == MENU_FRAME_PIECE }
+            val frame = u.pieces.filter { it.piece == MENU_FRAME_PIECE && it.fill < 0f }   // (its art; the black over its opening aside)
             assertEquals(8, frame.size, "$variant")
             val fx0 = frame.minOf { it.dst.x }; val fy0 = frame.minOf { it.dst.y }
             val fx1 = frame.maxOf { it.dst.x + it.dst.width }; val fy1 = frame.maxOf { it.dst.y + it.dst.height }
@@ -75,6 +74,7 @@ class SkinMenuRectTest {
             assertEquals(room.y + room.height, fy1 - bb, 0.5f, "$variant frame foot")
             val cx = room.x + room.width / 2f; val cy = room.y + room.height / 2f
             for (piece in u.pieces) {   // nothing over the menu's middle, nothing of the old pieces inside the room
+                if (piece.fill >= 0f) continue   // (the frame's black leaves every screen open)
                 val d = piece.dst
                 assertTrue(!(cx in d.x..(d.x + d.width) && cy in d.y..(d.y + d.height)), "$variant piece over the middle")
                 if (piece.piece != MENU_FRAME_PIECE) assertTrue(d.x + d.width <= room.x + 1f || d.x >= room.x + room.width - 1f ||

@@ -265,9 +265,6 @@ class RowLayoutTest {
         assertEquals(stackCaptionRows(details), carouselCaptionRows("Name", details, gameList = true))
         assertEquals(emptyList(), carouselCaptionRows(null, details, gameList = true))
         assertEquals(emptyList(), carouselCaptionRows("Name", emptyList(), gameList = true))
-        // Any other Carousel's (the main menu's, its stats under the name): as before, the time and count, then the next goal.
-        val info = listOf(InfoLine(InfoKind.TIME, "Today - 1h"), InfoLine(InfoKind.ACHIEVEMENTS, "3 of 10"), InfoLine(InfoKind.NEXT, "Next: First"))
-        assertEquals(listOf(info.take(2), info.drop(2)), carouselCaptionRows("Name", info))
     }
 
     // A game list's horizontal Carousel: the time and achievements in the picture, the game's details under its name.
@@ -364,24 +361,24 @@ class RowLayoutTest {
         assertEquals(-(60f * 0.5f + 28f) * 0.5f, rowItemDxVar(g, 0, 0.5f, floatArrayOf(60f)), 0.001f)
     }
 
-    // A portrait game list Carousel's selected tile is at most 60% of the width, its shape and gaps scaled
-    // with it, so a neighbour shows either side; landscape (no width) and a wide body keep the spec.
-    @Test fun aPortraitCarouselTileIsHeldToSixtyPercentOfTheWidth() {
+    // A Carousel's selected tile is at most 60% of the body's width, its shape and gaps scaled with it, so a
+    // neighbour shows either side; no width and a wide body keep the spec.
+    @Test fun aCarouselTileIsHeldToSixtyPercentOfTheWidth() {
         val spec = carouselRowPlace(500f, 0f, 60f).g
-        val flip = carouselRowPlace(500f, 0f, 60f, portraitW = 411f).g
+        val flip = carouselRowPlace(500f, 0f, 60f, bodyW = 411f).g
         assertEquals(0.6f * 411f, flip.itemW, 1e-3f)
         assertEquals(spec.itemW / spec.itemH, flip.itemW / flip.itemH, 1e-4f)
         assertEquals(spec.gap * flip.itemW / spec.itemW, flip.gap, 1e-3f)
         // A neighbour's inner edge (at its scale) is inside the screen: its centre less half its width, under half the width.
         val neighbourInner = flip.itemW / 2 + flip.gap
         assertTrue(neighbourInner < 411f / 2 - 40f)
-        assertEquals(spec, carouselRowPlace(500f, 0f, 60f, portraitW = 900f).g)
+        assertEquals(spec, carouselRowPlace(500f, 0f, 60f, bodyW = 900f).g)
     }
 
     // A Carousel (Home's and a game list's): the first neighbour at 0.75 of the selection, each further one 0.8 of the
     // one before (0.6, 0.48), held from there; the gaps edge to edge stay the row's.
     @Test fun aCarouselTapersItsNeighboursOutwards() {
-        val g = carouselRowPlace(500f, 0f, 60f, portraitW = 411f).g
+        val g = carouselRowPlace(500f, 0f, 60f, bodyW = 411f).g
         val scales = (0..4).map { rowItem(RowStyle.CAROUSEL, it.toFloat(), g).scale }
         listOf(1f, 0.75f, 0.6f, 0.48f, 0.48f).zip(scales).forEach { (want, got) -> assertEquals(want, got, 1e-5f) }
         val mid = rowItem(RowStyle.CAROUSEL, 1.5f, g).scale
@@ -402,10 +399,18 @@ class RowLayoutTest {
         assertEquals(-rowItem(RowStyle.CAROUSEL, 2f, g).dx, rowItem(RowStyle.CAROUSEL, -2f, g).dx, 1e-4f)   // both sides
     }
 
+    // A short landscape body (a pad skin's touch screen on the unfolded Fold, ~300 x 236 dp) holds the tile to 60% of
+    // its width too, so the neighbours show, as in portrait.
+    @Test fun aShortLandscapeBodyHoldsTheTileToItsShareToo() {
+        val g = carouselRowPlace(236f, 0f, 30f, bodyW = 300f).g
+        assertTrue(g.itemW <= 0.6f * 300f + 1e-3f, "${g.itemW}")
+        assertEquals(340f / 240f, g.itemW / g.itemH, 1e-4f)
+    }
+
     // A Carousel's tile (Home's and a game list's) is never wider than 300 dp, its height in proportion, whatever room it has.
     @Test fun aCarouselTileIsCappedAt300Dp() {
         for ((h, w) in listOf(900f to null, 900f to 2000f, 400f to null)) {
-            val g = carouselRowPlace(h, 0f, 30f, portraitW = w).g
+            val g = carouselRowPlace(h, 0f, 30f, bodyW = w).g
             assertTrue(g.itemW <= 300f + 1e-3f, "$h: ${g.itemW}")
             assertEquals(340f / 240f, g.itemW / g.itemH, 1e-4f)
         }
@@ -422,7 +427,7 @@ class RowLayoutTest {
     private val capDetails = listOf(16.9f, 16.9f)
     private val capNeed = carouselCaptionNeed(capName, 2 * capName, capDetails[0], STACK_CAPTION_GAP.value)
 
-    private fun capped(box: Float, portraitW: Float? = null) = carouselRowPlace(box, 0f, capRoom, portraitW, maxItemH = carouselItemHMax(box, capNeed))
+    private fun capped(box: Float, bodyW: Float? = null) = carouselRowPlace(box, 0f, capRoom, bodyW, maxItemH = carouselItemHMax(box, capNeed))
     private fun rowsUnder(box: Float, place: CarouselRowPlace, nameH: Float = capName): Int {
         val m = carouselMargins(box, place.g.itemH, capNeed, place.capped)
         return captionRowsWithin(nameH, capDetails, STACK_CAPTION_GAP.value, carouselCaptionMax(box, place.g.itemH, m))
@@ -435,7 +440,7 @@ class RowLayoutTest {
         assertEquals(10f + 2 * (gap + 30f), carouselCaptionNeed(10f, 20f, 30f, gap), 1e-4f)
     }
 
-    // Extra info off (no game in the list can show details): the need is the name alone, its two lines; on, today's.
+    // Extra info off (no game in the list can show details): the need is the name alone, its two lines; on, the usual one.
     @Test fun withNoDetailsTheNeedIsTheNameAlone() {
         val gap = STACK_CAPTION_GAP.value
         assertEquals(2 * capName, carouselCaptionNeed(capName, 2 * capName, capDetails[0], gap, details = false), 1e-4f)
@@ -484,7 +489,7 @@ class RowLayoutTest {
         val box = 120f
         val g = capped(box).g
         assertEquals(CAROUSEL_MIN_HEIGHT_SHARE * box, g.itemH, 1e-3f)
-        assertTrue(carouselRowPlace(box, 0f, capRoom).g.itemH > g.itemH)            // the floor binds, below today's tile
+        assertTrue(carouselRowPlace(box, 0f, capRoom).g.itemH > g.itemH)            // the floor binds, below the uncapped tile
         assertEquals(1, rowsUnder(box, capped(box)))
         assertEquals(0, rowsUnder(box, capped(box), nameH = 2 * capName))
     }
@@ -500,7 +505,7 @@ class RowLayoutTest {
     }
 
     // Cover glass (≈ 440 × 380, laid out landscape), the 3.33" 960 × 720 handheld at density 2 (480 × 360) and 2.25
-    // (≈ 427 × 320), and a phone in landscape (800 × 360, the 480 × 360 box): today the caption has room for the name
+    // (≈ 427 × 320), and a phone in landscape (800 × 360, the 480 × 360 box): uncapped the caption has room for the name
     // alone; capped, the tile keeps its shape, its gaps and neighbours scale with it, and both detail rows fit.
     @Test fun aGameListCarouselLeavesItsCaptionRoomForTheNameAndTwoDetailRows() {
         for (box in listOf(380f - 124f, 360f - 124f, 320f - 124f)) {
@@ -520,9 +525,9 @@ class RowLayoutTest {
     }
 
     // Where the area already leaves the need, nothing changes: a phone in portrait (393 × ~760, its tile held by the
-    // width), the 640 × 480 handheld, a tall body; and no cap (Home's row) is today's row.
+    // width), the 640 × 480 handheld, a tall body; and no cap (Home's row) is the plain row.
     @Test fun theCarouselHeightCapChangesNothingWhereTheCaptionFits() {
-        assertEquals(carouselRowPlace(636f, 0f, capRoom, portraitW = 393f), capped(636f, portraitW = 393f))
+        assertEquals(carouselRowPlace(636f, 0f, capRoom, bodyW = 393f), capped(636f, bodyW = 393f))
         assertEquals(carouselRowPlace(356f, 0f, capRoom), capped(356f))
         assertEquals(2, rowsUnder(356f, capped(356f)))
         assertEquals(carouselRowPlace(900f, 0f, capRoom), capped(900f))
@@ -562,19 +567,19 @@ class RowLayoutTest {
         }
     }
 
-    // Where the cap does not bind, the margins are today's: the ring's room at the top, [CAPTION_SPARE_MARGIN] at the
+    // Where the cap does not bind, the margins are the plain ones: the ring's room at the top, [CAPTION_SPARE_MARGIN] at the
     // bottom; and the phone in portrait and the 640 × 480 handheld stay uncapped with the breathing room reserved.
     @Test fun anUncappedCarouselKeepsTodaysMargins() {
-        assertFalse(capped(636f, portraitW = 393f).capped)
+        assertFalse(capped(636f, bodyW = 393f).capped)
         assertFalse(capped(356f).capped)
         val h = capped(356f).g.itemH
         assertEquals(CaptionMargins(GRID_RING_ROOM, CAPTION_SPARE_MARGIN), carouselMargins(356f, h, capNeed, capped = false))
         assertEquals(carouselCaptionMax(356f, h), carouselCaptionMax(356f, h, carouselMargins(356f, h, capNeed, capped = false)), 1e-4f)
-        // The default placement (no margins) is today's.
+        // The default placement (no margins) is the same.
         assertEquals(rowSelectedTopOn(300f, 600f, 200f, 8f, 40f), rowSelectedTopOn(300f, 600f, 200f, 8f, 40f, null, 0f), 1e-4f)
     }
 
-    // At the 40% floor the breathing room gives way first, down to today's margins, before a row is cut: a 120 dp box
+    // At the 40% floor the breathing room gives way first, down to the plain margins, before a row is cut: a 120 dp box
     // keeps 4 dp over the tile and 8 under the caption, 44 dp of caption, a one-line name and its genre.
     @Test fun atTheFloorTheBreathingRoomGivesWayBeforeTheRows() {
         val box = 120f
@@ -583,13 +588,12 @@ class RowLayoutTest {
         val m = carouselMargins(box, place.g.itemH, capNeed, capped = true)
         assertEquals(CaptionMargins(GRID_RING_ROOM, CAPTION_SPARE_MARGIN), m)
         assertEquals(box - CAROUSEL_MIN_HEIGHT_SHARE * box - GRID_RING_ROOM - CAPTION_GAP - CAPTION_SPARE_MARGIN, carouselCaptionMax(box, place.g.itemH, m), 1e-3f)
-        // Between: a box with half the breathing room to spare keeps margins between today's and the full ones.
+        // Between: a box with half the breathing room to spare keeps margins between the plain and the full ones.
         val mid = carouselMargins(200f, 200f - CAPTION_GAP - capNeed - CAPTION_NEED_SLACK - 18f, capNeed, capped = true)
         assertEquals(18f, mid.top + mid.bottom, 1e-3f)
         assertTrue(mid.top > GRID_RING_ROOM && mid.top < CAROUSEL_TOP_BREATH)
     }
 
-    // A game list Carousel's neighbours centre on the screen's centre line, wherever their box starts; unmeasured, none.
     // A game list's selection and its caption (gap 8 + 40 drawn) centred on the screen's line, 300 dp down its 600 dp box;
     // kept inside the box when the line is near an edge.
     @Test fun rowSelectedTopOnCentresTheTileAndCaptionOnTheLine() {
@@ -597,6 +601,7 @@ class RowLayoutTest {
         assertEquals(600f - 248f, rowSelectedTopOn(560f, 600f, 200f, 8f, 40f), 1e-4f)
     }
 
+    // A game list Carousel's neighbours centre on the screen's centre line, wherever their box starts; unmeasured, none.
     @Test fun screenCentreLineTopCentresTheTileOnTheScreen() {
         // A screen 1000 px tall from y 100 (centre 600), the box from y 250, 2.5 px per dp: the centre 140 dp down the box,
         // so a 120 dp tile's top at 80. A box starting higher puts the tile lower in it.

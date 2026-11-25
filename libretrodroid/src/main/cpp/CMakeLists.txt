@@ -1,11 +1,9 @@
-cmake_minimum_required(VERSION 3.13.2)
+cmake_minimum_required(VERSION 3.22.1)
 
-# now build app's shared lib
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -Wall")
 
 add_definitions("-DVFS_FRONTEND -DHAVE_STRL")
 
-# Let's include oboe
 set (OBOE_DIR oboe)
 add_subdirectory (${OBOE_DIR} oboe)
 include_directories (${OBOE_DIR}/include)
@@ -76,6 +74,8 @@ add_library (soundtouch STATIC
 target_include_directories (soundtouch PUBLIC soundtouch/include)
 target_compile_definitions (soundtouch PUBLIC SOUNDTOUCH_FLOAT_SAMPLES=1 SOUNDTOUCH_DISABLE_X86_OPTIMIZATIONS=1)
 
+include (slang.cmake)
+
 set (LIBRETRO_COMMON
         libretro/libretro-common/vfs/vfs_implementation.c
         libretro/libretro-common/string/stdstring.c
@@ -84,11 +84,21 @@ set (LIBRETRO_COMMON
         libretro/libretro-common/time/rtime.c
 )
 
+# libadrenotools (BSD-2-Clause, github.com/bylaws/libadrenotools @ 8fae8ce, vendored with its linkernsbypass): loads a
+# custom Vulkan driver (Turnip) for the Vulkan bridge. Its hook libraries (libhook_impl, libmain_hook, ...) are SHARED
+# targets that must sit in nativeLibraryDir; libretrodroid depends on them, so AGP packages them beside it. arm64-v8a only:
+# its CMake stops on any other ABI, and the app ships arm64-v8a only (this module still configures the others).
+if (${CMAKE_ANDROID_ARCH_ABI} STREQUAL arm64-v8a)
+    add_subdirectory (libadrenotools)
+    foreach (hook hook_impl main_hook file_redirect_hook gsl_alloc_hook)
+        target_link_options(${hook} PRIVATE "-Wl,-z,max-page-size=16384")
+    endforeach()
+endif()
+
 # The GBA link mode probe is shared with the mGBA core (cores/gba_wifi_link).
 set(GWL_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../cores/gba_wifi_link)
 
 add_library(libretrodroid SHARED
-        libretrodroidjni.h
         libretrodroidjni.cpp
         libretrodroid.h
         libretrodroid.cpp
@@ -103,8 +113,6 @@ add_library(libretrodroid SHARED
         gldebug.cpp
         logflag.h
         logflag.cpp
-        immersivemode.h
-        immersivemode.cpp
         videolayout.h
         videolayout.cpp
         screenregion.h
@@ -114,6 +122,9 @@ add_library(libretrodroid SHARED
         hwcontext.cpp
         vulkanbridge.h
         vulkanbridge.cpp
+        vulkanreader.cpp
+        vulkandispatch.h
+        vulkandispatch.cpp
         teardowncontext.h
         teardowncontext.cpp
         sharedcontexts.h
@@ -141,8 +152,6 @@ add_library(libretrodroid SHARED
         renderers/es3/framebufferrenderer.cpp
         renderers/es3/ahbrenderer.h
         renderers/es3/ahbrenderer.cpp
-        renderers/es2/imagerendereres2.h
-        renderers/es2/imagerendereres2.cpp
         renderers/es3/imagerendereres3.h
         renderers/es3/imagerendereres3.cpp
         audio.h
@@ -165,6 +174,12 @@ add_library(libretrodroid SHARED
         shadermanager.cpp
         presetchain.h
         presetchain.cpp
+        slangtranslate.h
+        slangtranslate.cpp
+        slangsemantics.h
+        slangsemantics.cpp
+        slangchain.h
+        slangchain.cpp
         rumble.h
         rumble.cpp
         rumblestate.h
@@ -182,7 +197,6 @@ add_library(libretrodroid SHARED
         utils/rect.h
         utils/rect.cpp
         errorcodes.h
-        errorcodes.cpp
         vfs/vfs.h
         vfs/vfs.cpp
         vfs/vfsfile.h
@@ -236,11 +250,20 @@ add_library(libretrodroid SHARED
         lz4/lz4.c
 )
 
-# Support 16k pages for Android 15
 target_include_directories(libretrodroid PRIVATE ${GWL_DIR})
+# 16 KB pages (Android 15+)
 target_link_options(libretrodroid PRIVATE "-Wl,-z,max-page-size=16384")
+if (${CMAKE_ANDROID_ARCH_ABI} STREQUAL arm64-v8a)
+    add_dependencies(libretrodroid hook_impl main_hook file_redirect_hook gsl_alloc_hook)
+    target_link_libraries(libretrodroid adrenotools)
+    target_compile_definitions(libretrodroid PRIVATE LIBRETRODROID_ADRENOTOOLS=1)
+endif()
+# glslang and SPIRV-Cross are used through one small path (slangtranslate): with the static libraries' symbols kept out
+# of this library's exports, the linker drops what nothing reaches (about 1 MB of the stripped library).
+target_link_options(libretrodroid PRIVATE "-Wl,--gc-sections" "-Wl,--exclude-libs,ALL")
 
-# add lib dependencies
+# No libvulkan: every Vulkan call goes through VulkanDispatch (dlopen'd system loader or
+# libadrenotools' custom one), so a direct vk* call fails to link instead of silently bypassing a custom driver.
 target_link_libraries(libretrodroid
                       android
                       log 
@@ -249,8 +272,8 @@ target_link_libraries(libretrodroid
                       samplerate
                       soundtouch
                       chdr-static
+                      nxslangdeps
                       GLESv3
-                      vulkan
                       mediandk
                       nativewindow
 )

@@ -220,6 +220,17 @@ interface AppSettings {
      * question or Settings → Library → Android games. One no longer installed is skipped but kept.
      */
     var androidConsoleApps: List<String>
+    /**
+     * The first-launch tips' Don't show again ([com.nxredux.mobile.ui.FirstTip]): the main menu's (MENU, SELECT + START,
+     * START, SELECT) and a game list's (Y, X). Hidden here, so a store that keeps none (a test's) never shows them; the
+     * app's store shows each until its Don't show again.
+     */
+    var mainMenuTipHidden: Boolean
+        get() = true
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+    var gameListTipHidden: Boolean
+        get() = true
+        set(@Suppress("UNUSED_PARAMETER") value) {}
     /** The "Add N Android games to Consoles?" question was answered (Yes or Not now); it is never asked again. */
     var androidGamesAsked: Boolean
     /** Android games pinned on Home ([com.nxredux.mobile.launcher.InstalledApp.id]), in the order pinned (never shortcuts.txt). */
@@ -464,12 +475,29 @@ interface AppSettings {
         set(@Suppress("UNUSED_PARAMETER") value) {}
 
     /**
-     * Layouts → Game info: what a game's caption shows under its play time. Off (the default, Details): its genre and
-     * release. On (Achievements): its achievements where it has some to show, else the genre and release. Defaulted,
-     * like [debugLog].
+     * Settings → Emulation → Save on quit (default on): leaving a game (Quit, Home, the system stopping it) writes the
+     * hidden save state it resumes from. Off: none is written, and one already on disk is ignored, never deleted, so
+     * games start fresh. Defaulted, like [debugLog].
+     */
+    var saveOnQuit: Boolean
+        get() = true
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+
+    /**
+     * Settings → Emulation → A resumes (default on): A on a game with a save state continues from it. Off: A starts it
+     * fresh, and its menu's Resume continues instead. Defaulted, like [debugLog].
+     */
+    var aResumes: Boolean
+        get() = true
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+
+    /**
+     * Layouts → Game info: what a game's caption shows under its play time. Off (Details): its genre and release. On
+     * (Achievements, the default: [MenuStyles.DEFAULT_INFO_ACHIEVEMENTS]): its achievements where it has some to show,
+     * else the genre and release. Defaulted, like [debugLog].
      */
     var menuInfoAchievements: Boolean
-        get() = false
+        get() = MenuStyles.DEFAULT_INFO_ACHIEVEMENTS
         set(@Suppress("UNUSED_PARAMETER") value) {}
 
     /**
@@ -477,6 +505,14 @@ interface AppSettings {
      * Library → Microphone access does not touch it. Defaulted, like [debugLog].
      */
     var micAsked: Boolean
+        get() = false
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+
+    /**
+     * The DS / 3DS pad's mic button shown (the in-game Mic tile): hidden, the row closes up without it and the game hears
+     * nothing. Off by default. Defaulted, like [debugLog].
+     */
+    var micButtonShown: Boolean
         get() = false
         set(@Suppress("UNUSED_PARAMETER") value) {}
 
@@ -493,8 +529,8 @@ interface AppSettings {
         get() = false
         set(@Suppress("UNUSED_PARAMETER") value) {}
     /**
-     * First-launch onboarding was finished or skipped (true), is to run (false), or was never decided (null): an install
-     * from before onboarding, which [com.nxredux.mobile.ui.AppState.load] settles from whether it has a home folder.
+     * First-launch onboarding was finished or skipped (true), is to run (false), or is not decided yet (null): the first
+     * [com.nxredux.mobile.ui.AppState.load] settles it from whether a home folder is set.
      * Defaulted, like [debugLog].
      */
     var onboardingDone: Boolean?
@@ -523,6 +559,28 @@ interface AppSettings {
      */
     val vulkanFailedCores: Set<String>
         get() = emptySet()
+    /** Settings → Emulation → GPU driver: [com.nxredux.mobile.gpudriver.GpuDriverChoice.SYSTEM] or an installed driver's id. Defaulted, like [debugLog]. */
+    var gpuDriver: String
+        get() = com.nxredux.mobile.gpudriver.GpuDriverChoice.SYSTEM
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+    /**
+     * The custom-driver launch in flight ([com.nxredux.mobile.gpudriver.GpuDriverCrash.encode]); null: none. Setting a
+     * marker is durable when it returns (it guards a launch that may kill the process), so it may block. Defaulted, like [debugLog].
+     */
+    var gpuDriverMarker: String?
+        get() = null
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+    /**
+     * The last launch ran on a Mali's system Vulkan driver ([com.nxredux.mobile.gpudriver.GameCrashNotice.onMaliSystemVulkan]);
+     * written by every launch, read for the notice of a crash. Defaulted, like [debugLog].
+     */
+    var lastLaunchMaliSystemVulkan: Boolean
+        get() = false
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+    /** The games a custom driver crashed in, one `gamePath<TAB>driverId` per line; null: none. Defaulted, like [debugLog]. */
+    var gpuDriverCrashes: String?
+        get() = null
+        set(@Suppress("UNUSED_PARAMETER") value) {}
     /** Controls → Game rumble: a core's rumble on the controller in use or the phone ([GameRumble.DEFAULT] Medium). */
     var gameRumble: GameRumble
     /** Appearance → Accent: the selection colour; unset or unknown is [AccentPreset.DEFAULT] (White). */

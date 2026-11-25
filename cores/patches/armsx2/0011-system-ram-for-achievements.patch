@@ -1,0 +1,19 @@
+--- a/pcsx2-libretro/Main.cpp
++++ b/pcsx2-libretro/Main.cpp
+@@ -2800,12 +2800,14 @@
+ 	return RETRO_REGION_NTSC;
+ }
+ 
++// The EE's 32 MB main RAM as SYSTEM_RAM, for RetroAchievements (rcheevos maps PS2 addresses 0x00000000-0x01FFFFFF onto
++// it). eeMem exists from the VM's memory reservation to its release; none before the boot or after the shutdown.
+ RETRO_API void* retro_get_memory_data(unsigned id)
+ {
+-	return nullptr;
++	return (id == RETRO_MEMORY_SYSTEM_RAM && eeMem) ? eeMem->Main : nullptr;
+ }
+ 
+ RETRO_API size_t retro_get_memory_size(unsigned id)
+ {
+-	return 0;
++	return (id == RETRO_MEMORY_SYSTEM_RAM && eeMem) ? Ps2MemSize::MainRam : 0;
+ }

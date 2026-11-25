@@ -21,9 +21,8 @@ class MenuArtTest {
         assertEquals(consoleLogosById["gba"], consoleLogo("MGBA"))
     }
 
-    @Test fun androidAndThe3dsHaveLogos() {
+    @Test fun androidHasALogo() {
         assertNotNull(consoleLogo(com.nxredux.mobile.ui.ANDROID_TAG))
-        assertNotNull(consoleLogosById["3ds"])   // no console uses it yet
     }
 
     @Test fun anUnknownTagHasNoLogo() { assertNull(consoleLogo("NOPE")) }

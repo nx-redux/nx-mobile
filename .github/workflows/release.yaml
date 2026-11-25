@@ -101,12 +101,12 @@ jobs:
         id: cache-key
         run: |
           # Hash all files that affect this core's build:
-          # - the Makefile (pins, flags, build logic)
+          # - the Makefile (pins, flags, build logic) and the NDK settings it includes
           # - the core's patch and its numbered patches (cores/patches/<core>/*.patch), and for melondsds its melonDS
           #   dependency's patch
           # - the set-table generators (fbneo, flycast)
           # - the frontend's link libraries compiled into gpsp (sio_lockstep) and mgba (sio_lockstep, gba_wifi_link)
-          FILES=(cores/Makefile)
+          FILES=(cores/Makefile cores/ndk.mk)
           if [ -f "cores/patches/${{ matrix.core }}.patch" ]; then
             FILES+=("cores/patches/${{ matrix.core }}.patch")
           fi

@@ -10,12 +10,25 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.IOException
+import java.io.InputStream
 import java.io.RandomAccessFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/** [FileRomsSource.readHead]'s read size: a head is grown in these steps up to its file's size or the cap. */
-private const val FILE_READ_CHUNK = 64 * 1024
+/** A head is grown in these steps up to its file's size or the cap. */
+private const val READ_CHUNK = 64 * 1024
+
+/**
+ * Up to [max] bytes from the stream's start. Grown as read, never [max] up front: the scraper's image mix reads its
+ * inputs with a 32 MB cap.
+ */
+internal fun InputStream.readHead(max: Int): ByteArray {
+    val out = ByteArrayOutputStream(minOf(max, READ_CHUNK))
+    val buf = ByteArray(minOf(max, READ_CHUNK))
+    var n = 0
+    while (n < max) { val r = read(buf, 0, minOf(buf.size, max - n)); if (r < 0) break; out.write(buf, 0, r); n += r }
+    return out.toByteArray()
+}
 
 /**
  * RomsSource over file refs ([FileRefs]), for trees read with All files access, with [SafRomsSource]'s return
@@ -63,14 +76,7 @@ class FileRomsSource(
 
     override suspend fun readHead(file: ContentRef, max: Int): ByteArray? = withContext(Dispatchers.IO) {
         runCatching {
-            FileInputStream(fileOf(file)).use { input ->
-                // Grown as read, never [max] up front: the scraper's image mix reads its inputs with a 32 MB cap.
-                val out = ByteArrayOutputStream(minOf(max, FILE_READ_CHUNK))
-                val buf = ByteArray(minOf(max, FILE_READ_CHUNK))
-                var n = 0
-                while (n < max) { val r = input.read(buf, 0, minOf(buf.size, max - n)); if (r < 0) break; out.write(buf, 0, r); n += r }
-                out.toByteArray()
-            }
+            FileInputStream(fileOf(file)).use { it.readHead(max) }
         }.getOrNull()
     }
 

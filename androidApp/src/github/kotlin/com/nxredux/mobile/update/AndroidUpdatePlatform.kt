@@ -1,18 +1,16 @@
 package com.nxredux.mobile.update
 
-import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
-import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.core.app.NotificationCompat
-import androidx.core.content.ContextCompat
+import com.nxredux.mobile.canPostNotifications
 import com.nxredux.mobile.BuildConfig
 import com.nxredux.mobile.LaunchActivity
 import com.nxredux.mobile.NotificationIds
@@ -36,7 +34,7 @@ import java.net.URL
 import java.security.MessageDigest
 
 /**
- * Why the app can't be replaced now, in the Global Constraints order (the host's Netplay reason comes before all but the
+ * Why the app can't be replaced now, the first that holds (the host's Netplay reason comes before all but the
  * game, from [UpdateController.hostBusy]); null when nothing would be lost. Last, [foreground] false waits as "Ready to
  * install": Android blocks a hidden app's confirm screen silently, so the install starts once the user is back. Pure, for the test.
  */
@@ -282,9 +280,7 @@ class AndroidUpdatePlatform(private val app: Context, private val scope: Corouti
         val nm = app.getSystemService(NotificationManager::class.java) ?: return
         if (reason == null) { nm.cancel(NotificationIds.APP_UPDATE_WAIT); return }
         // API 33+ needs the runtime grant; without it the About row still says what the install waits for.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(app, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) return
+        if (!canPostNotifications(app)) return
         if (nm.getNotificationChannel(WAIT_CHANNEL_ID) == null) {
             nm.createNotificationChannel(NotificationChannel(WAIT_CHANNEL_ID, "App update", NotificationManager.IMPORTANCE_LOW).apply {
                 description = "Shows an app update download"

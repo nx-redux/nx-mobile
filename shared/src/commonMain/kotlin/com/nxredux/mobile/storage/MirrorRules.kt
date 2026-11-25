@@ -1,20 +1,13 @@
 package com.nxredux.mobile.storage
 
-enum class SyncAction { NONE, IMPORT, EXPORT }
-
 /**
- * The BIOS import's newer-wins rule ([decide]) and the `.part`/`.tmp` names sync skips ([isTransient]). Saves are not
+ * The BIOS import's newer-wins rule ([treeIsNewer]) and the `.part`/`.tmp` names sync skips ([isTransient]). Saves are not
  * imported this way: they are read and written in place under the data root.
  */
 object MirrorRules {
-    fun decide(localMtime: Long?, treeMtime: Long?): SyncAction = when {
-        localMtime == null && treeMtime == null -> SyncAction.NONE
-        localMtime == null -> SyncAction.IMPORT
-        treeMtime == null -> SyncAction.EXPORT
-        treeMtime > localMtime -> SyncAction.IMPORT
-        localMtime > treeMtime -> SyncAction.EXPORT
-        else -> SyncAction.NONE
-    }
+    /** The tree's copy comes in: it is there, and the local one is missing or older. */
+    fun treeIsNewer(localMtime: Long?, treeMtime: Long?): Boolean =
+        treeMtime != null && (localMtime == null || treeMtime > localMtime)
 
     /** The suffix of a tree document written before it replaces the file ([isTransient]). */
     const val PART = ".part"

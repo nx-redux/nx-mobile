@@ -64,7 +64,6 @@ class SystemButtonsTest {
         assertNull(map.bound[m])
     }
 
-    // A button on a device beside the pad: its press becomes the role, the same code from the pad itself does not.
     private val full = PadKeys(hasSelect = true, hasStart = true)
     private val noSelect = PadKeys(hasSelect = false, hasStart = true)
     private val noStart = PadKeys(hasSelect = true, hasStart = false)
