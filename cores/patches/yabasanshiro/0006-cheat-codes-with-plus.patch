@@ -1,0 +1,79 @@
+# license: modifies YabaSanshiro (https://github.com/libretro/yabause), GPL-2.0 (LICENSE); this patch is distributed under the same license.
+# Database cheats applied wrongly or not at all: libretro's Saturn .cht files join address and value with '+'
+# ("1606CE28+0064"), and retro_cheat_set handed the whole code to CheatAddARCode, whose scanf read the '+' as a sign
+# (value 0006) and took only the first pair of a code of several. The code is now split on '+' and whitespace (so
+# typed "1606CE28 0064" codes still work) and each address/value pair added on its own; a malformed pair is skipped
+# and logged. A disabled cheat is no longer added.
+diff --git a/yabause/src/libretro/libretro.c b/yabause/src/libretro/libretro.c
+index 6f65ede..e2d1156 100644
+--- a/yabause/src/libretro/libretro.c
++++ b/yabause/src/libretro/libretro.c
+@@ -917,14 +917,64 @@ void retro_cheat_reset(void)
+    CheatClearCodes();
+ }
+ 
++static bool cheat_is_separator(char c)
++{
++   return c == '+' || c == ' ' || c == '\t' || c == '\r' || c == '\n';
++}
++
++/* The next token of a code from p: its start, with its length in *len (0 at the end of the code). */
++static const char *cheat_next_token(const char *p, size_t *len)
++{
++   while (*p && cheat_is_separator(*p))
++      p++;
++   *len = 0;
++   while (p[*len] && !cheat_is_separator(p[*len]))
++      (*len)++;
++   return p;
++}
++
++static bool cheat_is_hex(const char *p, size_t len, size_t digits)
++{
++   size_t i;
++   if (len != digits)
++      return false;
++   for (i = 0; i < len; i++)
++      if (!((p[i] >= '0' && p[i] <= '9') || (p[i] >= 'a' && p[i] <= 'f') || (p[i] >= 'A' && p[i] <= 'F')))
++         return false;
++   return true;
++}
++
++/* CheatAddARCode takes one "AAAAAAAA VVVV" pair. The database joins address and value with '+', and a code of several
++ * writes its pairs the same way ("F6000914+C305+B6002800+0000"); a typed code may use spaces or new lines. Each pair is
++ * added on its own; a malformed one is skipped. */
+ void retro_cheat_set(unsigned index, bool enabled, const char *code)
+ {
+-   (void)index;
+-   (void)enabled;
+-   (void)code;
++   const char *p = code;
+ 
+-   if (CheatAddARCode(code) == 0)
++   if (!enabled || !code)
+       return;
++   for (;;)
++   {
++      size_t addr_len, val_len;
++      const char *addr = cheat_next_token(p, &addr_len);
++      const char *val;
++      char pair[16];
++
++      if (addr_len == 0)
++         break;
++      val = cheat_next_token(addr + addr_len, &val_len);
++      p = val + val_len;
++      if (!cheat_is_hex(addr, addr_len, 8) || !cheat_is_hex(val, val_len, 4))
++      {
++         if (log_cb)
++            log_cb(RETRO_LOG_WARN, "Cheat %u: skipped malformed part \"%.*s %.*s\"\n", index,
++                  (int)addr_len, addr, (int)val_len, val);
++         continue;
++      }
++      snprintf(pair, sizeof(pair), "%.8s %.4s", addr, val);
++      if (CheatAddARCode(pair) != 0 && log_cb)
++         log_cb(RETRO_LOG_INFO, "Cheat %u: %s is not a write the core applies\n", index, pair);
++   }
+ }
+ 
+ static int does_file_exist(const char *filename)

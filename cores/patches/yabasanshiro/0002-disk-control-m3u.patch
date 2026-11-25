@@ -2,9 +2,10 @@
 # Multi-disc games had no way to change disc: no disk control interface and no .m3u. The core now loads an .m3u (one
 # disc per line, relative to the playlist) and offers disk control (the ext interface when the frontend has it, with
 # image paths, labels and the initial disc): ejecting opens the CD block's tray, closing it puts the selected disc in, as
-# when swapping on a console.
+# when swapping on a console. Closing on the empty tray, or on a disc the CD block cannot open, fails and the tray
+# stays open.
 diff --git a/yabause/src/libretro/libretro.c b/yabause/src/libretro/libretro.c
-index 4c5acbd..69799e9 100644
+index 4c5acbd..691e55e 100644
 --- a/yabause/src/libretro/libretro.c
 +++ b/yabause/src/libretro/libretro.c
 @@ -11,6 +11,9 @@
@@ -26,7 +27,7 @@ index 4c5acbd..69799e9 100644
  }
  
  void check_variables(void)
-@@ -940,6 +943,201 @@ static void extract_basename(char *buf, const char *path, size_t size)
+@@ -940,6 +943,208 @@ static void extract_basename(char *buf, const char *path, size_t size)
        *ext = '\0';
  }
  
@@ -65,13 +66,20 @@ index 4c5acbd..69799e9 100644
 +{
 +   if (ejected == disk_ejected)
 +      return true;
++   /* Closing on the empty tray, or on a disc that will not open, leaves the tray open. */
++   if (!ejected && (disk_index >= disk_count || !disk_paths[disk_index][0]))
++      return false;
 +   /* Before the machine is up the state is only recorded; it boots with the selected disc. */
 +   if (Cs2Area)
 +   {
 +      if (ejected)
 +         Cs2ForceOpenTray();
-+      else if (disk_index < disk_count && disk_paths[disk_index][0])
-+         Cs2ForceCloseTray(CDCORE_ISO, disk_paths[disk_index]);
++      else if (Cs2ForceCloseTray(CDCORE_ISO, disk_paths[disk_index]) != 0)
++      {
++         if (log_cb)
++            log_cb(RETRO_LOG_ERROR, "Cannot put in %s\n", disk_paths[disk_index]);
++         return false;
++      }
 +   }
 +   disk_ejected = ejected;
 +   return true;
@@ -228,7 +236,7 @@ index 4c5acbd..69799e9 100644
  void retro_init(void)
  {
     struct retro_log_callback log;
-@@ -977,6 +1175,13 @@ void retro_init(void)
+@@ -977,6 +1182,13 @@ void retro_init(void)
     environ_cb(RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL, &level);
  
     environ_cb(RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS, &serialization_quirks);
@@ -242,7 +250,7 @@ index 4c5acbd..69799e9 100644
  }
  
  bool retro_load_game_common()
-@@ -1051,7 +1256,12 @@ bool retro_load_game(const struct retro_game_info *info)
+@@ -1051,7 +1263,12 @@ bool retro_load_game(const struct retro_game_info *info)
           break;
     }
  
@@ -256,7 +264,7 @@ index 4c5acbd..69799e9 100644
     snprintf(bios_path, sizeof(bios_path), "%s%csaturn_bios.bin", g_system_dir, slash);
     if (does_file_exist(bios_path) != 1)
     {
-@@ -1333,6 +1543,9 @@ void retro_unload_game(void)
+@@ -1333,6 +1550,9 @@ void retro_unload_game(void)
     if (!renderer_running)
        VIDCore->Init();
     YabauseDeInit();
