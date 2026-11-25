@@ -120,6 +120,11 @@ data class CoreDescriptor(
      * prboom, which don't support it, and Dolphin, whose states are too large to snapshot every frame on a phone.
      */
     val rewind: Boolean = true,
+    /**
+     * Whether the core can save and load states. False: no save-state slots, rows or shortcuts, and no resume point, so
+     * Quit only quits and Continue starts the game afresh.
+     */
+    val saveStates: Boolean = true,
     /** The core reads the libretro mic interface; the app shows the Mic toggle and offers the interface. */
     val microphone: Boolean = false,
     /**

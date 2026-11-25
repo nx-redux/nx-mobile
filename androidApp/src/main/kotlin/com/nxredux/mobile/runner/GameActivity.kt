@@ -456,6 +456,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /** The core can rewind ([com.nxredux.mobile.runner.CoreDescriptor.rewind]); false until the launch resolves the core. */
     override var canRewind = false
         private set
+    /** The core saves states ([com.nxredux.mobile.runner.CoreDescriptor.saveStates]); set when the launch resolves the core. */
+    override var canSaveStates = true
+        private set
     /**
      * Fast forward and rewind on the view; the shortcuts drive it ([onShortcut]), the speed rows configure it ([applyFrontend]).
      * Off for a netplay session ([SpeedController.setSession]): a link session's end turns it back on ([becomeLocal]), a
@@ -1724,7 +1727,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun becomeLocal(localCheats: (() -> Job)?) {
         speed.setSession(netplay = false)   // the shortcuts work again
         shortcuts.onSessionEnded()
-        saves.openLocal(dataRoot, paths) { slot -> withMenu { it.showSlot(slot - 1) } }
+        if (canSaveStates) saves.openLocal(dataRoot, paths) { slot -> withMenu { it.showSlot(slot - 1) } }
         localCheats?.let { load ->
             val job = load().also { cheatsLoad = it }
             lifecycleScope.launch {
@@ -2255,6 +2258,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         override var playerCount by game::playerCount
         override var rumbles by game::rumbles
         override var canRewind by game::canRewind
+        override var canSaveStates by game::canSaveStates
         override var padMap by game::padMap
         override var segaPad by game::segaPad
         override var segaHeader by game::segaHeader

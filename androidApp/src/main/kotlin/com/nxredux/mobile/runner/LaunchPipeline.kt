@@ -159,6 +159,7 @@ internal interface LaunchHost : GameScreenHost {
     var playerCount: Int
     var rumbles: Array<RumbleMotor>
     var canRewind: Boolean
+    var canSaveStates: Boolean
     var padMap: PadMap
     var segaPad: SegaPad?
     var segaHeader: SegaPad?
@@ -646,8 +647,9 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             val sessionPad = np?.segaPad?.takeIf { PadMap.isSegaPadTag(tag) }
             if (np != null && PadMap.isSegaPadTag(tag)) frontendValues = frontendValues + (PadOptions.SEGA_PAD to (sessionPad ?: SegaPadType.AUTO))
             canRewind = descriptor?.rewind == true
+            canSaveStates = descriptor?.saveStates != false
             speed.setSession(netplay = np != null)   // first: the touch buttons [ShortcutsMicController.launch] builds follow the session
-            shortcuts.launch(microphone = descriptor?.microphone == true, netplay = np != null, tag, Shortcuts.fromConfig(resolved.values))
+            shortcuts.launch(microphone = descriptor?.microphone == true, netplay = np != null, tag, Shortcuts.fromConfig(resolved.values), saveStates = canSaveStates)
             val netplayPad = if (np != null) NetplayPads.forSession(tag, descriptor?.id, sessionPad) else null
             renderer.shaderValues = ShaderOptions.fromConfig(resolved.values)
             renderer.presetNames = withContext(Dispatchers.IO) { Shaders.presets(shaderRoots) }
@@ -820,7 +822,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             }
             // minarch names saves after the unpacked file when Use extracted file name is on (ma_game.c): known only now.
             paths = paths.withInner(inner?.let { unpackedEntry })
-            saves.open(if (cfg.np == null) SaveStates(dataRoot, paths) else null)   // netplay: no save states, no auto-resume
+            // netplay, or a core without save states: no save states, no auto-resume
+            saves.open(if (cfg.np == null && canSaveStates) SaveStates(dataRoot, paths) else null)
             if (!settings.saveOnQuit) saves.unlinkAuto()
             saves.refreshSlots()   // warm for the first menu open
             cfg.np?.let { gameNetplay.prepareSaves(it, cfg.tag, cfg.romFileName, dataRoot, paths) }

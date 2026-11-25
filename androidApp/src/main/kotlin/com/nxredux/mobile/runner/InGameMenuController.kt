@@ -99,6 +99,8 @@ internal interface InGameMenuHost : GameScreenHost {
     val slotsUi: State<List<SlotUi>>
     var lastSlotCache: Int?
     val saveStates: SaveStates?
+    /** The core saves states ([CoreDescriptor.saveStates]): without, the root has no Save / Load and Quit only quits. */
+    val canSaveStates: Boolean
     // netplay
     val netplay: NetplaySession?
     val netplayNow: NetplaySession?
@@ -245,7 +247,7 @@ internal class InGameMenuController(
             initialSlot = (host.lastSlotCache ?: host.saveStates?.lastSlot()?.also { host.lastSlotCache = it } ?: 1) - 1,
         ).also {
             it.setStatus(host.configSource); it.cheatsAvailable = host.cheatsSupported
-            it.saveOnQuit = host.settings.saveOnQuit; it.refresh()
+            it.saveOnQuit = host.settings.saveOnQuit; it.saveStates = host.canSaveStates; it.refresh()
             it.screen = activity.screenClass()   // the DS / 3DS layout rows: this window's values and defaults
             it.displayMax3d = host.nds3dDisplayMax   // the DS / 3DS 3D Resolution rows' scales
             it.ndsView = host.ndsView                 // the DS / 3DS layout row in use, and the DS inset rows only in Picture in picture

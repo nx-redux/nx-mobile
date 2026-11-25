@@ -118,6 +118,13 @@ class GamePanelModelTest {
         assertEquals(listOf(save, load), GamePanelModel.panelTouchActions(mapOf(TouchSlot.THREE to ShortcutAction.RESET, TouchSlot.FOUR to ShortcutAction.TOGGLE_REWIND), rewind = true))
     }
 
+    // A core without save states gets no Save / Load tiles, not even the unset buttons' defaults.
+    @Test fun no_save_and_load_tiles_without_save_states() {
+        assertEquals(emptyList(), GamePanelModel.panelTouchActions(emptyMap(), rewind = true, saveStates = false))
+        val set = mapOf(TouchSlot.ONE to ShortcutAction.HOLD_FF, TouchSlot.TWO to ShortcutAction.SAVE_STATE)
+        assertEquals(listOf(ShortcutAction.HOLD_FF), GamePanelModel.panelTouchActions(set, rewind = true, saveStates = false))
+    }
+
     // A touch tile is first, named for its action, with the save-state slot under Save and Load; netplay has none.
     @Test fun touch_tiles_come_first_and_name_the_slot() {
         val list = shortcuts(discCount = 2, touch = listOf(ShortcutAction.SAVE_STATE, ShortcutAction.LOAD_STATE, ShortcutAction.HOLD_FF), slot = 2)

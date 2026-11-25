@@ -430,6 +430,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private var shortcutClaimed: List<ClaimedInput> = ConsoleHotkeys.always
     private var shortcutRewind = false
     private var shortcutMic = false
+    private var shortcutStates = true
     /** A controller is connected ([setControllerConnected]): without one the page has no bind rows (the on-screen pad binds nothing). */
     private var controllerConnected = true
     /** A pad skin or its bare buttons are drawn ([setPadDrawn]). */
@@ -468,6 +469,20 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     // Inverted so the root built during construction, before this line's initializer runs, already reads it as on.
     private var quitSaveOff = false
+
+    /**
+     * The core can save states ([com.nxredux.mobile.runner.CoreDescriptor.saveStates]): without, the root has no Save /
+     * Load and its Quit is the plain [MenuAction.QUIT_ONLY], as no resume point is written. Set before the menu shows, then [refresh].
+     */
+    var saveStates: Boolean
+        get() = !statesOff
+        set(value) { statesOff = !value }
+
+    // Inverted as [quitSaveOff] is.
+    private var statesOff = false
+
+    /** Quitting writes a resume point: Save on quit is on and the core has save states. */
+    private val quitSaves: Boolean get() = saveOnQuit && saveStates
 
     /**
      * netplay: the session is a link one (GB/GBC/GBA, each player on their own save): Leave ends the link and the game
@@ -1713,12 +1728,14 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         buildList {
             add(MenuRow.Action("Continue", MenuAction.CONTINUE))
             if (discCount > 1) add(MenuRow.Option(DISC_LABEL, DISC_KEY, "${discIndex + 1}/$discCount", choices = (1..discCount).map { "Disc $it" }, index = discIndex, detail = DISC_INFO))
-            add(MenuRow.Slot("Save", SlotAction.SAVE))
-            add(MenuRow.Slot("Load", SlotAction.LOAD))
+            if (saveStates) {
+                add(MenuRow.Slot("Save", SlotAction.SAVE))
+                add(MenuRow.Slot("Load", SlotAction.LOAD))
+            }
             add(MenuRow.Action("Reset", MenuAction.ASK_RESET))   // asks first ([resetPage])
             if (screenTaken) add(MenuRow.Action(USE_TOP_SCREEN_LABEL, MenuAction.USE_TOP_SCREEN))
             if (!kidsLocked) add(MenuRow.Submenu("Options", PageKind.Options))
-            add(MenuRow.Action("Quit", if (saveOnQuit) MenuAction.QUIT else MenuAction.QUIT_ONLY))
+            add(MenuRow.Action("Quit", if (quitSaves) MenuAction.QUIT else MenuAction.QUIT_ONLY))
         },
     )
 
@@ -1887,13 +1904,14 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     /**
      * Controls → Shortcuts ([base]), this console's or game's [overrides] over it (the resolved config's `nx_bind_*`, or
      * what this page set since launch), the console's hotkeys ([claimed]: [ConsoleHotkeys.claimed]) and whether the core
-     * can rewind (no rewind rows without). Refreshes an open Shortcuts page.
+     * can rewind, hear a mic and save states (no rows for what it can't). Refreshes an open Shortcuts page.
      */
-    fun setShortcuts(base: ShortcutSet, overrides: ShortcutOverrides, claimed: List<ClaimedInput>, canRewind: Boolean, canMic: Boolean = false) {
+    fun setShortcuts(base: ShortcutSet, overrides: ShortcutOverrides, claimed: List<ClaimedInput>, canRewind: Boolean, canMic: Boolean = false, canSaveStates: Boolean = true) {
         shortcutBase = base
         shortcutOverrides = overrides
         shortcutRewind = canRewind
         shortcutMic = canMic
+        shortcutStates = canSaveStates
         // A new capture only for new hotkeys: the old one's held keys must keep their releases swallowed.
         if (claimed != shortcutClaimed) { shortcutClaimed = claimed; capture.cancel(); capture = ShortcutCapture(claimed); capturing = null }
         refreshShortcutsPage()
@@ -1936,7 +1954,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         capturing = null
         return when (result) {
             is CaptureResult.Bound -> setBindOverride(shortcutOverrides.withBinding(action, result.binding))
-            is CaptureResult.Refused -> { refreshShortcutsPage(); push(message(action.label(saveOnQuit), result.reason)); null }
+            is CaptureResult.Refused -> { refreshShortcutsPage(); push(message(action.label(quitSaves), result.reason)); null }
             CaptureResult.Cancelled -> { refreshShortcutsPage(); null }
         }
     }
@@ -1995,8 +2013,12 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private fun touchSlot(key: String): TouchSlot? =
         if (key.startsWith(TOUCH_KEY_PREFIX)) TouchSlot.entries.firstOrNull { it.key == key.removePrefix(TOUCH_KEY_PREFIX) } else null
 
-    /** What a touch button can do here: None, then every action the core has (no rewind ones without rewind) a touch button can do. */
-    private fun touchChoices(): List<ShortcutAction?> = listOf<ShortcutAction?>(null) + ShortcutAction.entries.filter { (shortcutRewind || !it.rewind) && it.touch }
+    /**
+     * What a touch button can do here: None, then every action the core has (no rewind ones without rewind, no save-state
+     * ones without save states) a touch button can do.
+     */
+    private fun touchChoices(): List<ShortcutAction?> =
+        listOf<ShortcutAction?>(null) + ShortcutAction.entries.filter { (shortcutRewind || !it.rewind) && (shortcutStates || !it.saveState) && it.touch }
 
     private fun refreshShortcutsPage() {
         state = state.copy(stack = state.stack.map { p -> if (p.kind == PageKind.Shortcuts) rebuilt(p, shortcutsPage()).copy(footer = SHORTCUTS_FOOTER) else p })
@@ -2009,16 +2031,16 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      * controller the bind rows give way to [SHORTCUTS_NO_CONTROLLER] as the page's intro; their overrides stay.
      */
     private fun shortcutsPage(): MenuPage {
-        val effective = Shortcuts.effective(shortcutBase, shortcutOverrides, shortcutClaimed, shortcutRewind, shortcutMic)
+        val effective = Shortcuts.effective(shortcutBase, shortcutOverrides, shortcutClaimed, shortcutRewind, shortcutMic, shortcutStates)
         fun shown(value: String, inherited: Boolean) = if (inherited) "$value$DEFAULT_SUFFIX" else value
         val binds = if (!controllerConnected) emptyList()
-        else ShortcutAction.entries.filter { (shortcutRewind || !it.rewind) && (shortcutMic || !it.mic) }.map { a ->
+        else ShortcutAction.entries.filter { it.offered(shortcutRewind, shortcutMic, shortcutStates) }.map { a ->
             val key = BIND_KEY_PREFIX + a.key
             val blocked = effective.blocked[a]
             when {
-                a == capturing -> MenuRow.Option(a.label(saveOnQuit), key, SHORTCUT_PROMPT, CAPTURE_LINE)
-                blocked != null -> MenuRow.Option(a.label(saveOnQuit), key, UNAVAILABLE, blocked.note)
-                else -> MenuRow.Option(a.label(saveOnQuit), key, shown(effective.bindings[a]?.let(KeyLabels::label) ?: NONE_LABEL, a !in shortcutOverrides.bindings))
+                a == capturing -> MenuRow.Option(a.label(quitSaves), key, SHORTCUT_PROMPT, CAPTURE_LINE)
+                blocked != null -> MenuRow.Option(a.label(quitSaves), key, UNAVAILABLE, blocked.note)
+                else -> MenuRow.Option(a.label(quitSaves), key, shown(effective.bindings[a]?.let(KeyLabels::label) ?: NONE_LABEL, a !in shortcutOverrides.bindings))
             }
         }
         val choices = touchChoices()

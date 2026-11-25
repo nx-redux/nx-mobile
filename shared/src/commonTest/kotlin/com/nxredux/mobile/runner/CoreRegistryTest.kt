@@ -129,9 +129,14 @@ class CoreRegistryTest {
     @Test fun only_flycast_names_its_saves_after_the_content_so_only_it_unpacks_under_the_archive_name() {
         assertEquals(setOf("flycast"), CoreRegistry.all.filter { it.savesNamedAfterContent }.map { it.id }.toSet())
     }
-    @Test fun only_gpsp_stays_loaded_between_games() {
-        assertEquals(setOf("gpsp"), CoreRegistry.all.filter { it.keepLoaded }.map { it.id }.toSet())
+    @Test fun only_gpsp_and_cemu_stay_loaded_between_games() {
+        assertEquals(setOf("gpsp", "cemu"), CoreRegistry.all.filter { it.keepLoaded }.map { it.id }.toSet())
         assertEquals(true, CoreRegistry.forTag("GBA")!!.keepLoaded)
+        assertTrue(CoreRegistry.forTag("WIIU")!!.keepLoaded)
+    }
+    @Test fun only_cemu_has_no_save_states() {
+        assertEquals(setOf("cemu"), CoreRegistry.all.filterNot { it.saveStates }.map { it.id }.toSet())
+        assertFalse(CoreRegistry.forTag("WIIU")!!.saveStates)
     }
     @Test fun mupen_hides_startup_only_options_but_not_live_ones() {
         val hidden = CoreRegistry.forTag("N64")!!.restartOnlyOptions

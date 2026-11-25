@@ -565,6 +565,11 @@ object CoreRegistry {
         cheats = false,
         name = "Cemu",
         rewind = false,
+        // retro_serialize_size is 0: Cemu keeps no save states.
+        saveStates = false,
+        // Its static destructors lock mutexes already destroyed when the library is unloaded, crashing the quit; each
+        // game runs in its own process, which ends with the game, so the library is never unloaded.
+        keepLoaded = true,
         // Cemu presents its own image through set_image and announces every larger frame through its geometry, so its
         // frames stay bounded by the max geometry, not the surface (swapchainFrames).
         vulkan = VulkanSwitch(vulkanOnly = true),
