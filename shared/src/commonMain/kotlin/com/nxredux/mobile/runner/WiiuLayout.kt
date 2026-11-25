@@ -29,6 +29,13 @@ object WiiuLayout {
         width > 0 && height > 0 && abs(width.toFloat() / height - FRAME_ASPECT) < 0.01f
 
     /**
+     * Whether a [width] x [height] frame keeps the screens as they are drawn ([drawn]) rather than being laid out. Cemu's
+     * layout is locked to the stack, so once its screens are drawn any other size is a passing one (a boot step, a 3D
+     * resolution change on its way): laying it out as one picture would flash the overlay back and blank a second display.
+     */
+    fun keepsDrawn(width: Int, height: Int, drawn: Boolean): Boolean = drawn && !isWiiuFrame(width, height)
+
+    /**
      * The regions of [layout] in [space] (game-area px), the big screen ([NdsSettings.big]) first; empty without room.
      * The GamePad takes touches, except as a picture-in-picture inset (drawn over the big screen, as on the DS).
      */

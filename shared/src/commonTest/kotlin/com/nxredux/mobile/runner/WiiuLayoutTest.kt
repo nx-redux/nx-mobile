@@ -165,6 +165,18 @@ class WiiuLayoutTest {
         assertEquals(DualMode.OFF, DualScreen.mode(false, true, DualScreenConsole.appliesTo("WIIU"), false))
     }
 
+    @Test fun a_passing_frame_that_is_not_the_stack_keeps_the_screens_drawn() {
+        // Cemu's layout is locked to the stack: once its screens are drawn, any other size is a transient one
+        assertTrue(WiiuLayout.keepsDrawn(1280, 720, drawn = true))
+        assertTrue(WiiuLayout.keepsDrawn(2560, 1440, drawn = true))
+        assertTrue(WiiuLayout.keepsDrawn(0, 0, drawn = true))
+        // the stack itself is laid out again (a new 3D resolution)
+        assertFalse(WiiuLayout.keepsDrawn(2560, 2880, drawn = true))
+        assertFalse(WiiuLayout.keepsDrawn(1280, 1440, drawn = true))
+        // nothing drawn yet: the frame decides as it comes
+        assertFalse(WiiuLayout.keepsDrawn(1280, 720, drawn = false))
+    }
+
     @Test fun no_room_no_regions() {
         assertEquals(emptyList(), regions(PxRect(0f, 0f, 0f, 0f), NdsLayoutChoice.STACKED))
     }

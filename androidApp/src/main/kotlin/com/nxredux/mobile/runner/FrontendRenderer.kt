@@ -187,6 +187,7 @@ internal class FrontendRenderer(
     var ndsSplit = false                            // regions are on: the overlay is off and shown unavailable
         internal set   // the launch sets it (a DS game starts split)
     private var ndsFrameWarned = false                      // the "not 256x384" warning is logged once
+    private var wiiuFrameWarned = false                     // the "not the Wii U stack" warning is logged once
     private var nds3dArea: Nds3dArea? = null                // the game area the DS 3D scale was last reported for
     private var nds3dMaxFor: Triple<Float, Float, ScreenClass>? = null   // the area [nds3dMainMax] was worked out for
     private var nds3dMainMax = 1                            // the console's displayMax of that area
@@ -672,6 +673,13 @@ internal class FrontendRenderer(
         ndsFilled = false
         val nds = skinDs?.regions ?: ndsLayout(w, h, g, space, room, overlayH, screen, s.scaling) ?: n3dsSplitLayout(w, h)
             ?: wiiuLayout(w, h, g, space, room, overlayH)
+        if (isWiiu && nds == null && WiiuLayout.keepsDrawn(g[0].roundToInt(), g[1].roundToInt(), drawn = ndsRegions.isNotEmpty())) {
+            if (g[0] > 0f && g[1] > 0f && !wiiuFrameWarned) {
+                wiiuFrameWarned = true
+                NxLog.w(TAG_LOG, "Wii U frame is ${g[0].roundToInt()}x${g[1].roundToInt()}, not the TV over GamePad stack: keeping the screens drawn")
+            }
+            return
+        }
         // Auto fills the space at a fractional scale: the DS screens ([ndsLayout]), or one picture fitted ([picture]).
         setAutoFill(ndsFilled || (nds == null && !padLayout.skinShown && frame != null &&
             s.scaling == ScreenScaling.AUTO))
