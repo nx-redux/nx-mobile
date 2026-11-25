@@ -263,10 +263,13 @@ fun MainMenuScreen(
                                 val title = gridTitle(tiles.getOrNull(selection())).takeIf { !dual }
                                 if (whole != null && header != null && title != null) {
                                     val inset = nxPageInset()
-                                    GridTitleLines(
-                                        title.first, title.second, inset.start.value, header.stripTop, (maxWidth - inset.start - inset.end).value - iconsWidth,
-                                        homeStripLineH(whole), homeStripPitch(whole),
-                                    )
+                                    val titleWidth = (maxWidth - inset.start - inset.end).value - iconsWidth
+                                    Box(Modifier.fillMaxSize().pageFixed()) {
+                                        GridTitleLines(
+                                            title.first, title.second, inset.start.value, header.stripTop, titleWidth,
+                                            homeStripLineH(whole), homeStripPitch(whole),
+                                        )
+                                    }
                                 }
                                 NxTileGrid(
                                     tiles, selection, onSelect = onSelect, onOpen = onOpen, onLongPress = onLongPress,
