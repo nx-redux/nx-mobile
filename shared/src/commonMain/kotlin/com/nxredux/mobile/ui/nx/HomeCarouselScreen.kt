@@ -228,14 +228,16 @@ internal fun HomeCarouselScreen(
             else homeCarouselScreenCentred(centred, inkH, dockH = 0f, bodyTop + headerH, centreY, HOME_CAROUSEL_MIN_GAP, bodyH - HOME_CAROUSEL_MIN_GAP)
         Box(Modifier.fillMaxSize().onGloballyPositioned { bodyTop = with(density) { it.positionInWindow().y.toDp().value } }) {
             // With the tab row hidden, the tab row's eased band in its place (the header's height), under the strip
-            // and the Recent and Search icons MainMenuScreen draws over it.
-            if (frame.titleHidden) Box(Modifier.fillMaxWidth().height((header?.height ?: MENU_TAB_ROW_HEIGHT.value).dp + NX_TOP_BAND_REACH).nxTopBandFade(colors.background))
+            // and the Recent and Search icons MainMenuScreen draws over it, still while the page slides between tabs.
+            if (frame.titleHidden) Box(Modifier.fillMaxWidth().height((header?.height ?: MENU_TAB_ROW_HEIGHT.value).dp + NX_TOP_BAND_REACH).pageFixed().nxTopBandFade(colors.background))
             // In the header with the tab row hidden, else centred over the centred carousel, in either orientation.
             if (header != null) shownStrip?.let {
-                HomeStripLines(
-                    it, header.lines, inset.start.value, header.stripTop, width = width - (inset.start + inset.end).value - iconsWidth,
-                    lh = homeStripLineH(frame), pitch = homeStripPitch(frame),
-                )
+                Box(Modifier.fillMaxSize().pageFixed()) {
+                    HomeStripLines(
+                        it, header.lines, inset.start.value, header.stripTop, width = width - (inset.start + inset.end).value - iconsWidth,
+                        lh = homeStripLineH(frame), pitch = homeStripPitch(frame),
+                    )
+                }
             } else shownStrip?.let {
                 HomeStripLines(
                     it, stripLines, inset.start.value, place.stripInkTop - capTop,

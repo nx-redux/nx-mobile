@@ -29,12 +29,11 @@ import com.nxredux.mobile.ui.nx.LocalPageSlide
 import com.nxredux.mobile.ui.nx.LocalTabSwipe
 import com.nxredux.mobile.ui.nx.PageSlide
 import com.nxredux.mobile.ui.nx.TabSwipe
-import kotlinx.coroutines.launch
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.zIndex
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.key
-import com.nxredux.mobile.ui.nx.settleTo
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -402,12 +401,12 @@ internal fun pagedTabs(s: Screen): Pair<List<MenuCategory>, Int>? = when (s) {
 
 /**
  * The main menu's tabs side by side: the tab showing ([screen]'s) and the ones either side of it, each tab's page its
- * own composition (keyed by its tab), so the page a swipe uncovers is the page that stays when it commits: nothing is
- * built at the start of a drag or at its end. The pages shift together by [swipe]'s drag, the next tab's just right of
- * the showing one and the previous one's just left; a page beside is drawn only while it is in view and takes no taps.
- * Its fixed parts ([pageFixed])
- * show only on the tab showing. A committed swipe ([TabSwipe.pending]) lands here when the new tab shows: the pages
- * shift by a page so nothing jumps, then settle to rest.
+ * own composition (keyed by its tab), so the page a swipe uncovers is already built before the drag starts and stays
+ * when it commits. The pages shift together by [swipe]'s drag, the next tab's just right of the showing one and the
+ * previous one's just left; a page beside is drawn only while it is in view and takes no taps. Its fixed parts
+ * ([pageFixed]) show only on the tab showing. A swipe settles its incoming page to rest first, then commits
+ * ([TabSwipe.pending]) so no neighbour page is built mid-slide and the fixed chrome swaps cleanly at the end; L1 / R1
+ * and tab taps cancel any settle and switch at once.
  */
 @Composable
 private fun TabPager(
@@ -419,18 +418,35 @@ private fun TabPager(
     val n = tabs.size
     val scope = rememberCoroutineScope()
     val lastTab = remember { intArrayOf(tab) }
+    DisposableEffect(swipe) {
+        onDispose {
+            swipe.cancelSettle()
+            swipe.pending = 0
+            swipe.drag = 0f
+            swipe.scope = null
+        }
+    }
     SideEffect {
+        swipe.scope = scope
         if (tab != lastTab[0]) {
             lastTab[0] = tab
-            val step = swipe.pending
             swipe.pending = 0
-            // The new tab was the page beside: it carries on from there (an L1 / R1 or a tap: no swipe, no slide).
-            if (step != 0) { swipe.drag += step * swipe.width; scope.launch { swipe.settleTo(0f) } }
-            else if (swipe.drag != 0f) scope.launch { swipe.settle.stop(); swipe.drag = 0f }
+            swipe.cancelSettle()
+            swipe.drag = 0f
         }
     }
     val notLive = remember { mutableStateOf(false) }
-    Box(Modifier.fillMaxSize().onSizeChanged { swipe.width = it.width.toFloat() }) {
+    Box(
+        Modifier.fillMaxSize().onSizeChanged {
+            val w = it.width.toFloat()
+            if (swipe.width != 0f && swipe.width != w && swipe.drag != 0f) {
+                swipe.cancelSettle()
+                swipe.pending = 0
+                swipe.drag = 0f
+            }
+            swipe.width = w
+        },
+    ) {
         val shown = listOf((tab - 1).mod(n), (tab + 1).mod(n), tab).distinct()
         for (i in shown) key(tabs[i]) {
             val current = i == tab
@@ -454,9 +470,10 @@ private fun TabPager(
                     Modifier.fillMaxSize().zIndex(if (current) 1f else 0f)
                         .graphicsLayer { translationX = slide.shift(size.width) }
                         .drawWithContent {
-                            // In view: the showing page, or the one beside on the side the drag (or a settle) uncovers.
+                            // Always draw the current page so its [pageFixed] chrome stays visible through the commit boundary;
+                            // draw a neighbour only while it is uncovered in view.
                             val x = slide.shift(size.width)
-                            if (x > -size.width && x < size.width) drawContent()
+                            if (isCurrent.value || (x > -size.width && x < size.width)) drawContent()
                         },
                 ) {
                     PageContent(state, beside?.first ?: screen, pageSelection, resume, gameInfo, if (current) live else notLive)
