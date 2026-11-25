@@ -741,6 +741,7 @@ internal class FrontendRenderer(
                 reportFlat3d(w, h, screen, shown, g, Ps1Resolution::shownScales, Ps1Resolution::displayMax)
             Res3dConsole.DC -> reportFlat3d(w, h, screen, shown, g, DcResolution::shownScales, DcResolution::displayMax)
             Res3dConsole.N64 -> reportFlat3d(w, h, screen, shown, g, N64Resolution::shownScales, N64Resolution::displayMax)
+            Res3dConsole.SATURN -> reportFlat3d(w, h, screen, shown, g, SaturnResolution::shownScales, SaturnResolution::displayMax)
             else -> Unit
         }
         if (viewport != lastViewport) {

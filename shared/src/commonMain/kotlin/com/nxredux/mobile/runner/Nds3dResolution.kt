@@ -61,13 +61,19 @@ enum class Res3dConsole(
      * Nintendo 64 on Mupen64Plus-Next: GLideN64 draws the whole picture at its window size, a multiple of 320 x 240
      * (patches/mupen64plus_next/0014 applies it mid-game); ParaLLEl-RDP, on Vulkan, at its own upscaling ([alsoSet]).
      */
-    N64("mupen64plus_next", "mupen64plus-43screensize", 8, 4, "nx_n64_3d_resolution", "nx_n64_3d_max_scale", "nx_n64_3d_scale");
+    N64("mupen64plus_next", "mupen64plus-43screensize", 8, 4, "nx_n64_3d_resolution", "nx_n64_3d_max_scale", "nx_n64_3d_scale"),
+
+    /** Saturn on YabaSanshiro: draws the whole picture at 1x, 2x or 4x of the game's own size (patches apply it mid-game). */
+    SATURN("yabasanshiro", "yabasanshiro_resolution_mode", 4, 2, "nx_saturn_3d_resolution", "nx_saturn_3d_max_scale", "nx_saturn_3d_scale");
 
     /** The core draws its whole picture at the scale (PS1, PS2, PSP, Dolphin, Dreamcast), not only the 3D: the rows say "the game". */
-    val wholePicture: Boolean get() = this == PS1 || this == PCSX || this == PS2 || this == PSP || this == DOLPHIN || this == DC || this == N64
+    val wholePicture: Boolean get() = this == PS1 || this == PCSX || this == PS2 || this == PSP || this == DOLPHIN || this == DC || this == N64 || this == SATURN
 
     /** Performance draws at native size: no Scale row (the PS2 runs slowly above it; PCSX-ReARMed has only 1x and 2x). */
     val nativePerformance: Boolean get() = this == PS2 || this == PCSX
+
+    /** The scales the core has, when not every whole one up to [coreMax] (YabaSanshiro: no 3x); null: all of them. */
+    val scaleSteps: List<Int>? get() = if (this == SATURN) listOf(1, 2, 4) else null
 
     /** The three stored rows. */
     val keys: Set<String> get() = setOf(modeKey, maxScaleKey, scaleKey)
@@ -101,11 +107,12 @@ enum class Res3dConsole(
         PS1, PCSX -> window?.let { Ps1Resolution.displayMax(it.first, it.second) }
         DC -> window?.let { DcResolution.displayMax(it.first, it.second) }
         N64 -> window?.let { N64Resolution.displayMax(it.first, it.second) }
+        SATURN -> window?.let { SaturnResolution.displayMax(it.first, it.second) }
     }
 
     /**
      * The core option's value for scale [n]: ARMSX2 reads "2x", PPSSPP, Flycast and GLideN64 the size ("960x544", "1280x960"),
-     * PCSX-ReARMed whether Enhanced Resolution is on, the others a bare number.
+     * PCSX-ReARMed whether Enhanced Resolution is on, YabaSanshiro its mode (no 3x: it rounds up to 4x), the others a bare number.
      */
     fun coreValue(n: Int): String = when (this) {
         PS2 -> "${n}x"
@@ -113,6 +120,7 @@ enum class Res3dConsole(
         PCSX -> if (n >= 2) "enabled" else "disabled"
         DC -> "${DcResolution.NATIVE_W * n}x${DcResolution.NATIVE_H * n}"
         N64 -> "${N64Resolution.NATIVE_W * n}x${N64Resolution.NATIVE_H * n}"
+        SATURN -> when { n <= 1 -> "original"; n == 2 -> "2x"; else -> "4x" }
         else -> "$n"
     }
 
@@ -137,6 +145,7 @@ enum class Res3dConsole(
             "PS" -> PCSX
             "DC" -> DC
             "N64" -> N64
+            "SATURN" -> SATURN
             else -> null
         }
     }
@@ -510,6 +519,26 @@ object DcResolution {
     fun displayMax(w: Int, h: Int): Int = scales.displayMax(w, h)
 
     /** The scale a picture [pictureHeightPx] px tall shows at, rounded up (1 to 8). */
+    fun currentScale(pictureHeightPx: Int): Int = scales.currentScale(pictureHeightPx)
+
+    /** The shown scale and the second display's reach, as [Ps2Resolution.shownScales]. */
+    fun shownScales(mainHeightPx: Int?, secondHeightPx: Int?): Pair<Int?, Int> =
+        shownScalesBy(mainHeightPx, secondHeightPx, ::currentScale)
+}
+
+/** Saturn on YabaSanshiro: the common 320 x 224 game picture at 1x, 2x or 4x (hi-res modes are twice as wide and the core handles that itself). */
+object SaturnResolution {
+    const val NATIVE_W = 320
+    const val NATIVE_H = 224
+
+    private const val MAX = 4
+
+    private val scales = WholeScale(NATIVE_W, NATIVE_H, MAX)
+
+    /** The scale the picture reaches fitted in a [w] x [h] px window, either way up, rounded up (1 to 4). */
+    fun displayMax(w: Int, h: Int): Int = scales.displayMax(w, h)
+
+    /** The scale a picture [pictureHeightPx] px tall shows at, rounded up (1 to 4). */
     fun currentScale(pictureHeightPx: Int): Int = scales.currentScale(pictureHeightPx)
 
     /** The shown scale and the second display's reach, as [Ps2Resolution.shownScales]. */
