@@ -223,6 +223,14 @@ Automated: `tools/device-tests/netplay_pads.py` (Fold host, Nova client, then AY
 - [x] N64 (Mario Kart 64): in step. Every RAM difference is in the framebuffer area (0x310000-0x38FFFF, drawn by each GPU); the rest of RDRAM matched at every check for 48 s, so the RAM hash can't pass for N64.
 - [ ] Phone ↔ Brick (no `pad=` yet): still starts, both on the old fixed pad, no desync.
 
+## Dreamcast: HLE BIOS when dc_boot.bin is missing
+- [ ] No `dc_boot.bin`: a disc boots on the HLE BIOS, the notice shows on the first launch only.
+- [ ] With `dc_boot.bin` back: the real BIOS boots, no notice.
+- [ ] Save for game / Save for console during an HLE launch, then add the BIOS and relaunch: the real BIOS boots.
+- [ ] An auto state made on HLE resumes with the BIOS present (and the reverse).
+- [ ] Netplay with no BIOS on one phone: the session starts, both sides on HLE, no drift.
+- [ ] Docs: the BIOS page says the Dreamcast BIOS is recommended, not required.
+
 ## Merged features: checks owed
 
 Change art (#71):
