@@ -16,10 +16,12 @@
  */
 
 /*
- * PSP ad hoc over Wi-Fi: how devices agree on which one runs the ad hoc server. A device in automatic mode announces
- * itself over UDP while it is active or serving; the others pick the best serving announcer, or start serving
- * themselves after listening for a while and finding none. Pure logic: the caller owns the socket, the thread and the
- * clock, and feeds packets and time in. Addresses are IPv4 in network byte order and are compared in host order.
+ * PSP ad hoc over Wi-Fi or the USB cable: how devices agree on which one runs the ad hoc server. A device in automatic
+ * mode announces itself over UDP while it is active or serving; the others pick the best serving announcer, or start
+ * serving themselves after listening for a while and finding none. The election runs on one network at a time, since
+ * a session's data goes device to device at the address the server saw: the cable while it is up, else the Wi-Fi.
+ * Pure logic: the caller owns the sockets, the thread and the clock, and feeds packets and time in. Addresses are IPv4
+ * in network byte order and are compared in host order.
  *
  * Wire (16 bytes): "NXPL", version u8, flags u8, 2 reserved zero bytes, announcer IP (4 bytes as given), tie u32 BE.
  */
@@ -39,14 +41,19 @@
 #define PSL_EXPIRE_MS   3000    /* a server not heard for this long is gone */
 #define PSL_LINGER_MS   10000   /* an automatic server outlives its game's ad hoc mode by this long */
 #define PSL_MAX_PEERS   8
+#define PSL_CABLE_HOLD_MS 6000  /* a cable that is coming is waited for this long before the Wi-Fi is used */
 
 enum { PSL_AUTO, PSL_HOST, PSL_JOIN };
 enum { PSL_F_SERVING = 1, PSL_F_SESSION = 2, PSL_F_GROUPED = 4 };
+enum { PSL_CABLE_NONE, PSL_CABLE_COMING, PSL_CABLE_UP };   /* as the cable watcher reports it */
 
 typedef struct {
     uint32_t server_ip;
     int serve;
     int settled;
+    int cable;        /* the network of this choice, and of its server and announcements: 1 the cable, 0 the Wi-Fi */
+    uint32_t self;    /* this device's address on that network */
+    int held;         /* unsettled because a cable is coming */
 } psl_choice;
 
 typedef struct {
@@ -66,6 +73,15 @@ typedef struct psl {
     int64_t left_ms;          /* when the device stopped being active */
     int64_t server_heard_ms;  /* last time any serving peer was heard */
     int heard_server;
+    int cable_state;          /* as last set, PSL_CABLE_* */
+    uint32_t cable_self;      /* this device's address on the cable */
+    uint32_t cable_broadcast; /* gives the cable's /30; 0 until set: 10.99.0.0/30 */
+    int on_cable;             /* automatic mode: the network the election is on */
+    int holding;
+    int64_t hold_until_ms;
+    int hold_spent;           /* this COMING has had its hold: no other until the cable leaves COMING */
+    int dropped;              /* taken off the cable by its going: leaving its group while COMING holds it */
+    uint32_t served_ip;       /* the address this device last served from: where its goodbye comes from */
     psl_peer peers[PSL_MAX_PEERS];
 } psl;
 
@@ -74,6 +90,15 @@ void   psl_set_self(psl*, uint32_t self_ip);                 /* the Wi-Fi addres
 /* The Wi-Fi network's broadcast address: packets from outside the subnet it and self_ip share are ignored, since the
  * server to follow is a packet's source. When no mask can be had from the two, every source is accepted. */
 void   psl_set_net(psl*, uint32_t broadcast_ip);
+/* The cable's state, this device's address on it and its broadcast (0 keeps the one known). UP without an address is
+ * no cable. An automatic device moves to the cable when it is up and it is not grouped, and back to the Wi-Fi as soon
+ * as it is not up, grouped or not: the peers are forgotten, any server stops and the listen window starts again. A
+ * transition into COMING while active, the trigger while COMING, or a device taken off the cable by its going leaving
+ * its group while COMING, holds the Wi-Fi election for PSL_CABLE_HOLD_MS (not for a grouped device): a server started
+ * or followed there now would keep the game off the cable. One hold per COMING: a phone on the port that never links
+ * is waited for once, not at every entry into ad hoc or group left, until the cable leaves COMING and comes again. A
+ * session's host and joiner are on the network self_ip is on, whatever the cable does. */
+void   psl_set_cable(psl*, int state, uint32_t cable_self, uint32_t cable_broadcast, int64_t now_ms);
 /* The game reached its trigger / left ad hoc. grouped: the game is in a group, or this device's server has another
  * user; either way the server keeps them (it never yields), and out of ad hoc it lingers until they are gone. */
 void   psl_active(psl*, int active, int grouped, int64_t now_ms);
@@ -83,9 +108,11 @@ void   psl_park(psl*, int parked);
 /* A packet that no longer says serving from the server being followed means it stopped: the listen window starts
  * again from now rather than after PSL_EXPIRE_MS. */
 void   psl_heard(psl*, const uint8_t* pkt, size_t len, uint32_t from_ip, int64_t now_ms);
-size_t psl_pack(const psl*, uint8_t out[PSL_PACKET]);        /* 0 when nothing is to be announced */
-/* The last packet of a server that stops (parked, linger over, yielded, the link gone): not serving, so its followers
- * drop it at once. Always PSL_PACKET. */
+/* 0 when nothing is to be announced. For the current network only: sent to the broadcast of choice.cable. */
+size_t psl_pack(const psl*, uint8_t out[PSL_PACKET]);
+/* The last packet of a server that stops (parked, linger over, yielded, held, moved network, the link gone): not
+ * serving, so its followers drop it at once. It belongs on the network the server was on: the cable of the last
+ * choice that served. Always PSL_PACKET. */
 size_t psl_pack_goodbye(const psl*, uint8_t out[PSL_PACKET]);
 psl_choice psl_step(psl*, int64_t now_ms);
 

@@ -662,7 +662,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             }
             launchPipeline.start()
             if (launchPipeline.dsLinked && !isDestroyed) dsRoom.start()
-            if (launchPipeline.dsCableAuto && !isDestroyed) dsCable.watch()
+            if (launchPipeline.dsCableAuto && !isDestroyed) dsCable.watch(launchPipeline.dsCableWithGame)
         }
     }
 
@@ -1698,7 +1698,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * falls back to the automatic route leaves its room now: Azahar reads the new mode only on its next frame, which an
      * open menu holds back, and until then its session would still count as in a room for the menu, states and locks
      * ([rejoinSessionRoom] keeps it out meanwhile). The check lands the presence at once, and the cable watcher a launch
-     * on that route starts (once) starts here.
+     * on that route starts (once) starts here. A PSP game is not taken out here: the runner takes it out of ad hoc on
+     * the variables sent, and its presence going out and back in tells the watcher when the game's wireless is on.
      */
     override fun leaveLinkSession(kind: NetplayLinkKind): Map<String, String> {
         val left = launchPipeline.leaveLinkSession(kind)
@@ -1706,8 +1707,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             localWirelessShownOff()
             LibretroNetplay.dsLeaveNow()
             dsRoom.check()
-            if (launchPipeline.dsCableAuto) dsCable.watch()
+            if (launchPipeline.dsCableAuto) dsCable.watch(launchPipeline.dsCableWithGame)
         }
+        if (kind == NetplayLinkKind.PSPLINK && launchPipeline.dsCableAuto) dsCable.watch(launchPipeline.dsCableWithGame)
         return left
     }
 

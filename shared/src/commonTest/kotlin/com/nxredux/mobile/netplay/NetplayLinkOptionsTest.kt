@@ -304,6 +304,39 @@ class NetplayLinkOptionsTest {
         assertFalse(NetplaySession(NetplayRole.HOST, "1.2.3.4", "ppsspp", "ppsspp").locksOptions)
     }
 
+    @Test fun psp_usb_session_carries_the_cable_addresses() {
+        val host = NetplayLinkOptions.forSession(session(NetplayRole.HOST, "ppsspp", peer = "10.99.0.2", usb = true), null)
+        assertEquals(
+            mapOf("nx_psp_link" to "host", "nx_psp_link_self" to "10.99.0.1", "nx_psp_link_broadcast" to "10.99.0.3"), host,
+        )
+        val join = NetplayLinkOptions.forSession(session(NetplayRole.CLIENT, "ppsspp", peer = "10.99.0.1", usb = true), null)
+        assertEquals(
+            mapOf("nx_psp_link" to "join", "nx_psp_link_ip" to "10.99.0.1", "nx_psp_link_self" to "10.99.0.2", "nx_psp_link_broadcast" to "10.99.0.3"), join,
+        )
+        // The USB device side hosts too: the other end is the cable's host side.
+        val deviceHost = NetplayLinkOptions.forSession(session(NetplayRole.HOST, "ppsspp", peer = "10.99.0.1", usb = true), null)
+        assertEquals("10.99.0.2", deviceHost["nx_psp_link_self"])
+    }
+
+    @Test fun psp_usb_session_with_an_unknown_peer_sends_no_cable_addresses() {
+        assertEquals(
+            mapOf("nx_psp_link" to "host"),
+            NetplayLinkOptions.forSession(session(NetplayRole.HOST, "ppsspp", peer = "192.168.1.7", usb = true), null),
+        )
+        assertEquals(
+            mapOf("nx_psp_link" to "join", "nx_psp_link_ip" to "192.168.1.7"),
+            NetplayLinkOptions.forSession(session(NetplayRole.CLIENT, "ppsspp", peer = "192.168.1.7", usb = true), null),
+        )
+    }
+
+    @Test fun psp_session_addresses_win_over_the_wifi_ones() {
+        val usb = NetplayLinkOptions.forSession(session(NetplayRole.HOST, "ppsspp", peer = "10.99.0.2", usb = true), null)
+        val o = NetplayLinkOptions.forPsp(usb, true, pspSelf, pspBroadcast, 7)
+        assertEquals("10.99.0.1", o[NetplayLinkOptions.PSP_SELF])
+        assertEquals("10.99.0.3", o[NetplayLinkOptions.PSP_BROADCAST])
+        assertEquals("host", o[NetplayLinkOptions.PSP_MODE])
+    }
+
     private val pspSelf = "192.168.1.5"
     private val pspBroadcast = "192.168.1.255"
     private fun pspSessionOptions(role: NetplayRole) = NetplayLinkOptions.forSession(session(role, "ppsspp"), null)
@@ -327,16 +360,15 @@ class NetplayLinkOptionsTest {
         assertEquals(mapOf("ppsspp_enable_wlan" to "disabled"), NetplayLinkOptions.forPsp(null, false, pspSelf, pspBroadcast, 7))
     }
 
-    @Test fun psp_automatic_route_needs_both_addresses() {
-        val off = mapOf("ppsspp_enable_wlan" to "disabled")
-        assertEquals(off, NetplayLinkOptions.forPsp(null, true, null, pspBroadcast, 7))
-        assertEquals(off, NetplayLinkOptions.forPsp(null, true, pspSelf, null, 7))
-        assertEquals(off, NetplayLinkOptions.forPsp(null, true, null, null, 7))
-        assertEquals(
-            NetplayLinkOptions.pspNetwork(NetplayLinkOptions.pspMac(7)) +
-                mapOf(NetplayLinkOptions.PSP_MODE to "auto", NetplayLinkOptions.PSP_BROADCAST to pspBroadcast, NetplayLinkOptions.PSP_SELF to pspSelf),
-            NetplayLinkOptions.forPsp(null, true, pspSelf, pspBroadcast, 7),
-        )
+    @Test fun psp_automatic_route_sends_the_addresses_it_knows() {
+        val net = NetplayLinkOptions.pspNetwork(NetplayLinkOptions.pspMac(7))
+        val auto = mapOf(NetplayLinkOptions.PSP_MODE to "auto")
+        val b = mapOf(NetplayLinkOptions.PSP_BROADCAST to pspBroadcast)
+        val s = mapOf(NetplayLinkOptions.PSP_SELF to pspSelf)
+        assertEquals(net + auto + b, NetplayLinkOptions.forPsp(null, true, null, pspBroadcast, 7))
+        assertEquals(net + auto + s, NetplayLinkOptions.forPsp(null, true, pspSelf, null, 7))
+        assertEquals(net + auto, NetplayLinkOptions.forPsp(null, true, null, null, 7))
+        assertEquals(net + auto + b + s, NetplayLinkOptions.forPsp(null, true, pspSelf, pspBroadcast, 7))
     }
 
     @Test fun psp_session_is_linked_whatever_local_wireless_says() {
@@ -348,28 +380,32 @@ class NetplayLinkOptionsTest {
             linked,
         )
         assertEquals("join", linked[NetplayLinkOptions.PSP_MODE])
-        // Without an address the session still runs; the runner then has no finder to announce on.
+        // Without a Wi-Fi address the session still runs; the address keys that are known are sent, the others left out.
         val bare = NetplayLinkOptions.forPsp(pspSessionOptions(NetplayRole.HOST), false, null, pspBroadcast, 7)
         assertEquals("host", bare[NetplayLinkOptions.PSP_MODE])
         assertEquals("enabled", bare["ppsspp_enable_wlan"])
-        assertFalse(NetplayLinkOptions.PSP_SELF in bare || NetplayLinkOptions.PSP_BROADCAST in bare)
+        assertFalse(NetplayLinkOptions.PSP_SELF in bare)
+        assertEquals(pspBroadcast, bare[NetplayLinkOptions.PSP_BROADCAST])
     }
 
-    @Test fun psp_session_left_falls_back_to_the_automatic_route_with_local_wireless_and_both_addresses() {
+    @Test fun psp_session_left_falls_back_to_the_automatic_route_with_local_wireless() {
         assertEquals(
             mapOf(NetplayLinkOptions.PSP_MODE to "auto", NetplayLinkOptions.PSP_BROADCAST to pspBroadcast, NetplayLinkOptions.PSP_SELF to pspSelf),
             NetplayLinkOptions.pspSessionLeft(localWireless = true, self = pspSelf, broadcast = pspBroadcast),
         )
         // A join's host address is not sent again: the automatic route never reads one.
         assertFalse(NetplayLinkOptions.PSP_IP in NetplayLinkOptions.pspSessionLeft(true, pspSelf, pspBroadcast))
+        // Without Wi-Fi the route still runs, over the cable.
+        assertEquals(mapOf(NetplayLinkOptions.PSP_MODE to "auto"), NetplayLinkOptions.pspSessionLeft(true, null, null))
+        assertEquals(
+            mapOf(NetplayLinkOptions.PSP_MODE to "auto", NetplayLinkOptions.PSP_SELF to pspSelf),
+            NetplayLinkOptions.pspSessionLeft(true, pspSelf, null),
+        )
     }
 
-    @Test fun psp_session_left_is_off_without_local_wireless_or_an_address() {
+    @Test fun psp_session_left_is_off_without_local_wireless() {
         val off = mapOf(NetplayLinkOptions.PSP_MODE to "off")
         assertEquals(off, NetplayLinkOptions.pspSessionLeft(localWireless = false, self = pspSelf, broadcast = pspBroadcast))
-        assertEquals(off, NetplayLinkOptions.pspSessionLeft(true, null, pspBroadcast))
-        assertEquals(off, NetplayLinkOptions.pspSessionLeft(true, pspSelf, null))
-        assertEquals(off, NetplayLinkOptions.pspSessionLeft(true, null, null))
         assertEquals(off, NetplayLinkOptions.pspSessionLeft(false, null, null))
     }
 
@@ -386,6 +422,49 @@ class NetplayLinkOptionsTest {
                 }
             }
         }
+    }
+
+    @Test fun psp_usb_session_left_sends_the_wifi_addresses_never_the_cables() {
+        assertEquals(
+            mapOf(NetplayLinkOptions.PSP_MODE to "auto", NetplayLinkOptions.PSP_BROADCAST to pspBroadcast, NetplayLinkOptions.PSP_SELF to pspSelf),
+            NetplayLinkOptions.pspSessionLeft(localWireless = true, self = pspSelf, broadcast = pspBroadcast, overUsb = true),
+        )
+        // Without Wi-Fi the session's cable addresses are cleared: the runner keeps a variable an update leaves out, and
+        // would take 10.99.0.x for a Wi-Fi address on the automatic route.
+        assertEquals(
+            mapOf(NetplayLinkOptions.PSP_MODE to "auto", NetplayLinkOptions.PSP_BROADCAST to "", NetplayLinkOptions.PSP_SELF to ""),
+            NetplayLinkOptions.pspSessionLeft(true, null, null, overUsb = true),
+        )
+        assertEquals(
+            mapOf(NetplayLinkOptions.PSP_MODE to "auto", NetplayLinkOptions.PSP_BROADCAST to "", NetplayLinkOptions.PSP_SELF to pspSelf),
+            NetplayLinkOptions.pspSessionLeft(true, pspSelf, null, overUsb = true),
+        )
+        // Off is off, cable or not.
+        assertEquals(mapOf(NetplayLinkOptions.PSP_MODE to "off"), NetplayLinkOptions.pspSessionLeft(false, null, null, overUsb = true))
+    }
+
+    @Test fun psp_wifi_address_goes_to_the_runner_when_new_and_whole() {
+        val given = pspSelf to pspBroadcast
+        // The first address of a launch made without Wi-Fi.
+        assertEquals(
+            mapOf(NetplayLinkOptions.PSP_SELF to pspSelf, NetplayLinkOptions.PSP_BROADCAST to pspBroadcast),
+            NetplayLinkOptions.pspWifiUpdate(onCable = false, given = null, self = pspSelf, broadcast = pspBroadcast),
+        )
+        // A new address on the automatic route, or after a session's Disconnect.
+        assertEquals(
+            mapOf(NetplayLinkOptions.PSP_SELF to "10.0.0.7", NetplayLinkOptions.PSP_BROADCAST to "10.0.0.255"),
+            NetplayLinkOptions.pspWifiUpdate(false, given, "10.0.0.7", "10.0.0.255"),
+        )
+        // The same address again: nothing (the runner would relogin for nothing).
+        assertEquals(emptyMap<String, String>(), NetplayLinkOptions.pspWifiUpdate(false, given, pspSelf, pspBroadcast))
+        // Half an address: nothing.
+        assertEquals(emptyMap<String, String>(), NetplayLinkOptions.pspWifiUpdate(false, null, pspSelf, null))
+        assertEquals(emptyMap<String, String>(), NetplayLinkOptions.pspWifiUpdate(false, null, null, pspBroadcast))
+    }
+
+    @Test fun psp_wifi_address_never_replaces_a_usb_sessions() {
+        assertEquals(emptyMap<String, String>(), NetplayLinkOptions.pspWifiUpdate(onCable = true, given = null, self = pspSelf, broadcast = pspBroadcast))
+        assertEquals(emptyMap<String, String>(), NetplayLinkOptions.pspWifiUpdate(true, "10.0.0.7" to "10.0.0.255", pspSelf, pspBroadcast))
     }
 
     @Test fun ds_session_left_falls_back_to_the_automatic_route_with_local_wireless() {
