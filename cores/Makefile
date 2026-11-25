@@ -68,6 +68,9 @@ check-tools:
 	@test -x $(NINJA) || (echo "ninja not found at $(NINJA). Set NINJA=." && exit 1)
 	@test -x $(READELF) || (echo "llvm-readelf not found at $(READELF)." && exit 1)
 	@git --version >/dev/null
+	@command -v pkg-config >/dev/null || (echo "pkg-config not found (cemu's vcpkg ports need it)." && exit 1)
+	@command -v autoconf >/dev/null && command -v automake >/dev/null || (echo "autoconf/automake not found (cemu's vcpkg ports need them)." && exit 1)
+	@command -v libtoolize >/dev/null || command -v glibtoolize >/dev/null || (echo "libtool not found (cemu's vcpkg ports need it)." && exit 1)
 	@echo "tools ok: NDK=$(NDK)"
 
 # ---- core list and per-core variables ------------------------------------
@@ -76,7 +79,7 @@ check-tools:
 # flycast) has a curated ../LICENSES/<core>.txt instead. check-licenses fails when a core has neither.
 CORES = gambatte fceumm snes9x genesis_plus_gx mgba melondsds mupen64plus_next ppsspp \
   race mednafen_pce_fast mednafen_vb handy stella2014 prosystem a5200 mednafen_wswan mednafen_supafaust pokemini fake08 prboom gpsp pcsx_rearmed \
-  swanstation picodrive gearcoleco fbneo flycast azahar dolphin armsx2
+  swanstation picodrive gearcoleco fbneo flycast azahar dolphin armsx2 cemu
 
 gambatte_REPO = https://github.com/libretro/gambatte-libretro
 gambatte_HASH = 77f2567d718b8973d02caa2daa8dce4953faf811
@@ -513,6 +516,39 @@ armsx2_FLAGS = -DCMAKE_PREFIX_PATH=$(ARMSX2_DEPS)/prefix -DCMAKE_FIND_ROOT_PATH=
   -DDISABLE_ADVANCE_SIMD=OFF -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON -DARMSX2_EMBED_PATCHES=OFF \
   -DLTO_PCSX2_CORE=ON "-DCMAKE_C_FLAGS=$(ARMSX2_PGO)" "-DCMAKE_CXX_FLAGS=$(ARMSX2_PGO)"
 
+# Cemu (Wii U): WizzardSK/cemu-libretro's libretro branch, tracking upstream Cemu 2.6-411-gb487cb70. MPL-2.0. Its
+# dependencies (~95 packages: boost, openssl, curl, SDL2, libzip, zstd, glslang, ...) come from vcpkg, the submodule
+# dependencies/vcpkg, cross-built for arm64-android while CMake configures; the core's CMakeLists chainloads the NDK
+# toolchain into vcpkg's. Some ports run autotools, so the host needs pkg-config, autoconf, automake and libtool
+# (check-tools). vcpkg finds the NDK by ANDROID_NDK_HOME, and a CC/CXX from the environment would build its host tools
+# with the wrong compiler, so cemu_ENV sets the one and drops the other. Finished packages go to a binary cache beside
+# the build tree, which clean-cemu and distclean-cemu keep, so a rebuild does not recompile the dependency set.
+# Vulkan only on Android (the OpenGL backend is desktop GL). The library lands in the source tree's bin/ (the target's
+# LIBRARY_OUTPUT_DIRECTORY), hence the artifact path relative to build/cemu.
+# patches/cemu/0001: a Stacked screen layout, the TV picture over the GamePad picture at the same width (output W x 2H,
+# aspect 8:9), which the app cuts into its two screens. patches/cemu/0002: no mouse cursor over the GamePad picture; on
+# a touchscreen the finger is the pointer.
+# notices/cemu-deps.txt holds the copyright files of the vcpkg packages linked in
+# (build/cemu/vcpkg_installed/arm64-android/share/*/copyright, the boost libraries' shared one once) and the licences of
+# the submodules compiled in (xbyak_aarch64, imgui, ZArchive, ih264d, Vulkan-Headers, the embedded graphic packs);
+# regenerate it on a pin bump.
+cemu_REPO = https://github.com/WizzardSK/cemu-libretro
+cemu_HASH = dbf18093970bd3091e201a0a893eacd0256f9c26
+cemu_KIND = cmake
+cemu_ARTIFACT = ../../$(SRC_ROOT)/cemu/bin/cemu_libretro.so
+cemu_CMAKE = $(CMAKE_330)/cmake
+cemu_NINJA = $(CMAKE_330)/ninja
+cemu_PLATFORM = android-28
+cemu_LICENSE = LICENSE.txt
+cemu_LICENSE_EXTRA = notices/cemu-deps.txt
+CEMU_VCPKG_CACHE = $(abspath $(BUILD_ROOT))/cemu-vcpkg-cache
+CEMU_HOST_TRIPLET = $(if $(filter Darwin,$(UNAME_S)),arm64-osx,x64-linux)
+cemu_ENV = env -u CC -u CXX ANDROID_NDK_HOME=$(NDK) ANDROID_NDK_ROOT=$(NDK) \
+  VCPKG_BINARY_SOURCES="clear;files,$(CEMU_VCPKG_CACHE),readwrite" PATH="$(CMAKE_330):$$PATH"
+cemu_FLAGS = -DANDROID_STL=c++_static -DENABLE_LIBRETRO=ON -DENABLE_BLUEZ=OFF -DENABLE_FERAL_GAMEMODE=OFF \
+  -DENABLE_WAYLAND=OFF -DENABLE_DISCORD_RPC=OFF -DVCPKG_TARGET_TRIPLET=arm64-android \
+  -DVCPKG_HOST_TRIPLET=$(CEMU_HOST_TRIPLET)
+
 # Deviation from the generic pattern: ppsspp reads its data files (flash0, fonts,
 # shaders, ...) from <system>/PPSSPP/ at runtime, so stage the repo's assets/ dir
 # next to the core. This extra prerequisite on the ppsspp target runs after the
@@ -579,6 +615,11 @@ $(OUTPUT_ROOT)/system/pcsx2/resources/.staged: $(OUTPUT_ROOT)/armsx2_libretro_an
 	cp -R $(SRC_ROOT)/armsx2/bin/resources/. $(OUTPUT_ROOT)/system/pcsx2/resources/
 	touch $(OUTPUT_ROOT)/system/pcsx2/resources/.staged
 armsx2: $(OUTPUT_ROOT)/system/pcsx2/resources/.staged
+
+# Deviation: the vcpkg binary cache (see cemu's entry) has to exist before vcpkg writes to it.
+$(CEMU_VCPKG_CACHE):
+	mkdir -p $@
+$(OUTPUT_ROOT)/cemu_libretro_android.so: | $(CEMU_VCPKG_CACHE)
 
 # Deviation: melonDS DS's dependencies (see its entry) are cloned at their pinned SHAs before its configure step. The
 # stamp names the whole list, so editing a pin re-runs the checkout.
@@ -656,10 +697,10 @@ $(OUTPUT_ROOT)/$$($1_CORE): $(SRC_ROOT)/$(1)/.patched
 else
 $(OUTPUT_ROOT)/$$($1_CORE): $(SRC_ROOT)/$(1)/.patched
 	mkdir -p $(OUTPUT_ROOT) $(BUILD_ROOT)/$(1)
-	$$($1_CMAKE) -S $(SRC_ROOT)/$(1)/$$($1_BUILD_PATH) -B $(BUILD_ROOT)/$(1) -G Ninja -DCMAKE_MAKE_PROGRAM=$$($1_NINJA) \
+	$$($1_ENV) $$($1_CMAKE) -S $(SRC_ROOT)/$(1)/$$($1_BUILD_PATH) -B $(BUILD_ROOT)/$(1) -G Ninja -DCMAKE_MAKE_PROGRAM=$$($1_NINJA) \
 	  -DCMAKE_TOOLCHAIN_FILE=$(NDK)/build/cmake/android.toolchain.cmake -DANDROID_ABI=$(ABI) -DANDROID_PLATFORM=$$($1_PLATFORM) \
 	  -DCMAKE_BUILD_TYPE=Release "-DCMAKE_SHARED_LINKER_FLAGS=$(PAGE_LDFLAGS)" $$($1_FLAGS)
-	$$($1_CMAKE) --build $(BUILD_ROOT)/$(1) --target $$($1_CMAKE_TARGET) $(PROCS)
+	$$($1_ENV) $$($1_CMAKE) --build $(BUILD_ROOT)/$(1) --target $$($1_CMAKE_TARGET) $(PROCS)
 	$(STRIP) --strip-unneeded -o $(OUTPUT_ROOT)/$$($1_CORE) $(BUILD_ROOT)/$(1)/$$($1_ARTIFACT)
 endif
 
