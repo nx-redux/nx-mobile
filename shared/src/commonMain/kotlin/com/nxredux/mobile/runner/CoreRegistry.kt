@@ -545,6 +545,26 @@ object CoreRegistry {
         controllerPort0 = CoreDescriptor.JOYPAD,
     )
 
+    // Cemu loads by path through the VFS. Vulkan is the only API wanted on a phone; the layout is the stacked one for a
+    // single screen, and its logging and FPS overlay are off.
+    private val cemuLogKeys = listOf(
+        "cemu_log_to_file", "cemu_log_filesystem", "cemu_log_thread_sync", "cemu_log_system_api",
+        "cemu_log_texture_memory", "cemu_log_input_api", "cemu_log_audio",
+    )
+    private val cemuOptions = mapOf(
+        "cemu_gpu_api" to "Vulkan", "cemu_screen_layout1" to "Stacked", "cemu_number_of_screen_layouts" to "1",
+        "cemu_show_game_fps" to "disabled",
+    ) + cemuLogKeys.associateWith { "disabled" }
+    private val cemu = CoreDescriptor(
+        "cemu", "libcemu_libretro_android.so", setOf("wua", "wux", "wud", "rpx"),
+        defaultOptions = cemuOptions,
+        lockedOptions = cemuOptions.keys,
+        players = 1,
+        cheats = false,
+        name = "Cemu",
+        rewind = false,
+    )
+
     // Canonical descriptors before tag views, so `all` (distinct by id) keeps plain mgba.
     private val byTag: Map<String, CoreDescriptor> = mapOf(
         "NDS" to melondsds,
@@ -576,6 +596,7 @@ object CoreRegistry {
         "3DS" to azahar,
         "WII" to dolphinWii, "GC" to dolphinGc,
         "PS2" to armsx2,
+        "WIIU" to cemu,
     )
 
     /** Extensions too generic to name a console on their own (disc images and sheets shared by many systems). */
@@ -629,6 +650,7 @@ object CoreRegistry {
         // iso, elf, dol, wad (Doom's) and m3u go by folder; a GameCube rvz or wia reaches GC by its folder too.
         Console("wii", "Nintendo Wii", listOf("WII"), setOf("wii", "nintendo wii"), setOf("wbfs", "wia", "rvz"), rawSram = false),
         Console("gc", "Nintendo GameCube", listOf("GC"), setOf("gc", "gamecube", "nintendo gamecube"), setOf("gcm", "gcz", "tgc", "ciso"), rawSram = false),
+        Console("wiiu", "Nintendo Wii U", listOf("WIIU"), setOf("wiiu", "wii u", "nintendo wii u"), setOf("wua", "wux", "wud", "rpx", "wuhb"), rawSram = false),
     )
 
     /** Every extension some tag's core runs, console-owned or not (png, o, lmp, exe only by folder or sidecar). */

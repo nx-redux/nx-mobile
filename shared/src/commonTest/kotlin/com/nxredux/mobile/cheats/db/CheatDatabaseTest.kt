@@ -64,7 +64,7 @@ class CheatDatabaseTest {
         assertEquals(
             setOf("NDS", "N64", "PSP", "GB", "GBC", "GBA", "MGBA", "SGB", "FC", "FDS", "SFC", "SUPA", "GPGX", "MD", "SMS", "GG",
                 "SG1000", "SEGACD", "PS", "PSX", "PS2", "NGP", "NGPC", "PCE", "VB", "LYNX", "A2600", "A5200", "A7800", "PKM", "WSC", "P8", "PRBOOM",
-                "32X", "COLECO", "FBN", "DC", "3DS", "WII", "GC", "GPGX_SMS", "GPGX_GG", "GPGX_SEGACD", "GPGX_SG1000"),
+                "32X", "COLECO", "FBN", "DC", "3DS", "WII", "GC", "WIIU", "GPGX_SMS", "GPGX_GG", "GPGX_SEGACD", "GPGX_SG1000"),
             CoreRegistry.tags,
         )
     }

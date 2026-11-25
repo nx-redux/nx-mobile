@@ -628,7 +628,8 @@ bool Environment::handle_callback_environment(unsigned cmd, void *data) {
 
         case RETRO_ENVIRONMENT_SET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE: {
             auto* negotiation = static_cast<const struct retro_hw_render_context_negotiation_interface*>(data);
-            if (negotiation == nullptr || !useVulkan ||
+            // Cemu registers its negotiation before SET_HW_RENDER, when only the preference is known.
+            if (negotiation == nullptr || !(useVulkan || preferVulkan) ||
                 negotiation->interface_type != RETRO_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_VULKAN) {
                 return false;
             }
