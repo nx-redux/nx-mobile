@@ -57,7 +57,7 @@ class CoreRegistryTest {
     @Test fun all_lists_each_core_once() {
         val ids = CoreRegistry.all.map { it.id }
         assertEquals(ids.size, ids.toSet().size)
-        assertEquals(30, ids.size)
+        assertEquals(31, ids.size)
     }
     @Test fun the_bricks_pak_defaults_are_carried() {
         // The second memory card stays out, as on the Brick (upstream's default is a shared card).
@@ -124,10 +124,10 @@ class CoreRegistryTest {
         assertEquals(CoreDescriptor.PS_DUALSHOCK, CoreRegistry.forTag("PS")!!.controllerPort0)
         assertEquals(1, CoreDescriptor.JOYPAD)
         assertEquals(CoreDescriptor.JOYPAD, CoreRegistry.forTag("DC")!!.controllerPort0)   // flycast plugs no pad in by itself
-        assertEquals(setOf("picodrive", "pcsx_rearmed", "swanstation", "flycast", "dolphin"), CoreRegistry.all.filter { it.controllerPort0 != null }.map { it.id }.toSet())
+        assertEquals(setOf("picodrive", "pcsx_rearmed", "swanstation", "flycast", "yabasanshiro", "dolphin"), CoreRegistry.all.filter { it.controllerPort0 != null }.map { it.id }.toSet())
     }
-    @Test fun only_flycast_names_its_saves_after_the_content_so_only_it_unpacks_under_the_archive_name() {
-        assertEquals(setOf("flycast"), CoreRegistry.all.filter { it.savesNamedAfterContent }.map { it.id }.toSet())
+    @Test fun only_flycast_and_yabasanshiro_name_their_saves_after_the_content_so_only_they_unpack_under_the_archive_name() {
+        assertEquals(setOf("flycast", "yabasanshiro"), CoreRegistry.all.filter { it.savesNamedAfterContent }.map { it.id }.toSet())
     }
     @Test fun only_gpsp_stays_loaded_between_games() {
         assertEquals(setOf("gpsp"), CoreRegistry.all.filter { it.keepLoaded }.map { it.id }.toSet())
@@ -223,7 +223,7 @@ class CoreRegistryTest {
             listOf(
                 "nds", "n64", "psp", "ps2", "ps", "gb", "gbc", "gba", "fc", "sfc", "md",
                 "sms", "gg", "sg1000", "segacd", "fds", "sgb", "ngp", "ngpc", "pce", "vb",
-                "lynx", "a2600", "a5200", "a7800", "pkm", "wsc", "p8", "prboom", "32x", "coleco", "fbn", "dc", "3ds", "wii", "gc",
+                "lynx", "a2600", "a5200", "a7800", "pkm", "wsc", "p8", "prboom", "32x", "coleco", "fbn", "dc", "saturn", "3ds", "wii", "gc",
             ),
             CoreRegistry.consoles.map { it.id },
         )
@@ -247,7 +247,7 @@ class CoreRegistryTest {
                 "Game Boy Advance", "Nintendo ES", "Super Nintendo ES", "Sega Genesis", "Sega Master System", "Sega Game Gear",
                 "Sega SG-1000", "Sega CD", "Famicom Disk System", "Super Game Boy", "Neo Geo Pocket", "Neo Geo Pocket Color",
                 "TurboGrafx-16", "Virtual Boy", "Atari Lynx", "Atari 2600", "Atari 5200", "Atari 7800", "Pokémon mini",
-                "Wonderswan Color", "Pico-8", "Doom", "Sega 32X", "Colecovision", "Arcade", "Dreamcast", "Nintendo 3DS", "Nintendo Wii", "Nintendo GameCube",
+                "Wonderswan Color", "Pico-8", "Doom", "Sega 32X", "Colecovision", "Arcade", "Dreamcast", "Sega Saturn", "Nintendo 3DS", "Nintendo Wii", "Nintendo GameCube",
             ),
             CoreRegistry.consoles.map { it.displayName },
         )

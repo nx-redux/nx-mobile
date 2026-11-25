@@ -96,6 +96,14 @@ class SaveSyncPlanTest {
         )
     }
 
+    @Test fun a_saturn_backup_ram_goes_by_path_like_a_dreamcast_card() {
+        val p = plan(mapOf("Sega Saturn (SATURN)" to setOf("Game.cue")))
+        assertEquals(
+            listOf(StageCopy("SATURN/Panzer Dragoon.bkr", "SATURN/Panzer Dragoon.bkr")),
+            p.send(listOf(SaveFile("SATURN/Panzer Dragoon.bkr", 1000))),
+        )
+    }
+
     @Test fun leftover_tag_folder_counts_as_the_console() {
         val p = plan(emptyMap())
         val phone = listOf(SaveFile("MGBA/Old.srm", 1000), SaveFile("MGBA/sub/x", 1000))
