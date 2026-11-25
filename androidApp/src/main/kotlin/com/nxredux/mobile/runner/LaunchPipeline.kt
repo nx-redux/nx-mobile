@@ -26,6 +26,8 @@ import com.nxredux.mobile.library.MsuSets
 import com.nxredux.mobile.library.Names
 import com.nxredux.mobile.library.NaomiSets
 import com.nxredux.mobile.library.disc.DiscProbe
+import com.nxredux.mobile.netplay.DcNetplaySaves
+import com.nxredux.mobile.netplay.GgpoSession
 import com.nxredux.mobile.netplay.NetplayCores
 import com.nxredux.mobile.netplay.NetplayLinkKind
 import com.nxredux.mobile.netplay.NetplayLinkOptions
@@ -450,6 +452,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
         private const val REAL_PATH_STAMP = ".nxstamp"
         /** The consoles a Sega CD disc lists under: its own, and the Mega Drive's (a cue in a Genesis folder runs too). */
         private val SEGA_CD_CONSOLES = setOf("segacd", "md")
+        /** flycast's log lines from a Dreamcast session's start (the GGPO patch's "NX GGPO: ..."). */
+        private const val GGPO_LOG = "NX GGPO"
     }
 
     /** What [resolveConfig] settled that the later stages read. */
@@ -636,13 +640,14 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             renderer.ndsSplit = ndsAtStart
             // nx_* (and legacy minarch_*) keys are frontend settings: never passed to the core.
             frontendValues = FrontendOptions.fromConfig(resolved.values, tag)
-            // netplay: both devices run the console's default Sega pad (Auto), whatever this device's console or game setting;
-            // the core then gets the handheld pak's pad for this tag and core (NetplayPads).
-            if (np != null && PadMap.isSegaPadTag(tag)) frontendValues = frontendValues + (PadOptions.SEGA_PAD to SegaPadType.AUTO)
+            // netplay: both devices run the host's Controller Type when both sides sent theirs (NetplaySession.segaPad), the
+            // single-player path then picks the pad; else Auto here and the handheld pak's fixed pad (NetplayPads).
+            val sessionPad = np?.segaPad?.takeIf { PadMap.isSegaPadTag(tag) }
+            if (np != null && PadMap.isSegaPadTag(tag)) frontendValues = frontendValues + (PadOptions.SEGA_PAD to (sessionPad ?: SegaPadType.AUTO))
             canRewind = descriptor?.rewind == true
             speed.setSession(netplay = np != null)   // first: the touch buttons [ShortcutsMicController.launch] builds follow the session
             shortcuts.launch(microphone = descriptor?.microphone == true, netplay = np != null, tag, Shortcuts.fromConfig(resolved.values))
-            val netplayPad = if (np != null) NetplayPads.forSession(tag, descriptor?.id) else null
+            val netplayPad = if (np != null) NetplayPads.forSession(tag, descriptor?.id, sessionPad) else null
             renderer.shaderValues = ShaderOptions.fromConfig(resolved.values)
             renderer.presetNames = withContext(Dispatchers.IO) { Shaders.presets(shaderRoots) }
             // 3DS with a second display: Azahar starts in the split's fixed layout, which replaces the rows' values below; launched
@@ -933,10 +938,30 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 }
             }
             val savesDir = (cfg.sessionDir ?: File(dataRoot, paths.savesDir)).apply { mkdirs() }
+            // A Dreamcast session on a copy: flycast's console settings (dc_nvmem) are the host's, so the core gets the copy's
+            // own system folder with this device's BIOS files beside them (the real BIOS only when both sides boot it).
+            val launchSystemDir = if (cfg.np?.ggpo == true && cfg.sessionDir != null) {
+                withContext(Dispatchers.IO) { ggpoSystemDir(cfg.sessionDir, biosDir, cfg.np.dcHle) }
+            } else systemDir
             // netplay: a link session's game is the player's own, so it gets achievements as a normal launch; lockstep has none.
             if (!cfg.dsMenu && (cfg.np == null || cfg.np.allowsAchievements)) prepareAchievements(cfg.tag, cfg.romFileName, cfg.content, inner)
-            return PreparedContent(inner, systemDir, savesDir, sram, rtc, segaSetting, biosPresent, archiveAsIs, naomiSets, naomiBios)
+            return PreparedContent(inner, launchSystemDir, savesDir, sram, rtc, segaSetting, biosPresent, archiveAsIs, naomiSets, naomiBios)
         }
+    }
+
+    /**
+     * A Dreamcast session copy's system folder, `<copy>/system/`, whose `dc/` already holds the host's console settings
+     * (the sink put them there): this device's arcade BIOS sets and, unless the session boots the HLE BIOS ([hle]), its
+     * Dreamcast BIOS are copied in from [biosDir] (flycast's `dc/` in the real system folder), as the handheld does.
+     */
+    private fun ggpoSystemDir(sessionDir: File, biosDir: File, hle: Boolean): File {
+        val system = File(sessionDir, DcNetplaySaves.SESSION_SYSTEM)
+        val dc = File(system, DcNetplaySaves.BIOS_SUBDIR).apply { mkdirs() }
+        biosDir.listFiles().orEmpty().filter { it.isFile }.forEach { f ->
+            val arcade = Names.isArchive(f.name)
+            if (arcade || (!hle && f.name == DcNetplaySaves.BIOS_FILE)) f.copyTo(File(dc, f.name), overwrite = true)
+        }
+        return system
     }
 
     private suspend fun buildViewData(cfg: LaunchConfig, prepared: PreparedContent): GLRetroViewData? {
@@ -1021,7 +1046,9 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                     val launchGpu = if (graphics.preferVulkan) AndroidDeviceInfo.gpu() else null
                     // Overwritten by every launch: a crash's notice then speaks of the game that ended.
                     settings.lastLaunchMaliSystemVulkan = GameCrashNotice.onMaliSystemVulkan(graphics.preferVulkan, driver != null, launchGpu)
-                    launchEnv = GraphicsApiOptions.envFor(graphics, cfg.descriptor?.vulkan, customDriver = driver != null, gpu = launchGpu)
+                    // A Dreamcast session's GGPO setup for flycast (GgpoSession), read by the core at load.
+                    launchEnv = GraphicsApiOptions.envFor(graphics, cfg.descriptor?.vulkan, customDriver = driver != null, gpu = launchGpu) +
+                        GgpoSession.env(cfg.descriptor?.id, cfg.np)
                     // ParaLLEl-RDP's upscaling follows the driver just picked (Auto stays native on the Adreno's own one).
                     val res3dAlso = res3d.launchAlsoSet(customDriver = driver != null, gpu = launchGpu ?: DeviceTraits.gpu)
                     // netplay link: the link options are this launch's too (a session's port, mode and peer; a solo mGBA's cable): never saved.
@@ -1074,6 +1101,9 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                         if (cfg.descriptor?.id == SegaPadType.GPGX) SegaPadType.gpgxPorts(launchSega, cfg.players)?.let { controllerPorts = it }
                         if (cfg.descriptor?.id == SegaPadType.PICODRIVE && launchSega != null) controllerPorts = SegaPadType.picodrivePorts(launchSega, launchSegaPad, cfg.players)
                         cfg.netplayPad?.ports?.takeIf { it.isNotEmpty() }?.let { controllerPorts = controllerPorts + it }   // netplay: the pak's ports 0-1
+                        if (BuildConfig.DEBUG && launchSega != null) NxTestResults.write(host.activity, "pad",
+                            "session" to cfg.np?.segaPad, "setting" to launchSega, "drawn" to launchSegaPad?.name,
+                            "port0" to controllerPorts[0], "port1" to controllerPorts[1])
                         if (cfg.dsMenu) {
                             loadWithoutContent = true
                         } else if (prepared.inner != null) {
@@ -1246,6 +1276,9 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // without a resume state, since the game has stopped itself by then. The resume point is HOME's ([WiiDolphinController.pressHome]).
             lifecycleScope.launch {
                 view.getShutdownRequests().first()
+                // A Dreamcast session's core stops itself when the other device is gone: the session is over. After this
+                // side's Leave the quit is under way already.
+                if (cfg.np?.ggpo == true) { gameNetplay.ggpoEnded(); return@launch }
                 wii.endedByCore = true   // before the drop suspends: no slot 9 may queue behind it
                 // Left without HOME this session (a game's own "Wii Menu", a channel launch): the resume point on disk is an
                 // older session's, behind the game's own save on the NAND. Dropped, so the next launch boots fresh.
@@ -1308,7 +1341,11 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // A refused game: the core's own reason (flycast names the NAOMI/Atomiswave BIOS or ROM file it could not find).
             val naomiParent = if (prepared.archiveAsIs) prepared.naomiSets.parent(Names.stripExtension(cfg.romFileName)) else null
             observeErrors(view, cfg.coreFile) { lines ->
-                LoadFailure.message(cfg.title, lines, cfg.romFileName.takeIf { prepared.archiveAsIs }, prepared.naomiBios, naomiParent)
+                // A Dreamcast session's load waits for the other device: refused, it never came (or the two did not agree).
+                if (cfg.np?.ggpo == true && (lines.isEmpty() || lines.any { GGPO_LOG in it })) {
+                    NetplayText.FAILED_CONNECT to NetplayText.FAILED
+                } else LoadFailure.message(cfg.title, lines, cfg.romFileName.takeIf { prepared.archiveAsIs }, prepared.naomiBios, naomiParent)
+                    ?.let { it to GameActivity.START_FAILED }
             }
             // Debug builds: a file named simulate_vulkan_fail in the app's files dir makes a Vulkan launch take the fallback
             // as a failed bridge setup would (no phone at hand fails it): `adb shell run-as <package> touch files/simulate_vulkan_fail`.
@@ -1439,7 +1476,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
         }
     }
 
-    private fun observeErrors(view: GLRetroView, coreFile: String, loadFailure: (List<String>) -> String?) {
+    private fun observeErrors(view: GLRetroView, coreFile: String, loadFailure: (List<String>) -> Pair<String, String>?) {
         host.lifecycleScope.launch {
             view.getGLRetroErrors().flowWithLifecycle(host.lifecycle, Lifecycle.State.STARTED).collect { code ->
                 if (code == GLRetroView.ERROR_LOAD_LIBRARY) {
@@ -1457,7 +1494,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 if (code == GLRetroView.ERROR_LOAD_GAME) {
                     val lines = runCatching { view.getRecentCoreErrors() }.getOrDefault(emptyList())
                     lines.forEach { NxLog.i(TAG_LOG, "core said: $it") }
-                    loadFailure(lines)?.let { host.fail(it); return@collect }
+                    loadFailure(lines)?.let { (message, title) -> host.fail(message, title); return@collect }
                 }
                 if (code == GLRetroView.ERROR_GL_NOT_COMPATIBLE) {
                     // netplay: a relaunch would start without the session (it is gone), so the dialog says what to do. An

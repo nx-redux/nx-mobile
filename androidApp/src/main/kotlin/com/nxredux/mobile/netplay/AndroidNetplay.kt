@@ -16,12 +16,23 @@ import com.nxredux.mobile.netplay.usb.UsbCables
 import com.nxredux.mobile.netplay.wizard.CableLinkOffer
 import com.nxredux.mobile.netplay.wizard.HostSaves
 import com.nxredux.mobile.netplay.wizard.SaveSink
+import com.nxredux.mobile.options.CoreConfig
+import com.nxredux.mobile.options.PadOptions
+import com.nxredux.mobile.runner.AndroidEmulatorConfigStore
 import com.nxredux.mobile.runner.Archives
+import com.nxredux.mobile.runner.BiosFolders
+import com.nxredux.mobile.runner.BiosImport
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.runner.NaomiSetsAsset
+import com.nxredux.mobile.runner.SegaHeader
+import com.nxredux.mobile.runner.SegaPad
+import com.nxredux.mobile.runner.SegaPadType
+import com.nxredux.mobile.runner.SystemFiles
+import com.nxredux.mobile.runner.readUpTo
 import com.nxredux.mobile.settings.AndroidAppSettings
 import com.nxredux.mobile.settings.Prefs
+import com.nxredux.mobile.storage.AndroidHomeLocator
 import com.nxredux.mobile.storage.AndroidRefs
 import com.nxredux.mobile.storage.NxPaths
 import com.nxredux.mobile.storage.findSave
@@ -49,6 +60,7 @@ import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketTimeoutException
+import java.security.MessageDigest
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.concurrent.thread
@@ -240,7 +252,8 @@ class AndroidNetplay(context: Context, private val sdRoot: () -> File) : Netplay
                 // The runner names saves after an unpacked archive's inner file under Use extracted file name: the same
                 // entry here, from the archive's listing (no unpack). Unlistable: the archive name, and the lookup's
                 // cross-setting candidates.
-                val naomiSets = if (CoreRegistry.forTag(tag)?.id == "flycast" && Names.isArchive(romFileName)) NaomiSetsAsset.get(context) else NaomiSets.EMPTY
+                val dc = CoreRegistry.forTag(tag)?.id?.let(NetplayCores::ggpo) == true
+                val naomiSets = if (dc && Names.isArchive(romFileName)) NaomiSetsAsset.get(context) else NaomiSets.EMPTY
                 val inner = NetplaySaves.hostInnerFileName(tag, romFileName, naomiSets) { Archives.entryNames(context, content, romFileName) }
                 val paths = NxPaths(tag, "", romFileName, AndroidAppSettings(context).saveNaming, inner)
                 // One joiner at a time: the previous joiner's daemon and staging go first (the driver closed them already
@@ -259,9 +272,13 @@ class AndroidNetplay(context: Context, private val sdRoot: () -> File) : Netplay
                 try {
                     if (!stage.mkdirs()) throw IOException("cannot create ${stage.name}")
                     // The save under any handheld name, RZIP decoded; nothing staged when none exists or it is malformed.
-                    val found = paths.findSave(sdRoot())
+                    // A Dreamcast game sends flycast's own files instead: its cards (or arcade saves) and console settings.
+                    val found = if (dc) null else paths.findSave(sdRoot())
                     val bytes = found?.readSaveDecoded()
-                    val names = if (found == null || bytes == null) emptyList() else {
+                    val names = if (dc) {
+                        val arcade = CoreRegistry.loadsArchive(tag, romFileName, naomiSets)
+                        stageDcFiles(stage, romFileName, arcade, File(sdRoot(), paths.savesDir))
+                    } else if (found == null || bytes == null) emptyList() else {
                         val wire = if (found.name.endsWith(".srm")) "nxsave.srm" else "nxsave.sav"
                         File(stage, wire).writeBytes(bytes)
                         listOf(wire)
@@ -288,6 +305,37 @@ class AndroidNetplay(context: Context, private val sdRoot: () -> File) : Netplay
         }
     }
 
+    /**
+     * A Dreamcast host's files under their wire names ([DcNetplaySaves.hostFiles]): from the game's save folder [savesDir]
+     * and flycast's `dc/` in the system directory (what the runner's last launch left there). Missing ones are not sent:
+     * the joiner's flycast then starts a blank card or default settings, as the host's own did.
+     */
+    private fun stageDcFiles(stage: File, romFileName: String, arcade: Boolean, savesDir: File): List<String> {
+        val systemDc = File(SystemFiles.ensure(context), DcNetplaySaves.BIOS_SUBDIR)
+        return DcNetplaySaves.hostFiles(romFileName, arcade).mapNotNull { f ->
+            val src = File(if (f.inSystem) systemDc else savesDir, f.path).takeIf { it.isFile } ?: return@mapNotNull null
+            src.copyTo(File(stage, f.wire), overwrite = true)
+            f.wire
+        }.sorted()
+    }
+
+    private fun md5Hex(f: File): String {
+        val md = MessageDigest.getInstance("MD5")
+        f.inputStream().use { input ->
+            val buf = ByteArray(64 * 1024)
+            while (true) { val n = input.read(buf); if (n < 0) break; md.update(buf, 0, n) }
+        }
+        return md.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    override suspend fun dcBios(): String = withContext(Dispatchers.IO) {
+        val systemDir = SystemFiles.ensure(context)
+        // The launch's own import: the BIOS a Dreamcast game here would boot, so both sides compare what they will run.
+        BiosImport.sync(context, AndroidHomeLocator(context).current(), BiosFolders.forTag("DC"), File(systemDir, DcNetplaySaves.BIOS_SUBDIR), listOf(DcNetplaySaves.BIOS_FILE))
+        val bios = File(systemDir, "${DcNetplaySaves.BIOS_SUBDIR}/${DcNetplaySaves.BIOS_FILE}")
+        DcNetplaySaves.fingerprint(runCatching { if (bios.isFile) md5Hex(bios) else null }.getOrNull())
+    }
+
     override suspend fun gbaLinkMode(romFileName: String, content: ContentRef): String {
         // The runner unpacks an archive; the probe reads only a bare ROM, so an archived game has no link mode.
         if (Names.isArchive(romFileName)) return GbaWifiLink.NONE
@@ -297,6 +345,28 @@ class AndroidNetplay(context: Context, private val sdRoot: () -> File) : Netplay
                 AndroidRefs(context.contentResolver).openFd(content, "r")?.use { LibretroNetplay.gbaLinkMode("/proc/self/fd/${it.fd}") }
             }.onFailure { NxLog.w(TAG, "GBA link mode probe failed", it) }.getOrNull() ?: GbaWifiLink.NONE
         }
+    }
+
+    override suspend fun segaPadSetting(tag: String, coreId: String, romFileName: String, content: ContentRef): String {
+        val (console, game) = AndroidEmulatorConfigStore(sdRoot).read(tag, coreId, romFileName)
+        return settledSegaPad(CoreConfig.resolve(emptyMap(), console, game).values[PadOptions.SEGA_PAD] ?: SegaPadType.AUTO, coreId, romFileName, content)
+    }
+
+    /** [setting] as [segaPadSetting] hands it to the handshake: picodrive's Auto settled from [content]'s header. */
+    suspend fun settledSegaPad(setting: String, coreId: String, romFileName: String, content: ContentRef): String {
+        if (setting != SegaPadType.AUTO || coreId != SegaPadType.PICODRIVE) return setting
+        val head = withContext(Dispatchers.IO) {
+            runCatching {
+                when {
+                    Names.isArchive(romFileName) -> Archives.head(context, content, romFileName,
+                        CoreRegistry.forId(coreId)?.extensions.orEmpty(), SegaHeader.READ_LENGTH)
+                    SegaHeader.readable(romFileName) -> AndroidRefs(context.contentResolver).openInput(content)?.use { it.readUpTo(SegaHeader.READ_LENGTH) }
+                    else -> null
+                }
+            }.onFailure { NxLog.w(TAG, "Sega header read failed", it) }.getOrNull()
+        }
+        // picodrive's own Auto (SegaPadType.picodrivePorts): no header is the 6-button pad.
+        return if (SegaPadType.resolve(setting, head?.let(SegaHeader::padType)) == SegaPad.THREE) SegaPadType.THREE else SegaPadType.SIX
     }
 
     override fun clientSink(romFileName: String): SaveSink = NetplaySessionDir.sink(context.filesDir, romFileName, Rsync.find(context))

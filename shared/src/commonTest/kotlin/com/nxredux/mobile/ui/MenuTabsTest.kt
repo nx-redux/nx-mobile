@@ -40,23 +40,23 @@ class MenuTabsTest {
         assertEquals(emptyList(), tabs.filter { it.category != MenuCategory.GAMES }.flatMap { it.games })
     }
 
-    // Every pin is on Home: the top section (the squares, "+N" for the rest), then every pinned game as a row game.
+    // Every pin is on Home: the top section, then every pinned game, then the pinned tools band.
     @Test fun homeListsTheTopThenTheRowGames() {
         val games = listOf("Mega Man X", "Zelda", "Sonic & Knuckles", "Streets of Rage 2", "Sonic II", "Sonic 3D Blast").map(::listed)
         val pinnedTools = listOf(ToolKind.RETRO_ACHIEVEMENTS, ToolKind.SETTINGS, ToolKind.GAME_TIME, ToolKind.ARTWORK, ToolKind.CHEAT_DB).map { ToolRow(it, it.name, null) }
         val home = buildHome(null, games, pinnedTools, stats, slots = 4)
         assertEquals(
-            listOf(MainRow.PickAGame) + pinnedTools.take(3).map(MainRow::PinnedTool) + MainRow.MoreTools(2) + games.map(MainRow::Pin),
+            listOf(MainRow.PickAGame) + games.map(MainRow::Pin) + pinnedTools.take(3).map(MainRow::PinnedTool) + MainRow.MoreTools(2),
             homeTabRows(home),
         )
     }
 
-    @Test fun rowsAreTheTopThenThePinsAsGiven() {
+    @Test fun rowsAreTheTopThenThePinsThenTheTools() {
         val zelda = MainRow.Pin(listed("Zelda"))
         val mario = MainRow.Pin(listed("Mario"))
         val tool = MainRow.PinnedTool(tools.single())
-        val home = Home(top = listOf(MainRow.PickAGame, tool), pins = listOf(zelda, mario), strip = null, freshInstall = false)
-        assertEquals(listOf(MainRow.PickAGame, tool, zelda, mario), homeTabRows(home))
+        val home = Home(top = listOf(MainRow.PickAGame), pins = listOf(zelda, mario), strip = null, freshInstall = false, tools = listOf(tool))
+        assertEquals(listOf(MainRow.PickAGame, zelda, mario, tool), homeTabRows(home))
     }
 
     @Test fun homeWithoutPinsHasNoPinnedRow() {
@@ -123,11 +123,11 @@ class MenuTabsTest {
         assertEquals(listOf("Home", "Games", "Consoles", "Collections", "Tools", "Apps"), MenuCategory.entries.map { it.label })
     }
 
-    // The rows skip the Continue game when it is pinned too ([buildHome] leaves it out); the others keep their order.
+    // The rows skip the Continue game when it is pinned too ([buildHome] leaves it out); the others keep their order, with tools after pinned games.
     @Test fun thePinnedRowsSkipTheContinueGame() {
         val kirby = listed("Kirby")
         val home = buildHome(MainRow.Continue(kirby, ResumeInfo.NONE), listOf(listed("Mario"), kirby, listed("Zelda")), tools, stats, slots = 3)
-        assertEquals(listOf(MainRow.Continue(kirby, ResumeInfo.NONE), MainRow.PinnedTool(tools.single()), MainRow.Pin(listed("Mario")), MainRow.Pin(listed("Zelda"))), homeTabRows(home))
+        assertEquals(listOf(MainRow.Continue(kirby, ResumeInfo.NONE), MainRow.Pin(listed("Mario")), MainRow.Pin(listed("Zelda")), MainRow.PinnedTool(tools.single())), homeTabRows(home))
     }
 
     // Continue's game the only pin: nothing left to show, so no row games at all, as with no pins.

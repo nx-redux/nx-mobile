@@ -88,7 +88,8 @@ object NetplaySessionDir {
 
     /**
      * Stages `nxsave.<ext>` files pulled by [puller] (the bundled rsync; null when there is none: [SaveSink.canPull] false)
-     * in `netplay/.staging/`; [SaveSink.commit] renames them to `<stem>.<ext>` and swaps the staging folder in as a fresh
+     * in `netplay/.staging/`; [SaveSink.commit] renames them to `<stem>.<ext>` (a Dreamcast session's [DcNetplaySaves]
+     * files to where flycast reads them, the console settings under `system/dc/`) and swaps the staging folder in as a fresh
      * `netplay/session/` with one rename, so the session copy is the whole set or nothing.
      *
      * Every join attempt starts from nothing: creating the sink (once per attempt, before the handshake, off the main
@@ -117,7 +118,7 @@ object NetplaySessionDir {
         }
 
         override suspend fun pull(hostIp: String, wireName: String) {
-            requireNotNull(NetplaySaves.localName(wireName, stem)) { "not a save: $wireName" }
+            requireNotNull(localName(wireName)) { "not a save: $wireName" }
             val p = puller ?: throw IOException("no rsync on this device")
             p.pull(hostIp, wireName, stage)
             if (!File(stage, wireName).isFile) throw IOException("rsync left no $wireName")
@@ -126,8 +127,9 @@ object NetplaySessionDir {
         override fun commit() = synchronized(NetplaySessionDir) {
             try {
                 stage.listFiles().orEmpty().forEach { f ->
-                    val local = NetplaySaves.localName(f.name, stem) ?: throw IOException("not a save: ${f.name}")
-                    if (!f.renameTo(File(stage, local))) throw IOException("rename failed: ${f.name}")
+                    val local = File(stage, localName(f.name) ?: throw IOException("not a save: ${f.name}"))
+                    local.parentFile?.mkdirs()
+                    if (!f.renameTo(local)) throw IOException("rename failed: ${f.name}")
                 }
                 session.deleteRecursively()
                 if (session.exists() || !stage.renameTo(session)) throw IOException("cannot promote the session copy")
@@ -141,5 +143,8 @@ object NetplaySessionDir {
         override fun abort() {
             synchronized(NetplaySessionDir) { stage.deleteRecursively() }
         }
+
+        /** A battery save's `<stem>.<ext>`, or a Dreamcast session's file where flycast reads it ([DcNetplaySaves.localPath]). */
+        private fun localName(wire: String): String? = NetplaySaves.localName(wire, stem) ?: DcNetplaySaves.localPath(wire, rom)
     }
 }

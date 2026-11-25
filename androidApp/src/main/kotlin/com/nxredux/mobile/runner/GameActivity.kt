@@ -230,6 +230,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         const val EXTRA_NETPLAY_MIXED = "netplay_mixed"          // Boolean: a GBA link with the other side on the other core
         const val EXTRA_NETPLAY_PEER_WL = "netplay_peer_wl"      // the other side's GBA link mode token; absent: it sent none
         const val EXTRA_NETPLAY_PEER_NAME = "netplay_peer_name"  // the other player's name; absent: none traded
+        const val EXTRA_NETPLAY_SEGA_PAD = "netplay_sega_pad"  // the host's Sega Controller Type both play; absent: the fixed pad
+        const val EXTRA_NETPLAY_DC_HLE = "netplay_dc_hle"        // a Dreamcast session boots the HLE BIOS on both sides
         const val EXTRA_NETPLAY_USB_TOKEN = "netplay_usb_token"  // Long: the menu's cable start this session runs on (UsbCables.token)
         // Cable Link over Wi-Fi (NetplaySession.cableLink and what its handshake settled)
         const val EXTRA_NETPLAY_CABLE_LINK = "netplay_cable_link"        // Boolean
@@ -1474,7 +1476,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // Multiplayer → Local Wireless (the menu, live).
         if (localWirelessKey?.let { values[it] } != oldLocalWireless) switchLocalWireless(values)
         val segaSetting = values[PadOptions.SEGA_PAD] ?: SegaPadType.AUTO
-        if (segaSetting != oldSegaSetting && PadMap.isSegaPadTag(gameTag)) applySegaPad(segaSetting)
+        // In a session the pad is the session's (both phones agreed it): a Controller Type change waits for the next launch.
+        if (segaSetting != oldSegaSetting && PadMap.isSegaPadTag(gameTag) && netplayNow == null) applySegaPad(segaSetting)
         if (isN3ds) {
             applyN3dsNewControls(values[N3dsOptions.NEW_CONTROLS])
             syncN3dsCore()   // a layout row changed in the menu, or the hotkey's

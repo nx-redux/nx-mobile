@@ -12,7 +12,7 @@ object RsyncCommands {
     /** `rsync -t --inplace --no-perms --timeout=8 --contimeout=4 rsync://<host>:18731/sync/<name> <dest>/` (no shell). */
     fun pullArgs(binary: String, hostIp: String, wireName: String, destDir: String): List<String> {
         require(NetplayAddress.ipv4(hostIp) == hostIp) { "not a dotted IPv4 address: $hostIp" }
-        require(wireName in NetplaySaves.WIRE_NAMES) { "not a save name: $wireName" }
+        require(wireName in NetplaySaves.ALL_WIRE_NAMES) { "not a save name: $wireName" }
         return listOf(
             binary, "-t", "--inplace", "--no-perms", "--timeout=8", "--contimeout=4",
             "rsync://$hostIp:$PORT/$MODULE/$wireName", destDir.trimEnd('/') + "/",

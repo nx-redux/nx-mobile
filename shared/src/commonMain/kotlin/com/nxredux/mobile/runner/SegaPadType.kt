@@ -60,6 +60,7 @@ object SegaPadType {
     const val AUTO = "auto"
     const val THREE = "3"
     const val SIX = "6"
+    val SETTINGS = setOf(AUTO, THREE, SIX)
     /** genesis_plus_gx `RETRO_DEVICE_MDPAD_3B` / `_6B` = RETRO_DEVICE_SUBCLASS(JOYPAD, 0 / 1) (`libretro/libretro.c:57-58`). */
     const val MDPAD_3B = 257
     const val MDPAD_6B = 513

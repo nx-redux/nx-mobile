@@ -25,14 +25,12 @@ import com.nxredux.mobile.ui.HomeStrip
 import com.nxredux.mobile.ui.InfoLine
 import com.nxredux.mobile.ui.MainRow
 import com.nxredux.mobile.ui.abstractAccentArtUrl
-import com.nxredux.mobile.ui.abstractAppArtUrl
 import com.nxredux.mobile.ui.abstractArtFor
-import com.nxredux.mobile.ui.abstractArtUrl
 import com.nxredux.mobile.ui.continueFrame
 import com.nxredux.mobile.ui.continuePictures
 import com.nxredux.mobile.ui.game
 import com.nxredux.mobile.ui.gridTiles
-import com.nxredux.mobile.ui.pinKey
+import com.nxredux.mobile.ui.toolAbstractArtUrl
 import kotlin.math.max
 import kotlin.math.min
 
@@ -127,7 +125,7 @@ internal fun homeCarouselTiles(rows: List<MainRow>, accentRgb: Int): List<GridTi
         // Pinned tools show a large centred icon over deterministic abstract art; their title sits in the caption under the carousel.
         is MainRow.PinnedTool -> (gridTiles(listOf(r)).single() as GridTile.Tool).copy(
             lines = emptyList(),
-            backgroundUrl = r.row.appId?.let { abstractAppArtUrl(it, icon = false) } ?: abstractArtUrl("TOOL", r.row.pinKey),
+            backgroundUrl = toolAbstractArtUrl(r.row),
         )
         else -> null
     }
@@ -230,14 +228,16 @@ internal fun HomeCarouselScreen(
             else homeCarouselScreenCentred(centred, inkH, dockH = 0f, bodyTop + headerH, centreY, HOME_CAROUSEL_MIN_GAP, bodyH - HOME_CAROUSEL_MIN_GAP)
         Box(Modifier.fillMaxSize().onGloballyPositioned { bodyTop = with(density) { it.positionInWindow().y.toDp().value } }) {
             // With the tab row hidden, the tab row's eased band in its place (the header's height), under the strip
-            // and the Recent and Search icons MainMenuScreen draws over it.
-            if (frame.titleHidden) Box(Modifier.fillMaxWidth().height((header?.height ?: MENU_TAB_ROW_HEIGHT.value).dp + NX_TOP_BAND_REACH).nxTopBandFade(colors.background))
+            // and the Recent and Search icons MainMenuScreen draws over it, still while the page slides between tabs.
+            if (frame.titleHidden) Box(Modifier.fillMaxWidth().height((header?.height ?: MENU_TAB_ROW_HEIGHT.value).dp + NX_TOP_BAND_REACH).pageFixed().nxTopBandFade(colors.background))
             // In the header with the tab row hidden, else centred over the centred carousel, in either orientation.
             if (header != null) shownStrip?.let {
-                HomeStripLines(
-                    it, header.lines, inset.start.value, header.stripTop, width = width - (inset.start + inset.end).value - iconsWidth,
-                    lh = homeStripLineH(frame), pitch = homeStripPitch(frame),
-                )
+                Box(Modifier.fillMaxSize().pageFixed()) {
+                    HomeStripLines(
+                        it, header.lines, inset.start.value, header.stripTop, width = width - (inset.start + inset.end).value - iconsWidth,
+                        lh = homeStripLineH(frame), pitch = homeStripPitch(frame),
+                    )
+                }
             } else shownStrip?.let {
                 HomeStripLines(
                     it, stripLines, inset.start.value, place.stripInkTop - capTop,

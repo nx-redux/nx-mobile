@@ -7,6 +7,7 @@ import com.nxredux.mobile.netplay.NetplayWire
 import com.nxredux.mobile.netplay.RejectReason
 import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.settings.PlayerName
+import com.nxredux.mobile.runner.SegaPadType
 
 /**
  * The handheld's capability token (nx-redux wiz_caps.c): the HELLO field `caps=<token>` after the four fixed
@@ -15,7 +16,8 @@ import com.nxredux.mobile.settings.PlayerName
  * Auto adds `,auto=1`, and a side that trades names (the NAME line after START, [NameLine]) `,nm=1`. A Cable Link
  * over Wi-Fi offer sends `core=mgba,tag=<TAG>,cl=1` instead (no `wl` or `auto`: that session always runs mGBA's own
  * cable inside each phone). Its ROM and BIOS hashes would not fit in [MAX] chars, so
- * they follow the HELLO in a `CABLE` line ([CableLinkExchange]).
+ * they follow the HELLO in a `CABLE` line ([CableLinkExchange]). A Mega Drive / Sega CD / 32X game adds `,pad=<auto|3|6>`,
+ * the side's Controller Type: a joiner's says it follows the host's, the host's (sent only to such a joiner) is the session's.
  */
 object Caps {
     const val MAX = 63
@@ -53,25 +55,34 @@ object Caps {
     /**
      * What this device sends: `core=<core>,tag=<TAG>` (the handheld's tag, [CoreRegistry.handheldTag]: GPGX_SMS goes as
      * GPGX, which the handheld knows), then for gpSP and mGBA `,wl=<wl>` (the game's link mode, when known), then
-     * `,auto=1` when [auto] (a joiner whose Emulator row is Auto and could switch); "" when that would break the grammar.
-     * The `auto` element, then `wl`, is dropped when it would not fit. The handheld reads caps by key (wiz_caps.c
-     * WizCaps_value), so elements it does not know are safe there.
+     * `,auto=1` when [auto] (a joiner whose Emulator row is Auto and could switch), then `,pad=<pad>` when [pad] (the
+     * Sega Controller Type), then `,nm=1` when [names]; "" when that would break the grammar. A Dreamcast game adds
+     * `,dcbios=<fingerprint>` ([dcBios]) after the tag. The `nm` element, then `pad`, then `auto`, then `wl`, is dropped
+     * when it would not fit (a side that sent no `pad` plays the old fixed pad, as its peer then does). The handheld reads
+     * caps by key (wiz_caps.c WizCaps_value), so elements it does not know are safe there.
      */
-    fun of(core: String, tag: String, auto: Boolean = false, wl: String? = null, cableLink: Boolean = false, names: Boolean = false): String {
-        val token = gates(core, tag, auto, wl, cableLink)
+    fun of(
+        core: String, tag: String, auto: Boolean = false, wl: String? = null, cableLink: Boolean = false,
+        names: Boolean = false, dcBios: String? = null, pad: String? = null,
+    ): String {
+        val token = gates(core, tag, auto, wl, cableLink, dcBios, pad)
         // Names are a nicety: the first thing left out when the token would not fit.
         if (names && token.isNotEmpty()) "$token,nm=1".takeIf { isValid(it) }?.let { return it }
         return token
     }
 
-    private fun gates(core: String, tag: String, auto: Boolean, wl: String?, cableLink: Boolean): String {
-        val base = "core=$core,tag=${CoreRegistry.handheldTag(tag)}"
-        if (cableLink) return "$base,cl=1".takeIf { isValid(it) } ?: ""
+    private fun gates(core: String, tag: String, auto: Boolean, wl: String?, cableLink: Boolean, dcBios: String?, pad: String?): String {
+        val named = "core=$core,tag=${CoreRegistry.handheldTag(tag)}"
+        if (cableLink) return "$named,cl=1".takeIf { isValid(it) } ?: ""
+        // A Dreamcast game's BIOS fingerprint (the handheld's `--caps dcbios=`): both sides boot the real BIOS only when theirs match.
+        val base = dcBios?.let { "$named,dcbios=$it" }?.takeIf { isValid(it) } ?: named
         val withWl = if (wl != null && NetplayCores.link(core) == NetplayLinkKind.NETPACKET) "$base,wl=$wl" else base
-        if (auto) "$withWl,auto=1".takeIf { isValid(it) }?.let { return it }
+        val withAuto = if (auto) "$withWl,auto=1" else withWl
+        if (pad != null) "$withAuto,pad=$pad".takeIf { isValid(it) }?.let { return it }
+        if (auto) withAuto.takeIf { isValid(it) }?.let { return it }
         withWl.takeIf { isValid(it) }?.let { return it }
         // Only a core or tag with characters outside the grammar gets here; gpSP and mGBA with a GBA tag always fit.
-        return base.takeIf { isValid(it) } ?: ""
+        return base.takeIf { isValid(it) } ?: named.takeIf { isValid(it) } ?: ""
     }
 }
 
@@ -102,6 +113,10 @@ data class Hello(
 
     /** A phone that trades names after START (`nm=1`, [NameLine]); older builds and the handheld never send it. */
     val names: Boolean get() = Caps.value(caps, "nm") == "1"
+    /** The side's Sega Controller Type (`pad=`, [SegaPadType]); null when it sent none or an unknown value. */
+    val pad: String? get() = Caps.value(caps, "pad")?.takeIf { it in SegaPadType.SETTINGS }
+    /** A Dreamcast game's BIOS fingerprint (`dcbios=`): 12 hex digits of its dc_boot.bin's MD5, or `none`; null when not sent. */
+    val dcBios: String? get() = Caps.value(caps, "dcbios")
 
     companion object {
         const val CLIENT = "client"

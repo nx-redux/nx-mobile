@@ -46,6 +46,26 @@ class SessionDirTest {
         assertEquals(listOf("10.0.0.1 nxsave.srm", "10.0.0.1 nxsave.srm"), p.pulls)
     }
 
+    @Test fun a_dreamcast_hosts_files_land_where_flycast_reads_them() {
+        val sink = NetplaySessionDir.sink(tmp.root, "Soulcalibur (USA).chd", FakePuller())
+        sink.begin()
+        for (wire in listOf("nxcard.bin", "nxa2.bin", "nxnvmem.bin")) sink.pullNow(wire)
+        sink.commit()
+        val session = NetplaySessionDir.dir(tmp.root)
+        assertTrue(File(session, "Soulcalibur (USA).A1.bin").isFile)
+        assertTrue(File(session, "vmu_save_A2.bin").isFile)
+        assertTrue(File(session, "system/dc/dc_nvmem.bin").isFile)
+        assertEquals(setOf("Soulcalibur (USA).A1.bin", "vmu_save_A2.bin", "system"), session.list()!!.toSet())
+    }
+
+    @Test fun a_dreamcast_arcade_hosts_saves_land_in_reicast() {
+        val sink = NetplaySessionDir.sink(tmp.root, "mvsc2.zip", FakePuller())
+        sink.begin()
+        sink.pullNow("nxarc.nvmem")
+        sink.commit()
+        assertTrue(File(NetplaySessionDir.dir(tmp.root), "reicast/mvsc2.zip.nvmem").isFile)
+    }
+
     @Test fun a_sink_without_rsync_cannot_pull() {
         val sink = NetplaySessionDir.sink(tmp.root, "Game.sfc", null)
         assertFalse(sink.canPull)
