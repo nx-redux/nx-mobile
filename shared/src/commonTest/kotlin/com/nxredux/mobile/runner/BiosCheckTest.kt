@@ -104,9 +104,17 @@ class BiosCheckTest {
         assertEquals(BiosPlan.Ok, BiosCheck.plan("DC", CoreRegistry.requiredBios("DC"), "chd", setOf("dc_boot.bin"), false))
     @Test fun plan_present_bios_is_ok_even_if_bad() =   // the checksum check is the pipeline's, after the plan
         assertEquals(BiosPlan.Ok, BiosCheck.plan("DC", CoreRegistry.requiredBios("DC"), "cue", setOf("dc_boot.bin"), false))
-    @Test fun plan_dc_netplay_without_bios_refuses() =
-        assertEquals(BiosPlan.Refuse("Dreamcast netplay needs a BIOS: put dc_boot.bin in Bios/DC/"),
-            BiosCheck.plan("DC", CoreRegistry.requiredBios("DC"), "gdi", emptySet(), netplay = true))
+    @Test fun plan_dc_netplay_without_bios_runs_hle_without_forcing() {
+        val needs = CoreRegistry.requiredBios("DC")
+        assertEquals(BiosPlan.Hle(emptyMap(), BiosCheck.hleNotice("DC", needs.first())),
+            BiosCheck.plan("DC", needs, "gdi", emptySet(), netplay = true))
+    }
+
+    @Test fun plan_netplay_without_an_hle_fallback_still_refuses() {
+        val need = BiosNeed(listOf("x.bin"))
+        assertEquals(BiosPlan.Refuse(BiosCheck.message("SEGACD", need)),
+            BiosCheck.plan("SEGACD", listOf(need), "iso", emptySet(), netplay = true))
+    }
     @Test fun plan_naomi_zip_is_not_hle() =
         assertEquals(BiosPlan.Ok, BiosCheck.plan("DC", CoreRegistry.requiredBios("DC"), "zip", emptySet(), false))
     @Test fun plan_without_hle_still_refuses() =

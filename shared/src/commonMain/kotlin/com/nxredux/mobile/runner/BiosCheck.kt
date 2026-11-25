@@ -42,14 +42,14 @@ object BiosCheck {
 
     /**
      * The plan for launching [tag]: the first unmet need decides. Without an HLE fallback it refuses; with one the core
-     * boots on its built-in BIOS, except in [netplay]: the session handshake owns a session's BIOS mode, so the launch-time
-     * fallback stays out, and without a BIOS a phone can neither join nor host until one is added.
+     * boots on its built-in BIOS. On a [netplay] launch the session's handshake picks HLE or the real BIOS for both
+     * sides, so the fallback only supplies the notice and forces no core option.
      */
     fun plan(tag: String, needs: List<BiosNeed>, ext: String, present: Set<String>, netplay: Boolean): BiosPlan {
         val need = missing(needs, ext, present).firstOrNull() ?: return BiosPlan.Ok
         val hle = need.hle ?: return BiosPlan.Refuse(message(tag, need))
-        if (netplay) return BiosPlan.Refuse("${consoleName(tag)} netplay needs a BIOS: put ${biosWording(need)} in Bios/${biosFolder(tag)}/")
-        return BiosPlan.Hle(mapOf(hle.optionKey to hle.optionValue), hleNotice(tag, need))
+        val options = if (netplay) emptyMap() else mapOf(hle.optionKey to hle.optionValue)
+        return BiosPlan.Hle(options, hleNotice(tag, need))
     }
 
     /** "Running without a Dreamcast BIOS: some games may not work. Put dc_boot.bin in Bios/DC/." */
