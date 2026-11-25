@@ -1,5 +1,17 @@
 # TODO list
 
+## PSP ad hoc over the USB cable
+
+To fix (both reproduce with `tools/device-tests/psp_cable.py`, checks `late` and `replug`):
+
+- [ ] A cable plugged into a running Wi-Fi lobby drops the lobby: as the cable starts the link logs `left`, `serve off`, `log in again`, though a running session should be kept. Looks like Android's USB dialog pausing the game; not traced in code.
+- [ ] A pull and a re-plug within about 10 s: the host-side phone reports `cable up` 2 s after the plug on a cable that is not linked yet, moves onto it and serves alone, then goes back to the Wi-Fi about 20 s later. For PSP count only a peer in link shape as up (`AndroidUsbCable.peer()`).
+
+Still owed:
+
+- [ ] Quit crash seen once on the Fold: SIGSEGV in PPSSPP's `DrawEngineGLES` constructor under `retro_unload_game`, a quit before the game finished booting behind a USB dialog.
+- [ ] After a pull, both phones re-enter the lobby and meet over the Wi-Fi (not run: the phones were on different subnets).
+
 ## Review round 3: device checks owed
 
 - [ ] RA: revoke/sign out mid-game, unlock, sign in, sync → the unlock arrives; quit right after an unlock → no toast during the quit.
