@@ -12,7 +12,7 @@ object DcInput {
 /**
  * How a console's face buttons take a pad's A/B/X/Y (Controller Layout): [LETTERS] by printed letter, the
  * core's RetroPad A being the console's A (SNES, NES, Game Boy, GBA, DS, 3DS, Virtual Boy, Lynx, Pokemon mini,
- * WonderSwan; N64 too, whose [N64Input] then reads that letter by name); [LETTERS_SWAPPED] by printed letter on a core
+ * WonderSwan, Wii, Wii U, GameCube; N64 too, whose [N64Input] then reads that letter by name); [LETTERS_SWAPPED] by printed letter on a core
  * that reads the console's A from JOYPAD_B, B from JOYPAD_A, X from JOYPAD_Y and Y from JOYPAD_X (Dreamcast with
  * NAOMI/Atomiswave, Neo Geo Pocket); [POSITIONS] by position, for buttons with no matching letters or a layout that is
  * positional by nature (PlayStation symbols, Sega A B C / X Y Z rows, 1/2, I/II, arcade and the rest): the console's
@@ -36,7 +36,7 @@ object PhysicalKeys {
     const val BUTTON_Y = 100
 
     private val LETTER_TAGS = setOf("SFC", "SUPA", "FC", "FDS", "GB", "GBC", "GBA", "MGBA", "SGB", "NDS", "3DS", "VB", "LYNX",
-        "PKM", "WSC", "N64", "WII", "GC")
+        "PKM", "WSC", "N64", "WII", "WIIU", "GC")
     private val SWAPPED_TAGS = setOf("DC", "NGP", "NGPC")
 
     fun modeFor(tag: String): FaceMode = when (tag.trim().uppercase()) {
