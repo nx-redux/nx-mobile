@@ -125,6 +125,7 @@ class BiosCheckTest {
         val notice = (hle as BiosPlan.Hle).notice
         assertEquals(notice, BiosCheck.noticeDue(hle, "DC", emptySet()))
         assertEquals(null, BiosCheck.noticeDue(hle, "DC", setOf("DC")))
+        assertEquals(null, BiosCheck.noticeDue(hle, " dc ", setOf(BiosCheck.noticeKey("DC"))))
         assertEquals(null, BiosCheck.noticeDue(BiosPlan.Ok, "DC", emptySet()))
     }
 }

@@ -1048,7 +1048,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                     // ParaLLEl-RDP's upscaling follows the driver just picked (Auto stays native on the Adreno's own one).
                     val res3dAlso = res3d.launchAlsoSet(customDriver = driver != null, gpu = launchGpu ?: DeviceTraits.gpu)
                     // netplay link: the link options are this launch's too (a session's port, mode and peer; a solo mGBA's cable): never saved.
-                    graphicsForcedOptions = graphics.forcedOptions.keys + cfg.linkOptions.keys
+                    graphicsForcedOptions = graphics.forcedOptions.keys + cfg.linkOptions.keys + prepared.hleOptions.keys
                     GLRetroViewData(host.activity).apply {
                         coreFilePath = cfg.coreFile
                         systemDirectory = prepared.systemDir.absolutePath
@@ -1146,7 +1146,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             preflightNotice?.let { toast(it) }
             prepared.hleNotice?.let {
                 toast(it)
-                settings.hleBiosNoticeShown = settings.hleBiosNoticeShown + CoreRegistry.consoleTag(cfg.tag.trim().uppercase())
+                settings.hleBiosNoticeShown = settings.hleBiosNoticeShown + BiosCheck.noticeKey(cfg.tag)
             }
             return data
         }

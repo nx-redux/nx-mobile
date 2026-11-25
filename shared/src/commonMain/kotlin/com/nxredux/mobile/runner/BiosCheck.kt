@@ -14,7 +14,11 @@ data class BiosNeed(
     val forExtensions: Set<String> = emptySet(),
     val anySuffix: String? = null,
     val hle: HleFallback? = null,
-)
+) {
+    init {
+        require(anyOf.isNotEmpty() || anySuffix != null) { "a BIOS need names a file or a suffix" }
+    }
+}
 
 /** What a launch does about its BIOS needs: go ahead, go ahead on the core's HLE BIOS with [options] set, or stop. */
 sealed interface BiosPlan {
@@ -38,22 +42,28 @@ object BiosCheck {
 
     /**
      * The plan for launching [tag]: the first unmet need decides. Without an HLE fallback it refuses; with one the core
-     * boots on its built-in BIOS, except in [netplay], where peers on different BIOSes would desync.
+     * boots on its built-in BIOS, except in [netplay]: the session handshake owns a session's BIOS mode, so the launch-time
+     * fallback stays out, and without a BIOS a phone can neither join nor host until one is added.
      */
     fun plan(tag: String, needs: List<BiosNeed>, ext: String, present: Set<String>, netplay: Boolean): BiosPlan {
         val need = missing(needs, ext, present).firstOrNull() ?: return BiosPlan.Ok
         val hle = need.hle ?: return BiosPlan.Refuse(message(tag, need))
-        if (netplay) return BiosPlan.Refuse("${consoleName(tag)} netplay needs a BIOS: put ${biosWording(need)} in Bios/${CoreRegistry.consoleTag(tag.trim().uppercase())}/")
+        if (netplay) return BiosPlan.Refuse("${consoleName(tag)} netplay needs a BIOS: put ${biosWording(need)} in Bios/${biosFolder(tag)}/")
         return BiosPlan.Hle(mapOf(hle.optionKey to hle.optionValue), hleNotice(tag, need))
     }
 
     /** "Running without a Dreamcast BIOS: some games may not work. Put dc_boot.bin in Bios/DC/." */
     fun hleNotice(tag: String, need: BiosNeed): String =
-        "Running without a ${consoleName(tag)} BIOS: some games may not work. Put ${biosWording(need)} in Bios/${CoreRegistry.consoleTag(tag.trim().uppercase())}/."
+        "Running without a ${consoleName(tag)} BIOS: some games may not work. Put ${biosWording(need)} in Bios/${biosFolder(tag)}/."
 
     /** The notice to show for [plan] on [tag], or null when it is no HLE launch or [shown] (console tags) already had it. */
     fun noticeDue(plan: BiosPlan, tag: String, shown: Set<String>): String? =
-        (plan as? BiosPlan.Hle)?.notice?.takeIf { CoreRegistry.consoleTag(tag.trim().uppercase()) !in shown }
+        (plan as? BiosPlan.Hle)?.notice?.takeIf { noticeKey(tag) !in shown }
+
+    /** The entry of the shown-notices set for [tag]: its console tag, so one console's notice shows once. */
+    fun noticeKey(tag: String): String = biosFolder(tag)
+
+    private fun biosFolder(tag: String): String = CoreRegistry.consoleTag(tag.trim().uppercase())
 
     private fun biosWording(need: BiosNeed): String = need.anyOf.firstOrNull() ?: "a ${need.anySuffix} file"
 
@@ -66,10 +76,10 @@ object BiosCheck {
     fun message(tag: String, need: BiosNeed): String {
         val t = tag.trim().uppercase()
         val console = consoleName(t)
-        if (need.anySuffix != null) return "$console needs a BIOS: put a ${need.anySuffix} file in Bios/${CoreRegistry.consoleTag(t)}/"
+        if (need.anySuffix != null) return "$console needs a BIOS: put a ${need.anySuffix} file in Bios/${biosFolder(t)}/"
         val rest = need.anyOf.drop(1)
         val names = if (rest.isEmpty()) biosWording(need) else "${need.anyOf.first()} (or ${rest.joinToString(", ")})"
-        return "$console needs a BIOS: put $names in Bios/${CoreRegistry.consoleTag(t)}/"
+        return "$console needs a BIOS: put $names in Bios/${biosFolder(t)}/"
     }
 }
 
