@@ -28,4 +28,11 @@ class LayoutTipTest {
         assertEquals(LayoutTip.WIIU_TEXT, LayoutTip.text(wiiu = true))
         assertEquals(LayoutTip.TEXT, LayoutTip.text(wiiu = false))
     }
+
+    @Test fun theWiiuTipHasItsOwnHiddenFlag() {
+        assertFalse(LayoutTip.hidden(wiiu = true, layoutTipHidden = true, layoutTipHiddenWiiu = false)) // a dismissed DS tip leaves the Wii U one
+        assertTrue(LayoutTip.hidden(wiiu = true, layoutTipHidden = false, layoutTipHiddenWiiu = true))
+        assertTrue(LayoutTip.hidden(wiiu = false, layoutTipHidden = true, layoutTipHiddenWiiu = false))
+        assertFalse(LayoutTip.hidden(wiiu = false, layoutTipHidden = false, layoutTipHiddenWiiu = true)) // the Wii U flag leaves the DS / 3DS one
+    }
 }

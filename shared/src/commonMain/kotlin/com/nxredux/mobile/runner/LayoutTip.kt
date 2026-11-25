@@ -13,6 +13,10 @@ object LayoutTip {
 
     fun text(wiiu: Boolean): String = if (wiiu) WIIU_TEXT else TEXT
 
+    /** The Wii U's tip is dismissed apart from the DS / 3DS one: its chord text differs, and a dismissed DS tip says nothing about it. */
+    fun hidden(wiiu: Boolean, layoutTipHidden: Boolean, layoutTipHiddenWiiu: Boolean): Boolean =
+        if (wiiu) layoutTipHiddenWiiu else layoutTipHidden
+
     /**
      * Due on a DS, 3DS or Wii U game ([n3ds]: any of them) unless [hidden], where the chord works: with no skin, or a
      * skin that lays the screens out by the layout ([skinLayouts]: a regular phone's landscape); a skin placing the

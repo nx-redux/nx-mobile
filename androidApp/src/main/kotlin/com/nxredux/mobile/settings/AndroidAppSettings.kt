@@ -95,6 +95,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
     override var micAsked: Boolean by bool(KEY_MIC_ASKED, false)
     override var micButtonShown: Boolean by bool(KEY_MIC_BUTTON_SHOWN, false)
     override var layoutTipHidden: Boolean by bool(KEY_LAYOUT_TIP_HIDDEN, false)
+    override var layoutTipHiddenWiiu: Boolean by bool(KEY_LAYOUT_TIP_HIDDEN_WIIU, false)
 
     override var allFilesAsked: Boolean by bool(KEY_ALL_FILES_ASKED, false)
 
@@ -351,6 +352,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_MIC_ASKED = "mic_asked"
         private const val KEY_MIC_BUTTON_SHOWN = "mic_button_shown"
         private const val KEY_LAYOUT_TIP_HIDDEN = "layout_tip_hidden"
+        private const val KEY_LAYOUT_TIP_HIDDEN_WIIU = "layout_tip_hidden_wiiu"
         private const val KEY_ONBOARDING_DONE = "onboarding_done"
         private const val KEY_ONBOARDING_STEP = "onboarding_step"
         private const val KEY_ANDROID_PINS = "android_pins"

@@ -521,6 +521,11 @@ interface AppSettings {
         get() = false
         set(@Suppress("UNUSED_PARAMETER") value) {}
 
+    /** The Wii U's own flag for the same tip, so hiding the DS / 3DS one does not hide it. */
+    var layoutTipHiddenWiiu: Boolean
+        get() = false
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+
     /**
      * First setup's All files access step was answered (Allow or Skip); it is never shown again. Defaulted, like
      * [debugLog].
