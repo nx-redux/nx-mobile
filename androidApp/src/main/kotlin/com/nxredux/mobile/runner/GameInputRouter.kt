@@ -118,11 +118,12 @@ internal class GameInputRouter(private val host: GameInputHost) {
             MotionEvent.AXIS_LTRIGGER, MotionEvent.AXIS_RTRIGGER, MotionEvent.AXIS_BRAKE, MotionEvent.AXIS_GAS,
         )
         /**
-         * Cores that read the left stick as analog (N64, PSP, PS1 DualShock, PS2, Dreamcast, and Dolphin's GameCube stick
-         * and Wii Nunchuk and Classic sticks): a gamepad's stick is analog only there. melonDS DS has its own routing (the NDS
-         * branch of onGenericMotionEvent). Every other core, prboom included, gets the stick folded into the d-pad.
+         * Cores that read the left stick as analog (N64, PSP, PS1 DualShock, PS2, Dreamcast, Dolphin's GameCube stick
+         * and Wii Nunchuk and Classic sticks, and Cemu's GamePad sticks): a gamepad's stick is analog only there. melonDS DS
+         * has its own routing (the NDS branch of onGenericMotionEvent). Every other core, prboom included, gets the stick
+         * folded into the d-pad.
          */
-        private val STICK_CORES = setOf("mupen64plus_next", "ppsspp", "pcsx_rearmed", "swanstation", "flycast", "dolphin", "armsx2")
+        internal val STICK_CORES = setOf("mupen64plus_next", "ppsspp", "pcsx_rearmed", "swanstation", "flycast", "dolphin", "armsx2", "cemu")
     }
 
     private val n3dsSwapKey = N3dsSwapKey()
@@ -934,9 +935,10 @@ internal class GameInputRouter(private val host: GameInputHost) {
                 inp.stickDpadY = stickDpadStep(sy, inp.stickDpadY)
             }
             if (isWiiu && port == 0) {
-                // P1's d-pad edges through the SELECT chords; the forwarded ones reach the core as its d-pad
-                val x = hatOrStick(hatX, inp.stickDpadX)
-                val y = hatOrStick(hatY, inp.stickDpadY)
+                // P1's hat edges through the SELECT chords; the forwarded ones reach the core as its d-pad. Cemu has
+                // the stick as analog (STICK_CORES), so no stick step is folded in and a tilt never makes a chord.
+                val x = hatOrStick(hatX, 0)
+                val y = hatOrStick(hatY, 0)
                 routeHat(view, wiiuHatX, wiiuHatY, x, y)
                 wiiuHatX = x
                 wiiuHatY = y

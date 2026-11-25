@@ -26,4 +26,12 @@ class GameInputRouterWiiuTest {
     @Test fun aSelectTapReachesTheGameAsMinus() {
         assertEquals(KeyEvent.KEYCODE_BUTTON_SELECT, PadKeymap.keyCodeFor(PadMap.forTag("WIIU").sends(NxButton.SELECT)))
     }
+
+    // Cemu reads the GamePad's sticks as analog: a tilt must not also press the d-pad (Breath of the Wild's item menus)
+    @Test fun cemuTakesTheStickAsAnalogOnly() {
+        assertEquals(
+            setOf("mupen64plus_next", "ppsspp", "pcsx_rearmed", "swanstation", "flycast", "dolphin", "armsx2", "cemu"),
+            GameInputRouter.STICK_CORES,
+        )
+    }
 }
