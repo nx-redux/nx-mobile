@@ -69,6 +69,13 @@ class NetplayGameTest {
         assertNull(netplaySessionFrom("HOST", "10.0.0.2", "snes9x", null))
     }
 
+    @Test fun the_hosts_sega_pad_crosses_into_the_game_process() {
+        assertEquals("6", netplaySessionFrom("CLIENT", "10.0.0.2", "picodrive", "picodrive", segaPad = "6")?.segaPad)
+        assertEquals("auto", netplaySessionFrom("HOST", "10.0.0.2", "picodrive", "picodrive", segaPad = "auto")?.segaPad)
+        assertNull(netplaySessionFrom("HOST", "10.0.0.2", "picodrive", "picodrive", segaPad = "9")?.segaPad)
+        assertNull(netplaySessionFrom("HOST", "10.0.0.2", "picodrive", "picodrive")?.segaPad)
+    }
+
     @Test fun both_roles_need_the_peer_as_ipv4() {
         // The host's engine accepts only this address: without one the session fails closed.
         assertNull(netplaySessionFrom("HOST", "", "snes9x", "snes9x"))

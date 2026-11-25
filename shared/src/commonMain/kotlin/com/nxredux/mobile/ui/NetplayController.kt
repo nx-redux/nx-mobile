@@ -26,6 +26,8 @@ import com.nxredux.mobile.netplay.wizard.HostOffer
 import com.nxredux.mobile.netplay.wizard.HostOutcome
 import com.nxredux.mobile.netplay.wizard.Wizard
 import com.nxredux.mobile.runner.CoreRegistry
+import com.nxredux.mobile.runner.PadMap
+import com.nxredux.mobile.runner.SegaPadType
 import com.nxredux.mobile.ui.nx.NxButton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -388,6 +390,7 @@ class NetplayController(
                             dcBios = if (NetplayCores.ggpo(own)) platform.dcBios() else null
                             Wizard.host(
                                 ch, HostOffer(game, tag, own, pick, usb, wl, cl, name = playerName(), dcBios = dcBios), saves = { platform.hostSaves(tag, rom, e.game.ref) },
+                                padFor = { run -> segaPad(tag, run, rom, e) },
                                 onSync = { hostStatus(NetplayText.SENDING) },
                                 onTransfer = { t -> hostStatus(NetplayText.transfer(t.sending, t.done, t.total)) },
                             )
@@ -402,7 +405,7 @@ class NetplayController(
                             _page.value = NetplayPage.Progress(NetplayText.TITLE, NetplayText.STARTING)
                             val session = NetplaySession(
                                 NetplayRole.HOST, out.peer, out.core, folderCore, out.emptySaves, overUsb = link != null, mixed = out.mixed,
-                                peerWl = out.peerWl, peerName = out.peerName, dcHle = DcNetplaySaves.hle(dcBios, out.peerDcBios),
+                                peerWl = out.peerWl, peerName = out.peerName, dcHle = DcNetplaySaves.hle(dcBios, out.peerDcBios), segaPad = out.pad,
                             )
                             finish(e, out.cableLink?.let(session::withCableLink) ?: session)
                             return@launch
@@ -562,7 +565,7 @@ class NetplayController(
                 withContext(work) {   // the save sink runs rsync and writes files: off the main thread
                     dcBios = if (NetplayCores.ggpo(core)) platform.dcBios() else null
                     Wizard.client(
-                        ch, ClientOffer(game, any, tag, core, pick, usb, mayRetry && cl == null, wl, cl, name = playerName(), dcBios = dcBios), platform.clientSink(rom),
+                        ch, ClientOffer(game, any, tag, core, pick, usb, mayRetry && cl == null, wl, cl, name = playerName(), dcBios = dcBios, pad = segaPad(tag, core, rom, e)), platform.clientSink(rom),
                         onSync = { joinProgress(NetplayText.RECEIVING) },
                         onWaiting = { n -> joinProgress(NetplayText.youArePlayer(n)) },
                         onTransfer = { t -> joinProgress(NetplayText.transfer(t.sending, t.done, t.total)) },
@@ -588,12 +591,27 @@ class NetplayController(
                     // always plays on the copy it received, empty when the host sent none; only a host has emptySaves.
                     val session = NetplaySession(
                         NetplayRole.CLIENT, host.ip, out.core, folderCore, overUsb = link == NetplayLink.USB, mixed = out.mixed,
-                        peerWl = out.peerWl, peerName = out.peerName, dcHle = DcNetplaySaves.hle(dcBios, out.peerDcBios),
+                        peerWl = out.peerWl, peerName = out.peerName, dcHle = DcNetplaySaves.hle(dcBios, out.peerDcBios), segaPad = out.pad,
                     )
                     finish(e, out.cableLink?.let(session::withCableLink) ?: session)
                     return
                 }
             }
+        }
+    }
+
+    /**
+     * The game's Sega Controller Type for the handshake on [core] ([NetplayPlatform.segaPadSetting]): null outside the Sega
+     * pad tags, Auto when the settings cannot be read.
+     */
+    private suspend fun segaPad(tag: String, core: String, rom: String, e: Listed): String? {
+        if (!PadMap.isSegaPadTag(tag)) return null
+        return try {
+            withContext(work) { platform.segaPadSetting(tag, core, rom, e.game.ref) }.takeIf { it in SegaPadType.SETTINGS } ?: SegaPadType.AUTO
+        } catch (c: CancellationException) {
+            throw c
+        } catch (x: Exception) {
+            SegaPadType.AUTO
         }
     }
 

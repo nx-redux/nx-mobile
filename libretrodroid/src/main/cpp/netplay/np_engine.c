@@ -53,6 +53,7 @@
  * frames 0 and 1 with neutral input: run_frame 0, our input goes out for frame 2.
  *
  * Where it differs from the handheld's engine:
+ * - the host loads back each state it sends (serialize_unlocked), so both sides rebuild what a core's state leaves out;
  * - preFrame never waits on a blocking receive (the thread receives);
  * - ring: remote INPUT for frame f re-initialises slot(f) when it still holds an older frame, and pre-frame only
  *   initialises its own slot when slot->frame != the frame it sends for, so an early remote half is never wiped;
@@ -115,6 +116,7 @@
 #include <unistd.h>
 
 // Constants kept from netplay.h (wire-relevant ones must not change)
+#define NP_VERIFIED_LOG_FRAMES 1200
 #define NP_INPUT_SIZE 10		// u16 buttons + i16 LX, LY, RX, RY (protocol 3)
 #define NP_INPUT_SIZE_LEGACY 2	// u16 buttons only (protocol 2 peers): sticks centred
 
@@ -560,6 +562,8 @@ static void compare_hashes(uint64_t now) {
 	if (same) {
 		if ((int64_t)at > np.verified)
 			np.verified = at;
+		if (at % NP_VERIFIED_LOG_FRAMES == 0)
+			NP_LOG("pair: verified frame %u", at); // a device test tells checks that passed from none at all
 		return;
 	}
 	NP_LOG("pair: hashes differ at frame %u", at);
@@ -1066,13 +1070,20 @@ bool np_active(void) {
 	return a;
 }
 
-// Serialise on the GL thread with np_mutex released (called and returns with it held). NULL on failure.
-static uint8_t* serialize_unlocked(np_size_fn size, np_ser_fn ser, size_t* out_n) {
+// Host: serialise on the GL thread with np_mutex released (called and returns with it held), then load that state back,
+// as the client will: a core whose state leaves out some of its timing (genesis_plus_gx's 68k refresh phase and VDP FIFO
+// cycles) rebuilds the rest from those same bytes on both sides, so the two run cycle for cycle. NULL on failure.
+static uint8_t* serialize_unlocked(np_size_fn size, np_ser_fn ser, np_unser_fn unser, size_t* out_n) {
 	pthread_mutex_unlock(&np_mutex);
 	size_t n = size ? size() : 0;
 	uint8_t* buf = NULL;
 	bool ok = ser && n > 0 && n <= NP_MAX_STATE_SIZE && (buf = (uint8_t*)malloc(n)) != NULL && ser(buf, n);
+	bool reloaded = !ok || !unser || unser(buf, n);
 	pthread_mutex_lock(&np_mutex);
+	if (!reloaded) {
+		NP_LOG("reloading the sent state failed (size %zu)", n); // the session ends; the caller's own line follows
+		ok = false;
+	}
 	*out_n = n;
 	if (!ok) {
 		free(buf);
@@ -1087,10 +1098,10 @@ static bool queue_state(uint32_t frame, const uint8_t* buf, size_t n) {
 }
 
 // Host: serialise on the GL thread (outside the mutex) and queue STATE_HDR + raw bytes for the engine thread.
-static void host_send_state(np_size_fn size, np_ser_fn ser) {
+static void host_send_state(np_size_fn size, np_ser_fn ser, np_unser_fn unser) {
 	np.sync = SYNC_HOST_SERIALIZING;
 	size_t n = 0;
-	uint8_t* buf = serialize_unlocked(size, ser, &n);
+	uint8_t* buf = serialize_unlocked(size, ser, unser, &n);
 	if (np.phase == NP_SYNCING && np.sync == SYNC_HOST_SERIALIZING) {
 		if (!buf) {
 			NP_LOG("serialize failed (size %zu)", n);
@@ -1108,10 +1119,10 @@ static void host_send_state(np_size_fn size, np_ser_fn ser) {
 }
 
 // Host at the resync frame: our state goes to the client, then we hold for its STATE_ACK.
-static void host_send_resync_state(np_size_fn size, np_ser_fn ser) {
+static void host_send_resync_state(np_size_fn size, np_ser_fn ser, np_unser_fn unser) {
 	np.resync = RESYNC_HOST_SERIALIZING;
 	size_t n = 0;
-	uint8_t* buf = serialize_unlocked(size, ser, &n);
+	uint8_t* buf = serialize_unlocked(size, ser, unser, &n);
 	if (np.phase == NP_RUNNING && np.resync == RESYNC_HOST_SERIALIZING) {
 		if (!buf) {
 			NP_LOG("resync serialize failed (size %zu)", n);
@@ -1160,7 +1171,7 @@ static bool client_load_resync(np_unser_fn unser) {
 static bool resync_at_frame(np_size_fn size, np_ser_fn ser, np_unser_fn unser, uint64_t now) {
 	switch (np.resync) {
 	case RESYNC_HOST_RUN_TO:
-		host_send_resync_state(size, ser);
+		host_send_resync_state(size, ser, unser);
 		return false;
 	case RESYNC_CLIENT_WAIT:
 		if (!np.resync_timer) {
@@ -1255,7 +1266,7 @@ int np_pre_frame(uint16_t local, const int16_t* local_analog, np_size_fn size, n
 		}
 		if (np.role == NP_ROLE_HOST) {
 			if (np.sync == SYNC_HOST_SERIALIZE)
-				host_send_state(size, ser);
+				host_send_state(size, ser, unser);
 		} else {
 			client_load_state(size, unser);
 		}

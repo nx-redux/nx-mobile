@@ -455,7 +455,7 @@ class NetplayControllerTest {
         c.press(NxButton.UP, NxButton.RIGHT, NxButton.RIGHT, NxButton.DOWN, NxButton.RIGHT, NxButton.A)   // Emulator = Genesis Plus GX, then Join
         p.found.emit(FoundHost("10.0.0.1", "Sonic The Hedgehog (USA)")); runCurrent()
         c.press(NxButton.A); runCurrent()
-        assertEquals("core=genesis_plus_gx,tag=MD", HelloCodec.parse(h.readLine(1000))!!.caps)
+        assertEquals("core=genesis_plus_gx,tag=MD,pad=auto", HelloCodec.parse(h.readLine(1000))!!.caps)
     }
 
     @Test fun md_netplay_runs_picodrive_which_is_also_the_folder_core() = runTest {
@@ -469,8 +469,23 @@ class NetplayControllerTest {
         client.open(sonic); client.press(NxButton.RIGHT, NxButton.A); runCurrent()
         clientP.found.emit(FoundHost("10.0.0.1", "Sonic The Hedgehog (USA)")); runCurrent()
         client.press(NxButton.A); runCurrent()
-        assertEquals(listOf(NetplaySession(NetplayRole.HOST, "10.0.0.2", "picodrive", "picodrive")), hostLaunches.all.map { it.second })
-        assertEquals(listOf(NetplaySession(NetplayRole.CLIENT, "10.0.0.1", "picodrive", "picodrive")), clientLaunches.all.map { it.second })
+        assertEquals(listOf(NetplaySession(NetplayRole.HOST, "10.0.0.2", "picodrive", "picodrive", segaPad = "auto")), hostLaunches.all.map { it.second })
+        assertEquals(listOf(NetplaySession(NetplayRole.CLIENT, "10.0.0.1", "picodrive", "picodrive", segaPad = "auto")), clientLaunches.all.map { it.second })
+    }
+
+    @Test fun both_phones_play_the_hosts_controller_type() = runTest {
+        val lan = FakeLan()
+        val hostP = FakeNetplayPlatform(lan, WifiInfo("10.0.0.1", "Host Phone")).apply { segaPad = "6" }
+        val clientP = FakeNetplayPlatform(lan, WifiInfo("10.0.0.2", "Client Phone")).apply { segaPad = null }   // unreadable: Auto
+        val hostLaunches = NetplayLaunches(); val clientLaunches = NetplayLaunches()
+        val host = netplayController(hostP, hostLaunches)
+        val client = netplayController(clientP, clientLaunches)
+        host.open(sonic); host.press(NxButton.A); runCurrent()
+        client.open(sonic); client.press(NxButton.RIGHT, NxButton.A); runCurrent()
+        clientP.found.emit(FoundHost("10.0.0.1", "Sonic The Hedgehog (USA)")); runCurrent()
+        client.press(NxButton.A); runCurrent()
+        assertEquals(listOf("6"), hostLaunches.all.map { it.second.segaPad })
+        assertEquals(listOf("6"), clientLaunches.all.map { it.second.segaPad })
     }
 
     @Test fun join_retries_once_with_the_hosts_core() = runTest {
@@ -485,7 +500,7 @@ class NetplayControllerTest {
         c.press(NxButton.A); runCurrent()
         assertEquals("picodrive", HelloCodec.parse(h1.readLine(1000))!!.core)
         h1.writeLine("REJECT core-genesis_plus_gx.GPGX"); runCurrent()
-        assertEquals("core=genesis_plus_gx,tag=MD,auto=1", HelloCodec.parse(h2.readLine(1000))!!.caps)
+        assertEquals("core=genesis_plus_gx,tag=MD,auto=1,pad=auto", HelloCodec.parse(h2.readLine(1000))!!.caps)
         h2.writeLine("HELLO 2 Sonic${esc}The${esc}Hedgehog${esc}(USA) host 2 caps=core=genesis_plus_gx,tag=GPGX")
         h2.writeLine("START 2"); runCurrent()
         assertEquals("START", h2.readLine(1000)); runCurrent()

@@ -1427,7 +1427,7 @@ static int resync_host(uint16_t port, int out, int in) {
 		fprintf(stderr, "  checksum host %08x client %08x\n", core_checksum(), theirs);
 		return -1;
 	}
-	CHECK(unser_calls == 0);
+	CHECK(unser_calls == 2);	/* the host loads each state it sends (the sync, the resync), as the client does */
 	CHECK(np_last_verified_frame() == 240 && their_verified == 240);
 	return 0;
 }

@@ -212,3 +212,14 @@ Checked on the emulator only (GBA game starts, draws, quits; first setup up to P
 - [ ] DS Layout row with a controller (built-in or plugged in, so no skin): it applies, not "Unavailable — The pad skin places the screens". Fixed; AYANEO check owed. Under a shown skin the DS rows stay hidden (Fold cover 2026-11-24).
 - [ ] Update row: after "Update failed" (a redirect), A retries the same release; checking again needs an app restart (Nova, local feed). Check whether intended.
 
+## Sega netplay: both players on the host's Controller Type
+Automated: `tools/device-tests/netplay_pads.py` (Fold host, Nova client, then AYANEO host, Nova client, 2026-11-25: all pass).
+- [x] PicoDrive: host on 6, 3, Auto (6-button and 3-button game) and 6 on a 3-button game: both phones play the host's pad, drift check clean.
+- [x] Old peer either side (no `pad=`): both on the old 3-button pad, drift check clean.
+- [x] The drift check catches a forced 6-vs-3 mismatch (the control case).
+- [x] Genesis Plus GX: host on 6, 3 and Auto, both phones on the host's pad, drift check clean. It drifted before this branch (Auto too): its state leaves out the 68k refresh phase and VDP FIFO timing; the host now loads back the state it sends. 60 s without resyncs stayed in step.
+- [x] Other consoles with the reload (`--smoke`, 45 s each): SNES on Snes9x (AYANEO ↔ Nova) and Supafaust, NES and FDS on FCEUmm, arcade on FBNeo (1942), Master System and Sega CD (Sonic CD) on PicoDrive and Genesis Plus GX (Fold ↔ Nova): no drift. No Game Gear, SG-1000 or 32X games on the phones.
+- [x] PS1: PCSX ReARMed drifted (its dynarec compiles on a second thread, so interrupts landed at other instructions per device); sessions now force `pcsx_rearmed_drc_thread` off. PCSX ReARMed and SwanStation, SF EX Plus Alpha: no drift.
+- [x] N64 (Mario Kart 64): in step. Every RAM difference is in the framebuffer area (0x310000-0x38FFFF, drawn by each GPU); the rest of RDRAM matched at every check for 48 s, so the RAM hash can't pass for N64.
+- [ ] Phone ↔ Brick (no `pad=` yet): still starts, both on the old fixed pad, no desync.
+

@@ -638,13 +638,14 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             renderer.ndsSplit = ndsAtStart
             // nx_* (and legacy minarch_*) keys are frontend settings: never passed to the core.
             frontendValues = FrontendOptions.fromConfig(resolved.values, tag)
-            // netplay: both devices run the console's default Sega pad (Auto), whatever this device's console or game setting;
-            // the core then gets the handheld pak's pad for this tag and core (NetplayPads).
-            if (np != null && PadMap.isSegaPadTag(tag)) frontendValues = frontendValues + (PadOptions.SEGA_PAD to SegaPadType.AUTO)
+            // netplay: both devices run the host's Controller Type when both sides sent theirs (NetplaySession.segaPad), the
+            // single-player path then picks the pad; else Auto here and the handheld pak's fixed pad (NetplayPads).
+            val sessionPad = np?.segaPad?.takeIf { PadMap.isSegaPadTag(tag) }
+            if (np != null && PadMap.isSegaPadTag(tag)) frontendValues = frontendValues + (PadOptions.SEGA_PAD to (sessionPad ?: SegaPadType.AUTO))
             canRewind = descriptor?.rewind == true
             speed.setSession(netplay = np != null)   // first: the touch buttons [ShortcutsMicController.launch] builds follow the session
             shortcuts.launch(microphone = descriptor?.microphone == true, netplay = np != null, tag, Shortcuts.fromConfig(resolved.values))
-            val netplayPad = if (np != null) NetplayPads.forSession(tag, descriptor?.id) else null
+            val netplayPad = if (np != null) NetplayPads.forSession(tag, descriptor?.id, sessionPad) else null
             renderer.shaderValues = ShaderOptions.fromConfig(resolved.values)
             renderer.presetNames = withContext(Dispatchers.IO) { Shaders.presets(shaderRoots) }
             // 3DS with a second display: Azahar starts in the split's fixed layout, which replaces the rows' values below; launched
@@ -1090,6 +1091,9 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                         if (cfg.descriptor?.id == SegaPadType.GPGX) SegaPadType.gpgxPorts(launchSega, cfg.players)?.let { controllerPorts = it }
                         if (cfg.descriptor?.id == SegaPadType.PICODRIVE && launchSega != null) controllerPorts = SegaPadType.picodrivePorts(launchSega, launchSegaPad, cfg.players)
                         cfg.netplayPad?.ports?.takeIf { it.isNotEmpty() }?.let { controllerPorts = controllerPorts + it }   // netplay: the pak's ports 0-1
+                        if (BuildConfig.DEBUG && launchSega != null) NxTestResults.write(host.activity, "pad",
+                            "session" to cfg.np?.segaPad, "setting" to launchSega, "drawn" to launchSegaPad?.name,
+                            "port0" to controllerPorts[0], "port1" to controllerPorts[1])
                         if (prepared.inner != null) {
                             gameFilePath = prepared.inner.absolutePath
                         } else if (cfg.realPath) {

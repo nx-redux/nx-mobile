@@ -2,13 +2,17 @@ package com.nxredux.mobile.netplay
 
 import com.nxredux.mobile.runner.CoreDescriptor
 import com.nxredux.mobile.runner.CoreRegistry
+import com.nxredux.mobile.runner.PadMap
 import com.nxredux.mobile.runner.SegaPad
 import com.nxredux.mobile.runner.SegaPadType
 
 /**
  * The controller a netplay session gives the core on ports 0-1, exactly what the handheld runs for the same tag and core,
  * so a game that probes the pad takes the same path on both devices (a 6-button probe against a 3-button pad desyncs).
- * Single player never reads this: it keeps Controls → Controller Type ([SegaPadType]).
+ * Exceptions, phones only: [PCSX_LOCKSTEP] (its compile thread drifts any session; the handheld's PS pak does not set it,
+ * so a phone ↔ handheld PS session still runs the two differently). Single player never reads this: it keeps Controls →
+ * Controller Type ([SegaPadType]). Nor does a Mega Drive / Sega CD /
+ * 32X session whose two sides both sent their Controller Type: both play the host's through that same path ([forSession]).
  *
  * Sources, nx-redux `skeleton/SYSTEM/tg5040/paks/Emus/<TAG>.pak/default.cfg` and `launch.sh`:
  * - SMS.pak, GG.pak, SG1000.pak: `-picodrive_input1 = 3 button pad`, `-picodrive_input2 = 3 button pad`.
@@ -20,7 +24,7 @@ import com.nxredux.mobile.runner.SegaPadType
  * - A picodrive session on GPGX (the joiner's alternative core) gets picodrive's default, `3 button pad`.
  * - SFC, SUPA, FC, FDS, FBN: no pad-type option in the paks or the cores' option lists (snes9x, supafaust, fceumm, fbneo):
  *   null, the launch is unchanged. PS: `minarch_gamepad_type = 1` (DualShock, 517 on both ports), already the
- *   descriptor's `controllerPortsFor(2)`: null here.
+ *   descriptor's `controllerPortsFor(2)`; pcsx_rearmed (PS and PSX) gets [PCSX_LOCKSTEP], its dynarec compiled in step.
  * - N64: minarch forces its own option set for a session (`Config_forceNetplayN64`): [N64_LOCKSTEP].
  */
 object NetplayPads {
@@ -47,6 +51,13 @@ object NetplayPads {
         "mupen64plus-ThreadedRenderer" to "False",
     ), mapOf(0 to CoreDescriptor.JOYPAD, 1 to CoreDescriptor.JOYPAD), null)
 
+    /**
+     * pcsx_rearmed compiles its dynarec blocks on a second thread by default (`drc_thread` Auto), running other code while
+     * a block compiles: how long that takes differs per device, so interrupts land at other instructions on each side and
+     * the session drifts. Compiled on the frame thread, both run the same cycles. Its ports stay the descriptor's.
+     */
+    private val PCSX_LOCKSTEP = Pad(mapOf("pcsx_rearmed_drc_thread" to "disabled"), emptyMap(), null)
+
     /** tag -> core -> pad. */
     private val table: Map<String, Map<String, Pad>> = mapOf(
         "MD" to mapOf(SegaPadType.PICODRIVE to PICODRIVE_3B, SegaPadType.GPGX to GPGX_AUTO),        // core default
@@ -57,11 +68,18 @@ object NetplayPads {
         "SG1000" to mapOf(SegaPadType.PICODRIVE to PICODRIVE_3B, SegaPadType.GPGX to GPGX_AUTO),    // pak: 3 button pad
         "GPGX" to mapOf(SegaPadType.GPGX to GPGX_AUTO, SegaPadType.PICODRIVE to PICODRIVE_3B),      // minarch JOYPAD
         "N64" to mapOf("mupen64plus_next" to N64_LOCKSTEP),
+        "PS" to mapOf("pcsx_rearmed" to PCSX_LOCKSTEP),
+        "PSX" to mapOf("pcsx_rearmed" to PCSX_LOCKSTEP),
     )
 
     /**
      * The session's pad for [tag] run on [core]; null = nothing to force (the launch's own ports and options stand). A
-     * GPGX_<X> tag reads <X>'s row ([CoreRegistry.baseTag]), whose genesis_plus_gx entry is the GPGX pak's.
+     * GPGX_<X> tag reads <X>'s row ([CoreRegistry.baseTag]), whose genesis_plus_gx entry is the GPGX pak's. [hostPad]: the
+     * host's Controller Type both sides play on a Sega pad tag ([PadMap.isSegaPadTag]); the launch's Controller Type path
+     * then sets the ports, except genesis_plus_gx on Auto, which still gets the joypad on ports 0-1 here.
      */
-    fun forSession(tag: String, core: String?): Pad? = core?.let { table[CoreRegistry.baseTag(tag)]?.get(it) }
+    fun forSession(tag: String, core: String?, hostPad: String? = null): Pad? {
+        if (hostPad != null && PadMap.isSegaPadTag(tag)) return GPGX_AUTO.takeIf { core == SegaPadType.GPGX && hostPad == SegaPadType.AUTO }
+        return core?.let { table[CoreRegistry.baseTag(tag)]?.get(it) }
+    }
 }
