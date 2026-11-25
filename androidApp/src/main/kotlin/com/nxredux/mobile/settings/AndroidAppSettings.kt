@@ -3,6 +3,7 @@ package com.nxredux.mobile.settings
 import com.nxredux.mobile.netplay.NetplayCores
 import com.nxredux.mobile.kids.KidsPin
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.core.content.edit
 import com.nxredux.mobile.BuildConfig
 import com.nxredux.mobile.gpudriver.GpuDriverChoice
@@ -95,6 +96,10 @@ class AndroidAppSettings(context: Context) : AppSettings {
     override var micAsked: Boolean by bool(KEY_MIC_ASKED, false)
     override var micButtonShown: Boolean by bool(KEY_MIC_BUTTON_SHOWN, false)
     override var layoutTipHidden: Boolean by bool(KEY_LAYOUT_TIP_HIDDEN, false)
+    // The tip was one flag shared with the DS: a 3DS player who dismissed it keeps it dismissed until the 3DS flag is written.
+    override var layoutTipHidden3ds: Boolean
+        get() = prefs.booleanOrFallback(KEY_LAYOUT_TIP_HIDDEN_3DS, KEY_LAYOUT_TIP_HIDDEN)
+        set(value) = prefs.edit { putBoolean(KEY_LAYOUT_TIP_HIDDEN_3DS, value) }
     override var layoutTipHiddenWiiu: Boolean by bool(KEY_LAYOUT_TIP_HIDDEN_WIIU, false)
 
     override var allFilesAsked: Boolean by bool(KEY_ALL_FILES_ASKED, false)
@@ -352,6 +357,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_MIC_ASKED = "mic_asked"
         private const val KEY_MIC_BUTTON_SHOWN = "mic_button_shown"
         private const val KEY_LAYOUT_TIP_HIDDEN = "layout_tip_hidden"
+        private const val KEY_LAYOUT_TIP_HIDDEN_3DS = "layout_tip_hidden_3ds"
         private const val KEY_LAYOUT_TIP_HIDDEN_WIIU = "layout_tip_hidden_wiiu"
         private const val KEY_ONBOARDING_DONE = "onboarding_done"
         private const val KEY_ONBOARDING_STEP = "onboarding_step"
@@ -439,3 +445,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_GAME_TIME_DEVICE = "game_time_device_id"
     }
 }
+
+/** [key]'s value, or [fallbackKey]'s (false when neither is stored) while [key] has never been written. */
+internal fun SharedPreferences.booleanOrFallback(key: String, fallbackKey: String): Boolean =
+    if (contains(key)) getBoolean(key, false) else getBoolean(fallbackKey, false)

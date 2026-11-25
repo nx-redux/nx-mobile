@@ -1427,9 +1427,16 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /** On a DS, 3DS or Wii U game where SELECT + Left / Right changes the layout: the tip saying so, until hidden from its button ([LayoutTip]). */
     private fun offerLayoutTip() {
         val wiiu = WiiuOptions.appliesTo(gameTag)
-        if (!LayoutTip.due((isN3ds || isNds || wiiu) && !netplayLocks, padLayout.skinShown, input.skinLayouts, LayoutTip.hidden(wiiu, settings.layoutTipHidden, settings.layoutTipHiddenWiiu))) return
+        val tipConsole = if (wiiu) TipConsole.WIIU else if (isN3ds) TipConsole.N3DS else TipConsole.DS
+        if (!LayoutTip.due((isN3ds || isNds || wiiu) && !netplayLocks, padLayout.skinShown, input.skinLayouts, LayoutTip.hidden(tipConsole, settings.layoutTipHidden, settings.layoutTipHidden3ds, settings.layoutTipHiddenWiiu))) return
         // up until closed: Close, or its button to hide it for good
-        input.showNotice(LayoutTip.text(wiiu), com.nxredux.mobile.ui.nx.NotificationQueue.UNTIL_CLOSED, LayoutTip.ACTION) { if (wiiu) settings.layoutTipHiddenWiiu = true else settings.layoutTipHidden = true }
+        input.showNotice(LayoutTip.text(wiiu), com.nxredux.mobile.ui.nx.NotificationQueue.UNTIL_CLOSED, LayoutTip.ACTION) {
+            when (tipConsole) {
+                TipConsole.WIIU -> settings.layoutTipHiddenWiiu = true
+                TipConsole.N3DS -> settings.layoutTipHidden3ds = true
+                TipConsole.DS -> settings.layoutTipHidden = true
+            }
+        }
     }
     override val n3dsStackPinned: Boolean get() = !netplayLocks
 

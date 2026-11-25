@@ -29,10 +29,16 @@ class LayoutTipTest {
         assertEquals(LayoutTip.TEXT, LayoutTip.text(wiiu = false))
     }
 
-    @Test fun theWiiuTipHasItsOwnHiddenFlag() {
-        assertFalse(LayoutTip.hidden(wiiu = true, layoutTipHidden = true, layoutTipHiddenWiiu = false)) // a dismissed DS tip leaves the Wii U one
-        assertTrue(LayoutTip.hidden(wiiu = true, layoutTipHidden = false, layoutTipHiddenWiiu = true))
-        assertTrue(LayoutTip.hidden(wiiu = false, layoutTipHidden = true, layoutTipHiddenWiiu = false))
-        assertFalse(LayoutTip.hidden(wiiu = false, layoutTipHidden = false, layoutTipHiddenWiiu = true)) // the Wii U flag leaves the DS / 3DS one
+    @Test fun eachConsoleHidesOnlyItsOwnTip() {
+        for (console in TipConsole.entries) {
+            val flags = TipConsole.entries.associateWith { it == console }
+            for (asked in TipConsole.entries) {
+                assertEquals(
+                    asked == console,
+                    LayoutTip.hidden(asked, ds = flags.getValue(TipConsole.DS), n3ds = flags.getValue(TipConsole.N3DS), wiiu = flags.getValue(TipConsole.WIIU)),
+                    "$asked with only $console hidden",
+                )
+            }
+        }
     }
 }

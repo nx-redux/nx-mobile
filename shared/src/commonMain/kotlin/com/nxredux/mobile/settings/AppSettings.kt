@@ -516,12 +516,17 @@ interface AppSettings {
         get() = false
         set(@Suppress("UNUSED_PARAMETER") value) {}
 
-    /** The 3DS layout chord's tip ([com.nxredux.mobile.runner.LayoutTip]) hidden for good from its button. Defaulted, like [debugLog]. */
+    /** The DS layout chord's tip ([com.nxredux.mobile.runner.LayoutTip]) hidden for good from its button. Defaulted, like [debugLog]. */
     var layoutTipHidden: Boolean
         get() = false
         set(@Suppress("UNUSED_PARAMETER") value) {}
 
-    /** The Wii U's own flag for the same tip, so hiding the DS / 3DS one does not hide it. */
+    /** The 3DS's own flag for the same tip. */
+    var layoutTipHidden3ds: Boolean
+        get() = false
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+
+    /** The Wii U's own flag for the same tip. */
     var layoutTipHiddenWiiu: Boolean
         get() = false
         set(@Suppress("UNUSED_PARAMETER") value) {}
