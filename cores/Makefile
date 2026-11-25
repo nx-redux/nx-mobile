@@ -532,7 +532,7 @@ armsx2_FLAGS = -DCMAKE_PREFIX_PATH=$(ARMSX2_DEPS)/prefix -DCMAKE_FIND_ROOT_PATH=
 # notices/cemu-deps.txt holds the copyright files of the vcpkg packages linked in
 # (build/cemu/vcpkg_installed/arm64-android/share/*/copyright, the boost libraries' shared one once) and the licences of
 # the submodules compiled in (xbyak_aarch64, imgui, ZArchive, ih264d, Vulkan-Headers, the embedded graphic packs);
-# regenerate it on a pin bump.
+# regenerate it on a pin bump, after the build: python3 cores/notices/gen_cemu_notices.py
 cemu_REPO = https://github.com/WizzardSK/cemu-libretro
 cemu_HASH = dbf18093970bd3091e201a0a893eacd0256f9c26
 cemu_KIND = cmake
