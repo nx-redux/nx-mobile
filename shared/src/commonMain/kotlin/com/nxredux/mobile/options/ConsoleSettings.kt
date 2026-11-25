@@ -13,7 +13,7 @@ import com.nxredux.mobile.runner.Res3dConsole
  */
 object ConsoleSettings {
     /**
-     * [tag]'s rows; [screen] (null: unknown) shapes the DS and 3DS layout rows, [displayMax] (null: unknown) the DS and 3DS
+     * [tag]'s rows; [screen] (null: unknown) shapes the DS and 3DS layout rows (the Wii U's are the same everywhere), [displayMax] (null: unknown) the DS and 3DS
      * 3D Resolution scales, [biosFiles] (the ".bin" names in the PS2 BIOS folder) the PS2 BIOS row's choices, [gpuDrivers] (null: the feature is unavailable, no row) the GPU driver row's choices.
      * [autoVulkan]: Graphics API's Auto is Vulkan for this console on this phone ([GraphicsApiOptions.autoIsVulkan]).
      * [mali]: the phone's GPU is a Mali, which the Graphics API row's info speaks to ([GraphicsApiOptions.rowFor]).
@@ -27,7 +27,7 @@ object ConsoleSettings {
         Ps1Options.appliesTo(tag) -> Ps1Options.resolutionRows(tag, displayMax)
         DcOptions.appliesTo(tag) -> DcOptions.resolutionRows(displayMax)
         N64Options.appliesTo(tag) -> N64Options.resolutionRows(displayMax)
-        Res3dConsole.forTag(tag) == Res3dConsole.CEMU -> resolutionRows(Res3dConsole.CEMU, displayMax)
+        WiiuOptions.appliesTo(tag) -> WiiuOptions.table + resolutionRows(Res3dConsole.CEMU, displayMax)
         Ps2Options.appliesTo(tag) -> Ps2Options.rowsFor(biosFiles) + Ps2Options.resolutionRows(displayMax)
         else -> emptyList()
     } + graphicsRows(tag, gpuDrivers, autoVulkan, mali) + BottomScreenOptions.row + PadOptions.tableFor(tag) + SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.rowsFor(tag)
@@ -61,5 +61,5 @@ object ConsoleSettings {
 
     /** Every console's rows (keys are unique across them); built when read, as [NdsOptions.table]. */
     val all: List<FrontendOption> get() =
-        NdsOptions.table + NdsOptions.localWirelessRow + N3dsOptions.layoutRows + N3dsOptions.resolutionRows(null) + N3dsOptions.newControlsRow + N3dsOptions.localWirelessRow + PspOptions.localWirelessRow + WiiOptions.table + DolphinOptions.resolutionRows(null) + Ps1Options.allResolutionRows + DcOptions.resolutionRows(null) + N64Options.resolutionRows(null) + resolutionRows(Res3dConsole.CEMU, null) + Ps2Options.biosRow(emptyList()) + Ps2Options.resolutionRows(null) + GraphicsApiOptions.row + GpuDriverOptions.row(emptyList()) + BottomScreenOptions.row + PadOptions.all + SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.row
+        NdsOptions.table + NdsOptions.localWirelessRow + N3dsOptions.layoutRows + N3dsOptions.resolutionRows(null) + N3dsOptions.newControlsRow + N3dsOptions.localWirelessRow + PspOptions.localWirelessRow + WiiOptions.table + DolphinOptions.resolutionRows(null) + Ps1Options.allResolutionRows + DcOptions.resolutionRows(null) + N64Options.resolutionRows(null) + WiiuOptions.table + resolutionRows(Res3dConsole.CEMU, null) + Ps2Options.biosRow(emptyList()) + Ps2Options.resolutionRows(null) + GraphicsApiOptions.row + GpuDriverOptions.row(emptyList()) + BottomScreenOptions.row + PadOptions.all + SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.row
 }

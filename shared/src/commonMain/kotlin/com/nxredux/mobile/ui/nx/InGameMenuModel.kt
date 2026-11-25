@@ -17,6 +17,7 @@ import com.nxredux.mobile.options.CoreOptionFilter
 import com.nxredux.mobile.options.FrontendOption
 import com.nxredux.mobile.options.FrontendOptions
 import com.nxredux.mobile.options.N3dsOptions
+import com.nxredux.mobile.options.WiiuOptions
 import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.NdsView
 import com.nxredux.mobile.options.ShaderBrowse
@@ -1787,6 +1788,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             view == null -> rows
             NdsOptions.appliesTo(frontendTag) -> NdsOptions.inGameRows(rows, frontend, view, screen)
             N3dsOptions.appliesTo(frontendTag) -> N3dsOptions.inGameRows(rows, view)
+            WiiuOptions.appliesTo(frontendTag) -> WiiuOptions.inGameRows(rows, view)
             else -> rows
         }
     }.map { ConsoleSettings.fitted(it, frontend[it.key] ?: it.default).first }

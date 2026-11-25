@@ -6,7 +6,7 @@ package com.nxredux.mobile.runner
  */
 object PadBandRule {
     /** Consoles with their own controller portrait layout (`nx_nds_layout_portrait_controller`) for the freed height. */
-    val DualScreenTags: Set<String> = setOf("NDS", "3DS")
+    val DualScreenTags: Set<String> = setOf("NDS", "3DS", "WIIU")
 
     /** Clip-on controllers (GameSir Pocket Taco, 8BitDo FlipPad): name fragments [isClipOn] looks for. */
     val ClipOnNames: List<String> = listOf(
