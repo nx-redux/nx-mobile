@@ -1,6 +1,7 @@
 package com.nxredux.mobile.options
 
 import com.nxredux.mobile.layout.ScreenClass
+import com.nxredux.mobile.settings.stepFrom
 
 /**
  * The Wii U's screen settings: frontend `nx_` keys, per game with a console default. Cemu always draws the TV over the
@@ -62,6 +63,12 @@ object WiiuOptions {
         val s = settings(values)
         val pick = if (landscape) s.landscape else if (controllerMode) s.controller else s.portrait
         return pick ?: defaultLayout(landscape)
+    }
+
+    /** SELECT + Left (-1) / Right (+1): the row in use's next layout, from the one shown. */
+    fun cycleLayout(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, delta: Int): Pair<String, String> {
+        val key = if (landscape) LAYOUT_LANDSCAPE else if (controllerMode) LAYOUT_PORTRAIT_CONTROLLER else LAYOUT_PORTRAIT
+        return key to NdsLayoutChoice.entries.stepFrom(layoutShown(values, landscape, controllerMode), delta).value
     }
 
     /**

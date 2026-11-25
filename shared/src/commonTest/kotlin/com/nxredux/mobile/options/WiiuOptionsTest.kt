@@ -47,6 +47,19 @@ class WiiuOptionsTest {
         assertEquals(NdsLayoutChoice.LARGE, WiiuOptions.layoutShown(mapOf(LAYOUT_LANDSCAPE to "nonsense"), landscape = true, controllerMode = false))
     }
 
+    @Test fun the_layout_chord_steps_the_row_in_use_from_the_layout_shown() {
+        // landscape: from the default Large, both ways round the five
+        assertEquals(LAYOUT_LANDSCAPE to "stacked", WiiuOptions.cycleLayout(emptyMap(), landscape = true, controllerMode = false, delta = 1))
+        assertEquals(LAYOUT_LANDSCAPE to "side-by-side", WiiuOptions.cycleLayout(emptyMap(), landscape = true, controllerMode = false, delta = -1))
+        // portrait: from the default Stacked
+        assertEquals(LAYOUT_PORTRAIT to "single", WiiuOptions.cycleLayout(emptyMap(), landscape = false, controllerMode = false, delta = 1))
+        assertEquals(LAYOUT_PORTRAIT to "large", WiiuOptions.cycleLayout(emptyMap(), landscape = false, controllerMode = false, delta = -1))
+        // portrait with a controller: its own row, from its pick
+        val picked = mapOf(LAYOUT_PORTRAIT_CONTROLLER to "side-by-side", LAYOUT_PORTRAIT to "pip")
+        assertEquals(LAYOUT_PORTRAIT_CONTROLLER to "large", WiiuOptions.cycleLayout(picked, landscape = false, controllerMode = true, delta = 1))
+        assertEquals(LAYOUT_PORTRAIT to "side-by-side", WiiuOptions.cycleLayout(picked, landscape = false, controllerMode = false, delta = 1))
+    }
+
     @Test fun settings_read_the_big_screen() {
         assertEquals(NdsScreen.TOP, WiiuOptions.settings(emptyMap()).big)
         assertEquals(NdsScreen.BOTTOM, WiiuOptions.settings(mapOf(BIG_SCREEN to "bottom")).big)

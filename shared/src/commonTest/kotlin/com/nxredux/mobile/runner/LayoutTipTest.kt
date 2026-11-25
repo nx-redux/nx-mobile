@@ -1,6 +1,7 @@
 package com.nxredux.mobile.runner
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -20,5 +21,11 @@ class LayoutTipTest {
     @Test fun namesTheLayoutChordAndTheSwap() {
         assertTrue(LayoutTip.TEXT.startsWith("SELECT + Left / Right"))
         assertTrue("L3 or SELECT + L swaps" in LayoutTip.TEXT)
+    }
+
+    @Test fun theWiiuTipNamesItsChordsWithoutL3() {
+        assertEquals("SELECT + Left / Right changes the screen layout\nSELECT + L swaps the screens", LayoutTip.WIIU_TEXT)
+        assertEquals(LayoutTip.WIIU_TEXT, LayoutTip.text(wiiu = true))
+        assertEquals(LayoutTip.TEXT, LayoutTip.text(wiiu = false))
     }
 }

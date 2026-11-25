@@ -100,6 +100,7 @@ import com.nxredux.mobile.options.FrontendOptions
 import com.nxredux.mobile.options.FrontendSettings
 import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.options.WiiOptions
+import com.nxredux.mobile.options.WiiuOptions
 import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.NdsScreen
 import com.nxredux.mobile.options.PadOptions
@@ -1420,11 +1421,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /** A running session that allows no option changes ([NetplaySession.locksOptions]); a 3DS link is not one. */
     private val netplayLocks: Boolean get() = netplayNow?.locksOptions == true
 
-    /** On a DS or 3DS game where SELECT + Left / Right changes the layout: the tip saying so, until hidden from its button ([LayoutTip]). */
+    /** On a DS, 3DS or Wii U game where SELECT + Left / Right changes the layout: the tip saying so, until hidden from its button ([LayoutTip]). */
     private fun offerLayoutTip() {
-        if (!LayoutTip.due((isN3ds || isNds) && !netplayLocks, padLayout.skinShown, input.skinLayouts, settings.layoutTipHidden)) return
+        val wiiu = WiiuOptions.appliesTo(gameTag)
+        if (!LayoutTip.due((isN3ds || isNds || wiiu) && !netplayLocks, padLayout.skinShown, input.skinLayouts, settings.layoutTipHidden)) return
         // up until closed: Close, or its button to hide it for good
-        input.showNotice(LayoutTip.TEXT, com.nxredux.mobile.ui.nx.NotificationQueue.UNTIL_CLOSED, LayoutTip.ACTION) { settings.layoutTipHidden = true }
+        input.showNotice(LayoutTip.text(wiiu), com.nxredux.mobile.ui.nx.NotificationQueue.UNTIL_CLOSED, LayoutTip.ACTION) { settings.layoutTipHidden = true }
     }
     override val n3dsStackPinned: Boolean get() = !netplayLocks
 

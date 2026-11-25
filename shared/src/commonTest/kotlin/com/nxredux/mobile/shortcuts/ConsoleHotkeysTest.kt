@@ -10,7 +10,7 @@ class ConsoleHotkeysTest {
     private fun chord(c: Int) = ShortcutBinding(KeyCodes.BUTTON_SELECT, c)
 
     @Test fun everyConsoleClaimsMenuAndChord() {
-        for (tag in listOf("GBA", "NDS", "3DS", "WII", "")) {
+        for (tag in listOf("GBA", "NDS", "3DS", "WII", "WIIU", "")) {
             val c = ConsoleHotkeys.claimed(tag).map { it.binding }
             assertTrue(single(KeyCodes.BUTTON_MODE) in c && chord(KeyCodes.BUTTON_START) in c, tag)
         }
@@ -35,5 +35,15 @@ class ConsoleHotkeysTest {
         val n = notes("Wii")
         assertEquals("L3 recentres motion", n[single(KeyCodes.BUTTON_THUMBL)])
         assertEquals("R3 is HOME", n[single(KeyCodes.BUTTON_THUMBR)])
+    }
+
+    // SELECT is the GamePad's minus and L3 a real button: only the SELECT chords are claimed
+    @Test fun wiiu() {
+        val n = notes("WIIU")
+        assertEquals("SELECT+Left cycles the Wii U layout", n[chord(KeyCodes.DPAD_LEFT)])
+        assertEquals("SELECT+Right cycles the Wii U layout", n[chord(KeyCodes.DPAD_RIGHT)])
+        assertEquals("SELECT+L1 swaps the Wii U screens", n[chord(KeyCodes.BUTTON_L1)])
+        assertEquals(ConsoleHotkeys.always.size + 3, n.size)
+        assertTrue(single(KeyCodes.BUTTON_THUMBL) !in n && chord(KeyCodes.BUTTON_R1) !in n)
     }
 }
