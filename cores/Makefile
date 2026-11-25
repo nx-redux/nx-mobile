@@ -396,7 +396,10 @@ flycast_FLAGS = -DLIBRETRO=ON -DUSE_GLES=ON -DUSE_OPENMP=OFF -DCMAKE_OSX_ARCHITE
 # patches/yabasanshiro/0002: disk control (ext when the frontend has it) and .m3u, so multi-disc games change disc
 # through the CD block's tray.
 # patches/yabasanshiro/0003: backup RAM per game, <save dir>/<content name>.bkr, instead of one shared
-# yabasanshiro/backup.bin, so it syncs and is deleted with its game like other battery saves.
+# yabasanshiro/backup.bin, so it syncs and is deleted with its game like other battery saves. It is the core's 64 KB
+# layout, not its 8 MB extended file (every game's would travel with Device Sync), and as the core only loads that one,
+# the port writes it whenever a frame changed it and at unload, through a temporary file and a rename (no save lost or
+# torn by a kill).
 # patches/yabasanshiro/0004: with yabasanshiro_force_hle_bios on, a missing BIOS file no longer aborts the load (the app
 # forces the option for a launch without one).
 # patches/yabasanshiro/0005: yabasanshiro_resolution_mode applies mid-game, between frames, through the core's own

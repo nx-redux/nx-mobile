@@ -2,10 +2,10 @@
 # The core refused to load without a BIOS file even with yabasanshiro_force_hle_bios on, which needs none. With it on, a
 # missing BIOS no longer aborts and the HLE BIOS boots; with it off nothing changes.
 diff --git a/yabause/src/libretro/libretro.c b/yabause/src/libretro/libretro.c
-index a7443fb..4fe2629 100644
+index c9b5549..4c65d03 100644
 --- a/yabause/src/libretro/libretro.c
 +++ b/yabause/src/libretro/libretro.c
-@@ -1277,10 +1277,8 @@ bool retro_load_game(const struct retro_game_info *info)
+@@ -1324,10 +1324,8 @@ bool retro_load_game(const struct retro_game_info *info)
        }
     }
  

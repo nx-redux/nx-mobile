@@ -1,12 +1,76 @@
 # license: modifies YabaSanshiro (https://github.com/libretro/yabause), GPL-2.0 (LICENSE); this patch is distributed under the same license.
-# Backup RAM was one file shared by every game (<save dir>/yabasanshiro/backup.bin). It is now <save dir>/<content
-# name>.bkr, so each game's saves are its own and move, sync and are deleted with it like other consoles' battery saves.
-# The file's format (the core's extended, memory-mapped backup) is unchanged.
+# Backup RAM was one file shared by every game (<save dir>/yabasanshiro/backup.bin), in the core's 8 MB extended format.
+# It is now the console's backup RAM in the core's 64 KB layout, one file per game, <save dir>/<content name>.bkr, so
+# each game's saves are its own and move, sync and are deleted with it like other consoles' battery saves. In this mode
+# the core only loads the file, so the libretro port writes it: whenever a frame changed it and at unload, through a
+# temporary file and a rename, so a killed process loses no save and never leaves a torn one. The HLE BIOS's flush
+# after a save no longer frees the backup RAM the game goes on using.
 diff --git a/yabause/src/libretro/libretro.c b/yabause/src/libretro/libretro.c
-index 69799e9..a7443fb 100644
+index 69799e9..c9b5549 100644
 --- a/yabause/src/libretro/libretro.c
 +++ b/yabause/src/libretro/libretro.c
-@@ -1165,9 +1165,8 @@ void retro_init(void)
+@@ -13,6 +13,7 @@
+ #include <sys/stat.h>
+ #ifndef _MSC_VER
+ #include <strings.h>
++#include <unistd.h>
+ #endif
+ 
+ #include <libretro.h>
+@@ -1138,6 +1139,52 @@ static bool disk_load_list(const char *path)
+    return true;
+ }
+ 
++#define BUP_SIZE 0x10000
++
++static u8 bup_written[BUP_SIZE];
++static bool bup_tracking = false;
++
++/* Through a temporary file and a rename, so a process killed mid-write keeps the previous save. */
++static void bup_write(void)
++{
++   char tmp[PATH_MAX + 8];
++   FILE *fp;
++   bool ok;
++
++   snprintf(tmp, sizeof(tmp), "%s.tmp", bup_path);
++   if (!(fp = fopen(tmp, "wb")))
++      return;
++   ok = fwrite(BupRam, 1, BUP_SIZE, fp) == BUP_SIZE;
++   ok = fflush(fp) == 0 && ok;
++#ifndef _MSC_VER
++   ok = ok && fsync(fileno(fp)) == 0;
++#endif
++   ok = fclose(fp) == 0 && ok;
++   if (!ok || rename(tmp, bup_path) != 0)
++   {
++      remove(tmp);
++      return;
++   }
++   memcpy(bup_written, BupRam, BUP_SIZE);
++}
++
++/* The backup RAM goes to disk as soon as a frame changes it (the game's save, written byte by byte on several paths),
++ * not only at unload, so a killed process loses no save. The first call takes what was loaded (or freshly formatted)
++ * as written. */
++static void bup_sync(void)
++{
++   if (!BupRam)
++      return;
++   if (!bup_tracking)
++   {
++      memcpy(bup_written, BupRam, BUP_SIZE);
++      bup_tracking = true;
++      return;
++   }
++   if (memcmp(BupRam, bup_written, BUP_SIZE) != 0)
++      bup_write();
++}
++
+ void retro_init(void)
+ {
+    struct retro_log_callback log;
+@@ -1165,9 +1212,8 @@ void retro_init(void)
        strncpy(g_save_dir, dir, sizeof(g_save_dir));
     }
  
@@ -18,16 +82,58 @@ index 69799e9..a7443fb 100644
  
     if (environ_cb(RETRO_ENVIRONMENT_GET_INPUT_BITMASKS, NULL))
        libretro_supports_bitmasks = true;
-@@ -1291,7 +1290,11 @@ bool retro_load_game(const struct retro_game_info *info)
+@@ -1213,7 +1259,7 @@ bool retro_load_game_common()
+    yinit.buppath                   = bup_path;
+    yinit.use_new_scsp              = 1;
+    yinit.scsp_sync_count_per_frame = 1;
+-   yinit.extend_backup             = 1;
++   yinit.extend_backup             = 0;
+    yinit.scsp_main_mode            = 0;
+    yinit.videoformattype           = VIDEOFORMATTYPE_NTSC;
+    yinit.video_filter_type         = 0;
+@@ -1291,7 +1337,13 @@ bool retro_load_game(const struct retro_game_info *info)
        log_cb(RETRO_LOG_WARN, "HLE bios is enabled, this is for debugging purpose only, expect lots of issues\n");
     }
  
 -   snprintf(bup_path, sizeof(bup_path), "%s%cyabasanshiro%cbackup.bin", g_save_dir, slash, slash);
-+   /* Each game keeps its own backup RAM, named after the content (an .m3u's name for every disc of the game), so it
-+    * moves, syncs and is deleted with the game like other consoles' battery saves. */
++   /* Each game keeps its own backup RAM (the console's 32 KB, 64 KB in the core's layout), named after the content (an
++    * .m3u's name for every disc of the game), so it moves, syncs and is deleted with the game like other consoles'
++    * battery saves. The core only reads it; bup_sync writes it. */
++   bup_tracking = false;
 +   char content_name[PATH_MAX];
 +   extract_basename(content_name, info->path, sizeof(content_name));
 +   snprintf(bup_path, sizeof(bup_path), "%s%c%s.bkr", g_save_dir, slash, content_name);
  
     struct retro_input_descriptor desc[] = {
        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT,  "D-Pad Left" },
+@@ -1540,6 +1592,8 @@ bool retro_load_game_special(unsigned game_type, const struct retro_game_info *i
+ 
+ void retro_unload_game(void)
+ {
++   bup_sync();
++   bup_tracking = false;
+    if (!renderer_running)
+       VIDCore->Init();
+    YabauseDeInit();
+@@ -1633,6 +1687,8 @@ void retro_run(void)
+    if(PERCore)
+       PERCore->HandleEvents();
+ 
++   bup_sync();
++
+    // If no frame rendered, dupe
+    if(!one_frame_rendered)
+       video_cb(NULL, current_width, current_height, 0);
+diff --git a/yabause/src/yabause.c b/yabause/src/yabause.c
+index 74a542d..d408bc2 100644
+--- a/yabause/src/yabause.c
++++ b/yabause/src/yabause.c
+@@ -461,7 +461,7 @@ void YabFlushBackups(void)
+     else {
+       if (T123Save(BupRam, 0x10000, 1, bupfilename) != 0)
+         YabSetError(YAB_ERR_FILEWRITE, (void *)bupfilename);
+-      T1MemoryDeInit(BupRam);
++      // The HLE BIOS flushes after each save while the game runs on: the backup RAM stays (YabauseDeInit frees it)
+     }
+   }
+   CartFlush();

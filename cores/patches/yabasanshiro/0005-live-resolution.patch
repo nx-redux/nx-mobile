@@ -4,10 +4,10 @@
 # at the new size when it next draws). The geometry reports room for the largest mode from the start, and the renderer
 # takes the frontend's current framebuffer every frame, since the frontend remakes it when a larger frame arrives.
 diff --git a/yabause/src/libretro/libretro.c b/yabause/src/libretro/libretro.c
-index 4fe2629..b5429d2 100644
+index 4c65d03..1eeb3a9 100644
 --- a/yabause/src/libretro/libretro.c
 +++ b/yabause/src/libretro/libretro.c
-@@ -111,7 +111,7 @@ void retro_set_environment(retro_environment_t cb)
+@@ -112,7 +112,7 @@ void retro_set_environment(retro_environment_t cb)
        { "yabasanshiro_sh2coretype", "SH2 Core (restart); dynarec|interpreter" },
  #endif
        { "yabasanshiro_polygon_mode", "Polygon Mode (restart); perspective_correction|gpu_tesselation|cpu_tesselation" },
@@ -16,7 +16,7 @@ index 4fe2629..b5429d2 100644
        { "yabasanshiro_rbg_resolution_mode", "RGB resolution mode; original|2x|720p|1080p|Fit_to_emulation" },
  #if !defined(__APPLE__)
        { "yabasanshiro_rbg_use_compute_shader", "RGB use compute shader for RGB; disabled|enabled" },
-@@ -1227,33 +1227,9 @@ bool retro_load_game(const struct retro_game_info *info)
+@@ -1274,33 +1274,9 @@ bool retro_load_game(const struct retro_game_info *info)
  
     check_variables();
     resolution_mode = g_resolution_mode;
@@ -53,7 +53,7 @@ index 4fe2629..b5429d2 100644
  
     if (!disk_load_list(info->path))
     {
-@@ -1614,6 +1590,14 @@ void retro_run(void)
+@@ -1665,6 +1641,14 @@ void retro_run(void)
     {
        int prev_multitap[2] = {multitap[0],multitap[1]};
        check_variables();
@@ -68,7 +68,7 @@ index 4fe2629..b5429d2 100644
        // Unlike Kronos, this core dislike changing tesselation on the fly
        //VIDCore->SetSettingValue(VDP_SETTING_POLYGON_MODE, polygon_mode);
        VIDCore->SetSettingValue(VDP_SETTING_RBG_RESOLUTION_MODE, g_rbg_resolution_mode);
-@@ -1630,6 +1614,11 @@ void retro_run(void)
+@@ -1681,6 +1665,11 @@ void retro_run(void)
           DisableAutoFrameSkip();
     }
  
