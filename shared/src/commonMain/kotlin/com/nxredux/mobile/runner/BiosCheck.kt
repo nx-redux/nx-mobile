@@ -1,15 +1,32 @@
 package com.nxredux.mobile.runner
 
+/** A core option that makes the core run its built-in (HLE) BIOS when the real one is absent. */
+data class HleFallback(val optionKey: String, val optionValue: String)
+
 /**
  * One required BIOS: any file of [anyOf] in the system dir meets it. [forExtensions] empty = every game of the tag.
  * [anySuffix] set: any present name ending with it (case-insensitive) meets it, for a core that scans its BIOS folder
- * and accepts whatever dump the user brings (ARMSX2: any ".bin").
+ * and accepts whatever dump the user brings (ARMSX2: any ".bin"). [hle] set: the core can boot without it, so a
+ * missing file is no refusal outside netplay.
  */
-data class BiosNeed(val anyOf: List<String>, val forExtensions: Set<String> = emptySet(), val anySuffix: String? = null)
+data class BiosNeed(
+    val anyOf: List<String>,
+    val forExtensions: Set<String> = emptySet(),
+    val anySuffix: String? = null,
+    val hle: HleFallback? = null,
+)
+
+/** What a launch does about its BIOS needs: go ahead, go ahead on the core's HLE BIOS with [options] set, or stop. */
+sealed interface BiosPlan {
+    data object Ok : BiosPlan
+    data class Refuse(val message: String) : BiosPlan
+    data class Hle(val options: Map<String, String>, val notice: String) : BiosPlan
+}
 
 /**
  * The pre-launch BIOS check, chosen over the cores' own errors (silent or a log line for most). Only required BIOS is
- * listed ([CoreRegistry.requiredBios]); optional BIOS never blocks a launch.
+ * listed ([CoreRegistry.requiredBios]); optional BIOS never blocks a launch, and a required one refuses unless its need
+ * has an HLE fallback ([plan]).
  */
 object BiosCheck {
     /** The needs a game with extension [ext] has that no name in [present] meets. Names compare case-sensitively, as the cores do on Linux. */
@@ -17,6 +34,26 @@ object BiosCheck {
         val e = ext.lowercase()
         return needs.filter { need -> (need.forExtensions.isEmpty() || e in need.forExtensions) && need.anyOf.none { it in present } &&
             need.anySuffix?.let { suffix -> present.none { it.endsWith(suffix, ignoreCase = true) } } != false }
+    }
+
+    /**
+     * The plan for launching [tag]: the first unmet need decides. Without an HLE fallback it refuses; with one the core
+     * boots on its built-in BIOS, except in [netplay], where peers on different BIOSes would desync.
+     */
+    fun plan(tag: String, needs: List<BiosNeed>, ext: String, present: Set<String>, netplay: Boolean): BiosPlan {
+        val need = missing(needs, ext, present).firstOrNull() ?: return BiosPlan.Ok
+        val hle = need.hle ?: return BiosPlan.Refuse(message(tag, need))
+        if (netplay) return BiosPlan.Refuse("${consoleName(tag)} netplay needs a BIOS: put ${need.anyOf.first()} in Bios/${CoreRegistry.consoleTag(tag.trim().uppercase())}/")
+        return BiosPlan.Hle(mapOf(hle.optionKey to hle.optionValue), hleNotice(tag, need))
+    }
+
+    /** "Running without a Dreamcast BIOS: some games may not work. Put dc_boot.bin in Bios/DC/." */
+    fun hleNotice(tag: String, need: BiosNeed): String =
+        "Running without a ${consoleName(tag)} BIOS: some games may not work. Put ${need.anyOf.first()} in Bios/${CoreRegistry.consoleTag(tag.trim().uppercase())}/."
+
+    private fun consoleName(tag: String): String {
+        val t = tag.trim().uppercase()
+        return CoreRegistry.consoleOf(t)?.displayName ?: t
     }
 
     /** "Sega CD needs a BIOS: put bios_CD_U.bin (or bios_CD_E.bin, bios_CD_J.bin) in Bios/SEGACD/" for the launched [tag]. */

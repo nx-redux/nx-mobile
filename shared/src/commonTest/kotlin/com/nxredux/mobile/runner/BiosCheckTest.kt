@@ -94,4 +94,22 @@ class BiosCheckTest {
         assertEquals(CoreRegistry.requiredBios("MD"), CoreRegistry.requiredBios("MD") { "System Card 1" })
         assertTrue("gexpress.pce" in CoreRegistry.biosFileNames)
     }
+
+    @Test fun plan_dc_disc_without_bios_runs_hle() {
+        val p = BiosCheck.plan("DC", CoreRegistry.requiredBios("DC"), "gdi", emptySet(), netplay = false)
+        assertEquals(BiosPlan.Hle(mapOf("reicast_hle_bios" to "enabled"),
+            "Running without a Dreamcast BIOS: some games may not work. Put dc_boot.bin in Bios/DC/."), p)
+    }
+    @Test fun plan_dc_with_bios_is_ok() =
+        assertEquals(BiosPlan.Ok, BiosCheck.plan("DC", CoreRegistry.requiredBios("DC"), "chd", setOf("dc_boot.bin"), false))
+    @Test fun plan_present_bios_is_ok_even_if_bad() =   // the checksum check is the pipeline's, after the plan
+        assertEquals(BiosPlan.Ok, BiosCheck.plan("DC", CoreRegistry.requiredBios("DC"), "cue", setOf("dc_boot.bin"), false))
+    @Test fun plan_dc_netplay_without_bios_refuses() =
+        assertEquals(BiosPlan.Refuse("Dreamcast netplay needs a BIOS: put dc_boot.bin in Bios/DC/"),
+            BiosCheck.plan("DC", CoreRegistry.requiredBios("DC"), "gdi", emptySet(), netplay = true))
+    @Test fun plan_naomi_zip_is_not_hle() =
+        assertEquals(BiosPlan.Ok, BiosCheck.plan("DC", CoreRegistry.requiredBios("DC"), "zip", emptySet(), false))
+    @Test fun plan_without_hle_still_refuses() =
+        assertEquals(BiosPlan.Refuse(BiosCheck.message("FDS", BiosNeed(listOf("disksys.rom")))),
+            BiosCheck.plan("FDS", CoreRegistry.requiredBios("FDS"), "fds", emptySet(), false))
 }

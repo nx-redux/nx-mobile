@@ -72,7 +72,7 @@ class CoreRegistryDcTest {
 
     @Test fun dc_needs_dc_boot_bin_for_discs_only() {
         val needs = CoreRegistry.requiredBios("DC")
-        assertEquals(listOf(BiosNeed(listOf("dc_boot.bin"), setOf("chd", "cdi", "gdi", "cue", "m3u"))), needs)
+        assertEquals(listOf(BiosNeed(listOf("dc_boot.bin"), setOf("chd", "cdi", "gdi", "cue", "m3u"), hle = HleFallback("reicast_hle_bios", "enabled"))), needs)
         for (ext in listOf("chd", "cdi", "gdi", "cue", "m3u", "GDI")) assertEquals(1, BiosCheck.missing(needs, ext, emptySet()).size, ext)
         for (ext in listOf("zip", "7z")) assertEquals(emptyList(), BiosCheck.missing(needs, ext, emptySet()), ext)   // arcade BIOS is its own check
         assertEquals(emptyList(), BiosCheck.missing(needs, "chd", setOf("dc_boot.bin", "dc_nvmem.bin")))
