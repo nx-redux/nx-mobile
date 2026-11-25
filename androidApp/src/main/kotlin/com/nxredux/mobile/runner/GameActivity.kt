@@ -1198,10 +1198,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * and launch, which the new screen reports to the launcher). Recreated, not finished and started again: a start from
      * a finishing activity is forced into a new task (the game would leave the menu's task), and singleTop would hand a
      * live one the intent. The old screen's onDestroy (the core's native destroy, the session release) runs before the
-     * new onCreate; not finishing, it keeps the launch for it.
+     * new onCreate; not finishing, it keeps the launch for it. A Vulkan-only core has no OpenGL ES to start on, so its
+     * launch ends with a message and nothing is recorded.
      */
     private fun relaunchOnGles(record: Boolean = true, notice: String = VulkanFallback.NOTICE) {
         if (isFinishing || relaunching || failShown) return
+        if (CoreRegistry.forId(gameCoreId)?.vulkan?.vulkanOnly == true) return fail(GpuDriverChoice.VULKAN_ONLY_FAIL, START_FAILED)
         relaunching = true
         clearDriverMarker()
         // [record] false: a custom driver failed on a core whose system-driver failure is already recorded.

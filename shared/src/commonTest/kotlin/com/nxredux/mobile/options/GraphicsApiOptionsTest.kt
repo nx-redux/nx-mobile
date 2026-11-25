@@ -216,4 +216,33 @@ class GraphicsApiOptionsTest {
         }
         assertTrue("ParaLLEl" !in GraphicsApiOptions.row.info)
     }
+    private val wiiu get() = CoreRegistry.forTag("WIIU")!!.vulkan!!
+
+    @Test fun vulkanOnlyAlwaysOffersVulkan() {
+        for (value in listOf(GraphicsApiOptions.GLES, GraphicsApiOptions.AUTO, null)) {
+            assertTrue(GraphicsApiOptions.resolve(value, wiiu, { true }).preferVulkan, "value $value")
+            assertEquals(GraphicsApiOptions.VULKAN, GraphicsApiOptions.effective(value, wiiu) { null }, "value $value")
+        }
+        assertFalse(wiiu.swapchainFrames)
+    }
+
+    @Test fun vulkanOnlyIgnoresRecordedFailure() {
+        assertTrue(GraphicsApiOptions.resolve(GraphicsApiOptions.AUTO, wiiu, { true }, vulkanFailed = true).preferVulkan)
+        assertFalse(GraphicsApiOptions.recordedFailure(wiiu, recorded = true))
+        assertTrue(GraphicsApiOptions.recordedFailure(CoreRegistry.forTag("WII")!!.vulkan, recorded = true))
+        assertFalse(GraphicsApiOptions.recordedFailure(CoreRegistry.forTag("WII")!!.vulkan, recorded = false))
+    }
+
+    @Test fun vulkanOnlyHasNoRow() {
+        assertFalse(GraphicsApiOptions.appliesTo("WIIU"))
+        assertTrue(ConsoleSettings.tableFor("WIIU").none { it.key == GraphicsApiOptions.KEY })
+        assertTrue(GraphicsApiOptions.appliesTo("WII"))
+    }
+
+    @Test fun vulkanOnlyRefusesWithoutVulkan() {
+        assertEquals("Wii U needs Vulkan, which this phone's GPU driver doesn't offer.", GraphicsApiOptions.vulkanRefusal(wiiu) { false })
+        assertEquals(null, GraphicsApiOptions.vulkanRefusal(wiiu) { true })
+        assertEquals(null, GraphicsApiOptions.vulkanRefusal(CoreRegistry.forTag("WII")!!.vulkan) { false })
+        assertEquals(null, GraphicsApiOptions.vulkanRefusal(null) { false })
+    }
 }

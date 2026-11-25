@@ -525,6 +525,9 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // The tag's own descriptor: a tag view (SGB) carries its own extensions and defaults; the id alone would give plain mgba.
             val descriptor = CoreRegistry.forTag(tag)?.takeIf { it.id == coreId } ?: CoreRegistry.forId(coreId)
             DebugLogFile.nameGame(tag, coreId)
+            // A core with no OpenGL ES renderer on a phone without Vulkan: refused before anything is unpacked or loaded.
+            withContext(Dispatchers.IO) { GraphicsApiOptions.vulkanRefusal(descriptor?.vulkan) { LibretroDroid.isVulkanSupported() } }
+                ?.let { return refuse(it) }
             val players = CoreRegistry.playersFor(tag, descriptor)
             playerCount = players
             // netplay: no slots, so every pad and the touch pad drive native port 0, the engine's local word.
@@ -1000,12 +1003,14 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                     val drivers = if (mayLoadDriver) driverStore.installed() else emptyList()
                     // The driver's frames go through a swapchain on an image reader: what its preflight found it can do.
                     var driverReader = false
+                    // A Vulkan-only core's recorded failure is ignored: it has no OpenGL ES to go to.
+                    val coreFailedOnSystem = GraphicsApiOptions.recordedFailure(cfg.descriptor?.vulkan, cfg.descriptor?.id in settings.vulkanFailedCores)
                     var launch = GpuDriverChoice.launch(
                         apiValue, frontendValues[GpuDriverOptions.KEY], settings.gpuDriver, drivers.mapTo(HashSet()) { it.id },
                         GpuDriverCrash.crashed(settings.gpuDriverCrashes, gamePath.orEmpty()), available = driversAvailable,
                         forceGles = activity.intent.getBooleanExtra(EXTRA_FORCE_GLES, false),
                         forceSystem = activity.intent.getBooleanExtra(GameActivity.EXTRA_FORCE_SYSTEM_DRIVER, false),
-                        coreFailedOnSystem = cfg.descriptor?.id in settings.vulkanFailedCores,
+                        coreFailedOnSystem = coreFailedOnSystem,
                         netplayForcesGles = cfg.np != null && NetplayCores.forcesGles(cfg.descriptor?.id),
                     )
                     var graphics = GraphicsApiOptions.resolve(apiValue, cfg.descriptor?.vulkan, { LibretroDroid.isVulkanSupported() }, launch.vulkanFailed)
@@ -1022,7 +1027,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                         val handoff = GLRetroView.probeVulkanDriver(activity, driverStore.directory(driver.id).absolutePath + "/", driver.libraryName)
                         val ok = handoff != LibretroDroid.VULKAN_HANDOFF_NONE
                         driverReader = handoff == LibretroDroid.VULKAN_HANDOFF_READER
-                        val after = GpuDriverChoice.afterPreflight(launch, ok, driver.name, cfg.descriptor?.id in settings.vulkanFailedCores)
+                        val after = GpuDriverChoice.afterPreflight(launch, ok, driver.name, coreFailedOnSystem)
                         if (after.clearMarker) clearDriverLaunchMarker()
                         if (after.launch != launch) {
                             NxLog.w(TAG_LOG, "the GPU driver ${driver.name} failed its preflight: this launch goes on without it")
@@ -1491,7 +1496,11 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                     // A custom driver failed (to load, to create its device, or to share its frames): the system driver
                     // next, unless that failed here already; the system driver failed: OpenGL ES.
                     val driver = host.launchedDriver
-                    val next = GpuDriverChoice.afterStartFailure(host.launchedOnVulkan, driver?.id, host.gameCoreId in host.settings.vulkanFailedCores, netplaySession)
+                    val switch = CoreRegistry.forId(host.gameCoreId)?.vulkan
+                    val next = GpuDriverChoice.afterStartFailure(
+                        host.launchedOnVulkan, driver?.id, GraphicsApiOptions.recordedFailure(switch, host.gameCoreId in host.settings.vulkanFailedCores),
+                        netplaySession, vulkanOnly = switch?.vulkanOnly == true,
+                    )
                     when (next) {
                         GpuDriverChoice.Next.SYSTEM_DRIVER -> host.relaunchOnSystemDriver()
                         GpuDriverChoice.Next.GLES_NO_RECORD ->
@@ -1499,6 +1508,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                         GpuDriverChoice.Next.GLES_RECORD -> host.relaunchOnGles()
                         GpuDriverChoice.Next.FAIL_MESSAGE -> host.fail(
                             if (driver != null) GpuDriverChoice.named(GpuDriverChoice.NETPLAY_FAIL, driver.name)
+                            else if (switch?.vulkanOnly == true) GpuDriverChoice.VULKAN_ONLY_FAIL
                             else "Vulkan could not start for this game on this device. Set Display → Graphics API to OpenGL ES."
                         )
                         GpuDriverChoice.Next.SHOW_ERROR -> Unit

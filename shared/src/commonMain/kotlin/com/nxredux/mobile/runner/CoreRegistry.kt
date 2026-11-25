@@ -565,6 +565,9 @@ object CoreRegistry {
         cheats = false,
         name = "Cemu",
         rewind = false,
+        // Cemu presents its own image through set_image and announces every larger frame through its geometry, so its
+        // frames stay bounded by the max geometry, not the surface (swapchainFrames).
+        vulkan = VulkanSwitch(vulkanOnly = true),
     )
 
     // Canonical descriptors before tag views, so `all` (distinct by id) keeps plain mgba.

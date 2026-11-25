@@ -34,6 +34,11 @@ data class VulkanSwitch(
      * Not N64 or Wii, which run slower on Vulkan there (measured on the Tab S10 FE and Galaxy Z Flip 8).
      */
     val autoOnXclipse: Boolean = false,
+    /**
+     * The core has no OpenGL ES renderer (Cemu): no Graphics API row, a phone without Vulkan is refused before the core
+     * loads, and a Vulkan start failure ends the launch instead of relaunching on OpenGL ES or recording the core.
+     */
+    val vulkanOnly: Boolean = false,
 ) {
     /** Auto depends on the GPU: [autoIsVulkan][com.nxredux.mobile.options.GraphicsApiOptions.autoIsVulkan] needs its name. */
     val followsGpu: Boolean get() = autoOnMali || autoOnXclipse
