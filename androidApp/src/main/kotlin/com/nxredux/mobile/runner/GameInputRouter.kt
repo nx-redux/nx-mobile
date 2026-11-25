@@ -774,7 +774,11 @@ internal class GameInputRouter(private val host: GameInputHost) {
         // MENU opens the pause menu (not forwarded to the core).
         if (btn == NxButton.MENU) { if (down) host.toggleMenu(); return }
         // The Wii's HOME: a resume point first, then a tap of the core's Home ([GameInputHost.pressWiiHome]); the release is the tap's.
-        if (btn == NxButton.HOME) { if (down && host.isWii) host.pressWiiHome(); return }
+        // The Wii U's (Cemu has no GamePad HOME): the pause menu, as MENU.
+        if (btn == NxButton.HOME) {
+            if (down && host.isWii) host.pressWiiHome() else if (down && WiiuOptions.appliesTo(host.gameTag)) host.toggleMenu()
+            return
+        }
         // SELECT + START held together also opens it (the on-screen pad is P1, port 0).
         if (inputs.menuChord(0, btn, down)) { host.toggleMenu(); return }
         if (host.isNds && !routeNds(btn, down)) return   // L3, L2, R2, the SELECT chords and the stylus inputs stay out of the core

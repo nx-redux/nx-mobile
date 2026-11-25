@@ -254,7 +254,8 @@ internal class InGameMenuController(
             // the DS / 3DS layout rows a shown pad skin ignores here, shown unavailable; a controller hides the skin, so
             // with one the rows apply
             it.layoutLocked = padLayout.dsSkinWanted().let { on ->
-                com.nxredux.mobile.options.N3dsOptions.lockedLayoutRows(on, activity.screenClass()) + com.nxredux.mobile.options.NdsOptions.lockedLayoutRows(on, activity.screenClass())
+                com.nxredux.mobile.options.N3dsOptions.lockedLayoutRows(on, activity.screenClass()) + com.nxredux.mobile.options.NdsOptions.lockedLayoutRows(on, activity.screenClass()) +
+                    com.nxredux.mobile.options.WiiuOptions.lockedLayoutRows(on, activity.screenClass())
             }
             // netplay: the root is "Leave netplay?" only (a link session's: Continue / Disconnect / Quit); Continue / Quit
             // once the session has ended. An ended link

@@ -4,6 +4,7 @@ import com.nxredux.mobile.options.WiiuOptions.BIG_SCREEN
 import com.nxredux.mobile.options.WiiuOptions.LAYOUT_LANDSCAPE
 import com.nxredux.mobile.options.WiiuOptions.LAYOUT_PORTRAIT
 import com.nxredux.mobile.options.WiiuOptions.LAYOUT_PORTRAIT_CONTROLLER
+import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.runner.PadBandRule
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -77,5 +78,20 @@ class WiiuOptionsTest {
     @Test fun a_controller_drops_the_band_and_uses_the_controller_row() {
         assertTrue(PadBandRule.controllerLayout("WIIU", portrait = true, controllerNames = listOf("Xbox Wireless Controller")))
         assertFalse(PadBandRule.controllerLayout("WIIU", portrait = false, controllerNames = listOf("Xbox Wireless Controller")))
+    }
+    @Test fun under_a_skin_only_a_regular_phones_landscape_takes_the_players_layout() {
+        val picked = mapOf(LAYOUT_LANDSCAPE to NdsLayoutChoice.SIDE_BY_SIDE.value)
+        assertEquals(NdsLayoutChoice.SIDE_BY_SIDE, WiiuOptions.skinLayout(picked, landscape = true, controllerMode = false, ScreenClass.REGULAR_PHONE))
+        assertEquals(NdsLayoutChoice.LARGE, WiiuOptions.skinLayout(emptyMap(), landscape = true, controllerMode = false, ScreenClass.REGULAR_PHONE))
+        for (screen in listOf(ScreenClass.STUBBY_PHONE, ScreenClass.WIDE_TABLET, ScreenClass.NEAR_SQUARE_TABLET))
+            assertEquals(null, WiiuOptions.skinLayout(picked, landscape = true, controllerMode = false, screen), "$screen")
+        for (screen in ScreenClass.entries) assertEquals(null, WiiuOptions.skinLayout(picked, landscape = false, controllerMode = false, screen), "$screen")
+    }
+
+    @Test fun a_skin_locks_the_layout_rows_it_ignores() {
+        assertEquals(emptySet(), WiiuOptions.lockedLayoutRows(false, ScreenClass.REGULAR_PHONE))
+        assertEquals(setOf(LAYOUT_PORTRAIT), WiiuOptions.lockedLayoutRows(true, ScreenClass.REGULAR_PHONE))
+        for (screen in listOf(ScreenClass.STUBBY_PHONE, ScreenClass.WIDE_TABLET, ScreenClass.NEAR_SQUARE_TABLET))
+            assertEquals(setOf(LAYOUT_PORTRAIT, LAYOUT_LANDSCAPE), WiiuOptions.lockedLayoutRows(true, screen), "$screen")
     }
 }

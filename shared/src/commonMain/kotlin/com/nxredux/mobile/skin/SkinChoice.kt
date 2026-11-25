@@ -40,7 +40,7 @@ object SkinChoice {
     /** The longest a book foldable's inner screen is to its short side (the Galaxy Fold 7 / 8 Ultra 1.11, the Pixel Folds 1.04). */
     private const val NEAR_SQUARE = 1.2f
     /** The consoles with two screens, which the fold board's hinge falls between. */
-    private val TWO_SCREEN = setOf(SkinVariant.DS, SkinVariant.N3DS, SkinVariant.N3DS_REGULAR)
+    private val TWO_SCREEN = setOf(SkinVariant.DS, SkinVariant.N3DS, SkinVariant.N3DS_REGULAR, SkinVariant.WIIU)
     /** The smallest menu glass side, picture px: less and the menu would not be usable in it. */
     private const val MENU_MIN_GLASS = 400f
 
@@ -63,6 +63,7 @@ object SkinChoice {
         baseTag in ARCADE_TAGS -> SkinVariant.ARCADE
         baseTag == "FDS" -> SkinVariant.FDS
         baseTag == "3DS" -> if (n3dsNew) SkinVariant.N3DS else SkinVariant.N3DS_REGULAR   // the New 3DS controls (ZL ZR, C-stick) or not
+        baseTag == "WIIU" -> SkinVariant.WIIU
         baseTag == "N64" -> SkinVariant.N64
         // pcsx_rearmed / SwanStation (a DualShock on port 1) and ARMSX2 (its DualShock 2): the same skin
         baseTag == "PS" || baseTag == "PSX" || baseTag == "PS2" -> SkinVariant.PS1
@@ -394,9 +395,9 @@ object SkinChoice {
         val own = placeAs(pack, windowW, windowH, densityDpi, tablet, ds, picture, hingeY, topInset, foldable, v)
         // a console's own set the pack lacks for this screen (an older pack, or a player's partly made one): the shared
         // one-screen set, decided per screen, so a missing landscape layout never leaves the game without a skin
-        // (never for the Dreamcast, the 3DS, the GameCube, the Wii pads, the PlayStations or the PSP: the shared set has
-        // no stick, nor two screens)
-        if (own != null || v == SkinVariant.DS || v == SkinVariant.SINGLE || v == SkinVariant.DC || v == SkinVariant.N3DS || v == SkinVariant.N3DS_REGULAR || v == SkinVariant.GC || v == SkinVariant.WII_CLASSIC || v == SkinVariant.WII_NUNCHUK || v == SkinVariant.WII_SIDEWAYS || v == SkinVariant.WII_UPRIGHT || v == SkinVariant.PS1 || v == SkinVariant.PSP) return own
+        // (never for the Dreamcast, the 3DS, the GameCube, the Wii pads, the Wii U, the PlayStations or the PSP: the shared
+        // set has no stick, nor two screens)
+        if (own != null || v == SkinVariant.DS || v == SkinVariant.SINGLE || v == SkinVariant.DC || v == SkinVariant.N3DS || v == SkinVariant.N3DS_REGULAR || v == SkinVariant.GC || v == SkinVariant.WII_CLASSIC || v == SkinVariant.WII_NUNCHUK || v == SkinVariant.WII_SIDEWAYS || v == SkinVariant.WII_UPRIGHT || v == SkinVariant.WIIU || v == SkinVariant.PS1 || v == SkinVariant.PSP) return own
         return placeAs(pack, windowW, windowH, densityDpi, tablet, ds, picture, hingeY, topInset, foldable, SkinVariant.SINGLE)
     }
 
@@ -428,7 +429,7 @@ object SkinChoice {
         val dp = densityDpi / 160f
         val row = rowSpacing(densityDpi, k)
         // the top screen's game size: the large layout's top frame takes its shape
-        val top = when (v) { SkinVariant.N3DS, SkinVariant.N3DS_REGULAR -> 400f to 240f; SkinVariant.DS -> 256f to 192f; else -> null }
+        val top = when (v) { SkinVariant.N3DS, SkinVariant.N3DS_REGULAR -> 400f to 240f; SkinVariant.DS -> 256f to 192f; SkinVariant.WIIU -> 1280f to 720f; else -> null }
         val landscape = windowW > windowH
         // sideways: the main menu's landscape shell, the game in its screen frame (the strip under it; a DS's MIC, SWAP)
         // [both]: the Dreamcast's board with the stick and the d-pad both, tried first at every scale (shrunk to fit) over the
@@ -439,7 +440,7 @@ object SkinChoice {
                 if (both != null && (spec.minRefH > 0) != both) return@widest null
                 // a screen frame with nothing under it as far from the window's bottom as the menu's
                 fun fold(hinge: Float? = hingeY) = foldPieces(spec, windowW, windowH, s, picture, topInset, hinge, densityDpi, top, bottomMargin = shellMargin(pack),
-                    bottomGlass = flatEnd, row = rowSpacing(densityDpi, s), centreControls = v !in N3DS_VARIANTS)
+                    bottomGlass = flatEnd, row = rowSpacing(densityDpi, s), centreControls = v !in N3DS_BOARD)
                 val placed = fold() ?: return@widest null
                 if (v !in N3DS_VARIANTS || spec.boxes.isEmpty()) return@widest placed
                 // the 3DS's touch screen, its 4:3 picture in a frame between the boxes: sideways (the room beside it) the frame

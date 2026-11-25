@@ -1,5 +1,6 @@
 package com.nxredux.mobile.runner
 
+import com.nxredux.mobile.layout.DsKind
 import com.nxredux.mobile.options.NdsLayoutChoice
 import com.nxredux.mobile.options.NdsScreen
 import com.nxredux.mobile.options.NdsSettings
@@ -50,6 +51,33 @@ object WiiuLayout {
             NdsLayoutChoice.PIP -> fit(space, 1f, 1f)?.let { pip(it, settings, insetMarginPx) }
         }.orEmpty()
         return regions.map { it.copy(touch = it.screen == NdsScreen.BOTTOM && !it.inset) }
+    }
+
+    /**
+     * The screens in a pad skin's glasses (the big one, [NdsSettings.big], first). Its one [stack] glass: [layout] in it
+     * where the player's layout applies ([com.nxredux.mobile.options.WiiuOptions.skinLayout]: a regular phone's wide
+     * landscape glass), else halved, the pair 16:18 and centred so each half is 16:9 (never the DS's 4:3 halves). Else
+     * the TV in its [top] glass and the GamePad in its [touch] glass, each 16:9 and centred. Null when the skin has
+     * neither, or the glass has no room.
+     */
+    fun skinRegions(
+        stack: PxRect?, top: PxRect?, touch: PxRect?, settings: NdsSettings, layout: NdsLayoutChoice? = null, insetMarginPx: Float = 0f,
+    ): List<NdsRegion>? {
+        if (stack != null && layout != null) return regions(stack, layout, settings, insetMarginPx).ifEmpty { null }
+        val (first, second) = if (stack != null) {
+            val pair = centredFit(stack, FRAME_ASPECT)
+            pair.copy(height = pair.height / 2f) to pair.copy(y = pair.y + pair.height / 2f, height = pair.height / 2f)
+        } else {
+            centredFit(top ?: return null, ASPECT) to centredFit(touch ?: return null, ASPECT)
+        }
+        if (first.width <= 0f || first.height <= 0f || second.width <= 0f || second.height <= 0f) return null
+        return dsScreenRegions(first, second, DsKind.WIIU, settings.big)
+    }
+
+    private fun centredFit(r: PxRect, aspect: Float): PxRect {
+        val w = min(r.width, r.height * aspect)
+        val h = w / aspect
+        return PxRect(r.x + (r.width - w) / 2f, r.y + (r.height - h) / 2f, w, h)
     }
 
     private fun screen(which: NdsScreen, dst: PxRect) =

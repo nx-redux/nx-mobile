@@ -77,26 +77,32 @@ internal fun SkinLayoutSpec.shoulderIds(): Set<String> =
 internal val N3DS_VARIANTS = setOf(SkinVariant.N3DS, SkinVariant.N3DS_REGULAR)
 
 /**
+ * The layout sets drawn on the 3DS's board: the 3DS's and the Wii U GamePad's (the same rings with the d-pad under the
+ * stick, ZL / ZR beside L / R, the right stick over the face buttons).
+ */
+internal val N3DS_BOARD = N3DS_VARIANTS + SkinVariant.WIIU
+
+/**
  * A board's shoulders' companions, each beside its shoulder on the inner side: the arcade's TB / TA, the GBA's L2 / R2
- * and the 3DS's ZL / ZR (small caps beside L / R; another console's L2 / R2 keep their own design).
+ * and the 3DS's and the GamePad's ZL / ZR (small caps beside L / R; another console's L2 / R2 keep their own design).
  */
 internal fun SkinLayoutSpec.companionIds(): Set<String> =
-    setOf("TURBO_A", "TURBO_B") + (if ((variant != SkinVariant.GBA && variant !in N3DS_VARIANTS) || "L2" in shoulderIds()) emptySet()
+    setOf("TURBO_A", "TURBO_B") + (if ((variant != SkinVariant.GBA && variant !in N3DS_BOARD) || "L2" in shoulderIds()) emptySet()
         else setOf("L2", "R2").filter { id -> controls.any { it.id == id } })
 
 /**
  * The side controls a [RowSpacing] places on this board: [ROW_IDS], its [shoulderIds] and their [companionIds] (the
- * 3DS's C-stick nub too, over its face buttons, moving with them).
+ * 3DS's C-stick nub and the GamePad's right stick too, over the face buttons, moving with them).
  */
-internal fun SkinLayoutSpec.rowIds(): Set<String> = ROW_IDS + shoulderIds() + companionIds() + (if (variant in N3DS_VARIANTS) setOf("CSTICK") else emptySet())
+internal fun SkinLayoutSpec.rowIds(): Set<String> = ROW_IDS + shoulderIds() + companionIds() + (if (variant in N3DS_BOARD) setOf("CSTICK") else emptySet())
 
 /**
  * A taller window's twin showing the stick and the d-pad apart, each its own ring (the Dreamcast's "both" boards): its
  * own design, the row rules leave it alone.
  */
 internal fun SkinLayoutSpec.tallTwinApart(): Boolean {
-    // the Dreamcast's and the 3DS's (both shown on every fold / tablet board) take the row too
-    if (minRefH <= 0 || variant == SkinVariant.DC || variant in N3DS_VARIANTS) return false
+    // the Dreamcast's, the 3DS's and the GamePad's (both shown on every fold / tablet board) take the row too
+    if (minRefH <= 0 || variant == SkinVariant.DC || variant in N3DS_BOARD) return false
     fun holdsOnly(p: PieceSpec, id: String) = controls.filter { c -> p.holds(c) }
         .map { it.id }.toSet() == setOf(id)
     return pieces.any { holdsOnly(it, "STICK") } && pieces.any { holdsOnly(it, "DPAD") }
@@ -378,7 +384,7 @@ object SkinSolver {
         val columnShift: Pair<Float, Float> = if (rowPlan == null) 0f to 0f else {
             val gap = rowPlan[4]
             // a side's small caps in a row (the 3DS's tall shell) stay as drawn, under their ring
-            fun inRow(side: PieceAnchor) = spec.variant in N3DS_VARIANTS && spec.controls.filter { it.id in columnIds && it.anchor == side }.let { cs -> cs.size >= 2 && cs.all { kotlin.math.abs(it.y - cs[0].y) < 1f } }
+            fun inRow(side: PieceAnchor) = spec.variant in N3DS_BOARD && spec.controls.filter { it.id in columnIds && it.anchor == side }.let { cs -> cs.size >= 2 && cs.all { kotlin.math.abs(it.y - cs[0].y) < 1f } }
             val left = spec.pieces.filter { it.anchor == PieceAnchor.LEFT && holdsColumn(it) }.takeUnless { inRow(PieceAnchor.LEFT) }.orEmpty()
             val right = spec.pieces.filter { it.anchor == PieceAnchor.RIGHT && holdsColumn(it) }.takeUnless { inRow(PieceAnchor.RIGHT) }.orEmpty()
             val l = if (left.isEmpty()) 0f else (rowPlan[2] - 2f * gap) - (left.maxOf { x0(it) + it.w * it.scale } + rowPlan[0])
@@ -411,7 +417,7 @@ object SkinSolver {
             spec.pieces.filter { p -> p.glass == null && p.anchor == c.anchor &&
                 kotlin.math.abs(p.x + p.w * p.scale / 2f - c.x) < 2f && kotlin.math.abs(p.y + p.h * p.scale / 2f - c.y) < 2f }
         }.orEmpty()
-        val padPieces = if (spec.variant == SkinVariant.DC || spec.variant in N3DS_VARIANTS) centredOn("DPAD") else emptyList()
+        val padPieces = if (spec.variant == SkinVariant.DC || spec.variant in N3DS_BOARD) centredOn("DPAD") else emptyList()
         val dpadUnder: Pair<Float, Float> = run {
             if (rowPlan == null || row == null) return@run 0f to 0f
             val stick = centredOn("STICK").maxByOrNull { it.w }

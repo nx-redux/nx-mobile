@@ -392,10 +392,12 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val tag = host.layoutTag()
         val ds = NdsOptions.appliesTo(tag)
         val n3ds = N3dsOptions.appliesTo(tag)
-        // with a second display: one-screen games and a DS / 3DS split keep the skin (its screen the touch screen, [SkinDual])
-        if (names.isNotEmpty() || !SkinDual.skinAllowed(host.dualMode, ds, n3ds)) return null
-        val key = skinKey(tag, ds || n3ds) ?: return null
-        val placed = skinCache?.takeIf { it.first == key }?.second ?: placeSkin(pack, key, ds || n3ds, closest = false).also { skinCache = key to it }
+        val wiiu = WiiuOptions.appliesTo(tag)
+        // with a second display: one-screen games and a two-screen split keep the skin (its screen the touch screen, [SkinDual])
+        if (names.isNotEmpty() || !SkinDual.skinAllowed(host.dualMode, ds, n3ds, wiiu)) return null
+        val twoScreens = DualScreenConsole.appliesTo(tag)
+        val key = skinKey(tag, twoScreens) ?: return null
+        val placed = skinCache?.takeIf { it.first == key }?.second ?: placeSkin(pack, key, twoScreens, closest = false).also { skinCache = key to it }
         val moved = skinView != null && skinView?.placement != placed
         skinView?.placement = placed
         if (moved) host.onSkinPlaced()   // a new size: the panel follows its glass
@@ -413,7 +415,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val pack = skinPack ?: return null
         if (names.isNotEmpty()) return null
         val tag = host.layoutTag()
-        val ds = NdsOptions.appliesTo(tag) || N3dsOptions.appliesTo(tag)
+        val ds = DualScreenConsole.appliesTo(tag)
         val key = skinKey(tag, ds) ?: return null
         val made = bareCache?.takeIf { it.first == key }?.second ?: placeBare(pack, key, ds).also { bareCache = key to it }
         val placed = made?.placement
@@ -424,7 +426,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         return placed
     }
 
-    /** What the skin is placed for now: the window, the fold, a one-screen console's picture aspect ([ds]: none), its layout set, the tweaks. */
+    /** What the skin is placed for now: the window, the fold, a one-screen console's picture aspect ([ds]: two screens, none), its layout set, the tweaks. */
     private fun skinKey(tag: String, ds: Boolean): SkinKey? {
         val (w, h) = rootSize()
         if (w <= 0 || h <= 0) return null
@@ -436,7 +438,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         return SkinKey(w, h, resources.displayMetrics.densityDpi, tablet, tag, aspect, hinge, variant, settings.skinTweaks, settings.overlayTweaks, micHidden = ds && !settings.micButtonShown)
     }
 
-    /** [pack]'s layout for [key] before any tweak ([SkinChoice.place], or [SkinChoice.placeClosest] when [closest]; [ds]: a DS or 3DS). */
+    /** [pack]'s layout for [key] before any tweak ([SkinChoice.place], or [SkinChoice.placeClosest] when [closest]; [ds]: a DS, 3DS or Wii U). */
     private fun placeUntweaked(pack: PadSkinPack, key: SkinKey, ds: Boolean, closest: Boolean): SkinPlacement? {
         val variant = key.variant
         val picture = key.aspect?.let { (it * 240f) to 240f }
@@ -483,7 +485,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val bare = view === bareView
         val pack = skinPack ?: return null
         val tag = host.layoutTag()
-        val ds = NdsOptions.appliesTo(tag) || N3dsOptions.appliesTo(tag)
+        val ds = DualScreenConsole.appliesTo(tag)
         val console = CoreRegistry.consoleOf(tag)?.id ?: return null
         // the same window, picture aspect and layout set as the drawn one, with no tweaks (the editor adds the stored ones)
         val key = skinKey(tag, ds) ?: return null
@@ -643,7 +645,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     private var lastLayoutNames: List<String>? = null
 
     /**
-     * A DS or 3DS game whose pad skin will show: a pack picked, no controller in the layout (a built-in one hides it
+     * A DS, 3DS or Wii U game whose pad skin will show: a pack picked, no controller in the layout (a built-in one hides it
      * too), the Dual screen mode allowing it and a layout set for the console. No window measure, so it holds for
      * either orientation (decided before the turn to landscape): the Bottom screen's Auto then means the phone
      * ([DualScreen.pictureOn]'s skin).
@@ -654,8 +656,9 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val tag = host.layoutTag()
         val ds = NdsOptions.appliesTo(tag)
         val n3ds = N3dsOptions.appliesTo(tag)
-        if (!ds && !n3ds) return false
-        return layoutControllerNames().isEmpty() && SkinDual.skinAllowed(mode, ds, n3ds)
+        val wiiu = WiiuOptions.appliesTo(tag)
+        if (!ds && !n3ds && !wiiu) return false
+        return layoutControllerNames().isEmpty() && SkinDual.skinAllowed(mode, ds, n3ds, wiiu)
     }
 
     /** Whether the pad skin is the layout now. */
@@ -691,14 +694,15 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     }
 
     /**
-     * A DS / 3DS touch screen's glass on a two-screen board ([SkinFamily.FLEX]: the unfolded Fold, a tablet, a Flip
-     * half-folded), its top screen in a glass above: the bottom screen of the skin's own dual screen. Null elsewhere.
+     * A DS / 3DS touch screen's (the Wii U GamePad's) glass on a two-screen board ([SkinFamily.FLEX]: the unfolded Fold, a
+     * tablet, a Flip half-folded), its top screen in a glass above: the bottom screen of the skin's own dual screen. Null
+     * elsewhere.
      */
     fun boardTouchGlass(): com.nxredux.mobile.skin.PlacedGlass? {
         if (!skinShown) return null
         val p = skinPlacement() ?: return null
         val tag = host.layoutTag()
-        if (!NdsOptions.appliesTo(tag) && !N3dsOptions.appliesTo(tag)) return null
+        if (!DualScreenConsole.appliesTo(tag)) return null
         if (p.spec.family != com.nxredux.mobile.skin.SkinFamily.FLEX || p.glass(GlassScreen.TOP) == null) return null
         return p.glass(GlassScreen.TOUCH)
     }

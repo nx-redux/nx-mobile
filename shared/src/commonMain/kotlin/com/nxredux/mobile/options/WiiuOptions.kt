@@ -1,5 +1,7 @@
 package com.nxredux.mobile.options
 
+import com.nxredux.mobile.layout.ScreenClass
+
 /**
  * The Wii U's screen settings: frontend `nx_` keys, per game with a console default. Cemu always draws the TV over the
  * GamePad in one frame; the app places the two screens by the layout row in use, with the DS's layouts.
@@ -60,6 +62,21 @@ object WiiuOptions {
         val s = settings(values)
         val pick = if (landscape) s.landscape else if (controllerMode) s.controller else s.portrait
         return pick ?: defaultLayout(landscape)
+    }
+
+    /**
+     * The layout the app draws under a pad skin: on a regular phone in [landscape] (as the DS's) the row in use's in the
+     * skin's one glass, whose width the two stacked would leave mostly empty; null elsewhere (the Fold, a tablet,
+     * portrait), where the skin's own TV over GamePad stays.
+     */
+    fun skinLayout(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, screen: ScreenClass): NdsLayoutChoice? =
+        if (!landscape || screen.isFoldShaped || screen.isTablet) null else layoutShown(values, landscape, controllerMode)
+
+    /** The layout rows a pad skin ([skinOn]) ignores on [screen], shown unavailable ([skinLayout] null there). */
+    fun lockedLayoutRows(skinOn: Boolean, screen: ScreenClass): Set<String> = when {
+        !skinOn -> emptySet()
+        screen.isFoldShaped || screen.isTablet -> setOf(LAYOUT_PORTRAIT, LAYOUT_LANDSCAPE)
+        else -> setOf(LAYOUT_PORTRAIT)
     }
 
     fun activeLayoutKey(view: NdsView): String = when {

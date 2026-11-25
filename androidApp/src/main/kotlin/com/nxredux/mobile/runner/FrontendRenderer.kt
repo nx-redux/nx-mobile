@@ -670,7 +670,7 @@ internal class FrontendRenderer(
         // The two-screen consoles may reach a third into portrait's bare-button band (the Fold's DS 6x + 3x), the rest a quarter.
         val space = pictureSpace(room, w, h, overlayH, hiddenBandReach(DualScreenConsole.appliesTo(host.gameTag)))
         val skinDs = skinDsLayout(g)
-        ndsFilled = false
+        ndsFilled = isWiiu && skinDs != null   // the Wii U's skin screens fill their glasses at any scale
         val nds = skinDs?.regions ?: ndsLayout(w, h, g, space, room, overlayH, screen, s.scaling) ?: n3dsSplitLayout(w, h)
             ?: wiiuLayout(w, h, g, space, room, overlayH)
         if (isWiiu && nds == null && WiiuLayout.keepsDrawn(g[0].roundToInt(), g[1].roundToInt(), drawn = ndsRegions.isNotEmpty())) {
@@ -723,7 +723,7 @@ internal class FrontendRenderer(
             val screenH = if (isWiiu) WIIU_SCREEN_H else 192f
             val scales = nds.joinToString(" + ") { "${it.screen.value}${if (it.inset) " inset" else ""} %.2fx".format(java.util.Locale.US, it.dst.height / screenH) }
             if (skinDs != null) {
-                logLayout(w, h, shape, "SKIN_DS", "top=${skinDs.top.short()} bottom=${skinDs.bottom.short()}", "${if (host.isN3ds) "3ds" else "ds"} $scales")
+                logLayout(w, h, shape, "SKIN_DS", "top=${skinDs.top.short()} bottom=${skinDs.bottom.short()}", "${if (host.isN3ds) "3ds" else if (isWiiu) "wiiu" else "ds"} $scales")
             } else {
                 logLayout(w, h, shape, room.name, spaceAndPicture(space, shown), "${if (isWiiu) "wiiu" else "ds"} $scales")
             }
@@ -1037,14 +1037,15 @@ internal class FrontendRenderer(
     }
 
     /**
-     * A DS or 3DS under a pad skin: its screens in the skin's glass (the top and touch glasses, or the halves of one tall
-     * glass). Null without a skin, or for a DS frame that is not the plain stack.
+     * A DS, 3DS or Wii U under a pad skin: its screens in the skin's glass (the top and touch glasses, or the halves of one
+     * tall glass). Null without a skin, or for a DS or Wii U frame that is not the plain stack.
      * A 3DS ([SkinN3ds]): each screen at its own shape (SWAP trades them, [PadLayoutController.n3dsSkinBig]); a frame
      * that isn't azahar's plain stack (netplay keeps the player's layout) is drawn whole in the top glass.
      */
     private fun skinDsLayout(g: FloatArray): SkinDs? {
         if (!padLayout.skinShown || host.dualMode != DualMode.OFF) return null
         if (host.isN3ds) return skinN3dsLayout(g)
+        if (isWiiu) return skinWiiuLayout(g)
         if (!NdsOptions.appliesTo(host.gameTag) || !dsScreensKnown(g)) return null
         val p = padLayout.skinPlacement() ?: return null
         // a regular phone's landscape: the player's layout in the skin's one glass (NdsOptions.skinLayout), as without a skin
@@ -1082,6 +1083,21 @@ internal class FrontendRenderer(
             val whole = SkinN3ds.whole(stack, top, fw, fh) ?: return null
             listOf(NdsRegion(NdsScreen.TOP, FrameRect(0f, 0f, 1f, 1f), whole, shaded = true, touch = false))
         }
+        return SkinDs(regions[0].dst, regions.getOrNull(1)?.dst ?: regions[0].dst, regions)
+    }
+
+    /**
+     * The Wii U's TV and GamePad in the skin's glasses ([WiiuLayout.skinRegions]): on a regular phone's landscape the
+     * player's layout in its one glass, as without a skin, else the skin's own TV over GamePad. SWAP trades them.
+     */
+    private fun skinWiiuLayout(g: FloatArray): SkinDs? {
+        if (!WiiuLayout.isWiiuFrame(g[0].roundToInt(), g[1].roundToInt())) return null
+        val p = padLayout.skinPlacement() ?: return null
+        val layout = WiiuOptions.skinLayout(host.frontendValues, host.isLandscape(), ndsControllerMode(), activity.windowShape().screenClass)
+        val regions = WiiuLayout.skinRegions(
+            p.glass(GlassScreen.STACK)?.rect, p.glass(GlassScreen.TOP)?.rect, p.glass(GlassScreen.TOUCH)?.rect,
+            WiiuOptions.settings(host.frontendValues), layout, NDS_INSET_MARGIN_DP * resources.displayMetrics.density,
+        ) ?: return null
         return SkinDs(regions[0].dst, regions.getOrNull(1)?.dst ?: regions[0].dst, regions)
     }
 
@@ -1132,19 +1148,23 @@ internal class FrontendRenderer(
 
     /**
      * The Wii U's screens, cut from Cemu's TV-over-GamePad frame, for a [w] x [h] game area; null for another console or a
-     * frame that is not that stack (none yet). Split, the main display's screen alone; panel up, the big screen alone;
-     * else the row in use's layout in [space] (the pad's [room], as the DS's), or under a pad skin in its picture glass.
+     * frame that is not that stack (none yet). Split, the main display's screen alone (under a pad skin in its glass);
+     * panel up, the big screen alone; else the row in use's layout in [space] (the pad's [room], as the DS's). A pad skin
+     * with no second display places them itself ([skinWiiuLayout]).
      */
     private fun wiiuLayout(w: Float, h: Float, g: FloatArray, space: PxRect, room: PadRoom, overlayH: Float): List<NdsRegion>? {
         if (!isWiiu || !WiiuLayout.isWiiuFrame(g[0].roundToInt(), g[1].roundToInt())) return null
         val settings = WiiuOptions.settings(host.frontendValues)
-        if (host.dualMode == DualMode.SPLIT) return DualScreen.wiiuScreen(w, h, DualScreen.splitMain(settings.big, host.pictureOn))
+        if (host.dualMode == DualMode.SPLIT) {
+            val main = DualScreen.splitMain(settings.big, host.pictureOn)
+            val glass = SkinDual.splitGlass(padLayout.skinPlacement()?.takeIf { padLayout.skinShown }, main)
+            return if (glass != null) DualScreen.wiiuScreenIn(glass, main) else DualScreen.wiiuScreen(w, h, main)
+        }
         if (host.dualMode == DualMode.PANEL_UP) return DualScreen.wiiuScreen(w, h, settings.big)
-        val glass = if (padLayout.skinShown) padLayout.skinPlacement()?.glass(GlassScreen.PICTURE)?.rect else null
         val layout = WiiuOptions.layoutShown(host.frontendValues, host.isLandscape(), ndsControllerMode())
-        val regions = WiiuLayout.regions(glass ?: space, layout, settings, NDS_INSET_MARGIN_DP * resources.displayMetrics.density)
+        val regions = WiiuLayout.regions(space, layout, settings, NDS_INSET_MARGIN_DP * resources.displayMetrics.density)
         ndsFilled = regions.isNotEmpty()
-        if (glass != null || room != PadRoom.HIDDEN_BAND || regions.isEmpty()) return regions
+        if (room != PadRoom.HIDDEN_BAND || regions.isEmpty()) return regions
         // The band hidden: the screens as one picture, at the top when they reach into the overlay, else centred above it.
         val shown = regions.shownRect()
         val dy = (placedFor(room, shown, h, overlayH).y - shown.y).roundToInt().toFloat()

@@ -180,4 +180,51 @@ class WiiuLayoutTest {
     @Test fun no_room_no_regions() {
         assertEquals(emptyList(), regions(PxRect(0f, 0f, 0f, 0f), NdsLayoutChoice.STACKED))
     }
+    @Test fun a_skins_stack_glass_is_halved_into_two_16_by_9_screens() {
+        // the landscape shell's and the portrait stacked layout's one glass (16:18), and one a little off that shape
+        for (glass in listOf(PxRect(496f, 40f, 996f, 1120f), PxRect(30f, 200f, 1020f, 1120f), PxRect(0f, 0f, 996f, 1200f))) {
+            val (tv, pad) = assertNotNull(WiiuLayout.skinRegions(glass, null, null, NdsSettings(big = NdsScreen.TOP)), "$glass")
+            assert16by9(tv); assert16by9(pad)
+            assertEquals(tv.dst.width, pad.dst.width, 0.01f)
+            assertEquals(tv.dst.y + tv.dst.height, pad.dst.y, 0.01f)   // the GamePad right under the TV
+            assertEquals(glass.x + glass.width / 2f, tv.dst.x + tv.dst.width / 2f, 0.01f)
+            assertEquals(glass.y + glass.height / 2f, tv.dst.y + tv.dst.height, 0.5f)   // the pair centred in the glass
+            assertTrue(tv.dst.x >= glass.x - 0.01f && tv.dst.x + tv.dst.width <= glass.x + glass.width + 0.01f)
+            assertTrue(tv.dst.y >= glass.y - 0.01f && pad.dst.y + pad.dst.height <= glass.y + glass.height + 0.01f)
+            assertEquals(WiiuLayout.TV_SRC, tv.src); assertFalse(tv.touch)
+            assertEquals(WiiuLayout.PAD_SRC, pad.src); assertTrue(pad.touch)
+        }
+    }
+
+    @Test fun a_skins_top_and_touch_glasses_hold_the_tv_and_the_gamepad() {
+        val top = PxRect(24f, 60f, 1800f, 1012f)
+        val touch = PxRect(300f, 1200f, 1300f, 700f)   // wider than 16:9: the GamePad centred in it
+        val (tv, pad) = assertNotNull(WiiuLayout.skinRegions(null, top, touch, NdsSettings(big = NdsScreen.TOP)))
+        assert16by9(tv); assert16by9(pad)
+        assertEquals(NdsScreen.TOP, tv.screen); assertFalse(tv.touch)
+        assertEquals(NdsScreen.BOTTOM, pad.screen); assertTrue(pad.touch)
+        assertEquals(touch.height, pad.dst.height, 0.01f)
+        assertEquals(touch.x + touch.width / 2f, pad.dst.x + pad.dst.width / 2f, 0.01f)
+        // SWAP: the GamePad in the top glass, the TV in the touch glass
+        val (big, small) = assertNotNull(WiiuLayout.skinRegions(null, top, touch, NdsSettings(big = NdsScreen.BOTTOM)))
+        assertEquals(NdsScreen.BOTTOM, big.screen); assertTrue(big.touch)
+        assertEquals(tv.dst, big.dst)
+        assertEquals(NdsScreen.TOP, small.screen); assertFalse(small.touch)
+        assertEquals(pad.dst, small.dst)
+    }
+
+    @Test fun a_regular_phones_landscape_glass_takes_the_players_layout() {
+        val glass = PxRect(571f, 89f, 1377f, 827f)   // the landscape shell's glass grown across a 20:9 phone
+        val halved = assertNotNull(WiiuLayout.skinRegions(glass, null, null, NdsSettings()))
+        val large = assertNotNull(WiiuLayout.skinRegions(glass, null, null, NdsSettings(), NdsLayoutChoice.LARGE, margin))
+        assertEquals(WiiuLayout.regions(glass, NdsLayoutChoice.LARGE, NdsSettings(), margin), large)
+        assertTrue(large[0].dst.width > halved[0].dst.width * 1.2f, "${large[0].dst} vs ${halved[0].dst}")
+        assertEquals(NdsScreen.TOP, large[0].screen)
+        assertTrue(large.single { it.screen == NdsScreen.BOTTOM }.touch)
+    }
+
+    @Test fun a_skin_with_neither_glass_gives_no_screens() {
+        assertEquals(null, WiiuLayout.skinRegions(null, PxRect(0f, 0f, 1600f, 900f), null, NdsSettings(big = NdsScreen.TOP)))
+        assertEquals(null, WiiuLayout.skinRegions(null, null, null, NdsSettings(big = NdsScreen.TOP)))
+    }
 }
