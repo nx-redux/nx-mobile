@@ -202,6 +202,8 @@ internal interface LaunchHost : GameScreenHost {
     fun startGameTime(rec: GameTimeRecorder)
 
     fun fail(message: String, title: String = GameActivity.START_FAILED)
+    /** A one-button notice the launch waits on; returns once the player has answered (at once when the screen is gone). */
+    suspend fun confirmNotice(message: String)
     /** [record] false: the core's Vulkan failure is not recorded (a custom driver failed); [notice]: the toast. */
     fun relaunchOnGles(record: Boolean = true, notice: String = VulkanFallback.NOTICE)
     /** The custom driver could not start: the same launch again on the system driver ([GameActivity.EXTRA_FORCE_SYSTEM_DRIVER]). */
@@ -511,6 +513,9 @@ internal class LaunchPipeline(private val host: LaunchHost) {
         attachView(cfg, prepared, data)
     }
 
+    private fun totalRam(): Long =
+        ActivityManager.MemoryInfo().also { host.activity.getSystemService(ActivityManager::class.java).getMemoryInfo(it) }.totalMem
+
     private fun refuse(message: String, title: String = GameActivity.START_FAILED): Nothing? { host.fail(message, title); return null }
 
     private suspend fun resolveConfig(): LaunchConfig? {
@@ -529,6 +534,10 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // A core with no OpenGL ES renderer on a phone without Vulkan: refused before anything is unpacked or loaded.
             withContext(Dispatchers.IO) { GraphicsApiOptions.vulkanRefusal(descriptor?.vulkan) { LibretroDroid.isVulkanSupported() } }
                 ?.let { return refuse(it) }
+            if (WiiuRamWarning.due(tag, totalRam(), settings.wiiuRamWarned)) {
+                confirmNotice(WiiuRamWarning.MESSAGE)
+                settings.wiiuRamWarned = true
+            }
             val players = CoreRegistry.playersFor(tag, descriptor)
             playerCount = players
             // netplay: no slots, so every pad and the touch pad drive native port 0, the engine's local word.
@@ -1060,7 +1069,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                         // session's (NetplayLinkOptions) the user's, set even when absent.
                         // N64: Max High-Res VRAM Limit's Auto becomes a number for this device's memory (N64HiresPack.vramLimit).
                         val n64Vram = if (cfg.descriptor?.id == MUPEN64PLUS_NEXT_ID) {
-                            val total = ActivityManager.MemoryInfo().also { activity.getSystemService(ActivityManager::class.java).getMemoryInfo(it) }.totalMem
+                            val total = totalRam()
                             val limit = N64HiresPack.vramLimit(cfg.option(N64HiresPack.VRAM_KEY), total)
                             NxLog.i(TAG_LOG, "N64 hi-res VRAM limit: $limit MB (device ${total / (1024 * 1024)} MB)")
                             mapOf(N64HiresPack.VRAM_KEY to limit)

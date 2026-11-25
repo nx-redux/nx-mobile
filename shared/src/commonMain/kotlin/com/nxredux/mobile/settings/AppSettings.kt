@@ -577,6 +577,10 @@ interface AppSettings {
     var lastLaunchMaliSystemVulkan: Boolean
         get() = false
         set(@Suppress("UNUSED_PARAMETER") value) {}
+    /** The low-RAM Wii U warning was answered once. Defaulted, like [debugLog]. */
+    var wiiuRamWarned: Boolean
+        get() = false
+        set(@Suppress("UNUSED_PARAMETER") value) {}
     /** The games a custom driver crashed in, one `gamePath<TAB>driverId` per line; null: none. Defaulted, like [debugLog]. */
     var gpuDriverCrashes: String?
         get() = null

@@ -1299,6 +1299,31 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             }
     }
 
+    /** A one-button notice the launch waits on. A controller's A or B leaves on release, as in [fail]. */
+    suspend fun confirmNotice(message: String) {
+        if (isFinishing || isDestroyed) return
+        val answered = CompletableDeferred<Unit>()
+        var pressed = -1
+        val dialog = AlertDialog.Builder(this)
+            .setMessage(message)
+            .setCancelable(false)
+            .setPositiveButton("OK") { _, _ -> answered.complete(Unit) }
+            .setOnKeyListener { dialog, keyCode, event ->
+                val leaves = keyCode == KeyEvent.KEYCODE_BACK || PadKeymap.buttonFor(keyCode).let { it == NxButton.A || it == NxButton.B }
+                if (leaves) when (event.action) {
+                    KeyEvent.ACTION_DOWN -> if (event.repeatCount == 0) pressed = keyCode
+                    KeyEvent.ACTION_UP -> if (pressed == keyCode) { dialog.dismiss(); answered.complete(Unit) }
+                }
+                leaves
+            }
+            .setOnDismissListener { answered.complete(Unit) }
+            .show()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) dialog.onBackInvokedDispatcher.registerOnBackInvokedCallback(
+            OnBackInvokedDispatcher.PRIORITY_OVERLAY,
+        ) { dialog.dismiss() }
+        try { answered.await() } finally { if (dialog.isShowing) dialog.dismiss() }
+    }
+
     /** Opens the game's content and companions, SAF documents or file refs. */
     private val refs by lazy { AndroidRefs(contentResolver) }
 
@@ -2303,6 +2328,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
 
         override fun fail(message: String, title: String) = game.fail(message, title)
+        override suspend fun confirmNotice(message: String) = game.confirmNotice(message)
         override fun relaunchOnGles(record: Boolean, notice: String) = game.relaunchOnGles(record, notice)
         override fun relaunchOnSystemDriver() = game.relaunchOnSystemDriver()
         override fun clearDriverMarkerLater() = game.clearDriverMarkerLater()
