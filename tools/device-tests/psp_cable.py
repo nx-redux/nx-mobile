@@ -50,6 +50,7 @@ class Phone:
         self.state = "%s/%s.state%s" % (states, stem, slot if slot else "")
         self.auto = ["%s/%s.state.auto" % (states, stem), minui + ".9.bmp", minui + ".txt"]
         self.timeout = None
+        self.set_aside = False
         self.dialogs_seen = []
 
     def sh(self, cmd, timeout=60):
@@ -65,12 +66,23 @@ class Phone:
         self.sh("settings put system screen_off_timeout 1800000")
         # A busy phone's default buffer keeps under a minute of lines.
         self.sh("logcat -G 10M")
-        self.sh("; ".join("if [ -e %s ]; then mv %s %s; fi" % (q(f), q(f), q(f + ".nxcable")) for f in self.auto))
+        # A copy already set aside is a run that never put it back: it is the real one, and what is here now is a test's.
+        self.sh("; ".join("if [ -e %s ] && [ ! -e %s ]; then mv %s %s; fi" % (q(f), q(f + ".nxcable"), q(f), q(f + ".nxcable"))
+                          for f in self.auto))
+        self.set_aside = True
 
     def restore(self):
-        self.stop()
-        self.sh("; ".join("rm -f %s; if [ -e %s ]; then mv %s %s; fi" % (q(f), q(f + ".nxcable"), q(f + ".nxcable"), q(f))
-                          for f in self.auto))
+        try:
+            self.stop()
+        except FoldError as e:
+            print("stop %s: %s" % (self.name, e))
+        # Only after prepare set the files aside: otherwise the ones here are the game's own.
+        if self.set_aside:
+            self.sh("; ".join("rm -f %s; if [ -e %s ]; then mv %s %s; fi" % (q(f), q(f + ".nxcable"), q(f + ".nxcable"), q(f))
+                              for f in self.auto))
+            left = self.sh("ls %s 2>/dev/null" % " ".join(q(f + ".nxcable") for f in self.auto)).strip()
+            if left:
+                print("%s: resume files still set aside, put them back by hand: %s" % (self.name, left))
         if self.timeout and self.timeout.isdigit():
             self.sh("settings put system screen_off_timeout %s" % self.timeout)
 
@@ -343,7 +355,10 @@ class Run:
         mark = self.host.now()
         self.press(self.host, "circle", r"PSP link: game left ad hoc", mark)
         left = self.host.wait(r"PSP link: game left ad hoc", 5, mark)
-        self.note("leaving ad hoc does not stall", bool(left), "%.1f s" % (seconds(left) - mark) if left else "no 'game left ad hoc' in 15 s")
+        took = seconds(left) - mark if left else None
+        # The press itself takes about 2 s (Circle, the game's question, Cross); a held login would add up to 9 s.
+        self.note("leaving ad hoc does not stall", took is not None and took <= 6,
+                  "%.1f s" % took if left else "the game never left ad hoc")
 
     def late(self):
         self.cable(False)
@@ -395,7 +410,13 @@ class Run:
                     self.note("ran", False, str(e))
                     self.finish()
         finally:
-            self.cable(True)
+            try:
+                self.cable(True)
+            except FoldError as e:
+                print("USB data: %s" % e)
+            # A shell command to a phone that dropped off adb fails silently.
+            if not self.switch.dev.present():
+                print("the switch phone is off adb: its USB data may still be off (svc usb enableUsbDataSignal true)")
             for p in self.both:
                 try:
                     p.restore()

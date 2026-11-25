@@ -11,6 +11,7 @@ Still owed:
 
 - [ ] Quit crash seen once on the Fold: SIGSEGV in PPSSPP's `DrawEngineGLES` constructor under `retro_unload_game`, a quit before the game finished booting behind a USB dialog.
 - [ ] After a pull, both phones re-enter the lobby and meet over the Wi-Fi (not run: the phones were on different subnets).
+- [ ] From review, not seen on a device: the Wi-Fi lost mid-game is never told to the runner (`LaunchPipeline` `onLost` only clears `pspWifi`; `pspWifiUpdate` sends nothing for no address), so with a cable coming the election may serve alone on the old Wi-Fi address after the hold.
 
 ## Review round 3: device checks owed
 

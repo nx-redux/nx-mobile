@@ -51,7 +51,6 @@ typedef struct {
     uint32_t server_ip;
     int serve;
     int settled;
-    int announce;
     int cable;        /* the network of this choice, and of its server and announcements: 1 the cable, 0 the Wi-Fi */
     uint32_t self;    /* this device's address on that network */
     int held;         /* unsettled because a cable is coming */

@@ -277,7 +277,7 @@ psl_choice psl_step(psl* s, int64_t now_ms) {
     }
     if (s->mode == PSL_HOST) {
         c.server_ip = s->served_ip = s->self_ip;
-        c.serve = c.settled = c.announce = 1;
+        c.serve = c.settled = 1;
         return c;
     }
     if (s->mode == PSL_JOIN) {
@@ -297,11 +297,10 @@ psl_choice psl_step(psl* s, int64_t now_ms) {
         if (s->serving && !s->grouped && now_ms - s->left_ms >= PSL_LINGER_MS) s->serving = 0;
         if (s->serving) {
             c.server_ip = s->served_ip = c.self;
-            c.serve = c.settled = c.announce = 1;
+            c.serve = c.settled = 1;
         }
         return c;
     }
-    c.announce = 1;
     if (s->holding && !s->on_cable && !s->grouped) {
         /* A server here, started or followed, would group the game on the Wi-Fi and keep it off the cable. */
         s->serving = 0;

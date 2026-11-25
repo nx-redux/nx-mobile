@@ -482,7 +482,7 @@ static void cable_coming_hold_expires(void) {
     psl_choice c = psl_step(&s, 1000 + PSL_CABLE_HOLD_MS - 1);
     assert(c.held == 1 && c.serve == 0 && c.settled == 0);
     c = psl_step(&s, 1000 + PSL_CABLE_HOLD_MS);
-    assert(c.held == 0 && c.serve == 0 && c.settled == 0 && c.announce == 1);
+    assert(c.held == 0 && c.serve == 0 && c.settled == 0);
     c = psl_step(&s, 1000 + PSL_CABLE_HOLD_MS + PSL_LISTEN_MS - 1);
     assert(c.held == 0 && c.serve == 0 && c.settled == 0);
     c = psl_step(&s, 1000 + PSL_CABLE_HOLD_MS + PSL_LISTEN_MS);
@@ -586,8 +586,8 @@ static void freed_hold_only_after_a_dropped_cable(void) {
     assert(psl_step(&n, 4000).held == 1);
 }
 
-/* Stage-1 rules hold on the cable: linger and goodbye, a busy server, this instance's own tie. */
-static void stage_one_rules_on_the_cable(void) {
+/* The Wi-Fi's rules hold on the cable: linger and goodbye, a busy server, this instance's own tie. */
+static void wifi_rules_on_the_cable(void) {
     psl s;
     uint8_t pkt[PSL_PACKET];
     uint32_t ip;
@@ -597,12 +597,12 @@ static void stage_one_rules_on_the_cable(void) {
     assert(c.serve == 1 && c.cable == 1 && c.server_ip == CABLE_A);
     psl_active(&s, 0, 0, 5000);
     c = psl_step(&s, 5000 + PSL_LINGER_MS - 1);
-    assert(c.serve == 1 && c.announce == 1 && c.cable == 1);
+    assert(c.serve == 1 && c.cable == 1);
     assert(psl_pack(&s, pkt) == PSL_PACKET && (pkt[5] & PSL_F_SERVING));
     memcpy(&ip, pkt + 8, 4);
     assert(ip == CABLE_A);
     c = psl_step(&s, 5000 + PSL_LINGER_MS);
-    assert(c.serve == 0 && c.announce == 0);
+    assert(c.serve == 0);
     assert(psl_pack(&s, pkt) == 0);
     psl_pack_goodbye(&s, pkt);
     memcpy(&ip, pkt + 8, 4);
@@ -889,7 +889,7 @@ static void no_wifi_self_never_serves(void) {
     uint8_t pkt[PSL_PACKET];
     make_auto(&s, 0, 5, 0, 0);
     psl_choice c = psl_step(&s, 5000);
-    assert(c.serve == 0 && c.settled == 0 && c.announce == 0 && c.cable == 0);
+    assert(c.serve == 0 && c.settled == 0 && c.cable == 0);
     assert(psl_pack(&s, pkt) == 0);
     hear(&s, WIFI_B, 1, PSL_F_SERVING | PSL_F_SESSION, 5100);
     c = psl_step(&s, 5100);
@@ -906,7 +906,7 @@ static void no_wifi_self_never_serves(void) {
     /* Waiting for a cable that is coming is a hold all the same, and says so. */
     psl_set_cable(&s, PSL_CABLE_COMING, 0, 0, 21000);
     c = psl_step(&s, 21000);
-    assert(c.held == 1 && c.settled == 0 && c.serve == 0 && c.announce == 0);
+    assert(c.held == 1 && c.settled == 0 && c.serve == 0);
     c = psl_step(&s, 21000 + PSL_CABLE_HOLD_MS - 1);
     assert(c.held == 1);
     c = psl_step(&s, 21000 + PSL_CABLE_HOLD_MS);
@@ -969,7 +969,7 @@ static void two_cabled_devices_one_server(void) {
         size_t len[2];
         for (int i = 0; i < 2; i++) {
             c[i] = psl_step(&d[i], now);
-            len[i] = c[i].announce ? psl_pack(&d[i], pkt[i]) : 0;
+            len[i] = psl_pack(&d[i], pkt[i]);
         }
         /* A packet reaches the other only when both are on the same network, from the sender's address there. */
         for (int i = 0; i < 2; i++) {
@@ -1016,7 +1016,7 @@ int main(void) {
     cable_coming_hold_expires();
     one_hold_per_coming_episode();
     freed_hold_only_after_a_dropped_cable();
-    stage_one_rules_on_the_cable();
+    wifi_rules_on_the_cable();
     cable_none_ends_hold();
     cable_up_without_self_is_none();
     cable_up_ends_hold_and_switches();
