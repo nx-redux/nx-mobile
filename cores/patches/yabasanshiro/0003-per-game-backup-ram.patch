@@ -1,0 +1,33 @@
+# license: modifies YabaSanshiro (https://github.com/libretro/yabause), GPL-2.0 (LICENSE); this patch is distributed under the same license.
+# Backup RAM was one file shared by every game (<save dir>/yabasanshiro/backup.bin). It is now <save dir>/<content
+# name>.bkr, so each game's saves are its own and move, sync and are deleted with it like other consoles' battery saves.
+# The file's format (the core's extended, memory-mapped backup) is unchanged.
+diff --git a/yabause/src/libretro/libretro.c b/yabause/src/libretro/libretro.c
+index 69799e9..a7443fb 100644
+--- a/yabause/src/libretro/libretro.c
++++ b/yabause/src/libretro/libretro.c
+@@ -1165,9 +1165,8 @@ void retro_init(void)
+       strncpy(g_save_dir, dir, sizeof(g_save_dir));
+    }
+ 
+-   char save_dir[PATH_MAX];
+-   snprintf(save_dir, sizeof(save_dir), "%s%cyabasanshiro%c", g_save_dir, slash, slash);
+-   path_mkdir(save_dir);
++   if (g_save_dir[0])
++      path_mkdir(g_save_dir);
+ 
+    if (environ_cb(RETRO_ENVIRONMENT_GET_INPUT_BITMASKS, NULL))
+       libretro_supports_bitmasks = true;
+@@ -1291,7 +1290,11 @@ bool retro_load_game(const struct retro_game_info *info)
+       log_cb(RETRO_LOG_WARN, "HLE bios is enabled, this is for debugging purpose only, expect lots of issues\n");
+    }
+ 
+-   snprintf(bup_path, sizeof(bup_path), "%s%cyabasanshiro%cbackup.bin", g_save_dir, slash, slash);
++   /* Each game keeps its own backup RAM, named after the content (an .m3u's name for every disc of the game), so it
++    * moves, syncs and is deleted with the game like other consoles' battery saves. */
++   char content_name[PATH_MAX];
++   extract_basename(content_name, info->path, sizeof(content_name));
++   snprintf(bup_path, sizeof(bup_path), "%s%c%s.bkr", g_save_dir, slash, content_name);
+ 
+    struct retro_input_descriptor desc[] = {
+       { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT,  "D-Pad Left" },

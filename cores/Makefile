@@ -76,7 +76,7 @@ check-tools:
 # flycast) has a curated ../LICENSES/<core>.txt instead. check-licenses fails when a core has neither.
 CORES = gambatte fceumm snes9x genesis_plus_gx mgba melondsds mupen64plus_next ppsspp \
   race mednafen_pce_fast mednafen_vb handy stella2014 prosystem a5200 mednafen_wswan mednafen_supafaust pokemini fake08 prboom gpsp pcsx_rearmed \
-  swanstation picodrive gearcoleco fbneo flycast azahar dolphin armsx2
+  swanstation picodrive gearcoleco fbneo flycast yabasanshiro azahar dolphin armsx2
 
 gambatte_REPO = https://github.com/libretro/gambatte-libretro
 gambatte_HASH = 77f2567d718b8973d02caa2daa8dce4953faf811
@@ -387,6 +387,24 @@ flycast_ARTIFACT = flycast_libretro.so
 flycast_SUBMODULES = --recursive core/deps/libchdr core/deps/tinygettext core/deps/asio \
   core/deps/glslang core/deps/Vulkan-Headers core/deps/VulkanMemoryAllocator
 flycast_FLAGS = -DLIBRETRO=ON -DUSE_GLES=ON -DUSE_OPENMP=OFF -DCMAKE_OSX_ARCHITECTURES=arm64 -DNX_LIBRETRO_GGPO=ON
+
+# YabaSanshiro (Saturn): libretro/yabause's yabasanshiro branch, head c6de72c0 (2026-11-25). ndk-build in
+# yabause/src/libretro (jni/Android.mk, LOCAL_MODULE retro): GLES 3, the arm64 SH-2 dynarec. Its one submodule (eigen,
+# for the standalone retro_arena UI) is not built, so it is not fetched. Licence notices: LICENSES/yabasanshiro.txt.
+# patches/yabasanshiro/0001: Low and High Work RAM as one fixed block, exposed as SYSTEM_RAM and as a memory map at
+# their SH-2 addresses, in the layout RetroAchievements' Saturn sets use (the core exposed no RAM).
+# patches/yabasanshiro/0002: disk control (ext when the frontend has it) and .m3u, so multi-disc games change disc
+# through the CD block's tray.
+# patches/yabasanshiro/0003: backup RAM per game, <save dir>/<content name>.bkr, instead of one shared
+# yabasanshiro/backup.bin, so it syncs and is deleted with its game like other battery saves.
+# patches/yabasanshiro/0004: with yabasanshiro_force_hle_bios on, a missing BIOS file no longer aborts the load (the app
+# forces the option for a launch without one).
+# patches/yabasanshiro/0005: yabasanshiro_resolution_mode applies mid-game, between frames, through the core's own
+# resolution-change path; the frontend's framebuffer is re-read every frame, since it is remade for a larger frame.
+yabasanshiro_REPO = https://github.com/libretro/yabause
+yabasanshiro_HASH = c6de72c08dda71b74648e9e055598cec1a974a11
+yabasanshiro_BUILD_PATH = yabause/src/libretro
+yabasanshiro_SUBMODULES = ':(exclude)yabause/src/retro_arena/nanogui-sdl/ext/eigen'
 
 # Azahar (Nintendo 3DS), 2126.2 (a lightweight tag on 219d743a1e698101fe1ab8bef43e6563126c3c27). The libretro core is
 # src/citra_libretro, the SHARED target citra_libretro (OUTPUT_NAME azahar_libretro, empty prefix) gated on

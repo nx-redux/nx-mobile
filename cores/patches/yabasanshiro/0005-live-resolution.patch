@@ -1,0 +1,82 @@
+# license: modifies YabaSanshiro (https://github.com/libretro/yabause), GPL-2.0 (LICENSE); this patch is distributed under the same license.
+# yabasanshiro_resolution_mode applied only at the next load. A new value now applies between frames: retro_run takes it
+# through retro_set_resolution, the path a game's own resolution change takes (the GL renderer rebuilds its frame buffers
+# at the new size when it next draws). The geometry reports room for the largest mode from the start, and the renderer
+# takes the frontend's current framebuffer every frame, since the frontend remakes it when a larger frame arrives.
+diff --git a/yabause/src/libretro/libretro.c b/yabause/src/libretro/libretro.c
+index 4fe2629..b5429d2 100644
+--- a/yabause/src/libretro/libretro.c
++++ b/yabause/src/libretro/libretro.c
+@@ -111,7 +111,7 @@ void retro_set_environment(retro_environment_t cb)
+       { "yabasanshiro_sh2coretype", "SH2 Core (restart); dynarec|interpreter" },
+ #endif
+       { "yabasanshiro_polygon_mode", "Polygon Mode (restart); perspective_correction|gpu_tesselation|cpu_tesselation" },
+-      { "yabasanshiro_resolution_mode", "Resolution Mode (restart); original|2x|4x|720p|1080p|4k" },
++      { "yabasanshiro_resolution_mode", "Resolution Mode; original|2x|4x|720p|1080p|4k" },
+       { "yabasanshiro_rbg_resolution_mode", "RGB resolution mode; original|2x|720p|1080p|Fit_to_emulation" },
+ #if !defined(__APPLE__)
+       { "yabasanshiro_rbg_use_compute_shader", "RGB use compute shader for RGB; disabled|enabled" },
+@@ -1227,33 +1227,9 @@ bool retro_load_game(const struct retro_game_info *info)
+ 
+    check_variables();
+    resolution_mode = g_resolution_mode;
+-   switch(resolution_mode)
+-   {
+-      case RES_ORIGINAL:
+-         max_width = 704;
+-         max_height = 512;
+-         break;
+-      case RES_4x:
+-         max_width = 704 * 4;
+-         max_height = 512 * 4;
+-         break;
+-      case RES_2x:
+-         max_width = 704 * 2;
+-         max_height = 512 * 2;
+-         break;
+-      case RES_720P:
+-         max_width = 1280;
+-         max_height = 720;
+-         break;
+-      case RES_1080P:
+-         max_width = 1920;
+-         max_height = 1080;
+-         break;
+-      case RES_NATIVE:
+-         max_width = 3840;
+-         max_height = 2160;
+-         break;
+-   }
++   /* Room for every resolution mode (4x's 2816 x 2048, 4k's 3840 x 2160), since one can be picked mid-game. */
++   max_width = 3840;
++   max_height = 2160;
+ 
+    if (!disk_load_list(info->path))
+    {
+@@ -1614,6 +1590,14 @@ void retro_run(void)
+    {
+       int prev_multitap[2] = {multitap[0],multitap[1]};
+       check_variables();
++      /* A new resolution mode applies here, between frames, through the path a game's own resolution change takes:
++       * the renderer rebuilds its frame buffers at the new size when it next draws. */
++      if (g_resolution_mode != resolution_mode)
++      {
++         resolution_mode = g_resolution_mode;
++         if (renderer_running)
++            retro_set_resolution();
++      }
+       // Unlike Kronos, this core dislike changing tesselation on the fly
+       //VIDCore->SetSettingValue(VDP_SETTING_POLYGON_MODE, polygon_mode);
+       VIDCore->SetSettingValue(VDP_SETTING_RBG_RESOLUTION_MODE, g_rbg_resolution_mode);
+@@ -1630,6 +1614,11 @@ void retro_run(void)
+          DisableAutoFrameSkip();
+    }
+ 
++   /* The frontend's framebuffer can be remade between frames (it grows for a larger frame, as after a raise of the
++    * resolution mode); the renderer draws to the current one. */
++   if (renderer_running && _Ygl)
++      _Ygl->default_fbo = YuiGetFB();
++
+    //YabauseExec(); runs from handle events
+    if(PERCore)
+       PERCore->HandleEvents();

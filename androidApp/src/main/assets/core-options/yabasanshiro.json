@@ -1,0 +1,204 @@
+{
+ "core": "yabasanshiro",
+ "emulator": "YabaSanshiro",
+ "sections": [
+  {
+   "key": "",
+   "label": "",
+   "info": "",
+   "items": [
+    {
+     "key": "yabasanshiro_force_hle_bios",
+     "label": "Force HLE BIOS (restart)",
+     "labelCategorized": "",
+     "info": "",
+     "values": [
+      "disabled",
+      "enabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "disabled"
+    },
+    {
+     "key": "yabasanshiro_frameskip",
+     "label": "Auto-frameskip",
+     "labelCategorized": "",
+     "info": "",
+     "values": [
+      "enabled",
+      "disabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "enabled"
+    },
+    {
+     "key": "yabasanshiro_addon_cart",
+     "label": "Addon Cartridge (restart)",
+     "labelCategorized": "",
+     "info": "",
+     "values": [
+      "4M_extended_ram",
+      "1M_extended_ram"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "4M_extended_ram"
+    },
+    {
+     "key": "yabasanshiro_system_language",
+     "label": "System Language (restart)",
+     "labelCategorized": "",
+     "info": "",
+     "values": [
+      "english",
+      "deutsch",
+      "french",
+      "spanish",
+      "italian",
+      "japanese"
+     ],
+     "labels": [
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+     ],
+     "default": "english"
+    },
+    {
+     "key": "yabasanshiro_multitap_port1",
+     "label": "6Player Adaptor on Port 1",
+     "labelCategorized": "",
+     "info": "",
+     "values": [
+      "disabled",
+      "enabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "disabled"
+    },
+    {
+     "key": "yabasanshiro_multitap_port2",
+     "label": "6Player Adaptor on Port 2",
+     "labelCategorized": "",
+     "info": "",
+     "values": [
+      "disabled",
+      "enabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "disabled"
+    },
+    {
+     "key": "yabasanshiro_sh2coretype",
+     "label": "SH2 Core (restart)",
+     "labelCategorized": "",
+     "info": "",
+     "values": [
+      "dynarec",
+      "interpreter"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "dynarec"
+    },
+    {
+     "key": "yabasanshiro_polygon_mode",
+     "label": "Polygon Mode (restart)",
+     "labelCategorized": "",
+     "info": "",
+     "values": [
+      "perspective_correction",
+      "gpu_tesselation",
+      "cpu_tesselation"
+     ],
+     "labels": [
+      "",
+      "",
+      ""
+     ],
+     "default": "perspective_correction"
+    },
+    {
+     "key": "yabasanshiro_resolution_mode",
+     "label": "Resolution Mode",
+     "labelCategorized": "",
+     "info": "",
+     "values": [
+      "original",
+      "2x",
+      "4x",
+      "720p",
+      "1080p",
+      "4k"
+     ],
+     "labels": [
+      "",
+      "",
+      "",
+      "",
+      "",
+      ""
+     ],
+     "default": "original"
+    },
+    {
+     "key": "yabasanshiro_rbg_resolution_mode",
+     "label": "RGB resolution mode",
+     "labelCategorized": "",
+     "info": "",
+     "values": [
+      "original",
+      "2x",
+      "720p",
+      "1080p",
+      "Fit_to_emulation"
+     ],
+     "labels": [
+      "",
+      "",
+      "",
+      "",
+      ""
+     ],
+     "default": "original"
+    },
+    {
+     "key": "yabasanshiro_rbg_use_compute_shader",
+     "label": "RGB use compute shader for RGB",
+     "labelCategorized": "",
+     "info": "",
+     "values": [
+      "disabled",
+      "enabled"
+     ],
+     "labels": [
+      "",
+      ""
+     ],
+     "default": "disabled"
+    }
+   ]
+  }
+ ],
+ "soSha256": "8222d9dacc12a747ef13a9884609dfff95071a43245ca642e62048c682a12355",
+ "probedAt": "2026-11-25"
+}
