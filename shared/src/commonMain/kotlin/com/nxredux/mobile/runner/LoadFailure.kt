@@ -16,7 +16,7 @@ object LoadFailure {
     private val cannotLoadBios = Regex("""^Error: cannot load BIOS (\S+)$""")
     private val biosFileMissing = Regex("""^(\S+): Cannot open (\S+)$""")
     private val romMissing = Regex("""^Cannot find (\S+)$""")
-    private val noDiscKey = Regex("""^No disc key for .*""")
+    private val noDiscKey = Regex("""^(?:Cemu:\s*)?No disc key for .*""")
     private val romTruncated = Regex("""^Invalid ROM: truncated (\S+)$""")
 
     private val WIIU_ENCRYPTED_DISCS = setOf("wud", "wux")
