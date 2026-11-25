@@ -223,8 +223,17 @@ class NxCarbonPackTest {
             val menu = assertNotNull(SkinChoice.placeMenu(pack, w, h, dpi, foldable = big && w != 1440, tablet = big))
             val p = assertNotNull(SkinChoice.place(pack, w, h, dpi, big, false, 240f to 160f, null, foldable = big && w != 1440, variant = SkinVariant.GBA))
             val mc = menu.controls.associateBy { it.spec.id }; val gc = p.controls.associateBy { it.spec.id }
-            for (id in listOf("DPAD", "Y", "START", "SELECT", "MENU")) {
+            // the phone: SELECT / START would sit on TL / TR, so they join MENU in the bottom row (MENU still the menu's)
+            val bottomRow = w == 1080
+            for (id in if (bottomRow) listOf("DPAD", "Y", "MENU") else listOf("DPAD", "Y", "START", "SELECT", "MENU")) {
                 assertEquals(mc.getValue(id).x, gc.getValue(id).x, 1.5f, "${w}x$h $id x"); assertEquals(mc.getValue(id).y, gc.getValue(id).y, 1.5f, "${w}x$h $id y")
+            }
+            if (bottomRow) {
+                val menuBtn = gc.getValue("MENU")
+                for (id in listOf("SELECT", "START")) assertEquals(menuBtn.y, gc.getValue(id).y, 1.5f, "${w}x$h $id in MENU's row")
+                assertTrue(gc.getValue("SELECT").x < menuBtn.x && menuBtn.x < gc.getValue("START").x, "${w}x$h SELECT MENU START")
+                fun SkinPlacement.frameBottom() = pieces.filter { it.piece < 0 && !it.strip }.maxOf { it.dst.y + it.dst.height }
+                assertEquals(menu.frameBottom(), p.frameBottom(), 1f, "${w}x$h the menu's screen frame")
             }
             fun cap(id: String) = gc.getValue(id).let { c -> p.pieces.filter { pc -> pc.piece >= 0 && p.spec.pieces[pc.piece].glass == null &&
                 c.x >= pc.dst.x && c.x <= pc.dst.x + pc.dst.width && c.y >= pc.dst.y && c.y <= pc.dst.y + pc.dst.height }.minBy { it.dst.width }.dst }

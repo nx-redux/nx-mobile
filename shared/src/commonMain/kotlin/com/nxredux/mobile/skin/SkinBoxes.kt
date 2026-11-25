@@ -77,8 +77,9 @@ object SkinBoxes {
         val sideCount = boxes.count { it.slot == BoxSlot.LEFT || it.slot == BoxSlot.RIGHT }
         fun fits(b: BoxSpec, z: BoxSize) = z.h * k <= tall && (b.slot !in setOf(BoxSlot.LEFT, BoxSlot.RIGHT) || z.w * k <= sideRoom / maxOf(1, sideCount))
         val picked = boxes.associate { b -> b.slot to (pick(b, shape) { fits(b, it) } ?: b.sizes.first()) }
-        // a size with nothing in it: no box there on this device shape
-        val sizes = picked.filterValues { it.pieces.isNotEmpty() || it.controls.isNotEmpty() }
+        // a size with nothing in it: no box there on this device shape, unless it has a height (it then holds the
+        // menu's room, so the screen stays the menu's size where the menu has caps in that row)
+        val sizes = picked.filterValues { it.pieces.isNotEmpty() || it.controls.isNotEmpty() || it.h > 0 }
         fun size(s: BoxSlot) = sizes[s]
         val sides = listOf(BoxSlot.LEFT, BoxSlot.RIGHT).filter { it in sizes }
         // one shrink factor for all the boxes: across, the side boxes and the least screen; down, every box's height

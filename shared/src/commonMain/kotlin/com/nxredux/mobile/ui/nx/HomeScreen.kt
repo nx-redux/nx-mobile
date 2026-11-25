@@ -135,7 +135,7 @@ internal fun HomeScreen(
     val colors = LocalNxColors.current
     val portrait = homeGridPortrait()
     val tabRow = LocalLauncherChrome.current.tabRow
-    BoxWithConstraints(modifier.fillMaxSize().clipToBounds()) {
+    BoxWithConstraints(modifier.fillMaxSize()) {
         val w = maxWidth.value
         val whole = homeFrameHere(squareIsPortrait = true) ?: return@BoxWithConstraints
         // With the tab row hidden the stats strip sits in a fixed header in its place ([homeStatsHeader]); the page is
@@ -295,15 +295,17 @@ internal fun HomeScreen(
         if (tabRow) {
             Box(
                 Modifier.offset(y = -MENU_TAB_ROW_HEIGHT).fillMaxWidth().height(MENU_TAB_ROW_HEIGHT + NX_TOP_BAND_REACH)
-                    .graphicsLayer { alpha = band.value }.nxTopBandFade(colors.background),
+                    .pageFixed().graphicsLayer { alpha = band.value }.nxTopBandFade(colors.background),
             )
         }
         // The header: the tab row's eased band while the page is scrolled under it, and the strip on it at the gutter
-        // (short of the Recent and Search icons MainMenuScreen draws at its right).
+        // (short of the Recent and Search icons MainMenuScreen draws at its right), still while the page slides between tabs.
         header?.let { hd ->
-            Box(Modifier.fillMaxWidth().height(hd.height.dp + NX_TOP_BAND_REACH).graphicsLayer { alpha = band.value }.nxTopBandFade(colors.background))
-            if (hd.lines > 0) view.strip?.let {
-                HomeStripLines(it, hd.lines, b.gutter, hd.stripTop, w - b.gutter - homeInsetEnd(whole) - iconsWidth, homeStripLineH(whole), homeStripPitch(whole))
+            Box(Modifier.fillMaxSize().pageFixed()) {
+                Box(Modifier.fillMaxWidth().height(hd.height.dp + NX_TOP_BAND_REACH).graphicsLayer { alpha = band.value }.nxTopBandFade(colors.background))
+                if (hd.lines > 0) view.strip?.let {
+                    HomeStripLines(it, hd.lines, b.gutter, hd.stripTop, w - b.gutter - homeInsetEnd(whole) - iconsWidth, homeStripLineH(whole), homeStripPitch(whole))
+                }
             }
         }
     }

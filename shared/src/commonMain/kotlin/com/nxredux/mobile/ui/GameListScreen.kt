@@ -249,7 +249,7 @@ internal fun GameListFrame(
     // The page's icons, built once for the title row's right or, with Page title Off, the page's top right.
     val touch = touchOnly()
     val titleIcons = gameListTitleIcons(chrome, hints.value, onHint, recentIcon, touch, LocalHasTouchscreen.current, onSearch, onLayout, layoutOpen, onAchievements, achievementsOpen, onKidsLock)
-    // The Games tab's top band stays put while the pages slide between tabs, as the main menu's.
+    // The Games tab's top band, title header and icons stay put while the pages slide between tabs, as the main menu's.
     val fixed = if (tabbed) Modifier.pageFixed() else Modifier
     // The Games tab has no hint bar: its hints go to the bottom row, and the body runs down to it.
     val barHints = if (tabbed) emptyList() else hints.value
@@ -316,7 +316,7 @@ internal fun GameListFrame(
                     // the lines keep their places (an outgoing one fades where it was). [facts] is read here for the lines
                     // anyway, so the shift is a plain value, not deferred to layout.
                     val titleShift = gameListTitleTop(facts, next, height, block, lh, pitch) - blockTop
-                    Box(Modifier.fillMaxWidth().height(height.dp)) {
+                    Box(Modifier.fillMaxWidth().height(height.dp).then(fixed)) {
                         Column(Modifier.fillMaxWidth().padding(start = textStart, end = inset.end + iconsRoom, top = blockTop.dp)) {
                             Box(Modifier.offset(y = titleShift.dp).height(lh.dp), contentAlignment = Alignment.CenterStart) { WithTitle(titleOf) { title ->
                                 Text(
@@ -333,7 +333,7 @@ internal fun GameListFrame(
                 } else if (chrome.listTitle) {
                     val titleStyle = menuTitleStyle()
                     WithTitle(titleOf) { title -> MenuTitleRow(
-                        title, overArt = style == MenuStyle.BACKDROP, textStart = textStart,
+                        title, modifier = fixed, overArt = style == MenuStyle.BACKDROP, textStart = textStart,
                         textModifier = titleModifier(title, titleStyle),
                         trailing = { NxTopIcons(titleIcons) },
                     ) }
@@ -460,7 +460,7 @@ internal fun GameListFrame(
             // (the title room above the list is [MENU_TAB_ROW_HEIGHT] tall), ending on the page inset like the title row's.
             if (iconsUp) NxTopIcons(
                 titleIcons,
-                Modifier.align(Alignment.TopEnd).height(MENU_TAB_ROW_HEIGHT)
+                Modifier.align(Alignment.TopEnd).then(fixed).height(MENU_TAB_ROW_HEIGHT)
                     .padding(end = inset.end - TOP_ICON_INSET).nxListTopCut(topCut),
             )
             emptyText?.let {
