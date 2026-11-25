@@ -223,3 +223,49 @@ Automated: `tools/device-tests/netplay_pads.py` (Fold host, Nova client, then AY
 - [x] N64 (Mario Kart 64): in step. Every RAM difference is in the framebuffer area (0x310000-0x38FFFF, drawn by each GPU); the rest of RDRAM matched at every check for 48 s, so the RAM hash can't pass for N64.
 - [ ] Phone ↔ Brick (no `pad=` yet): still starts, both on the old fixed pad, no desync.
 
+## Merged features: checks owed
+
+Change art (#71):
+- [ ] Upgrade scan of a library with old `grid/` and `hero/` art folders: they move once, art still shows.
+- [ ] Game Switcher wheel art at 60%; the "Show this picture?" card's position; Change art on an Android game.
+- [ ] Artwork page on a wide screen; Fold cover fit while a fetch runs.
+
+DS / 3DS microphone (#36):
+- [ ] Mic permission denied: the blow-noise fallback passes a real blow prompt.
+- [ ] A 3DS game that uses the mic.
+- [ ] Toggle mic from a controller.
+
+Save on quit / A resumes (#158):
+- [ ] Save on quit Off: start from a manual slot, kill the app → the game starts fresh.
+- [ ] A resumes Off: A on a suspended game starts fresh.
+- [ ] Wii HOME / Wii Menu exit with Save on quit Off.
+- [ ] Game Switcher falls back to screenshot art when there is no state picture.
+
+Import BIOS (#163):
+- [ ] Import into a SAF-picked home (Play build path).
+- [ ] Import real BIOS dumps (folder, zip, RetroArch system folder).
+
+PC Engine CD BIOS (#181):
+- [ ] CD BIOS = System Card 3 US with only `syscard3u.pce` in `Bios/PCE/`: a PCE CD game boots.
+
+3DS local wireless and Player name (#129, #130):
+- [ ] The core writes the personal Mii on its own (Fold), and it shows in Mario Kart 7.
+- [ ] A full Mario Kart 7 race; a sheet-hosted room with an automatic joiner.
+- [ ] Prompt box above the keyboard on the Fold, a portrait skin and the Android keyboard.
+
+Home captions and second-screen panel (#128):
+- [ ] Landscape Home with a d-pad: DOWN from an inline game can skip the tools row, UP from the first pin row returns to Continue. Check whether intended.
+- [ ] The small old-style Panel pill still shows under a pad skin and when the touch screen is on the other display.
+- [ ] Minimal Home strip, 3-line caption names, Flip / wide-phone landscape Home, shader stepping, DS/3DS menu flip across Reset and state loads.
+
+RetroAchievements user agent (#226, handheld #352):
+- [ ] Phone: sign in and unlock an achievement.
+- [ ] Brick: ratools and in-game RA.
+- [ ] When applying for hardcore compliance, disclose the old NextUI user agent.
+
+A before LEFT / RIGHT (#160):
+- [ ] Fold: value rows change only after A on Settings, the in-game menu, onboarding and Kids Mode.
+
+N64 hi-res packs (#45):
+- [ ] Play build (no All files access): a pack in `Textures/N64/` loads.
+- [ ] A phone with more than 3 GB RAM: Auto VRAM limit picks the right size.
