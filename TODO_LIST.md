@@ -290,3 +290,7 @@ A before LEFT / RIGHT (#160):
 N64 hi-res packs (#45):
 - [ ] Play build (no All files access): a pack in `Textures/N64/` loads.
 - [ ] A phone with more than 3 GB RAM: Auto VRAM limit picks the right size.
+
+## Sega Saturn
+
+- [ ] Saturn menu logo and pad art (files from the user; logo via tools/console-logos, pad via tools/controller-art/make_pads.py)

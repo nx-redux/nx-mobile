@@ -24,8 +24,9 @@ class PadMapTest {
     @Test fun every_registered_tag_routes_like_nx_redux() {
         val genesis = setOf("MD", "GPGX", "SEGACD", "32X")
         val ownRouting = setOf("DC", "NDS", "N64")   // their own input paths ([com.nxredux.mobile.ui.nx.PadProfile]), not PadMap
-        assertTrue(CoreRegistry.tags.containsAll(genesis + ownRouting))
-        for (tag in CoreRegistry.tags - ownRouting) for (sega in listOf(null, SegaPad.THREE, SegaPad.SIX)) {
+        val saturn = setOf("SATURN")   // its own table (saturn_buttons_reach_the_cores_descriptors)
+        assertTrue(CoreRegistry.tags.containsAll(genesis + ownRouting + saturn))
+        for (tag in CoreRegistry.tags - ownRouting - saturn) for (sega in listOf(null, SegaPad.THREE, SegaPad.SIX)) {
             val m = PadMap.forTag(tag, sega)
             val expected = if (CoreRegistry.baseTag(tag) in genesis) mapOf(X to B, B to L1, L1 to X) else emptyMap()
             for (b in NxButton.entries) assertEquals(expected[b] ?: b, m.sends(b), "$tag $sega $b")
@@ -138,5 +139,21 @@ class PadMapTest {
 
     @Test fun ps2UsesPsLabels() {
         assertEquals(listOf("○", "×", "△", "□"), listOf(A, B, X, Y).map { PadMap.forTag("PS2").label(it) })
+    }
+
+    /** The core's descriptors: B="A", A="B", L="C", Y="X", X="Y", R="Z", L2="L", R2="R"; the skin keeps the Genesis six's spots. */
+    @Test fun saturn_buttons_reach_the_cores_descriptors() {
+        for (tag in listOf("SATURN", "SS", " saturn ")) {
+            val m = PadMap.forTag(tag)
+            // the drawn letter -> the on-screen button it sits on -> the RetroPad button the core names that letter
+            val sent = mapOf("A" to B, "B" to A, "C" to L1, "X" to Y, "Y" to X, "Z" to R1, "L" to L2, "R" to R2)
+            for ((letter, retro) in sent) {
+                val onScreen = NxButton.entries.single { m.label(it) == letter }
+                assertEquals(retro, m.sends(onScreen), "$tag $letter")
+            }
+            assertTrue(m.segaCluster, tag)
+            assertFalse(PadMap.isSegaPadTag(tag), tag)   // no 3/6-button choice: the Saturn pad is always the six
+            assertEquals(START, m.sends(START), tag)
+        }
     }
 }

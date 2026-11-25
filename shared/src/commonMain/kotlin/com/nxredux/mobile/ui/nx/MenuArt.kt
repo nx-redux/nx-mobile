@@ -24,10 +24,11 @@ internal val consoleLogosById: Map<String, DrawableResource> = mapOf(
     "pkm" to Res.drawable.menu_logo_pkm, "wsc" to Res.drawable.menu_logo_wsc, "p8" to Res.drawable.menu_logo_p8,
     "prboom" to Res.drawable.menu_logo_prboom, "32x" to Res.drawable.menu_logo_s32x, "coleco" to Res.drawable.menu_logo_coleco,
     "fbn" to Res.drawable.menu_logo_fbn, "dc" to Res.drawable.menu_logo_dc, "3ds" to Res.drawable.menu_logo_3ds,
-    // Saturn's own logo is not drawn yet.
-    "saturn" to Res.drawable.menu_logo_dc,
     "gc" to Res.drawable.menu_logo_gc, "wii" to Res.drawable.menu_logo_wii, "ps2" to Res.drawable.menu_logo_ps2,
 )
+
+/** Consoles whose logo and pad are not drawn yet: they show their name, never another console's art. */
+internal val AWAITING_ART = setOf("saturn")
 
 /**
  * [tag]'s console logo (SFC and SUPA share one; so do MD and GPGX), or null for a tag no console claims. The Android
