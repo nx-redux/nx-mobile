@@ -122,6 +122,21 @@ class SkinBoxesTest {
         }
     }
 
+    // A top row with nothing in it but a height holds its room: the screen ends where it would over caps there, so a
+    // game that moves its menu row caps elsewhere keeps the menu's screen. A 0 x 0 one is no row at all.
+    @Test
+    fun anEmptyTopRowWithAHeightHoldsTheScreen() {
+        val base = boxed("stacked_menu")
+        fun screenBottom(top: BoxSize?): Float {
+            val spec = base.copy(boxes = base.boxes + listOfNotNull(top?.let { BoxSpec(BoxSlot.TOP_ROW, listOf(it)) }))
+            return assertNotNull(place(spec, 1080, 2520, 480)).frame().maxOf { it.y + it.height }
+        }
+        val dp = 480 / 160f
+        val none = screenBottom(null)
+        assertEquals(none, screenBottom(BoxSize(0, 0)), 0.5f, "a 0 x 0 row is no row")
+        assertEquals(none - 16f * dp - 1f * 480 / 420f, screenBottom(BoxSize(0, 1)), 1f, "an empty 1 px row holds its gap")
+    }
+
     // Too narrow for the boxes at their size (the background still fits): both shrink by one factor, no less than
     // SHRINK_FLOOR, before the layout gives up.
     @Test
