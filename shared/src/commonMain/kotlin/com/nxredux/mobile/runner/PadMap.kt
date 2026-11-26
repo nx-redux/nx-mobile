@@ -11,7 +11,7 @@ enum class SegaPad { THREE, SIX }
  * on-screen/physical position sends to the core ([sends]) and what is drawn on it
  * ([label], null = the button's own glyph), which buttons are left off the pad ([isHidden]) or only off its face
  * cluster ([isHiddenInCluster]), and which button the app's menus act on for an on-screen press ([menuButton]).
- * The Genesis family draws the real Sega 6-button pad ([segaCluster]). DC, N64, 3DS, Wii and GameCube are not here
+ * The Genesis family and the Saturn draw the real Sega 6-button pad ([segaCluster]). DC, N64, 3DS, Wii and GameCube are not here
  * ([com.nxredux.mobile.ui.nx.PadProfile]).
  */
 class PadMap private constructor(
@@ -86,7 +86,7 @@ class PadMap private constructor(
 
         fun forTag(tag: String, sega: SegaPad? = null): PadMap = when (CoreRegistry.baseTag(tag)) {
             in SEGA_TAGS -> if (sega == SegaPad.THREE) SEGA_THREE else SEGA_SIX
-            "SATURN", "SS" -> SATURN_PAD
+            "SATURN" -> SATURN_PAD
             "SMS", "GG", "SG1000", "A7800" -> SEGA_8BIT
             "NGP", "NGPC" -> PadMap(labels = mapOf(B to "A", A to "B", START to "OPTION"), menu = mapOf(B to A, A to B, Y to X, X to Y))
             "PCE" -> PadMap(labels = mapOf(A to "I", B to "II", Y to "III", X to "IV", L1 to "V", R1 to "VI", L2 to "Mode", START to "RUN"))

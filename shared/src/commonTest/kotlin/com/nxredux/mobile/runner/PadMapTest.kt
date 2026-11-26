@@ -143,7 +143,7 @@ class PadMapTest {
 
     /** The core's descriptors: B="A", A="B", L="C", Y="X", X="Y", R="Z", L2="L", R2="R"; the skin keeps the Genesis six's spots. */
     @Test fun saturn_buttons_reach_the_cores_descriptors() {
-        for (tag in listOf("SATURN", "SS", " saturn ")) {
+        for (tag in listOf("SATURN", " saturn ")) {
             val m = PadMap.forTag(tag)
             // the drawn letter -> the on-screen button it sits on -> the RetroPad button the core names that letter
             val sent = mapOf("A" to B, "B" to A, "C" to L1, "X" to Y, "Y" to X, "Z" to R1, "L" to L2, "R" to R2)

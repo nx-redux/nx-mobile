@@ -46,7 +46,7 @@ class LooseProbeTest {
         assertEquals(listOf(null), index.probes.map { it.console })
     }
 
-    // A nothing-recognised answer kept under older signatures is probed again (a Saturn disc now places); a current one is reused.
+    // A nothing-recognised answer kept under older signatures is probed again (newer signatures may place it); a current one is reused.
     @Test fun saturn_disc_probed_again_after_version_bump() = runTest {
         val sat = ByteArray(2048 * 17).also { "SEGA SEGASATURN ".encodeToByteArray().copyInto(it, 0) }
         val fake = FakeRomsSource(mapOf("x" to listOf("S.iso")), bytes = mapOf("x/S.iso" to sat)).apply { stamps["x/S.iso"] = 1_000L }
