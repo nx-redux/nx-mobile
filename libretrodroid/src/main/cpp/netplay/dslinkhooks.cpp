@@ -474,13 +474,24 @@ void frameEnd() {
          stats.bytesIn / sec, stats.bytesOut / sec, ndl_member_count(theLink), rttMin, rttAvg, rttMax, (unsigned) drops.queue_hwm, dropText);
 }
 
+// The core room's copy of the phone's own networks. Lock order: coreRoomMutex, then linkMutex.
+void sendLocal(const nx_3ds_link_interface& room, const std::vector<ndl_subnet>& nets) {
+    std::vector<uint32_t> broadcasts, masks;
+    for (const auto& n : nets) { broadcasts.push_back(n.broadcast); masks.push_back(n.mask); }
+    room.set_local(broadcasts.data(), masks.data(), (int) nets.size());
+}
+
 void setCoreRoom(nx_3ds_link_interface* room) {
     std::lock_guard<std::mutex> guard(coreRoomMutex);
     hasCoreRoom = room != nullptr && room->presence != nullptr && room->leave != nullptr && room->rejoin != nullptr;
     if (hasCoreRoom) room->route_socket = routeCoreSocket;
     coreRoom = hasCoreRoom ? *room : nx_3ds_link_interface {};
-    // The cable as it stands, and its network, before the room's first socket.
+    // The cable as it stands, and its network, before the room's first socket; the phone's own networks too.
     if (hasCoreRoom && coreRoom.set_cable != nullptr) coreRoom.set_cable(cableState.load(), CABLE_BROADCAST);
+    if (hasCoreRoom && coreRoom.set_local != nullptr) {
+        std::lock_guard<std::mutex> link(linkMutex);
+        sendLocal(coreRoom, localNetworks);
+    }
     LOGI("link: core room %s", hasCoreRoom ? "registered" : "cleared");
 }
 
@@ -497,6 +508,8 @@ void setCable(int state) {
 }
 
 void setLocalNetworks(const std::vector<ndl_subnet>& nets) {
+    // The core room first (its lock comes before the link's), then the link.
+    std::lock_guard<std::mutex> core(coreRoomMutex);
     std::lock_guard<std::mutex> guard(linkMutex);
     const bool same = nets.size() == localNetworks.size() &&
                       std::equal(nets.begin(), nets.end(), localNetworks.begin(), [](const ndl_subnet& a, const ndl_subnet& b) {
@@ -505,7 +518,8 @@ void setLocalNetworks(const std::vector<ndl_subnet>& nets) {
     if (same) return;
     localNetworks = nets;
     ndl_set_local(theLink, localNetworks.data(), (int) localNetworks.size());
-    LOGI("DS link: %zu network(s) of this phone's own (hotspot)", localNetworks.size());
+    if (hasCoreRoom && coreRoom.set_local != nullptr) sendLocal(coreRoom, localNetworks);
+    LOGI("link: %zu network(s) of this phone's own (hotspot)", localNetworks.size());
 }
 
 void stopCore() {
