@@ -726,8 +726,10 @@ bool Environment::handle_callback_environment(unsigned cmd, void *data) {
             if (message && message->msg) {
                 LOGI("Core message: %s", message->msg);
                 // A log-only message is for the log, not the player.
+                // A progress line is a status line that counts: each replaces the one before.
                 if (message->target != RETRO_MESSAGE_TARGET_LOG)
-                    pushCoreMessage(message->msg, message->duration, message->type == RETRO_MESSAGE_TYPE_STATUS);
+                    pushCoreMessage(message->msg, message->duration,
+                                    message->type == RETRO_MESSAGE_TYPE_STATUS || message->type == RETRO_MESSAGE_TYPE_PROGRESS);
             }
             return true;
         }

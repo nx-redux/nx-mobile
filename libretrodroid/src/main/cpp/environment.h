@@ -56,7 +56,7 @@ public:
 
     static float callback_get_sensor_input(unsigned port, unsigned id);
 
-    /** A core's on-screen message (SET_MESSAGE / _EXT): its text, how long it asks for (0: no say) and whether it is a status line. */
+    /** A core's on-screen message (SET_MESSAGE / _EXT): its text, how long it asks for (0: no say) and whether it is a status or progress line. */
     struct CoreMessage {
         std::string text;
         unsigned durationMs;

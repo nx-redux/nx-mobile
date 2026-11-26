@@ -1042,6 +1042,9 @@ internal class DualScreenController(
     /** The Swap disc toast ("Disc N of M") on the picture's display. */
     fun discToast(index: Int, count: Int) = pictureToast(GamePanelModel.discToast(index, count))
 
+    /** The game's picture is on the second display. */
+    fun pictureOnSecond(): Boolean = presentation != null && pictureOn == PictureOn.SECOND
+
     /** [text] as a toast on the display showing the game's picture. */
     fun pictureToast(text: String) {
         val p = presentation

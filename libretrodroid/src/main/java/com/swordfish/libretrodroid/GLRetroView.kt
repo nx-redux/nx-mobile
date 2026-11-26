@@ -867,7 +867,7 @@ class GLRetroView(
 
     /**
      * A core's on-screen message (SET_MESSAGE / _EXT): its [text], the [durationMs] it asks for (0: none given) and
-     * whether it is a [status] line (one that replaces the core's previous one).
+     * whether it is a [status] or progress line (one that replaces the core's previous one).
      */
     data class CoreMessage(val text: String, val durationMs: Int, val status: Boolean)
 
