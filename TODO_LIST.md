@@ -296,7 +296,7 @@ N64 hi-res packs (#45):
 - [ ] Saturn menu art: the Saturn logo in the Consoles tab and the six-button Sega pad behind it, both orientations
 - [x] With a BIOS in `Bios/SATURN/`: a disc boots and plays (Daytona USA, Nova, full speed).
 - [ ] An in-game save creates `<game>.bkr` in `Saves/SATURN/`, and it survives a killed app.
-- [ ] Save state and load state work (save checked on the Nova; load to check).
+- [x] Save state and load state work (Daytona USA, Mega Man X4, Nova).
 - [ ] An Action Replay cheat takes effect.
 - [ ] A multi-part database cheat (e.g. `+`-joined) works.
 - [ ] An achievement unlocks (if not: Saturn is show-only).
@@ -305,10 +305,10 @@ N64 hi-res packs (#45):
 - [ ] A multi-disc game by its `.m3u`: swap to disc 2 in the in-game menu, on the real BIOS and on HLE.
 - [ ] An `.m3u` game's `.bkr` is named after the playlist.
 - [ ] A zipped disc (cue+bin in a zip) boots; its `.bkr` is named after the archive.
-- [ ] 3D Resolution 1x, then 2x, then 4x mid-game: each change shows at once.
+- [x] 3D Resolution 1x, then 2x, then 4x mid-game: each change shows at once (Nova).
 - [ ] 3D Resolution Auto across the Fold opening and closing.
-- [ ] Frame rate at the default cap on the Nova.
-- [ ] AYANEO (2 GB): memory holds at 4x.
+- [x] Frame rate at the default cap on the Nova (full speed).
+- [x] AYANEO (2 GB): both games full speed at Auto, 1x and 2x, 400+ MB free; its 1280×960 screen caps 4x at 2x.
 - [ ] A slang shader (CRT) at 2x looks right.
 - [ ] Saturn skin: L and R sit on the trigger slots; C and Z are reachable on a physical pad.
 - [ ] Device Sync carries a Saturn `.bkr` to another phone.
