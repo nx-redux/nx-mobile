@@ -67,8 +67,8 @@ static void drawTop(void) {
             char line[48];
             snprintf(line, sizeof line, "Looking for games nearby%s", dots[(frame / 30) % 4]);
             text(&font_title, 24, 90, line, INK);
-            text(&font_body, 24, 118, "Ask the other player to open", HINT);
-            text(&font_body, 24, 138, "Download Play in their game.", HINT);
+            text(&font_body, 24, 118, "Ask the other player to start", HINT);
+            text(&font_body, 24, 138, "local multiplayer in their game.", HINT);
             Hint h[] = {{"START", "Quit"}};
             hints(h, 1);
             return;
