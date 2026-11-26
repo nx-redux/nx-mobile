@@ -55,6 +55,11 @@ object SyncAreas {
         "/*/Azahar/sysdata/mcu.dat",
         "/*/Azahar/nand/data/*/sysdata/00010017/",
         "/*/Azahar/config/",
+        // A Download Play child is stored under a key made on this device (its title, its ticket and the key itself):
+        // copied to another device it could not be read there.
+        "/*/Azahar/sysdata/nx_dlp_child.key",
+        "/*/Azahar/nand/*/title/00040001/",
+        "/*/Azahar/nand/dbs/ticket.db/00040001*",
         // Azahar's shader caches (built for this device's GPU and driver), logs and dumps.
         "/*/Azahar/shaders/",
         "/*/Azahar/cache/",

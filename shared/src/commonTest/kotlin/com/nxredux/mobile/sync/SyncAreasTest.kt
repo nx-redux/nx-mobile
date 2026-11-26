@@ -99,4 +99,17 @@ class SyncAreasTest {
         perDevice.forEach { assertTrue(SyncAreas.isPerDevice(it), it) }
         saves.forEach { assertFalse(SyncAreas.isPerDevice(it), it) }
     }
+
+    // A Download Play child is stored under this device's own key: neither the key nor the child is any use elsewhere.
+    @Test fun per_device_download_play_files_stay_out_of_sync() {
+        listOf(
+            "3DS/Azahar/sysdata/nx_dlp_child.key",
+            "3DS/Azahar/nand/00000000000000000000000000000000/title/00040001/00030800/content/00000000.app",
+            "3DS/Azahar/nand/dbs/ticket.db/0004000100030800.0004949B34CACAFD.tik",
+        ).forEach { assertTrue(SyncAreas.isPerDevice(it), it) }
+        listOf(
+            "3DS/Azahar/nand/00000000000000000000000000000000/title/00040000/00030800/content/00000000.app",
+            "3DS/Azahar/nand/dbs/ticket.db/0004000000030800.0004949B34CACAFD.tik",
+        ).forEach { assertFalse(SyncAreas.isPerDevice(it), it) }
+    }
 }

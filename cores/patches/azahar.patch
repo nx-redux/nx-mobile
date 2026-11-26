@@ -2445,6 +2445,28 @@ index c83f322e2..2c5a18e7f 100644
      SwitchableSetting<SmallScreenPosition> small_screen_position{SmallScreenPosition::BottomRight,
                                                                   Keys::small_screen_position};
      Setting<u16> custom_top_x{0, Keys::custom_top_x};
+diff --git a/src/core/file_sys/ncch_container.cpp b/src/core/file_sys/ncch_container.cpp
+index 666d6037f..9fd1ea150 100644
+--- a/src/core/file_sys/ncch_container.cpp
++++ b/src/core/file_sys/ncch_container.cpp
+@@ -161,6 +161,17 @@ std::unique_ptr<FileUtil::IOFileBase> NCCHContainer::AutoOpenNCCHNCSD(
+                 continue;
+             }
+         }
++        // A Download Play child kept under this device's own key (no console unique data).
++        if (HW::UniqueData::IsUniqueCryptoFile(file.get(),
++                                               HW::UniqueData::UniqueCryptoFileID::DLPChild)) {
++            file = HW::UniqueData::OpenUniqueCryptoFile(
++                std::move(file), "rb", HW::UniqueData::UniqueCryptoFileID::DLPChild);
++            if (has_ncch_magic(file.get())) {
++                return file;
++            } else {
++                continue;
++            }
++        }
+ 
+         // 2nd: Z3DS file
+         if (FileUtil::Z3DSReadIOFile::IsZ3DSIOFile(file.get())) {
 diff --git a/src/core/file_sys/savedata_archive.cpp b/src/core/file_sys/savedata_archive.cpp
 index 4a6b7e9e4..d72c12e19 100644
 --- a/src/core/file_sys/savedata_archive.cpp
@@ -2530,6 +2552,127 @@ index 3a31142a0..e65961a0c 100644
          break;
      }
      if (upright_screen) {
+diff --git a/src/core/hle/service/am/am.cpp b/src/core/hle/service/am/am.cpp
+index 602582161..e7ff28e12 100644
+--- a/src/core/hle/service/am/am.cpp
++++ b/src/core/hle/service/am/am.cpp
+@@ -116,8 +116,11 @@ public:
+     std::vector<CryptoPP::CBC_Mode<CryptoPP::AES>::Decryption> content;
+ };
+ 
+-NCCHCryptoFile::NCCHCryptoFile(const std::string& out_file, bool encrypted_content) {
+-    if (encrypted_content) {
++NCCHCryptoFile::NCCHCryptoFile(const std::string& out_file, bool encrypted_content, bool dlp_child) {
++    if (encrypted_content && dlp_child && !HW::UniqueData::HasConsoleCryptoKey()) {
++        file = HW::UniqueData::OpenUniqueCryptoFile(out_file, "wb",
++                                                    HW::UniqueData::UniqueCryptoFileID::DLPChild);
++    } else if (encrypted_content) {
+         // A console unique crypto file is used to store the decrypted NCCH file. This is done
+         // to prevent Azahar being used as a tool to download easy shareable decrypted contents
+         // from the eshop.
+@@ -452,6 +455,11 @@ void CIAFile::AuthorizeDecryptionFromHLE() {
+     decryption_authorized = true;
+ }
+ 
++void CIAFile::AuthorizeDlpChildInstall() {
++    decryption_authorized = true;
++    dlp_child = true;
++}
++
+ CIAFile::CIAFile(Core::System& system_, Service::FS::MediaType media_type, bool from_cdn_)
+     : system(system_), from_cdn(from_cdn_), decryption_authorized(false), media_type(media_type),
+       decryption_state(std::make_unique<DecryptionState>()) {
+@@ -656,7 +664,7 @@ ResultVal<std::size_t> CIAFile::WriteContentData(u64 offset, std::size_t length,
+                 }
+                 current_content_index = static_cast<u16>(i);
+                 current_content_file =
+-                    std::make_unique<NCCHCryptoFile>(content_file_paths[i], decryption_authorized);
++                    std::make_unique<NCCHCryptoFile>(content_file_paths[i], decryption_authorized, dlp_child);
+                 current_content_file->decryption_authorized = decryption_authorized;
+ 
+                 current_content_install_result.type = InstallResult::Type::APP;
+@@ -909,7 +917,7 @@ ResultVal<std::size_t> CIAFile::WriteContentDataIndexed(u16 content_index, u64 o
+ 
+         current_content_index = content_index;
+         current_content_file = std::make_unique<NCCHCryptoFile>(content_file_paths[content_index],
+-                                                                decryption_authorized);
++                                                                decryption_authorized, dlp_child);
+         current_content_file->decryption_authorized = decryption_authorized;
+ 
+         current_content_install_result.type = InstallResult::Type::APP;
+diff --git a/src/core/hle/service/am/am.h b/src/core/hle/service/am/am.h
+index 26e2e7d60..9696fd3b7 100644
+--- a/src/core/hle/service/am/am.h
++++ b/src/core/hle/service/am/am.h
+@@ -127,7 +127,7 @@ using ProgressCallback = void(std::size_t, std::size_t);
+ 
+ class NCCHCryptoFile final {
+ public:
+-    NCCHCryptoFile(const std::string& out_file, bool encrypted_content);
++    NCCHCryptoFile(const std::string& out_file, bool encrypted_content, bool dlp_child = false);
+ 
+     void Write(const u8* buffer, std::size_t length);
+     bool IsError() {
+@@ -261,6 +261,9 @@ public:
+     }
+ 
+     void AuthorizeDecryptionFromHLE();
++    /// A Download Play child: decryption authorized, and stored under this device's own key when
++    /// there is no console unique data (HW::UniqueData::UniqueCryptoFileID::DLPChild).
++    void AuthorizeDlpChildInstall();
+ 
+ private:
+     friend void AuthorizeCIAFileDecryption(CIAFile* cia_file, Kernel::HLERequestContext& ctx);
+@@ -274,6 +277,7 @@ private:
+     // Sections (tik, tmd, contents) are being imported individually
+     bool from_cdn;
+     bool decryption_authorized;
++    bool dlp_child = false;
+     bool is_done = false;
+     bool is_closed = false;
+     bool is_cancel = false;
+diff --git a/src/core/hle/service/apt/ns.cpp b/src/core/hle/service/apt/ns.cpp
+index ec712497c..056cf975f 100644
+--- a/src/core/hle/service/apt/ns.cpp
++++ b/src/core/hle/service/apt/ns.cpp
+@@ -4,6 +4,7 @@
+ 
+ #include "core/core.h"
+ #include "core/hle/service/am/am.h"
++#include "common/settings.h"
+ #include "core/hle/service/apt/ns.h"
+ #include "core/loader/loader.h"
+ 
+@@ -88,7 +89,15 @@ void RebootToTitle(Core::System& system, FS::MediaType media_type, u64 title_id,
+ 
+     std::optional<u8> mem_mode_u8;
+     if (mem_mode) {
+-        mem_mode_u8 = static_cast<u8>(mem_mode.value());
++        // A layout for the other model would not fill this console's FCRAM, which
++        // KernelSystem::MemoryInit asserts on: take this model's default layout instead.
++        auto mode = mem_mode.value();
++        const bool new_3ds = Settings::values.is_new_3ds.GetValue();
++        const bool new_layout = static_cast<u8>(mode) >= static_cast<u8>(Kernel::MemoryMode::NewProd);
++        if (new_3ds != new_layout) {
++            mode = new_3ds ? Kernel::MemoryMode::NewProd : Kernel::MemoryMode::Prod;
++        }
++        mem_mode_u8 = static_cast<u8>(mode);
+     }
+     system.RequestReset(new_path, mem_mode_u8);
+ }
+diff --git a/src/core/hle/service/dlp/dlp_clt_base.cpp b/src/core/hle/service/dlp/dlp_clt_base.cpp
+index 73bc2d5b0..086196776 100644
+--- a/src/core/hle/service/dlp/dlp_clt_base.cpp
++++ b/src/core/hle/service/dlp/dlp_clt_base.cpp
+@@ -838,7 +838,7 @@ bool DLP_Clt_Base::NeedsContentDownload(Network::MacAddress mac_addr) {
+ // interoperability between HLE & LLE service modules.
+ bool DLP_Clt_Base::InstallEncryptedCIAFromFragments(std::set<ReceivedFragment>& frags) {
+     auto cia_file = std::make_unique<AM::CIAFile>(system, FS::MediaType::NAND);
+-    cia_file->AuthorizeDecryptionFromHLE();
++    cia_file->AuthorizeDlpChildInstall();
+     bool install_errored = false;
+ 
+     for (u64 nb = 0; auto& frag : frags) {
 diff --git a/src/core/hle/service/nim/nim_aoc.cpp b/src/core/hle/service/nim/nim_aoc.cpp
 index 27137a2bc..dd6e72533 100644
 --- a/src/core/hle/service/nim/nim_aoc.cpp
@@ -2791,6 +2934,90 @@ index 000000000..ce2badfda
 +inline std::function<void(WirelessState)> wireless_hook;
 +
 +} // namespace Service::NWM
+diff --git a/src/core/hw/unique_data.cpp b/src/core/hw/unique_data.cpp
+index 810650529..cb17f4e42 100644
+--- a/src/core/hw/unique_data.cpp
++++ b/src/core/hw/unique_data.cpp
+@@ -2,6 +2,7 @@
+ // Licensed under GPLv2 or any later version
+ // Refer to the license.txt file included.
+ 
++#include <cryptopp/osrng.h>
+ #include <cryptopp/sha.h>
+ #include "common/common_paths.h"
+ #include "common/file_derived.h"
+@@ -284,8 +285,40 @@ void InvalidateSecureData() {
+     movable.Invalidate();
+ }
+ 
++/// A random secret made once for this device (sysdata/nx_dlp_child.key): the key of Download Play
++/// children installed without console unique data.
++static bool GetDlpChildKeyIV(std::vector<u8>& out_key, std::vector<u8>& out_iv) {
++    const std::string path =
++        FileUtil::GetUserPath(FileUtil::UserPath::SysDataDir) + "nx_dlp_child.key";
++    std::array<u8, 32> secret{};
++    bool have = false;
++    {
++        FileUtil::IOFile in(path, "rb");
++        have = in.IsOpen() && in.ReadBytes(secret.data(), secret.size()) == secret.size();
++    }
++    if (!have) {
++        CryptoPP::AutoSeededRandomPool rng;
++        rng.GenerateBlock(secret.data(), secret.size());
++        FileUtil::CreateFullPath(path);
++        FileUtil::IOFile out(path, "wb");
++        if (!out.IsOpen() || out.WriteBytes(secret.data(), secret.size()) != secret.size()) {
++            LOG_ERROR(HW, "Could not store the Download Play child key");
++            return false;
++        }
++    }
++    u8 digest[CryptoPP::SHA256::DIGESTSIZE];
++    CryptoPP::SHA256().CalculateDigest(digest, secret.data(), secret.size());
++    out_key.assign(digest, digest + 0x10);
++    out_iv.assign(0x10, 0);
++    memcpy(out_iv.data(), digest + 0x10, 12);
++    return true;
++}
++
+ static bool GetUniqueCryptoFileKeyIV(std::vector<u8>& out_key, std::vector<u8>& out_iv,
+                                      UniqueCryptoFileID id) {
++    if (id == UniqueCryptoFileID::DLPChild) {
++        return GetDlpChildKeyIV(out_key, out_iv);
++    }
+ 
+     LoadOTP();
+ 
+@@ -313,6 +346,11 @@ static bool GetUniqueCryptoFileKeyIV(std::vector<u8>& out_key, std::vector<u8>&
+     return true;
+ }
+ 
++bool HasConsoleCryptoKey() {
++    LoadOTP();
++    return ct_cert.IsValid() && otp.Valid();
++}
++
+ bool IsUniqueCryptoFile(FileUtil::IOFileBase* file, UniqueCryptoFileID id) {
+ 
+     std::vector<u8> key(0x10);
+diff --git a/src/core/hw/unique_data.h b/src/core/hw/unique_data.h
+index cbb1db510..a4804277b 100644
+--- a/src/core/hw/unique_data.h
++++ b/src/core/hw/unique_data.h
+@@ -163,8 +163,14 @@ MovableSedFull& GetMovableSed();
+ 
+ enum class UniqueCryptoFileID {
+     NCCH = 0,
++    // A Download Play child installed without console unique data, kept under a key of this
++    // device's own (sysdata/nx_dlp_child.key) so it is still unreadable elsewhere.
++    DLPChild = 1,
+ };
+ 
++/// Whether the console unique key for NCCH crypto files is available (OTP and CT certificate set up).
++bool HasConsoleCryptoKey();
++
+ void InvalidateSecureData();
+ 
+ bool IsUniqueCryptoFile(FileUtil::IOFileBase* file, UniqueCryptoFileID id);
 diff --git a/src/core/savestate.cpp b/src/core/savestate.cpp
 index 16c3db6fd..6f878d60a 100644
 --- a/src/core/savestate.cpp
