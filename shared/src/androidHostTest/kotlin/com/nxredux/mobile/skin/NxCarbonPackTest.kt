@@ -378,10 +378,12 @@ class NxCarbonPackTest {
             fun c(id: String) = p.controls.first { it.spec.id == id }
             assertTrue(c("SELECT").x < c("START").x && c("SELECT").y == c("START").y, "$name − + in a row")
             assertTrue(c("STICK_SWAP").x < c("MENU").x && c("MENU").x < c("HOME").x && c("STICK_SWAP").y == c("MENU").y && c("HOME").y == c("MENU").y, "$name swap MENU HOME in a row")
-            assertTrue(c("HOME").y > c("START").y, "$name HOME below + (the bottom row)")
+            // (the Flip: the phone's boxes, + in the bottom row with HOME)
+            if (name == "flip") assertEquals(c("HOME").y, c("START").y, 1f, "$name + level with HOME")
+            else assertTrue(c("HOME").y > c("START").y, "$name HOME below + (the bottom row)")
             assertEquals(listOf("−", "+", "HOME"), listOf(c("SELECT"), c("START"), c("HOME")).map { it.spec.label }, name)
             assertTrue(c("CSTICK").spec.r > c("X").spec.capR, "$name the right stick's nub bigger than a face cap")
-            assertTrue(c("SELECT").spec.labelH > 2 * c("MENU").spec.labelH && c("START").spec.labelH == c("SELECT").spec.labelH, "$name − + drawn larger than the words")
+            if (name != "flip") assertTrue(c("SELECT").spec.labelH > 2 * c("MENU").spec.labelH && c("START").spec.labelH == c("SELECT").spec.labelH, "$name − + drawn larger than the words")
             for (useStick in listOf(true, false)) {
                 val cs = p.forStick(useStick).controls.filterNot { it.spec.id.startsWith("TOUCH_") }
                 val face = setOf("A", "B", "X", "Y")
