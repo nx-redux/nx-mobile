@@ -183,7 +183,7 @@ class SkinWiiuTest {
         val wf = assertNotNull(frames(p).first, label); val nf = assertNotNull(frames(n).first, label)
         when (p.spec.family) {
             SkinFamily.GRIP -> for ((a, b) in listOf(nf.x to wf.x, nf.y to wf.y, nf.width to wf.width, nf.height to wf.height)) assertEquals(a, b, 1f, "$label frame $wf, the 3DS's $nf")
-            SkinFamily.STACKED -> assertEquals(top(n, "L") - (nf.y + nf.height), top(p, "L3") - (wf.y + wf.height), 1f, "$label frame edge over L3")
+            SkinFamily.STACKED -> assertEquals(nf.y + nf.height, wf.y + wf.height, 1f, "$label frame as tall as the 3DS's")
             else -> {
                 // the shoulder row's pieces (− + with them): the topmost a box gap under the frame
                 val row = p.controls.filter { it.spec.id in setOf("L", "SELECT", "START") }
@@ -245,17 +245,14 @@ class SkinWiiuTest {
                     assertEquals(sc.y, zc.y, 1f, "$label $z level with $s")
                     assertTrue((zc.x - sc.x) * sg >= zc.spec.hw + sc.spec.hw, "$label $z ${zc.x} not inside $s ${sc.x}")
                 }
-                if (stacked) for ((p3, s, z) in listOf(Triple("L3", "L", "L2"), Triple("R3", "R", "R2"))) {   // L3 / R3 pills over L / R, ZL / ZR in their row
-                    val pc = at(p, p3); val sc = at(p, s); val zc = at(p, z)
-                    assertEquals(sc.x, pc.x, 1f, "$label $p3 over $s")
-                    assertTrue(pc.y + pc.spec.hh <= sc.y - sc.spec.hh, "$label $p3 ${pc.y} not over $s ${sc.y}")
-                    assertPill(pc, sc, label)
+                if (stacked) for ((s, z) in listOf("L" to "L2", "R" to "R2")) {   // ZL / ZR in the L / R row
+                    val sc = at(p, s); val zc = at(p, z)
                     assertEquals(sc.y, zc.y, 1f, "$label $z in the L / R row")
                     val (l, r) = at(p, "L").x to at(p, "R").x
                     assertTrue(zc.x > l && zc.x < r, "$label $z ${zc.x} not between L and R")
                 }
-                if (stacked) {   // the bottom row's four in one row, evenly spaced, centred across the window
-                    val row = listOf("STICK_SWAP", "MENU", "SELECT", "START").map { at(p, it) }
+                if (stacked) {   // the bottom row's six in one row, evenly spaced, centred across the window
+                    val row = listOf("L3", "STICK_SWAP", "MENU", "SELECT", "START", "R3").map { at(p, it) }
                     for (c in row) assertEquals(row[0].y, c.y, 1f, "$label ${c.spec.id} in the bottom row")
                     val steps = row.zipWithNext { a, b -> b.x - a.x }
                     for (st in steps) assertEquals(steps[0], st, 1f, "$label bottom row steps $steps")
@@ -514,13 +511,6 @@ class SkinWiiuTest {
             assertEquals(16f / 9f, aspect(pad), 0.01f, "$id GamePad"); assertEquals(g.x + g.width / 2f, pad.x + pad.width / 2f, 1f, "$id GamePad centred")
             for (r in listOf(tv, pad)) assertTrue(r.x >= g.x - 0.5f && r.y >= g.y - 0.5f && r.x + r.width <= g.x + g.width + 0.5f && r.y + r.height <= g.y + g.height + 0.5f, "$id $r outside $g")
         }
-    }
-
-    /** [pill] (L3 / R3) the shoulder [shoulder] (L / R) is: a rect of its touch size, its own word on it. */
-    private fun assertPill(pill: PlacedControl, shoulder: PlacedControl, label: String) {
-        assertEquals(ControlShape.RECT, pill.spec.shape, "$label ${pill.spec.id} shape")
-        assertEquals(shoulder.spec.hw, pill.spec.hw, 0.5f, "$label ${pill.spec.id} hw"); assertEquals(shoulder.spec.hh, pill.spec.hh, 0.5f, "$label ${pill.spec.id} hh")
-        assertEquals(pill.spec.id, pill.spec.mark, "$label ${pill.spec.id} word")
     }
 
     /** Windows whose right stick's box has no room for 85% of the left stick without moving the 3DS's pads. */

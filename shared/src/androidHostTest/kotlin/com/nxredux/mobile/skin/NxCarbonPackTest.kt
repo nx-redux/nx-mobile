@@ -577,7 +577,8 @@ class NxCarbonPackTest {
 
     @Test
     fun ps1PhonePortrait() {
-        // L2 L1 | SELECT START | R1 R2; the d-pad (the left stick by the swap cap); △ ○ × □ with the right stick nub by △; the swap cap L3 MENU R3
+        // L2 L1 | SELECT START | R1 R2; the d-pad (the left stick by the swap cap); △ ○ × □ with the right stick nub by △; the
+        // swap cap L3 MENU R3 (the phone's: L3, the swap cap, SELECT, MENU, START, R3 in the bottom row)
         for (name in listOf("flip", "cover")) {
             val d = consoleDevices.toList().first { it.first == name }.second
             val p = assertNotNull(SkinChoice.place(pack, d.first, d.second, 420, false, false, 640f to 480f, d.third, variant = SkinVariant.PS1), name)
@@ -586,8 +587,10 @@ class NxCarbonPackTest {
             val ids = p.controls.map { it.spec.id }.filterNot { it.startsWith("TOUCH_") }.toSet()
             assertEquals(setOf("DPAD", "STICK", "A", "B", "X", "Y", "L", "L2", "R", "R2", "CSTICK", "SELECT", "START", "STICK_SWAP", "L3", "MENU", "R3"), ids, name)
             fun c(id: String) = p.controls.first { it.spec.id == id }
-            assertTrue(c("L2").x < c("L").x && c("L").x < c("SELECT").x && c("START").x < c("R").x && c("R").x < c("R2").x, "$name L2 L1 SELECT START R1 R2")
-            val row = listOf("STICK_SWAP", "L3", "MENU", "R3").map(::c)
+            val phone = name == "flip"
+            if (phone) assertTrue(c("L2").x < c("L").x && c("L").x < c("R").x && c("R").x < c("R2").x, "$name L2 L1 R1 R2")
+            else assertTrue(c("L2").x < c("L").x && c("L").x < c("SELECT").x && c("START").x < c("R").x && c("R").x < c("R2").x, "$name L2 L1 SELECT START R1 R2")
+            val row = (if (phone) listOf("L3", "STICK_SWAP", "SELECT", "MENU", "START", "R3") else listOf("STICK_SWAP", "L3", "MENU", "R3")).map(::c)
             for (i in 1 until row.size) { assertEquals(row[0].y, row[i].y, 1f, "$name bottom row"); assertTrue(row[i].x > row[i - 1].x, "$name bottom row order") }
             assertTrue(c("CSTICK").x > c("X").x && c("CSTICK").y < c("A").y, "$name the right stick nub up and right of △")
             assertTrue(c("STICK").spec.r > c("DPAD").spec.r, "$name the swapped stick full size")
@@ -610,7 +613,8 @@ class NxCarbonPackTest {
 
     @Test
     fun wiiNunchukPhonePortrait() {
-        // SHAKE N Z | − + | C SHAKE; the stick (the Remote's d-pad by the swap cap); the Remote's 1 2 B A diamond; the swap cap MENU HOME MOTION
+        // SHAKE N Z | − + | C SHAKE (the phone's: − + in the bottom row); the stick (the Remote's d-pad by the swap cap); the
+        // Remote's 1 2 B A diamond; the swap cap MENU HOME MOTION
         for (name in listOf("flip", "cover")) {
             val d = consoleDevices.toList().first { it.first == name }.second
             val p = assertNotNull(SkinChoice.place(pack, d.first, d.second, 420, false, false, 640f to 480f, d.third, variant = SkinVariant.WII_NUNCHUK), name)
@@ -619,10 +623,12 @@ class NxCarbonPackTest {
             val ids = p.controls.map { it.spec.id }.filterNot { it.startsWith("TOUCH_") }.toSet()
             assertEquals(setOf("STICK", "DPAD", "A", "B", "START", "SELECT", "L2", "Y", "X", "R2", "L", "R", "STICK_SWAP", "MENU", "HOME", "MOTION"), ids, name)
             fun c(id: String) = p.controls.first { it.spec.id == id }
-            assertTrue(c("L2").x < c("Y").x && c("Y").x < c("L").x && c("L").x < c("R").x && c("R").x < c("X").x && c("X").x < c("R2").x, "$name SHAKE N Z − + C SHAKE")
+            val phone = name == "flip"   // the phone's sizes: − + at the bottom row's end
+            if (phone) assertTrue(c("L2").x < c("Y").x && c("Y").x < c("X").x && c("X").x < c("R2").x, "$name SHAKE N Z C SHAKE")
+            else assertTrue(c("L2").x < c("Y").x && c("Y").x < c("L").x && c("L").x < c("R").x && c("R").x < c("X").x && c("X").x < c("R2").x, "$name SHAKE N Z − + C SHAKE")
             assertEquals(listOf("−", "+"), listOf(c("L").spec.label, c("R").spec.label), name)
             assertTrue(c("START").y < c("A").y && c("SELECT").x < c("A").x && c("B").y > c("A").y, "$name 1 top, 2 left, B bottom, A right")
-            val row = listOf("STICK_SWAP", "MENU", "HOME", "MOTION").map(::c)
+            val row = (listOf("STICK_SWAP", "MENU", "HOME", "MOTION") + if (phone) listOf("L", "R") else emptyList()).map(::c)
             for (i in 1 until row.size) { assertEquals(row[0].y, row[i].y, 1f, "$name bottom row"); assertTrue(row[i].x > row[i - 1].x, "$name bottom row order") }
             for (useStick in listOf(true, false)) {
                 val cs = p.forStick(useStick).controls.filterNot { it.spec.id.startsWith("TOUCH_") }
