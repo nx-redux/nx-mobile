@@ -1,5 +1,7 @@
 package com.nxredux.mobile.runner
 
+import com.nxredux.mobile.options.ConfigFile
+import com.nxredux.mobile.options.ConfigLine
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -22,5 +24,30 @@ class N3dsDownloadPlayDefaultsTest {
     @Test fun local_wireless_off_refuses_with_the_setting_name() {
         assertEquals("3DS Download Play needs Local Wireless on (Game Settings → Multiplayer)", n3dsDownloadPlayRefusal(false))
         assertNull(n3dsDownloadPlayRefusal(true))
+    }
+
+    private fun cfg(vararg kv: Pair<String, String>) = ConfigFile(kv.map { (k, v) -> ConfigLine.Entry(k, v, false) })
+
+    @Test
+    fun the_row_defaults_sit_under_the_console_file_when_the_row_has_no_file_of_its_own() {
+        val (console, game) = n3dsDownloadPlayConfigs(mapOf("res" to "1x"), cfg("res" to "auto", "other" to "a"), null)
+        assertEquals(mapOf("res" to "1x", "other" to "a"), console?.values)
+        assertNull(game)
+    }
+
+    @Test
+    fun a_row_file_keeps_the_defaults_over_values_it_only_copied_from_the_console() {
+        val (_, game) = n3dsDownloadPlayConfigs(
+            mapOf("res" to "1x", "api" to "vulkan"),
+            cfg("res" to "auto", "wireless" to "off"),
+            cfg("res" to "auto", "wireless" to "on"),
+        )
+        assertEquals(mapOf("res" to "1x", "api" to "vulkan", "wireless" to "on"), game?.values)
+    }
+
+    @Test
+    fun a_value_the_player_changed_for_the_row_beats_its_default() {
+        val (_, game) = n3dsDownloadPlayConfigs(mapOf("res" to "1x"), cfg("res" to "auto"), cfg("res" to "3x"))
+        assertEquals("3x", game?.values?.get("res"))
     }
 }

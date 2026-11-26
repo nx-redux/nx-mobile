@@ -37,8 +37,6 @@ import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.netplay.NetplaySessionDir
 import com.nxredux.mobile.netplay.NetplayText
 import com.nxredux.mobile.netplay.cablelink.PairSaveCheckpoint
-import com.nxredux.mobile.options.ConfigFile
-import com.nxredux.mobile.options.ConfigLine
 import com.nxredux.mobile.options.ConfigSource
 import com.nxredux.mobile.options.CoreConfig
 import com.nxredux.mobile.options.FrontendOptions
@@ -662,14 +660,13 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 // fceumm's turbo default (Player 1): a cfg saved before it holds the old None as if picked ([FceummTurbo])
                 if (coreId == "fceumm") store.migrateFceummTurbo(fceummTurboSince())
                 val (console, perGame) = store.read()
-                // 3DS Download Play: its full-speed defaults above the console's values (a config's first line for a key
-                // wins), under the row's own settings.
-                val consoleValues = if (!N3dsDownloadPlay.isRow(content.value)) console else {
+                // 3DS Download Play: its full-speed defaults, under what the player set for the row.
+                val (consoleFile, gameFile) = if (!N3dsDownloadPlay.isRow(content.value)) console to perGame else {
                     val rowDefaults = n3dsDownloadPlayDefaults(AndroidDeviceInfo.gpu(),
                         AndroidGpuDrivers(AndroidGpuDrivers.root(activity.filesDir), Build.VERSION.SDK_INT).installed().map { it.id })
-                    ConfigFile(rowDefaults.map { (k, v) -> ConfigLine.Entry(k, v, false) } + console?.lines.orEmpty())
+                    n3dsDownloadPlayConfigs(rowDefaults, console, perGame)
                 }
-                CoreConfig.resolve(descriptorDefaults, consoleValues, perGame, forcedOptions, hiddenValues)
+                CoreConfig.resolve(descriptorDefaults, consoleFile, gameFile, forcedOptions, hiddenValues)
             }
             configSource = resolved.source
             lockedOptions = resolved.locked
@@ -1663,12 +1660,6 @@ internal class LaunchPipeline(private val host: LaunchHost) {
         while (true) RomCache.release(host.activity, cacheHolds.poll() ?: break)
     }
 
-    /**
-     * A top-level RomCache entry, held for this game; a copy whose stamp still matches the source is reused (and touched:
-     * its mtime is its last use). The stamp, `<file name>.nxstamp` beside it, is the source's size
-     * and last-modified ([realPathCopyStamp]): a same-size patched ROM is copied again. The copy goes to `<file name>.part`
-     * and is renamed into place, the old stamp dropped first, so a kill mid-copy leaves no torn copy that passes for whole.
-     */
     /** A 3DS game's title id against its file name, for 3DS Download Play's hand-off ([N3dsDownloadPlayHandoff]). */
     private fun recordN3dsTitle(configDir: File, titleId: Long, romFileName: String) = runCatching {
         val index = File(configDir.apply { mkdirs() }, N3dsDownloadPlayHandoff.INDEX_FILE)
@@ -1676,6 +1667,12 @@ internal class LaunchPipeline(private val host: LaunchHost) {
         if (N3dsDownloadPlayHandoff.titles(text)[titleId] != romFileName) index.writeText(N3dsDownloadPlayHandoff.withTitle(text, titleId, romFileName))
     }.onFailure { NxLog.w(TAG_LOG, "recording the 3DS title failed", it) }
 
+    /**
+     * A top-level RomCache entry, held for this game; a copy whose stamp still matches the source is reused (and touched:
+     * its mtime is its last use). The stamp, `<file name>.nxstamp` beside it, is the source's size
+     * and last-modified ([realPathCopyStamp]): a same-size patched ROM is copied again. The copy goes to `<file name>.part`
+     * and is renamed into place, the old stamp dropped first, so a kill mid-copy leaves no torn copy that passes for whole.
+     */
     private fun copyToCache(ref: ContentRef, fileName: String): File {
         val refs = host.refs
         val root = RomCache.root(host.activity).apply { mkdirs() }
