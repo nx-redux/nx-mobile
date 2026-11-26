@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import com.nxredux.mobile.R
 import com.nxredux.mobile.cheats.CheatSet
+import com.nxredux.mobile.cheats.Ps2PatchSet
 import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.options.ConfigSource
 import com.nxredux.mobile.options.CoreConfig
@@ -130,6 +131,13 @@ internal interface InGameMenuHost : GameScreenHost {
     var cheatSet: CheatSet
     val cheatsFolder: String
     val cheatsLoad: Job?
+    // PS2 patches
+    val patchesSupported: Boolean
+    var patchSet: Ps2PatchSet
+    /** Sends the enabled patch groups to the core (the emulation thread), replacing the last set. */
+    fun applyPatches(view: GLRetroView)
+    /** Reads the core's list of the game's patch groups while it is not known yet; publishes it once read. */
+    suspend fun refreshPatchList()
     fun padProfile(): PadProfile
     fun menuLocked(): Set<String>
     fun applyFrontend(values: Map<String, String>)
@@ -246,7 +254,7 @@ internal class InGameMenuController(
             // one-line file, and the model takes its slot only at construction.
             initialSlot = (host.lastSlotCache ?: host.saveStates?.lastSlot()?.also { host.lastSlotCache = it } ?: 1) - 1,
         ).also {
-            it.setStatus(host.configSource); it.cheatsAvailable = host.cheatsSupported
+            it.setStatus(host.configSource); it.cheatsAvailable = host.cheatsSupported; it.patchesAvailable = host.patchesSupported
             it.saveOnQuit = host.settings.saveOnQuit; it.saveStates = host.canSaveStates; it.refresh()
             it.screen = activity.screenClass()   // the DS / 3DS layout rows: this window's values and defaults
             it.displayMax3d = host.nds3dDisplayMax   // the DS / 3DS 3D Resolution rows' scales
@@ -299,6 +307,9 @@ internal class InGameMenuController(
         host.publishNds3d(model)
         model.setShaders(renderer.shaderValues, renderer.presetNames, renderer.shaderParams)
         model.setCheats(host.cheatSet.entries, host.cheatsFolder, host.cheatSet.expected)
+        model.setPatches(host.patchSet)
+        // The core lists the patches once the game itself has booted, after the BIOS: an early menu asks again.
+        if (host.patchesSupported && host.patchSet.groups == null) lifecycleScope.launch { host.refreshPatchList() }
         host.publishShortcuts(model)
         model.setPadDrawn(padDrawn())   // Adjust buttons: only over a drawn skin or its bare buttons
         model.setControllerConnected(padLayout.controllerConnected.value)
@@ -584,6 +595,12 @@ internal class InGameMenuController(
                 menuModel?.let { it.setCheats(host.cheatSet.entries, host.cheatsFolder, host.cheatSet.expected); menuState.value = it.state }
                 dual.refreshDualPanel()
             }
+            is MenuEffect.SetPatch -> {
+                host.patchSet = host.patchSet.toggle(effect.name, effect.on)
+                if (host.gameReady) host.retroView?.let(host::applyPatches)
+                menuModel?.let { it.setPatches(host.patchSet); menuState.value = it.state }
+                dual.refreshDualPanel()
+            }
             is MenuEffect.ChangeDisc -> host.retroView?.let { view ->
                 dual.discs = dual.discs?.let { effect.index to it.second }
                 // The menu panel's Swap disc says so, as the dual-screen panel's does; the Disc row shows it in place.
@@ -668,10 +685,11 @@ internal class InGameMenuController(
                     val values = CoreConfig.valuesToSave(all.map { it.key to it.value }, host.storedValues, host.graphicsForcedOptions + dualForcedOptions()) + host.frontendValues.toList() +
                         ShaderOptions.activeParamEntries(renderer.shaderValues, renderer.shaderParams) + Shortcuts.toConfig(overrides) +
                         if (game) listOf(FrontendOptions.CHEATS to CheatSet.encode(host.cheatSet.enabledKeys())) else emptyList()
+                    val patchValues = if (game && host.patchesSupported) listOf(FrontendOptions.PATCHES to CheatSet.encode(host.patchSet.savedKeys())) else emptyList()
                     val drop = Shortcuts.droppedOnSave(overrides)
                     withContext(Dispatchers.IO) {
                         runCatching {
-                            if (game) store.saveGame(values, drop) else store.saveConsole(values, drop).also { store.deleteGame() }
+                            if (game) store.saveGame(values + patchValues, drop) else store.saveConsole(values, drop).also { store.deleteGame() }
                         }.onFailure { NxLog.w(TAG_LOG, "saving options failed", it) }.getOrNull()
                     }
                 }

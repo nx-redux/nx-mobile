@@ -94,6 +94,8 @@ data class CoreDescriptor(
      * to the core's system RAM, so its Cheats row lists those and Cheats & Patches installs its folder.
      */
     val ramCheats: Boolean = false,
+    /** The in-game panel's Patches tab: the core lists the game's patch groups and takes `patch:<name>` codes (ARMSX2). */
+    val patchesTab: Boolean = false,
     /** The system-dir subfolder the core reads its BIOS from (flycast's `<system>/dc/`); empty = the system dir itself. */
     val biosSubdir: String = "",
     /**

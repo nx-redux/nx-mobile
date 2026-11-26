@@ -42,6 +42,8 @@ internal interface SaveSessionHost : GameScreenHost {
     val netplay: NetplaySession?
     val speed: SpeedController
     val rumbles: Array<RumbleMotor>
+    /** A slot's state replaced the game's memory: what the frontend writes on top of it goes again. */
+    fun onStateLoaded()
 }
 
 /**
@@ -572,6 +574,7 @@ internal class SaveSession(
             withContext(Dispatchers.Main) {
                 if (ok) {
                     host.rumbles.forEach { it.forget() }
+                    host.onStateLoaded()
                     lastSlotCache = slot   // the pointer moved: a save or load right after follows it before the refresh lands
                     refreshSlots()
                     menu.closeMenu()

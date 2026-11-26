@@ -242,6 +242,7 @@ object CoreRegistry {
         players = 2,
         name = "ARMSX2",
         cheats = false,
+        patchesTab = true,   // cores/patches/armsx2/0012
         rewind = false,
     )
     private val race = CoreDescriptor(
