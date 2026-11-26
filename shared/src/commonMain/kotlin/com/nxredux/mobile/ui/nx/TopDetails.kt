@@ -210,7 +210,7 @@ private fun DetailsText(details: TopDetails, now: Long, fit: DetailsFit, onAchie
                 )
             }
         }
-        // The DS menu keeps no play time: its play line would always say it was never played.
+        // A Download Play row is a different game each session: a play line for the row itself would mean nothing.
         if (!SystemRows.isRow(details.entry.game.ref.value)) Text(
             playLine(details.info, now), color = colors.listText, fontFamily = font, fontSize = 18.sp, maxLines = 1,
             overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 16.dp),
