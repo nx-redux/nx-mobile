@@ -300,7 +300,8 @@ N64 hi-res packs (#45):
 - [ ] An Action Replay cheat takes effect.
 - [ ] A multi-part database cheat (e.g. `+`-joined) works.
 - [ ] An achievement unlocks (if not: Saturn is show-only).
-- [ ] No BIOS: a disc boots on the HLE BIOS, the notice shows on the first launch only. Note the games that misbehave.
+- [x] No BIOS: a disc boots on the HLE BIOS (Daytona USA, Nova, full speed, its save created). Notice once: unseen (toast).
+- [ ] Mega Man X4 on HLE (no BIOS).
 - [ ] A multi-disc game by its `.m3u`: swap to disc 2 in the in-game menu, on the real BIOS and on HLE.
 - [ ] An `.m3u` game's `.bkr` is named after the playlist.
 - [ ] A zipped disc (cue+bin in a zip) boots; its `.bkr` is named after the archive.
