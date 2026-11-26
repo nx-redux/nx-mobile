@@ -36,6 +36,8 @@ import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.netplay.NetplaySessionDir
 import com.nxredux.mobile.netplay.NetplayText
 import com.nxredux.mobile.netplay.cablelink.PairSaveCheckpoint
+import com.nxredux.mobile.options.ConfigFile
+import com.nxredux.mobile.options.ConfigLine
 import com.nxredux.mobile.options.ConfigSource
 import com.nxredux.mobile.options.CoreConfig
 import com.nxredux.mobile.options.FrontendOptions
@@ -530,6 +532,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
     ) {
         /** The DS menu with no game ([DsMenu]): no file to open, hash or keep states for. */
         val dsMenu: Boolean get() = DsMenu.isMenu(content.value)
+        /** 3DS Download Play: our bundled client in place of a game file ([N3dsDownloadPlay]). */
+        val n3dsDownloadPlay: Boolean get() = N3dsDownloadPlay.isRow(content.value)
         fun option(key: String): String? = options.firstOrNull { it.key == key }?.value
     }
 
@@ -654,7 +658,14 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 // fceumm's turbo default (Player 1): a cfg saved before it holds the old None as if picked ([FceummTurbo])
                 if (coreId == "fceumm") store.migrateFceummTurbo(fceummTurboSince())
                 val (console, perGame) = store.read()
-                CoreConfig.resolve(descriptorDefaults, console, perGame, forcedOptions, hiddenValues)
+                // 3DS Download Play: its full-speed defaults above the console's values (a config's first line for a key
+                // wins), under the row's own settings.
+                val consoleValues = if (!N3dsDownloadPlay.isRow(content.value)) console else {
+                    val rowDefaults = n3dsDownloadPlayDefaults(AndroidDeviceInfo.gpu(),
+                        AndroidGpuDrivers(AndroidGpuDrivers.root(activity.filesDir), Build.VERSION.SDK_INT).installed().map { it.id })
+                    ConfigFile(rowDefaults.map { (k, v) -> ConfigLine.Entry(k, v, false) } + console?.lines.orEmpty())
+                }
+                CoreConfig.resolve(descriptorDefaults, consoleValues, perGame, forcedOptions, hiddenValues)
             }
             configSource = resolved.source
             lockedOptions = resolved.locked
@@ -708,7 +719,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             if (np != null && PadMap.isSegaPadTag(tag)) frontendValues = frontendValues + (PadOptions.SEGA_PAD to (sessionPad ?: SegaPadType.AUTO))
             canRewind = descriptor?.rewind == true
             // The DS menu has none either: a state would hold the game it downloaded, which a relaunch cannot fetch again.
-            canSaveStates = descriptor?.saveStates != false && !DsMenu.isMenu(content.value)
+            canSaveStates = descriptor?.saveStates != false && !SystemRows.isRow(content.value)
             speed.setSession(netplay = np != null)   // first: the touch buttons [ShortcutsMicController.launch] builds follow the session
             shortcuts.launch(microphone = descriptor?.microphone == true, netplay = np != null, tag, Shortcuts.fromConfig(resolved.values), saveStates = canSaveStates)
             val netplayPad = if (np != null) NetplayPads.forSession(tag, descriptor?.id, sessionPad) else null
@@ -982,6 +993,11 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             val biosPlan = BiosCheck.plan(cfg.tag, needs, biosExtension, biosPresent, netplay = cfg.np != null)
             if (biosPlan is BiosPlan.Refuse) return refuse(biosPlan.message)
             if (biosPlan is BiosPlan.Hle) NxLog.i(TAG_LOG, "BIOS missing: HLE")
+            if (cfg.n3dsDownloadPlay) {
+                n3dsDownloadPlayRefusal(N3dsOptions.localWireless(frontendValues))?.let { return refuse(it) }
+                // The client is copied out of the APK at the first start after an install or update.
+                if (N3dsDownloadPlay.appPath == null) return refuse("3DS Download Play is still being set up. Try again in a moment.")
+            }
             if (cfg.dsMenu) {
                 // melonDS DS reads its dumps from the system dir or its own subfolder there.
                 val coreDir = withContext(Dispatchers.IO) { File(biosDir, DsMenu.CORE_SUBDIR).list()?.toSet() ?: emptySet() }
@@ -1016,7 +1032,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 withContext(Dispatchers.IO) { ggpoSystemDir(cfg.sessionDir, biosDir, cfg.np.dcHle) }
             } else systemDir
             // netplay: a link session's game is the player's own, so it gets achievements as a normal launch; lockstep has none.
-            if (!cfg.dsMenu && (cfg.np == null || cfg.np.allowsAchievements)) prepareAchievements(cfg.tag, cfg.romFileName, cfg.content, inner)
+            if (!cfg.dsMenu && !cfg.n3dsDownloadPlay && (cfg.np == null || cfg.np.allowsAchievements)) prepareAchievements(cfg.tag, cfg.romFileName, cfg.content, inner)
             return PreparedContent(inner, launchSystemDir, savesDir, sram, rtc, segaSetting, biosPresent, archiveAsIs, naomiSets, naomiBios,
                 (biosPlan as? BiosPlan.Hle)?.options.orEmpty(), BiosCheck.noticeDue(biosPlan, cfg.tag, settings.hleBiosNoticeShown))
         }
@@ -1142,7 +1158,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                             mapOf(N64HiresPack.VRAM_KEY to limit)
                         } else emptyMap()
                         val forced = cfg.netplayPad?.options.orEmpty() + cfg.linkOptions + wii.screenOption() + nds3dLaunch + res3dAlso + ps2BiosOption + n64Vram + prepared.hleOptions + graphics.forcedOptions +
-                            (if (cfg.dsMenu) DsMenu.FORCED_OPTIONS else emptyMap())
+                            (if (cfg.dsMenu) DsMenu.FORCED_OPTIONS else emptyMap()) +
+                            (if (cfg.n3dsDownloadPlay) N3dsDownloadPlay.FORCED_OPTIONS else emptyMap())
                         variables = withForced(cfg.options, forced).toTypedArray()
                         rumbleEventsEnabled = gameRumble != GameRumble.OFF   // Game rumble Off: the runner does not even read the core's state
                         // DS / 3DS: the frontend feeds the core's mic ([ShortcutsMicController.applyMic] picks silence, the phone mic or noise).
@@ -1181,6 +1198,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                             "port0" to controllerPorts[0], "port1" to controllerPorts[1])
                         if (cfg.dsMenu) {
                             loadWithoutContent = true
+                        } else if (cfg.n3dsDownloadPlay) {
+                            gameFilePath = N3dsDownloadPlay.appPath
                         } else if (prepared.inner != null) {
                             gameFilePath = prepared.inner.absolutePath
                         } else if (cfg.realPath) {

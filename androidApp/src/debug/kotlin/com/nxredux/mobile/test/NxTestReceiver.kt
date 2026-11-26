@@ -10,6 +10,7 @@ import com.nxredux.mobile.runner.ArcadeSetsAsset
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.runner.DsMenu
+import com.nxredux.mobile.runner.N3dsDownloadPlay
 import com.nxredux.mobile.runner.GameSession
 import com.nxredux.mobile.runner.LibretroRunner
 import com.nxredux.mobile.runner.LiveGameStore
@@ -53,6 +54,7 @@ import java.io.File
  *   may not start an activity from the background otherwise (Android 10+). The game shows over the lock screen and
  *   turns the screen on ([NxTestResults.markShowWhenLocked]).
  * - GAME with `--es path nds-menu: --es tag NDS`: DS Download Play (the DS menu, no file).
+ * - GAME with `--es path n3ds-dlp: --es tag 3DS`: 3DS Download Play (the bundled client).
  * - GAME_STOP: the live game quits as the menu's Quit does (battery save and auto state written); its process ends.
  * - GAME_FF (`--ez on true|false`, default true): fast forward on or off in the live game, as the panel's tile sets it.
  *   As an activity start use NxGameStopActivity with `--ez ff true|false`: it runs in the game's task.
@@ -207,6 +209,14 @@ class NxTestReceiver : BroadcastReceiver() {
          */
         fun launchGame(app: Context, path: String, tag: String, slot: Int?, gamePath: String?) {
             val core = CoreRegistry.forTag(tag)
+            if (path == N3dsDownloadPlay.CONTENT && core != null) {
+                // 3DS Download Play: the bundled client in place of a game file (as its row launches it).
+                NxTestResults.markShowWhenLocked(app)
+                val session = GameSession("3DS", N3dsDownloadPlay.TITLE, core, ContentRef(N3dsDownloadPlay.CONTENT), ContentRef(""),
+                    N3dsDownloadPlay.FILE_NAME, null, emptyList(), fresh = true)
+                scope.launch { LibretroRunner(app) { true }.apply { recordLaunches = false }.launch(session, Recent(path, N3dsDownloadPlay.TITLE)) }
+                return
+            }
             if (path == DsMenu.CONTENT && core != null) {
                 // DS Download Play: no file, the game process boots the DS menu (as its row launches it).
                 NxTestResults.markShowWhenLocked(app)
