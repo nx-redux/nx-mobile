@@ -1,0 +1,72 @@
+# license: modifies YabaSanshiro (https://github.com/libretro/yabause), GPL-2.0 (LICENSE); this patch is distributed under the same license.
+# The Musashi interface saved and loaded no 68000 registers, so a state put back only the sound RAM and the SCSP: loaded
+# before the BIOS had started the sound CPU (a resume at launch) it stayed at its reset point and the game was silent.
+# The registers now go into the SCSP chunk, version 4; a version 3 state loads as before.
+diff --git a/yabause/src/m68kmusashi.c b/yabause/src/m68kmusashi.c
+index c14e4c5..2f6c143 100644
+--- a/yabause/src/m68kmusashi.c
++++ b/yabause/src/m68kmusashi.c
+@@ -165,10 +165,39 @@ static void M68KMusashiSetWriteW(M68K_WRITE *Func) {
+    rw_funcs.w_16 = Func;
+ }
+ 
++/* The registers in this order, then the stop and interrupt levels. SR goes first on load: it picks which stack pointer
++ * A7 is, so USP and ISP land in the right places before A7 is set. Setting PC refills the prefetch. */
++static const m68k_register_t state_regs[] = {
++   M68K_REG_SR, M68K_REG_USP, M68K_REG_ISP,
++   M68K_REG_D0, M68K_REG_D1, M68K_REG_D2, M68K_REG_D3, M68K_REG_D4, M68K_REG_D5, M68K_REG_D6, M68K_REG_D7,
++   M68K_REG_A0, M68K_REG_A1, M68K_REG_A2, M68K_REG_A3, M68K_REG_A4, M68K_REG_A5, M68K_REG_A6, M68K_REG_A7,
++   M68K_REG_PC,
++};
++
+ static void M68KMusashiSaveState(FILE *fp) {
++   u32 v;
++   size_t i;
++   for (i = 0; i < sizeof(state_regs) / sizeof(state_regs[0]); i++) {
++      v = m68k_get_reg(NULL, state_regs[i]);
++      fwrite(&v, sizeof(v), 1, fp);
++   }
++   v = CPU_STOPPED;
++   fwrite(&v, sizeof(v), 1, fp);
++   v = CPU_INT_LEVEL;
++   fwrite(&v, sizeof(v), 1, fp);
+ }
+ 
+ static void M68KMusashiLoadState(FILE *fp) {
++   u32 v = 0;
++   size_t i;
++   for (i = 0; i < sizeof(state_regs) / sizeof(state_regs[0]); i++) {
++      if (fread(&v, sizeof(v), 1, fp) == 1)
++         m68k_set_reg(state_regs[i], v);
++   }
++   if (fread(&v, sizeof(v), 1, fp) == 1)
++      CPU_STOPPED = v;
++   if (fread(&v, sizeof(v), 1, fp) == 1)
++      CPU_INT_LEVEL = v;
+ }
+ 
+ M68K_struct M68KMusashi = {
+diff --git a/yabause/src/scsp.c b/yabause/src/scsp.c
+index 552bed6..d72ea49 100644
+--- a/yabause/src/scsp.c
++++ b/yabause/src/scsp.c
+@@ -6043,7 +6043,7 @@ SoundSaveState (FILE *fp)
+   u8 nextphase;
+   IOCheck_struct check = { 0, 0 };
+ 
+-  offset = StateWriteHeader (fp, "SCSP", 3);
++  offset = StateWriteHeader (fp, "SCSP", 4);
+ 
+   // Save 68k registers first
+   ywrite (&check, (void *)&IsM68KRunning, 1, 1, fp);
+@@ -6341,7 +6341,9 @@ SoundLoadState (FILE *fp, int version, int size)
+   yread(&check, (void *)&savedcycles, sizeof(u32), 1, fp);
+ 
+ #ifdef IMPROVED_SAVESTATES
+-  M68K->LoadState(fp);
++  /* Version 3 states hold no 68000 registers (the Musashi interface saved none). */
++  if (version >= 4)
++    M68K->LoadState(fp);
+ #else
+   for (i = 0; i < 8; i++)
+     {

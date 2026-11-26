@@ -410,6 +410,8 @@ flycast_FLAGS = -DLIBRETRO=ON -DUSE_GLES=ON -DUSE_OPENMP=OFF -DCMAKE_OSX_ARCHITE
 # need more than 30 blocks refused to save).
 # patches/yabasanshiro/0008: save states no longer go through tmpfile(), which returns NULL in an Android app (the state
 # aborted the app): a temporary file in the system folder instead; a state that cannot be made fails cleanly.
+# patches/yabasanshiro/0009: the 68000 sound CPU's registers go into save states (the Musashi interface saved none, so a
+# state loaded before the BIOS started the sound CPU, a resume at launch, was silent); SCSP chunk version 4.
 yabasanshiro_REPO = https://github.com/libretro/yabause
 yabasanshiro_HASH = c6de72c08dda71b74648e9e055598cec1a974a11
 yabasanshiro_BUILD_PATH = yabause/src/libretro
