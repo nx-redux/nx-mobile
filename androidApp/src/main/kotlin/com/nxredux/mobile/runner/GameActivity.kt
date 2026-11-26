@@ -250,6 +250,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         const val EXTRA_NETPLAY_RTC = "netplay_rtc"                      // Long: the session clock, epoch seconds
         /** Kids Mode's "Games close in 10 minutes" toast stays this long. */
         private const val KIDS_WARNING_MS = 6000L
+        private const val DOWNLOAD_PLAY_HOST_GONE_MS = 4_000L   // a host restarting its wireless between menus is back within this
         /** After the core text box's Cancel: the game's keyboard is still waiting. */
         private const val CORE_TEXT_CANCELLED = "The game's keyboard is still open. Start on the pad answers with the account's name."
         /** The failure dialog's title unless a caller names another. */
@@ -737,8 +738,31 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /** DS: a toast as devices join and leave the room (the 3DS core sends its own, with names). */
     private fun onDsOthersChanged(before: Int, now: Int) {
         if (launchPipeline.dsAutoRoute && gameCoreId == "melondsds") LocalWirelessText.change(before, now)?.let(dual::pictureToast)
+        followDownloadPlayHost(now)
         dual.refreshDualPanel()   // the session card says how many are linked
         withMenu { it.setLocalWirelessNow(localWirelessNow) }
+    }
+
+    /** 3DS Download Play: the downloaded game has started ([watchDownloadPlayPick]); its host is all it can play with. */
+    @Volatile private var downloadPlayChildStarted = false
+    private var downloadPlayHostGone: Job? = null
+
+    /**
+     * A Download Play child with no host left can only show its communication error: once the room has stayed empty a
+     * few seconds (a host restarting its wireless comes back within that), the session ends as a quit.
+     */
+    private fun followDownloadPlayHost(others: Int) {
+        if (!downloadPlayChildStarted || quitting) return
+        if (others > 0) { downloadPlayHostGone?.cancel(); downloadPlayHostGone = null; return }
+        if (downloadPlayHostGone?.isActive == true) return
+        downloadPlayHostGone = lifecycleScope.launch {
+            delay(DOWNLOAD_PLAY_HOST_GONE_MS)
+            if (quitting) return@launch
+            NxLog.i(TAG_LOG, "3DS Download Play: the host left, quitting")
+            dual.pictureToast("The host left")
+            delay(1500)
+            quitWithAutoState(chosen = false, autoState = false)
+        }
     }
 
     /** The menu open in a room counts toward the cap; anything else stops the count. */
@@ -784,6 +808,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                         }
                     }
                     runCatching { File(azahar, N3dsDownloadPlayHandoff.ACK_FILE).apply { parentFile?.mkdirs() }.writeText("ok") }
+                    downloadPlayChildStarted = true
                 }
                 delay(250)
             }
