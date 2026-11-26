@@ -84,7 +84,7 @@ std::vector<Environment::TextInputEvent> Environment::takeTextInputEvents() {
 
 void Environment::queueKeyboardKeys(const std::vector<std::pair<unsigned, uint32_t>>& keys) {
     std::lock_guard<std::mutex> lock(textInputMutex);
-    if (keyboardCallback == nullptr) return;
+    if (keyboardCallback == nullptr || !textInputOpen) return;
     keyboardKeys.insert(keyboardKeys.end(), keys.begin(), keys.end());
 }
 
@@ -111,6 +111,7 @@ void Environment::deinitialize() {
     {
         std::lock_guard<std::mutex> lock(textInputMutex);
         keyboardCallback = nullptr;
+        textInputOpen = false;
         keyboardKeys.clear();
         textInputEvents.clear();
     }
@@ -887,6 +888,9 @@ bool Environment::handle_callback_environment(unsigned cmd, void *data) {
             std::lock_guard<std::mutex> lock(textInputMutex);
             // The box types through the keyboard callback: without one it could not answer.
             if (input->open && keyboardCallback == nullptr) return false;
+            textInputOpen = input->open;
+            // Keys left for an entry that closed would type into the game's next one.
+            if (!input->open) keyboardKeys.clear();
             textInputEvents.push_back(TextInputEvent {
                 input->open, safeString(input->open ? input->text : nullptr), safeString(input->open ? input->name : nullptr),
                 input->open ? input->max_length : 0,

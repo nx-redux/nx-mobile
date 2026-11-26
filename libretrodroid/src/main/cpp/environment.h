@@ -77,7 +77,10 @@ public:
     /** The entry changes since the last call, oldest first (the step drains them). */
     std::vector<TextInputEvent> takeTextInputEvents();
 
-    /** Keys for the core's keyboard callback, typed one a frame from the next (deliverKeyboardKey). Nothing without a callback. */
+    /**
+     * Keys for the core's keyboard callback, typed one a frame from the next (deliverKeyboardKey). Only into an open text
+     * entry: nothing without one or without a callback, and what is left goes when the entry closes.
+     */
     void queueKeyboardKeys(const std::vector<std::pair<unsigned, uint32_t>>& keys);
     /** Presses and releases the next queued key through the core's keyboard callback; on the core's thread, before a frame. */
     void deliverKeyboardKey();
@@ -208,6 +211,7 @@ private:
     std::vector<TextInputEvent> textInputEvents;
     std::vector<std::pair<unsigned, uint32_t>> keyboardKeys;
     retro_keyboard_event_t keyboardCallback = nullptr;
+    bool textInputOpen = false;
     bool preferVulkan = false;
     bool useVulkan = false;
     std::atomic<bool> loggedVulkanInterface { false };   // GET_HW_RENDER_INTERFACE logged this session

@@ -397,11 +397,15 @@ internal class GameInputRouter(private val host: GameInputHost) {
     /** The notices' buttons, by toast id: what a tap on one does ([showNotice]). */
     private val noticeActions = HashMap<Long, () -> Unit>()
 
-    /** A notice over the picture for [ms] (a tip: [LayoutTip]), with a button [action] whose tap runs [onAction] and closes it. */
-    fun showNotice(text: String, ms: Long, action: String? = null, onAction: () -> Unit = {}) {
+    /**
+     * A notice over the picture for [ms] (a tip: [LayoutTip]), with a button [action] whose tap runs [onAction] and closes
+     * it; its id, for [onNoticeDismiss].
+     */
+    fun showNotice(text: String, ms: Long, action: String? = null, onAction: () -> Unit = {}): Long {
         val id = host.notifications.push(text, null, ms, SystemClock.elapsedRealtime(), action)
         if (action != null && id >= 0) noticeActions[id] = onAction
         host.publishNotifications()
+        return id
     }
 
     /** A notice's Close was tapped: it goes, its action not run. */

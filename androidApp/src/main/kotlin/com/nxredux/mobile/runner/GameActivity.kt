@@ -248,7 +248,6 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         private const val KIDS_WARNING_MS = 6000L
         /** After the core text box's Cancel: the game's keyboard is still waiting. */
         private const val CORE_TEXT_CANCELLED = "The game's keyboard is still open. Start on the pad answers with the account's name."
-        private const val CORE_TEXT_CANCELLED_MS = 8000L
         /** The failure dialog's title unless a caller names another. */
         internal const val START_FAILED = "Could not start the game"
         /** [onCoreHung]: between the hung game's finish and the process kill. */
@@ -1337,12 +1336,20 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /** The core's text entry open now (its box may be down, after Cancel); null: none. */
     private var coreTextInput: GLRetroView.TextInput? = null
     private var coreTextBox: AlertDialog? = null
+    /** The notice after the box's Cancel; -1: none up. */
+    private var coreTextNotice = -1L
 
     /** The core's text entry opened or closed: its box comes up, or goes with it (answered elsewhere, as by Start). */
     fun onCoreTextInput(t: GLRetroView.TextInput) {
         coreTextInput = t.takeIf { it.open }
         coreTextBox?.let { coreTextBox = null; it.dismiss() }
+        dropCoreTextNotice()
         if (t.open) showCoreTextBox(t)
+    }
+
+    private fun dropCoreTextNotice() {
+        if (coreTextNotice >= 0) input.onNoticeDismiss(coreTextNotice)
+        coreTextNotice = -1L
     }
 
     /**
@@ -1373,7 +1380,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     val keys = CoreTextInput.keys(t.text, CoreTextInput.answer(field.text.toString(), t.name, t.maxLength))
                     retroView?.sendKeyboardKeys(keys.map { it.keycode }.toIntArray(), keys.map { it.character }.toIntArray())
                 } else {
-                    input.showNotice(CORE_TEXT_CANCELLED, CORE_TEXT_CANCELLED_MS, "Type") {
+                    // Up until the keyboard is answered (Start in the game), the box is back, or it is closed.
+                    coreTextNotice = input.showNotice(CORE_TEXT_CANCELLED, NotificationQueue.UNTIL_CLOSED, "Type") {
+                        coreTextNotice = -1L
                         coreTextInput?.takeIf { coreTextBox == null }?.let(::showCoreTextBox)
                     }
                 }

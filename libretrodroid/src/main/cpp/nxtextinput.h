@@ -4,6 +4,7 @@
 // frontend can show its own text box and type the answer through the keyboard callback. *data is a
 // struct nx_text_input*; true: the frontend shows its box (the core need not explain its own way of typing).
 // Only the nx-mobile runner answers it; only nx-mobile's patched cores send it.
+// cores/patches/cemu/0004-frontend-text-input.patch declares the same struct on the core's side: the two must keep one layout.
 #define NX_ENVIRONMENT_SET_TEXT_INPUT (0x20000 /* RETRO_ENVIRONMENT_PRIVATE */ | 0x4e5c)
 struct nx_text_input {
     bool open;               // false: the entry closed (the strings may be NULL)
