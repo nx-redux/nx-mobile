@@ -6405,6 +6405,19 @@ class AppStateTest {
         assertIs<Screen.RaSettings>(state.screen.value)
     }
 
+    // The launch's library path is what lets a custom GPU driver load (and keeps its crash record): the row needs one too.
+    @Test fun the_3ds_download_play_row_launches_with_its_library_path() = runTest {
+        val runner = RecordingRunner()
+        val state = state(MemorySettings(ContentRef("Home")), runner = runner, n3dsDownloadPlay = true)
+        state.load()
+        val n3ds = assertIs<Screen.Systems>(state.screen.value).tabs.flatMap { it.rows }.filterIsInstance<MainRow.System>().first { s -> s.systems.single().tag == "3DS" }
+        state.openList(ListSource.Console(n3ds.systems))
+        val games = assertIs<Screen.Games>(state.screen.value)
+        assertEquals(com.nxredux.mobile.runner.N3dsDownloadPlay.TITLE, games.entries[0].game.shownName)
+        tap(state, 0, opens = false)
+        assertEquals(games.entries[0].game.path, runner.launched.single().gamePath)
+    }
+
     @Test fun a_game_list_row_takes_two_taps_to_play() = runTest {
         val runner = RecordingRunner()
         val state = state(MemorySettings(ContentRef("Home")), runner = runner, data = FakeUserData(recents = listOf(Recent(mk), Recent(tetris))))

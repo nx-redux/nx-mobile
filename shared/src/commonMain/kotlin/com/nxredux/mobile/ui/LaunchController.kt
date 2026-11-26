@@ -138,7 +138,7 @@ internal class LaunchController(
                 if (host.kidsLocked()) return@launch
                 host.dropPushedTab()
                 switcher.onRunnerCalled(fromSwitcher)
-                deps.runner.launch(GameSession(listed.tag, game.shownName, core, game.ref, game.folder, game.fileName, null, emptyList(), fromSwitcher = fromSwitcher, fresh = true), Recent(game.path, game.shownName))
+                deps.runner.launch(GameSession(listed.tag, game.shownName, core, game.ref, game.folder, game.fileName, null, emptyList(), fromSwitcher = fromSwitcher, fresh = true, gamePath = game.path), Recent(game.path, game.shownName))
                 return@launch
             }
             val gone = "Could not find ${game.fileName}. If it was moved or deleted, use Rescan in Settings → Library."
