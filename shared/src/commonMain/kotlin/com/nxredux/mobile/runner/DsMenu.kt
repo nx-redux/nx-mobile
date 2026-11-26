@@ -24,7 +24,7 @@ object DsMenu {
     val ART_FILES = listOf("boxart.png", "boxart2d.png", "screenshot.png", "wheel.png", "mix.png")
 
     /** The folder the app copied [ART_FILES] to; null = no art. */
-    var artDir: String? = null
+    @kotlin.concurrent.Volatile var artDir: String? = null
 
     /** The row's details, in place of ScreenScraper's (which has no entry to fetch for it). */
     val INFO = com.nxredux.mobile.scraper.StoredGameInfo(

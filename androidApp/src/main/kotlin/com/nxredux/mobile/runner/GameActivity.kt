@@ -423,7 +423,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private val launchPipeline = LaunchPipeline(LaunchState())
     private val dsRoom = DsRoomWatcher(lifecycleScope, { DsPresence.of(LibretroNetplay.dsPresence()) }, ::onDsPresenceChanged,
         readOthers = { LibretroNetplay.dsOthers() }, onOthers = ::onDsOthersChanged)
-    private val ownNetworks by lazy { OwnNetworksWatcher(lifecycleScope, this) }
+    private val ownNetworks by lazy { OwnNetworksWatcher(this, this) }
     private val dsCable = DsCable(this, lifecycleScope)
     // The cap is the Disconnect row pressed for the player: the automatic route leaves the room, a sheet session ends its link.
     private val dsMenuCap = DsMenuCap(lifecycleScope, onTick = { seconds -> withMenu { it.setIdleSeconds(seconds) } }) {
