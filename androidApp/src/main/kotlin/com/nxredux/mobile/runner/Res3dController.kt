@@ -73,7 +73,8 @@ internal class Res3dController(private val host: Res3dHost, private val renderer
         val console = console ?: return
         if (!canSend()) return
         val max = displayMax ?: return
-        val value = Nds3dResolution.valueFor(host.frontendValues, current, max, console, shaded = host.shaderOn)
+        // A launch-only console keeps the scale it launched with (Nds3dResolution.liveValue).
+        val value = Nds3dResolution.liveValue(this.value, host.frontendValues, current, max, console, shaded = host.shaderOn)
         sender.offer(value, sizeChange, SystemClock.uptimeMillis())?.let(::send)
         scheduleTick()
     }

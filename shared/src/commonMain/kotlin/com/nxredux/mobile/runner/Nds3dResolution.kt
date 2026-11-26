@@ -76,6 +76,12 @@ enum class Res3dConsole(
      */
     val autoNative: Boolean get() = this == CEMU
 
+    /**
+     * The scale is set at launch only: the game keeps it through any size change or row change until the next launch.
+     * Cemu reads its internal resolution at start (Restart in its options); a change mid-game broke Mario Kart 8.
+     */
+    val launchOnly: Boolean get() = this == CEMU
+
     /** Performance draws at native size: no Scale row (the PS2 runs slowly above it; PCSX-ReARMed has only 1x and 2x). */
     val nativePerformance: Boolean get() = this == PS2 || this == PCSX
 
@@ -208,6 +214,14 @@ object Nds3dResolution {
         }
         return v.coerceIn(1, console.coreMax)
     }
+
+    /**
+     * The scale to send mid-game, the core having been sent [sent] (null: nothing yet): [valueFor] now, but for a
+     * [Res3dConsole.launchOnly] console that already has its launch scale, which it keeps.
+     */
+    fun liveValue(
+        sent: Int?, values: Map<String, String>, current: Int?, displayMax: Int, console: Res3dConsole, shaded: Boolean = false,
+    ): Int = sent?.takeIf { console.launchOnly } ?: valueFor(values, current, displayMax, console, shaded)
 
     /**
      * [value] from [console]'s stored 3D Resolution rows in [values] (its mode, max scale and scale keys); a row unset or

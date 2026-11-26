@@ -377,7 +377,8 @@ fun resolutionRows(console: Res3dConsole, displayMax: Int?, cap: Int = console.d
             console.modeKey, "3D Resolution", Nds3dMode.entries.map { it.value }, Nds3dMode.AUTO.value,
             (if (console.wholePicture) "How sharply the game is drawn. The screen's size doesn't change."
             else "How sharply 3D models are drawn. 2D art, text and the screen's size don't change.") +
-                (if (console.autoNative) "\nAuto draws at Native (1x). Quality and Performance can draw above it, which breaks some games' graphics (black areas, missing effects)."
+                (if (console.autoNative) "\nAuto draws at Native (1x). Quality and Performance can draw above it, which breaks some games' graphics (black areas, missing effects)." +
+                    " A change applies the next time the game starts."
                 else "\nWith a shader on, Auto draws at 1x: the shader works from the console's own resolution."),
             visual = false, valueLabels = Nds3dMode.entries.map { it.label },
         ),

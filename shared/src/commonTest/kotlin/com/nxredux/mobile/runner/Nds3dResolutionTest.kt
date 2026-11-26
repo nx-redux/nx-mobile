@@ -295,4 +295,28 @@ class Nds3dResolutionTest {
             resolutionRows(Res3dConsole.DOLPHIN, displayMax = 3).map { it.key },
         )
     }
+
+    @Test fun wiiUKeepsItsLaunchScaleThroughEverySizeChangeTheOthersFollowLive() {
+        val cemu = Res3dConsole.CEMU
+        val quality = mapOf(cemu.modeKey to Nds3dMode.QUALITY.value)
+        // launched at 1x on the phone; a 1440p second display plugged in, the Fold unfolded, a layout change
+        for ((current, max) in listOf(1 to 1, 2 to 2, 3 to 3, null to 2)) {
+            assertEquals(1, Nds3dResolution.liveValue(1, quality, current, max, cemu), "shown $current of $max")
+        }
+        assertEquals(2, Nds3dResolution.liveValue(2, quality, 1, 1, cemu))
+        // a row changed in the menu waits for the next launch too
+        assertEquals(1, Nds3dResolution.liveValue(1, mapOf(cemu.modeKey to Nds3dMode.PERFORMANCE.value, cemu.scaleKey to "3"), 3, 3, cemu))
+        // nothing sent at launch yet: the first value goes
+        assertEquals(2, Nds3dResolution.liveValue(null, quality, 2, 2, cemu))
+        assertTrue(cemu.launchOnly)
+        for (other in Res3dConsole.entries - cemu) assertTrue(!other.launchOnly, other.name)
+        assertEquals(3, Nds3dResolution.liveValue(1, mapOf(Res3dConsole.DOLPHIN.modeKey to Nds3dMode.QUALITY.value), 3, 3, Res3dConsole.DOLPHIN))
+        assertEquals(2, Nds3dResolution.liveValue(1, emptyMap(), 2, 2, Res3dConsole.PSP))
+    }
+
+    @Test fun wiiURowSaysAChangeAppliesAtTheNextLaunch() {
+        val info = resolutionRows(Res3dConsole.CEMU, displayMax = 3)[0].info
+        assertTrue("next time the game starts" in info, info)
+        assertTrue("next time the game starts" !in resolutionRows(Res3dConsole.DOLPHIN, displayMax = 3)[0].info)
+    }
 }
