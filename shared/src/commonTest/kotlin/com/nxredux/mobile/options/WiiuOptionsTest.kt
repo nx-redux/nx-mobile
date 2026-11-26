@@ -169,7 +169,7 @@ class WiiuOptionsTest {
         for (delta in listOf(1, -1)) {
             assertEquals(LAYOUT_LANDSCAPE to NdsLayoutChoice.entries.stepFrom(NdsLayoutChoice.STACKED, delta).value,
                 WiiuOptions.cycleLayout(emptyMap(), landscape = true, controllerMode = false, delta = delta, skinLandscape = skin))
-            // no skin there (or one that does not take the row): from Large, as before
+            // no skin there (or one that does not take the row): from Large
             assertEquals(LAYOUT_LANDSCAPE to NdsLayoutChoice.entries.stepFrom(NdsLayoutChoice.LARGE, delta).value,
                 WiiuOptions.cycleLayout(emptyMap(), landscape = true, controllerMode = false, delta = delta))
         }
@@ -177,6 +177,18 @@ class WiiuOptionsTest {
         val picked = mapOf(LAYOUT_LANDSCAPE to NdsLayoutChoice.SINGLE.value)
         assertEquals(LAYOUT_LANDSCAPE to NdsLayoutChoice.entries.stepFrom(NdsLayoutChoice.SINGLE, 1).value,
             WiiuOptions.cycleLayout(picked, landscape = true, controllerMode = false, delta = 1, skinLandscape = skin))
+    }
+
+    @Test fun a_game_never_given_a_layout_leaves_it_to_the_screen_and_skin() {
+        val values = FrontendOptions.fromConfig(emptyMap(), "WIIU")
+        for (key in WiiuOptions.LAYOUT_KEYS) assertFalse(key in values, key)
+        assertFalse(WiiuOptions.LAYOUT_PORTRAIT in FrontendOptions.defaults("WIIU"))
+        assertEquals(NdsLayoutChoice.STACKED, WiiuOptions.skinLayout(values, landscape = true, controllerMode = false, ScreenClass.REGULAR_PHONE))
+        assertEquals(NdsLayoutChoice.LARGE, WiiuOptions.layoutShown(values, landscape = true, controllerMode = false))
+        assertEquals(NdsLayoutChoice.STACKED, WiiuOptions.layoutShown(values, landscape = false, controllerMode = false))
+        assertEquals(NdsLayoutChoice.STACKED, WiiuOptions.layoutShown(values, landscape = false, controllerMode = true))
+        val picked = FrontendOptions.fromConfig(mapOf(WiiuOptions.LAYOUT_LANDSCAPE to "single"), "WIIU")
+        assertEquals(NdsLayoutChoice.SINGLE, WiiuOptions.skinLayout(picked, landscape = true, controllerMode = false, ScreenClass.REGULAR_PHONE))
     }
 
     @Test fun a_skin_locks_the_layout_rows_it_ignores() {

@@ -157,17 +157,20 @@ object FrontendOptions {
 
     /**
      * Every frontend key for [tag] with its default (the Overlay default is None, whatever files the console has), except
-     * the DS and 3DS layout rows ([NO_PICK_KEYS]): they have no stored default, the screen decides.
+     * the DS, 3DS and Wii U layout rows ([NO_PICK_KEYS]): they have no stored default, the screen and skin decide.
      */
     fun defaults(tag: String = ""): Map<String, String> =
         allFor(tag).filter { it.key !in NO_PICK_KEYS }.associate { it.key to it.default }
 
-    /** The DS and 3DS layout keys, which can be absent ("no pick"). */
-    val NO_PICK_KEYS: Set<String> = NdsOptions.NO_PICK_KEYS + N3dsOptions.NO_PICK_KEYS
+    /** The DS, 3DS and Wii U layout keys, which can be absent ("no pick"). */
+    val NO_PICK_KEYS: Set<String> = NdsOptions.NO_PICK_KEYS + N3dsOptions.NO_PICK_KEYS + WiiuOptions.LAYOUT_KEYS
 
     /** The stored value of a [NO_PICK_KEYS] layout row [key] in [values] (old keys migrated); null: no pick. */
-    fun layoutValue(values: Map<String, String>, key: String): String? =
-        if (key in NdsOptions.NO_PICK_KEYS) NdsOptions.layoutValue(values, key) else N3dsOptions.layoutValue(values, key)
+    fun layoutValue(values: Map<String, String>, key: String): String? = when (key) {
+        in NdsOptions.NO_PICK_KEYS -> NdsOptions.layoutValue(values, key)
+        in N3dsOptions.NO_PICK_KEYS -> N3dsOptions.layoutValue(values, key)
+        else -> values[key]
+    }
 
     /** A frontend setting by key, the console rows included (keys are unique). */
     fun option(key: String): FrontendOption? = table.firstOrNull { it.key == key } ?: ConsoleSettings.all.firstOrNull { it.key == key }
