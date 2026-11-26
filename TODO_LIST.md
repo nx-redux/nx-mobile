@@ -294,9 +294,9 @@ N64 hi-res packs (#45):
 ## Sega Saturn
 
 - [ ] Saturn menu art: the Saturn logo in the Consoles tab and the six-button Sega pad behind it, both orientations
-- [ ] With a BIOS in `Bios/SATURN/`: a disc boots and plays.
+- [x] With a BIOS in `Bios/SATURN/`: a disc boots and plays (Daytona USA, Nova, full speed).
 - [ ] An in-game save creates `<game>.bkr` in `Saves/SATURN/`, and it survives a killed app.
-- [ ] Save state and load state work.
+- [ ] Save state and load state work (save checked on the Nova; load to check).
 - [ ] An Action Replay cheat takes effect.
 - [ ] A multi-part database cheat (e.g. `+`-joined) works.
 - [ ] An achievement unlocks (if not: Saturn is show-only).
