@@ -78,6 +78,11 @@ object BiosChecksum {
                     val expect = anyName(known, tag)
                     expectOf = { expect }
                 }
+                need.anyRegion -> {
+                    names = need.anyOf.filter { it in present }
+                    val expect = anyName(known, tag)
+                    expectOf = { expect }
+                }
                 else -> {
                     names = need.anyOf.filter { it in present }
                     expectOf = { forName(known, it) }

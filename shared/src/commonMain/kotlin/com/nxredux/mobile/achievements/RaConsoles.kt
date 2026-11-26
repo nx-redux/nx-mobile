@@ -10,7 +10,7 @@ object RaConsoles {
     const val LYNX = 13; const val NEOGEO_POCKET = 14; const val GAME_GEAR = 15; const val NDS = 18; const val POKEMON_MINI = 24
     const val ATARI_2600 = 25; const val ARCADE = 27; const val VIRTUAL_BOY = 28; const val SG1000 = 33; const val PSP = 41
     const val ATARI_5200 = 50; const val ATARI_7800 = 51; const val WONDERSWAN = 53; const val PC_ENGINE_CD = 76; const val FDS = 81
-    const val SEGA_32X = 10; const val COLECOVISION = 44; const val DREAMCAST = 40; const val PLAYSTATION_2 = 21
+    const val SEGA_32X = 10; const val COLECOVISION = 44; const val DREAMCAST = 40; const val PLAYSTATION_2 = 21; const val SATURN = 39
     /** One tag per core can hold either disc: the native hasher picks 16 vs 19 from the disc magic. */
     const val GAMECUBE = 16; const val WII = 19
 
@@ -20,8 +20,9 @@ object RaConsoles {
         "MD" to MEGA_DRIVE, "GPGX" to MEGA_DRIVE, "SMS" to MASTER_SYSTEM, "GG" to GAME_GEAR, "SG1000" to SG1000, "SEGACD" to SEGA_CD,
         "NGP" to NEOGEO_POCKET, "NGPC" to NEOGEO_POCKET, "PCE" to PC_ENGINE, "VB" to VIRTUAL_BOY, "LYNX" to LYNX,
         "A2600" to ATARI_2600, "A5200" to ATARI_5200, "A7800" to ATARI_7800, "PKM" to POKEMON_MINI, "WSC" to WONDERSWAN,
-        "32X" to SEGA_32X, "COLECO" to COLECOVISION, "FBN" to ARCADE, "DC" to DREAMCAST,
+        "32X" to SEGA_32X, "COLECO" to COLECOVISION, "FBN" to ARCADE, "DC" to DREAMCAST, "SATURN" to SATURN,
         "WII" to WII, "GC" to GAMECUBE,
+        // Wii U is deliberately unmapped: rcheevos has no hasher for its files.
     )
     /**
      * The tag of RetroAchievements console [consoleId]: the first tag that maps to it, or the tag whose discs it is (PC

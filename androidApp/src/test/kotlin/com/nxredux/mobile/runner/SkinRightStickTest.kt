@@ -7,17 +7,21 @@ import org.junit.Test
 /** Where a skin's right stick goes: the game's right analog, or the N64's C buttons. */
 class SkinRightStickTest {
     @Test fun gameCubeAndPlayStationSticksAreTheRightAnalog() {
-        assertTrue(skinRightStickIsAnalog(gcPad = true, isWii = false, wiiPad = null, psSkin = false))
-        assertTrue(skinRightStickIsAnalog(gcPad = false, isWii = false, wiiPad = null, psSkin = true))
-        assertFalse(skinRightStickIsAnalog(gcPad = false, isWii = false, wiiPad = null, psSkin = false))   // the N64's C buttons
+        assertTrue(skinRightStickIsAnalog(gcPad = true, isWii = false, wiiPad = null, psSkin = false, wiiu = false))
+        assertTrue(skinRightStickIsAnalog(gcPad = false, isWii = false, wiiPad = null, psSkin = true, wiiu = false))
+        assertFalse(skinRightStickIsAnalog(gcPad = false, isWii = false, wiiPad = null, psSkin = false, wiiu = false))   // the N64's C buttons
     }
 
     @Test fun aWiiClassicOrUnknownPadsStickIsTheRightAnalog() {
-        assertTrue(skinRightStickIsAnalog(gcPad = false, isWii = true, wiiPad = WiiPad.CLASSIC, psSkin = false))
+        assertTrue(skinRightStickIsAnalog(gcPad = false, isWii = true, wiiPad = WiiPad.CLASSIC, psSkin = false, wiiu = false))
         // not yet known: the skin shows the Classic Controller, so its right stick is that one's
-        assertTrue(skinRightStickIsAnalog(gcPad = false, isWii = true, wiiPad = null, psSkin = false))
+        assertTrue(skinRightStickIsAnalog(gcPad = false, isWii = true, wiiPad = null, psSkin = false, wiiu = false))
         for (pad in listOf(WiiPad.NUNCHUK, WiiPad.SIDEWAYS, WiiPad.UPRIGHT)) {
-            assertFalse(pad.name, skinRightStickIsAnalog(gcPad = false, isWii = true, wiiPad = pad, psSkin = false))
+            assertFalse(pad.name, skinRightStickIsAnalog(gcPad = false, isWii = true, wiiPad = pad, psSkin = false, wiiu = false))
         }
+    }
+
+    @Test fun aWiiUGamePadsStickIsTheRightAnalog() {
+        assertTrue(skinRightStickIsAnalog(gcPad = false, isWii = false, wiiPad = null, psSkin = false, wiiu = true))
     }
 }

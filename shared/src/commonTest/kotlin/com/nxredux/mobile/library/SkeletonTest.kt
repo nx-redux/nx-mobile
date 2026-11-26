@@ -23,6 +23,7 @@ class SkeletonTest {
         assertTrue("Roms/Sony PlayStation (PS)" in f)
         assertTrue("Roms/Famicom (FC)" !in f)
         assertTrue("Roms/Sega CD (SEGACD)" in f); assertTrue("Bios/SEGACD" in f)
+        assertTrue("Roms/Sega Saturn (SATURN)" in f); assertTrue("Bios/SATURN" in f)
         assertFalse(f.any { it.startsWith("Saves") })
         assertEquals(f.size, f.toSet().size)
         val n = CoreRegistry.consoles.size

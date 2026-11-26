@@ -72,20 +72,20 @@ class CoreRegistryDcTest {
 
     @Test fun dc_needs_dc_boot_bin_for_discs_only() {
         val needs = CoreRegistry.requiredBios("DC")
-        assertEquals(listOf(BiosNeed(listOf("dc_boot.bin"), setOf("chd", "cdi", "gdi", "cue", "m3u"))), needs)
+        assertEquals(listOf(BiosNeed(listOf("dc_boot.bin"), setOf("chd", "cdi", "gdi", "cue", "m3u"), hle = HleFallback("reicast_hle_bios", "enabled"))), needs)
         for (ext in listOf("chd", "cdi", "gdi", "cue", "m3u", "GDI")) assertEquals(1, BiosCheck.missing(needs, ext, emptySet()).size, ext)
         for (ext in listOf("zip", "7z")) assertEquals(emptyList(), BiosCheck.missing(needs, ext, emptySet()), ext)   // arcade BIOS is its own check
         assertEquals(emptyList(), BiosCheck.missing(needs, "chd", setOf("dc_boot.bin", "dc_nvmem.bin")))
         assertEquals("Dreamcast needs a BIOS: put dc_boot.bin in Bios/DC/", BiosCheck.message("DC", needs.single()))
     }
 
-    @Test fun only_flycast_and_armsx2_keep_their_bios_in_a_subfolder() {
+    @Test fun only_flycast_armsx2_and_cemu_keep_their_bios_in_a_subfolder() {
         assertEquals("dc", BiosFolders.subdir("DC"))
         assertEquals("dc", BiosFolders.subdir(" dc "))
         assertEquals("", BiosFolders.subdir("PS"))
         assertEquals("", BiosFolders.subdir("FBN"))
         assertEquals("", BiosFolders.subdir("PORTS"))
-        assertEquals(setOf("flycast", "armsx2"), CoreRegistry.all.filter { it.biosSubdir.isNotEmpty() }.map { it.id }.toSet())
+        assertEquals(setOf("flycast", "armsx2", "cemu"), CoreRegistry.all.filter { it.biosSubdir.isNotEmpty() }.map { it.id }.toSet())
         assertEquals(listOf("DC"), BiosFolders.forTag("DC"))
     }
 

@@ -23,6 +23,7 @@ class DsScreenTouchTest {
             val narrow = PxRect(204f, 1236f, 1440f, 1080f)   // 320 x 240
             if (big == NdsScreen.TOP) wide to narrow else PxRect(204f, 60f, 1440f, 1080f) to PxRect(24f, 1236f, 1800f, 1080f)
         }
+        DsKind.WIIU -> PxRect(24f, 60f, 1800f, 1012f) to PxRect(24f, 1236f, 1800f, 1012f)   // TV and GamePad, both 16:9
     }
 
     private fun regions(kind: DsKind, big: NdsScreen) =

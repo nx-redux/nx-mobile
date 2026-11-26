@@ -11,13 +11,19 @@ class RaConsolesTest {
             "NDS" to 18, "N64" to 2, "PS" to 12, "PSX" to 12, "PSP" to 41, "MD" to 1, "GPGX" to 1, "SMS" to 11, "GG" to 15, "SG1000" to 33,
             "SEGACD" to 9, "NGP" to 14, "NGPC" to 14, "PCE" to 8, "VB" to 28, "LYNX" to 13, "A2600" to 25, "A5200" to 50,
             "A7800" to 51, "PKM" to 24, "WSC" to 53, "32X" to 10, "COLECO" to 44, "FBN" to 27, "DC" to 40,
-            "WII" to 19, "GC" to 16, "PS2" to 21,
+            "WII" to 19, "GC" to 16, "PS2" to 21, "SATURN" to 39,
         )
         // Dreamcast is identified by its disc extensions only (dreamcast_discs_are_console_40).
         for ((tag, id) in expected) assertEquals(id, RaConsoles.consoleId(tag, if (tag == "DC") "game.chd" else "game.bin"), tag)
+        assertNull(RaConsoles.consoleId("WIIU", "game.wua"))   // rcheevos has no Wii U hasher
         assertNull(RaConsoles.consoleId("P8", "x.p8"))
         assertNull(RaConsoles.consoleId("PRBOOM", "x.wad"))
         assertNull(RaConsoles.consoleId("nope", "x.bin"))
+    }
+
+    @Test fun saturn_discs_are_console_39_and_unlockable() {
+        for (ext in listOf("cue", "chd", "iso", "m3u", "ccd")) assertEquals(39, RaConsoles.consoleId("SATURN", "Game.$ext"), ext)
+        assertEquals("SATURN", RaConsoles.tagOf(RaConsoles.SATURN))
     }
 
     @Test fun mega_drive_tags_refine_by_extension() {

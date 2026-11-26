@@ -8,7 +8,7 @@ package com.nxredux.mobile.options
 enum class OptionGroup(val label: String) {
     /** The picture: scaling, sharpness, overlay, offsets, the DS / 3DS / Wii screens, 3D resolution, Graphics API, Debug HUD. */
     DISPLAY("Display"),
-    /** The pad and the console's own controls: layout, type, portrait pad, landscape opacity, 3DS and Wii controls. */
+    /** The pad and the console's own controls: layout, type, portrait pad, landscape opacity, 3DS, Wii and Wii U controls. */
     CONTROLS("Controls"),
     /** How the game runs: fast forward, rewind (with their audio), Frame Skip, the PS2 BIOS. */
     GAMEPLAY("Gameplay"),
@@ -22,6 +22,7 @@ enum class OptionGroup(val label: String) {
             PadOptions.LAYOUT, PadOptions.SEGA_PAD, FrontendOptions.PAD_LANDSCAPE_OPACITY,
             N3dsOptions.NEW_CONTROLS,
             WiiOptions.CONTROLLER, WiiOptions.MOTION, WiiOptions.POINTER_WIDTH, WiiOptions.POINTER_HEIGHT, WiiOptions.POINTER_OFFSET,
+            WiiuOptions.MOTION,
         )
         private val GAMEPLAY_KEYS = setOf(SpeedOptions.MAX_FF, SpeedOptions.FF_AUDIO, SpeedOptions.REWIND, SpeedOptions.REWIND_AUDIO, FrameSkipOptions.KEY, Ps2Options.BIOS)
         private val MULTIPLAYER_KEYS = setOf(NdsOptions.LOCAL_WIRELESS, N3dsOptions.LOCAL_WIRELESS, PspOptions.LOCAL_WIRELESS)

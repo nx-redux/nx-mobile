@@ -18,7 +18,7 @@ class DcInputTest {
     private val x = PhysicalKeys.BUTTON_X
     private val y = PhysicalKeys.BUTTON_Y
 
-    private val letterTags = listOf("SFC", "SUPA", "FC", "FDS", "GB", "GBC", "GBA", "MGBA", "SGB", "NDS", "3DS", "VB", "LYNX", "PKM", "WSC", "N64", "WII", "GC")
+    private val letterTags = listOf("SFC", "SUPA", "FC", "FDS", "GB", "GBC", "GBA", "MGBA", "SGB", "NDS", "3DS", "VB", "LYNX", "PKM", "WSC", "N64", "WII", "WIIU", "GC")
     private val swappedTags = listOf("DC", "NGP", "NGPC")
     private val positionTags = listOf("PS", "PSP", "MD", "GPGX", "SEGACD", "32X", "SMS", "GG", "SG1000", "PCE", "P8", "A2600", "A5200",
         "A7800", "COLECO", "PRBOOM", "FBN", "", "UNKNOWN")

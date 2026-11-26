@@ -53,6 +53,10 @@ import java.io.File
  * - GAME_STOP: the live game quits as the menu's Quit does (battery save and auto state written); its process ends.
  * - GAME_FF (`--ez on true|false`, default true): fast forward on or off in the live game, as the panel's tile sets it.
  *   As an activity start use NxGameStopActivity with `--ez ff true|false`: it runs in the game's task.
+ * - GAME_DISC (`--ei index n`, 0-based): the live game changes to disc n, as the menu's Disc row does.
+ * - GAME_RESET: the live game resets, as the menu's Reset does.
+ * - GAME_SLOT (`--ei slot n --ez save true|false`, default load): the live game saves to or loads slot n, numbered from 1 as
+ *   the menu shows it, as the menu does.
  * - NETPLAY: one Wi-Fi session through the real handshake, then the game ([NxNetplayHook]). Send it with
  *   `--allow-background-activity-starts`, as GAME.
  */
@@ -80,6 +84,17 @@ class NxTestReceiver : BroadcastReceiver() {
             ACTION_GAME_FF -> if (LiveGameStore.alive(app)) {
                 app.sendBroadcast(Intent(app, NxGameStopReceiver::class.java).putExtra(NxGameStopReceiver.EXTRA_FF, intent.getBooleanExtra("on", true)))
             } else NxLog.w(TAG, "GAME_FF: no live game")
+            ACTION_GAME_DISC -> if (LiveGameStore.alive(app)) {
+                app.sendBroadcast(Intent(app, NxGameStopReceiver::class.java).putExtra(NxGameStopReceiver.EXTRA_DISC, intent.getIntExtra("index", 0)))
+            } else NxLog.w(TAG, "GAME_DISC: no live game")
+            ACTION_GAME_RESET -> if (LiveGameStore.alive(app)) {
+                app.sendBroadcast(Intent(app, NxGameStopReceiver::class.java).putExtra(NxGameStopReceiver.EXTRA_RESET, true))
+            } else NxLog.w(TAG, "GAME_RESET: no live game")
+            ACTION_GAME_SLOT -> if (LiveGameStore.alive(app)) {
+                app.sendBroadcast(Intent(app, NxGameStopReceiver::class.java)
+                    .putExtra(NxGameStopReceiver.EXTRA_SLOT, intent.getIntExtra("slot", 0))
+                    .putExtra(NxGameStopReceiver.EXTRA_SAVE, intent.getBooleanExtra("save", false)))
+            } else NxLog.w(TAG, "GAME_SLOT: no live game")
             ACTION_NETPLAY -> NxNetplayHook.start(
                 app, scope, intent.getStringExtra("role"), intent.getStringExtra("peer"), intent.getStringExtra("path"),
                 intent.getStringExtra("tag"), intent.getStringExtra("core"), intent.getStringExtra("pad"),
@@ -96,6 +111,9 @@ class NxTestReceiver : BroadcastReceiver() {
         const val ACTION_GAME = "com.nxredux.mobile.test.GAME"
         const val ACTION_GAME_STOP = "com.nxredux.mobile.test.GAME_STOP"
         const val ACTION_GAME_FF = "com.nxredux.mobile.test.GAME_FF"
+        const val ACTION_GAME_DISC = "com.nxredux.mobile.test.GAME_DISC"
+        const val ACTION_GAME_RESET = "com.nxredux.mobile.test.GAME_RESET"
+        const val ACTION_GAME_SLOT = "com.nxredux.mobile.test.GAME_SLOT"
         const val ACTION_NETPLAY = "com.nxredux.mobile.test.NETPLAY"
         const val SYNC_TIMEOUT_MS = 20 * 60 * 1000L
 

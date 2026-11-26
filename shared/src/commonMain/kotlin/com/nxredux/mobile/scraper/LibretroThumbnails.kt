@@ -32,7 +32,7 @@ object Libretro {
         3 to listOf("Nintendo - Nintendo Entertainment System"), 4 to listOf("Nintendo - Super Nintendo Entertainment System"),
         9 to listOf("Nintendo - Game Boy"), 10 to listOf("Nintendo - Game Boy Color"), 11 to listOf("Nintendo - Virtual Boy"),
         12 to listOf("Nintendo - Game Boy Advance"), 14 to listOf("Nintendo - Nintendo 64"), 15 to listOf("Nintendo - Nintendo DS"),
-        13 to listOf("Nintendo - GameCube"), 16 to listOf("Nintendo - Wii"), 17 to listOf("Nintendo - Nintendo 3DS"),
+        13 to listOf("Nintendo - GameCube"), 16 to listOf("Nintendo - Wii"), 17 to listOf("Nintendo - Nintendo 3DS"), 18 to listOf("Nintendo - Wii U"),
         19 to listOf("Sega - 32X"), 20 to listOf("Sega - Mega-CD - Sega CD"), 21 to listOf("Sega - Game Gear"),
         22 to listOf("Sega - Saturn"), 23 to listOf("Sega - Dreamcast"), 25 to listOf("SNK - Neo Geo Pocket"),
         82 to listOf("SNK - Neo Geo Pocket Color"), 26 to listOf("Atari - 2600"), 27 to listOf("Atari - Jaguar"),

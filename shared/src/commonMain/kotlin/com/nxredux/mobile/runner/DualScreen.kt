@@ -46,6 +46,7 @@ enum class BottomScreen(
 object DualScreen {
     private const val DS_ASPECT = 4f / 3f
     private const val N3DS_TOP_ASPECT = 5f / 3f
+    private const val WIIU_ASPECT = 16f / 9f
     private const val SWAP_SCREEN = "citra_swap_screen"
     private const val SWAP_SCREEN_MODE = "citra_swap_screen_mode"
 
@@ -59,7 +60,7 @@ object DualScreen {
     /** The DS / 3DS layout shortcut (SELECT + Left / Right): only on one display; a second one places the screens itself. */
     fun layoutCycles(mode: DualMode): Boolean = mode == DualMode.OFF
 
-    /** A DS/3DS game ([dualGame]) splits (or shows both screens with [panelUp]); any other game gets the panel. */
+    /** A two-screen game ([dualGame]: DS, 3DS, Wii U) splits (or shows both screens with [panelUp]); any other game gets the panel. */
     fun mode(secondConnected: Boolean, settingOn: Boolean, dualGame: Boolean, panelUp: Boolean): DualMode = when {
         !secondConnected || !settingOn -> DualMode.OFF
         dualGame -> if (panelUp) DualMode.PANEL_UP else DualMode.SPLIT
@@ -154,6 +155,17 @@ object DualScreen {
     /** [n3dsScreen] in [area] (game-view px) instead of the whole view: a pad skin's screen (its glass) holds it. */
     fun n3dsScreenIn(area: PxRect, which: NdsScreen): List<NdsRegion> =
         n3dsScreen(area.width, area.height, which).map { it.copy(dst = it.dst.copy(x = it.dst.x + area.x, y = it.dst.y + area.y)) }
+
+    /**
+     * Split, Wii U screen [which] alone on a display's area: the TV or the GamePad fitted 16:9 and centred; touch only on
+     * the GamePad.
+     */
+    fun wiiuScreen(areaW: Float, areaH: Float, which: NdsScreen): List<NdsRegion> =
+        single(areaW, areaH, which, WiiuLayout.src(which), WIIU_ASPECT)
+
+    /** [wiiuScreen] in [area] (game-view px) instead of the whole view. */
+    fun wiiuScreenIn(area: PxRect, which: NdsScreen): List<NdsRegion> =
+        wiiuScreen(area.width, area.height, which).map { it.copy(dst = it.dst.copy(x = it.dst.x + area.x, y = it.dst.y + area.y)) }
 
     /**
      * The Azahar options a mode needs, or null to put back the usual ones ([DualMode.OFF], [DualMode.PANEL]: the caller

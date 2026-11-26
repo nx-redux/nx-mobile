@@ -427,6 +427,33 @@ object CoreRegistry {
         rewind = false,
     )
 
+    // Saturn discs. The core reads its BIOS from the system folder's root and keeps one 64 KB backup RAM file per game,
+    // <saves>/<content name>.bkr, written by the core itself.
+    private val yabasanshiro = CoreDescriptor(
+        "yabasanshiro", "libyabasanshiro_libretro_android.so", setOf("cue", "chd", "ccd", "iso", "m3u"),
+        biosFiles = listOf("saturn_bios.bin", "sega_101.bin", "mpr-17933.bin"),
+        // Its disc reader opens the sheet and its tracks with fopen, never the frontend's VFS, so it needs real paths.
+        loadMode = LoadMode.REAL_PATH,
+        defaultOptions = mapOf(
+            "yabasanshiro_sh2coretype" to "dynarec",
+            "yabasanshiro_addon_cart" to "4M_extended_ram",
+            "yabasanshiro_frameskip" to "enabled",
+            "yabasanshiro_system_language" to "english",
+            // Forced per launch by the BIOS plan when no BIOS is present, never stored.
+            "yabasanshiro_force_hle_bios" to "disabled",
+            // The app's (3D Resolution rows); native until the launch sends it.
+            "yabasanshiro_resolution_mode" to "original",
+        ),
+        lockedOptions = setOf("yabasanshiro_force_hle_bios", "yabasanshiro_resolution_mode"),
+        cheats = true, ramCheats = true,   // action-replay codes through retro_cheat_set; the RAM patches go to the system RAM
+        controllerPort0 = CoreDescriptor.JOYPAD,
+        controllerPortCount = 2,
+        savesNamedAfterContent = true,   // the backup RAM is <content>.bkr: a zipped disc unpacks as <archive stem>.<ext>
+        players = 2,
+        name = "YabaSanshiro",
+        rewind = false,
+    )
+
     // Nintendo 3DS on Azahar (azahar-emu/azahar 2126.2, src/citra_libretro, patched; cores/Makefile), GLES or Vulkan
     // (Graphics API). Content through the runner's VFS: the game is /rom/<name>, read from the SAF descriptor in place, not
     // a multi-GB copy into the cache. FileUtil's plain stat misses that file, so the patch asks the VFS when stat finds
@@ -545,6 +572,58 @@ object CoreRegistry {
         controllerPort0 = CoreDescriptor.JOYPAD,
     )
 
+    // Cemu loads by path through the VFS. Vulkan is the only API wanted on a phone; the layout is the stacked one for a
+    // single screen, and its logging and FPS overlay are off.
+    private val cemuLogKeys = listOf(
+        "cemu_log_to_file", "cemu_log_filesystem", "cemu_log_thread_sync", "cemu_log_system_api",
+        "cemu_log_texture_memory", "cemu_log_input_api", "cemu_log_audio", "cemu_log_thread_time",
+    )
+    private val cemuOptions = mapOf(
+        "cemu_gpu_api" to "Vulkan", "cemu_screen_layout1" to "Stacked", "cemu_number_of_screen_layouts" to "1",
+        "cemu_show_game_fps" to "disabled",
+        // A debug feature that writes files.
+        "cemu_dump_shaders" to "disabled",
+        // The app's (3D Resolution rows, Res3dConsole.CEMU); native until the launch sends the scale.
+        "cemu_internal_resolution" to "native",
+        // The app's (Motion Controls, WiiuOptions.motionOption): off at launch, so the row's On sent on the first frame,
+        // once the sensors are offered again, is a change that makes Cemu ask for them.
+        "cemu_gamepad_motion" to "disabled",
+    ) + cemuLogKeys.associateWith { "disabled" }
+    // Actions and screen setups the app has no page for: game installs and the WUA conversion (the games are loaded in
+    // place), the toy peripherals, the extra layouts and the button and position that cycle them (the app's own
+    // layouts replace them). Each keeps the core's default.
+    private val cemuHiddenKeys = setOf(
+        "cemu_install_game", "cemu_uninstall_game", "cemu_install_titles", "cemu_uninstall_titles", "cemu_install_remove_source",
+        "cemu_convert_to_wua", "cemu_wua_output_dir",
+        "cemu_emulate_skylander_portal", "cemu_emulate_infinity_base", "cemu_emulate_dimensions_toypad",
+        "cemu_next_screen_layout_button", "cemu_drc_position",
+        "cemu_screen_layout2", "cemu_screen_layout3", "cemu_screen_layout4", "cemu_screen_layout5",
+    )
+    private val cemu = CoreDescriptor(
+        "cemu", "libcemu_libretro_android.so", setOf("wua", "wux", "wud", "rpx"),
+        defaultOptions = cemuOptions,
+        lockedOptions = cemuOptions.keys + cemuHiddenKeys,
+        // keys.txt (disc keys for .wud/.wux) lands in system/Cemu/, where Cemu reads it; optional, since .wua and
+        // installed titles need none.
+        biosSubdir = "Cemu",
+        biosFiles = listOf("keys.txt"),
+        players = 1,
+        cheats = false,
+        name = "Cemu",
+        rewind = false,
+        // retro_serialize_size is 0: Cemu keeps no save states.
+        saveStates = false,
+        // Its static destructors lock mutexes already destroyed when the library is unloaded, crashing the quit; each
+        // game runs in its own process, which ends with the game, so the library is never unloaded.
+        keepLoaded = true,
+        // The start is one frame that loads the shader and pipeline caches, which grow with play (20 s seen with a full
+        // Mario Kart 8 cache): the default limit would kill it.
+        hangLimitMillis = 120_000L,
+        // Cemu presents its own image through set_image and announces every larger frame through its geometry, so its
+        // frames stay bounded by the max geometry, not the surface (swapchainFrames).
+        vulkan = VulkanSwitch(vulkanOnly = true),
+    )
+
     // Canonical descriptors before tag views, so `all` (distinct by id) keeps plain mgba.
     private val byTag: Map<String, CoreDescriptor> = mapOf(
         "NDS" to melondsds,
@@ -573,9 +652,11 @@ object CoreRegistry {
         "PRBOOM" to prboom,
         "32X" to picodrive, "COLECO" to gearcoleco, "FBN" to fbneo,
         "DC" to flycast,
+        "SATURN" to yabasanshiro,
         "3DS" to azahar,
         "WII" to dolphinWii, "GC" to dolphinGc,
         "PS2" to armsx2,
+        "WIIU" to cemu,
     )
 
     /** Extensions too generic to name a console on their own (disc images and sheets shared by many systems). */
@@ -624,11 +705,13 @@ object CoreRegistry {
         Console("fbn", "Arcade", listOf("FBN"), setOf("arcade", "fbn", "fbneo", "fba", "finalburn neo", "final burn neo"), emptySet(), rawSram = false),
         // Discs only: an arcade zip in a Dreamcast folder still reaches flycast by folder, never by extension.
         Console("dc", "Dreamcast", listOf("DC"), setOf("dc", "dreamcast", "sega dreamcast"), setOf("chd", "cdi", "gdi", "cue", "m3u"), rawSram = false),
+        Console("saturn", "Sega Saturn", listOf("SATURN"), setOf("saturn", "ss", "sega saturn"), setOf("cue", "chd", "ccd", "iso", "m3u"), rawSram = false),
         // elf, axf and app are left to the folder: too generic to name a 3DS game (PSP runs elf too).
         Console("3ds", "Nintendo 3DS", listOf("3DS"), setOf("3ds", "n3ds", "nintendo 3ds", "azahar", "citra"), setOf("3ds", "3dsx", "z3dsx", "cci", "zcci", "cxi", "zcxi"), rawSram = false),
         // iso, elf, dol, wad (Doom's) and m3u go by folder; a GameCube rvz or wia reaches GC by its folder too.
         Console("wii", "Nintendo Wii", listOf("WII"), setOf("wii", "nintendo wii"), setOf("wbfs", "wia", "rvz"), rawSram = false),
         Console("gc", "Nintendo GameCube", listOf("GC"), setOf("gc", "gamecube", "nintendo gamecube"), setOf("gcm", "gcz", "tgc", "ciso"), rawSram = false),
+        Console("wiiu", "Nintendo Wii U", listOf("WIIU"), setOf("wiiu", "wii u", "nintendo wii u"), setOf("wua", "wux", "wud", "rpx", "wuhb"), rawSram = false),
     )
 
     /** Every extension some tag's core runs, console-owned or not (png, o, lmp, exe only by folder or sidecar). */
@@ -807,7 +890,8 @@ object CoreRegistry {
         "MD" to listOf(segaCdDiscs),
         "PCE" to listOf(pceCdCard),
         "COLECO" to listOf(BiosNeed(listOf("colecovision.rom", "coleco.rom"))),
-        "DC" to listOf(BiosNeed(listOf("dc_boot.bin"), setOf("chd", "cdi", "gdi", "cue", "m3u"))),   // arcade sets bring their own BIOS
+        "DC" to listOf(BiosNeed(listOf("dc_boot.bin"), setOf("chd", "cdi", "gdi", "cue", "m3u"), hle = HleFallback("reicast_hle_bios", "enabled"))),   // arcade sets bring their own BIOS
+        "SATURN" to listOf(BiosNeed(listOf("saturn_bios.bin", "sega_101.bin", "mpr-17933.bin"), hle = HleFallback("yabasanshiro_force_hle_bios", "enabled"), anyRegion = true)),
         "PS2" to listOf(BiosNeed(emptyList(), anySuffix = ".bin")),   // the core's scan takes ".bin" only: .nvm / .mec do not count
     )
 

@@ -1,7 +1,7 @@
 # Third-party art
 
 Main menu console logos (`shared/src/commonMain/composeResources/drawable/menu_logo_*.xml`, except the Android,
-3DS and Doom logos below) are converted from Dan Patrick's professionally redrawn console logos, v2.1 SVG
+3DS, Saturn and Doom logos below) are converted from Dan Patrick's professionally redrawn console logos, v2.1 SVG
 set ("Light - Just White"):
 https://archive.org/details/console-logos-professionally-redrawn-plus-official-versions
 
@@ -13,7 +13,7 @@ trademarks of their owners.
 
 The Doom logo (`menu_logo_prboom.xml`) is the project's own drawing, traced from the earlier PNG. Doom is a trademark of its owner.
 
-## Vector logos (`menu_logo_android.xml`, `menu_logo_3ds.xml`)
+## Vector logos (`menu_logo_android.xml`, `menu_logo_3ds.xml`, `menu_logo_saturn.xml`, `menu_logo_wiiu.xml`)
 
 Converted from SVG to Android vector drawables (paths unchanged, filled white):
 
@@ -21,6 +21,10 @@ Converted from SVG to Android vector drawables (paths unchanged, filled white):
   created and shared by Google and used according to terms described in the Creative Commons 3.0 Attribution License.
   Android is a trademark of Google LLC.
 - 3DS logo: Nintendo 3DS logo (user-supplied). Nintendo 3DS is a trademark of Nintendo.
+- Saturn logo: Sega Saturn logo (user-supplied, `tools/console-logos/src/saturn.svg`), black fills recoloured white and its
+  viewBox trimmed to the logo. Sega Saturn is a trademark of Sega.
+- Wii U logo: Wii U logo (`tools/console-logos/src/wiiu.svg`, user-supplied), which came with black fills, recoloured white,
+  and its viewBox trimmed to the logo. Wii U is a trademark of Nintendo.
 
 ## Tab row icons (`nav_icon_*.xml`)
 
@@ -36,7 +40,7 @@ Google's Material Icons "mic", under the Apache License 2.0 (https://github.com/
 
 Console controllers and handhelds drawn in the main menu's Consoles tab, from ScreenScraper (https://www.screenscraper.fr),
 user-supplied. Changes: cables cut, cropped, fitted to 640 px, converted to WebP (`tools/controller-art/make_pads.py`).
-Console names and hardware designs are trademarks of their owners; Commodore and VIC-20 are trademarks of their owners.
+Console names and hardware designs are trademarks of their owners; Wii U is a trademark of Nintendo; Commodore and VIC-20 are trademarks of their owners.
 
 The Android console's pad (`menu_pad_android.webp`) is a controller with no brand (`controller.png`, saved as
 `android-controller.png`), prepared first by `tools/controller-art/prep_controller.py` (the right stick's cap, holed by

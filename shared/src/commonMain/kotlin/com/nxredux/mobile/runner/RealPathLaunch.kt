@@ -3,7 +3,7 @@ package com.nxredux.mobile.runner
 import com.nxredux.mobile.storage.FileRefs
 
 /**
- * A [LoadMode.REAL_PATH] core (prboom) opens the game by path. A game reached through a file ref (All files access)
+ * A [LoadMode.REAL_PATH] core (prboom, yabasanshiro) opens the game by path. A game reached through a file ref (All files access)
  * already has one, so it is opened in place; only a SAF game is copied into the ROM cache first.
  */
 object RealPathLaunch {

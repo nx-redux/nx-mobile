@@ -212,12 +212,12 @@ object GamePanelModel {
     /**
      * The touch buttons the panel shows a tile for, in the buttons' order: each button's action ([touch], the player's),
      * the first two Save state and Load state while unset, the rest left out while unset. An action with a tile of
-     * the panel's own (Toggle FF, Toggle Rewind, Reset) is left out, as is one already listed, and a rewind hold where
-     * the game can't rewind now ([rewind] false).
+     * the panel's own (Toggle FF, Toggle Rewind, Reset) is left out, as is one already listed, a rewind hold where
+     * the game can't rewind now ([rewind] false), and Save and Load where the core has no save states ([saveStates] false).
      */
-    fun panelTouchActions(touch: Map<TouchSlot, ShortcutAction>, rewind: Boolean): List<ShortcutAction> =
+    fun panelTouchActions(touch: Map<TouchSlot, ShortcutAction>, rewind: Boolean, saveStates: Boolean = true): List<ShortcutAction> =
         TouchSlot.entries.mapNotNull { touch[it] ?: PANEL_TOUCH_DEFAULTS[it] }.distinct()
-            .filter { it !in PANEL_OWN_ACTIONS && (rewind || !it.rewind) }
+            .filter { it !in PANEL_OWN_ACTIONS && (rewind || !it.rewind) && (saveStates || !it.saveState) }
 
     private val PANEL_TOUCH_DEFAULTS = mapOf(TouchSlot.ONE to ShortcutAction.SAVE_STATE, TouchSlot.TWO to ShortcutAction.LOAD_STATE)
     private val PANEL_OWN_ACTIONS = setOf(ShortcutAction.TOGGLE_FF, ShortcutAction.TOGGLE_REWIND, ShortcutAction.RESET)

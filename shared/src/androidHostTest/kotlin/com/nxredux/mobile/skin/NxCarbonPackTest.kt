@@ -16,6 +16,9 @@ class NxCarbonPackTest {
     /** The 3DS's twins of the DS layouts (stacked, large and its wide, flex and its wide, the fold board, both landscapes), the fold board and the tall landscape with both sticks shown. */
     private val N3DS_LAYOUTS = 16   // the New 3DS twins and the regular 3DS twins, 8 each
     private val GRIP_COLUMNS = 21   // each landscape shell's twin with the small caps in a column (the Fold cover)
+    private val WIIU_LAYOUTS = 10   // the GamePad's, its column twin too
+    private val SHARED_LAYOUTS = 161   // the menu's and the other consoles' layouts in each family
+    private val SMALL_PAD_LAYOUTS = 88   // the eleven small-pad consoles' 7 and a tablet twin each
     /** How far (picture px) the frame's touch slots keep below the screen, so a press on one never lands on the picture. */
     private val SLOT_SCREEN_GAP = 12f
 
@@ -62,7 +65,7 @@ class NxCarbonPackTest {
 
     @Test
     fun everyLayoutParsesAndItsControlsAreInFixedSlices() {
-        assertEquals(161 + 88 + N3DS_LAYOUTS + GRIP_COLUMNS, pack.layouts.size)   // 161: the menu's and the other consoles' layouts in each family; 88: the eleven small-pad consoles' 7 and a tablet twin each
+        assertEquals(SHARED_LAYOUTS + SMALL_PAD_LAYOUTS + N3DS_LAYOUTS + GRIP_COLUMNS + WIIU_LAYOUTS, pack.layouts.size)
         for (spec in pack.layouts) {
             if (spec.frame != null) continue   // built from pieces: placed by placePieces (below)
             if (spec.scales.any { t -> t.any { it <= 0f } && spec.glasses.any { it.screen == GlassScreen.PICTURE } }) continue   // a picture glass grows to fit

@@ -1,6 +1,9 @@
 package com.nxredux.mobile.runner
 
+import com.nxredux.mobile.layout.DsKind
+
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -20,5 +23,24 @@ class LayoutTipTest {
     @Test fun namesTheLayoutChordAndTheSwap() {
         assertTrue(LayoutTip.TEXT.startsWith("SELECT + Left / Right"))
         assertTrue("L3 or SELECT + L swaps" in LayoutTip.TEXT)
+    }
+
+    @Test fun theWiiuTipNamesItsChordsWithoutL3() {
+        assertEquals("SELECT + Left / Right changes the screen layout\nSELECT + L swaps the screens", LayoutTip.WIIU_TEXT)
+        assertEquals(LayoutTip.WIIU_TEXT, LayoutTip.text(wiiu = true))
+        assertEquals(LayoutTip.TEXT, LayoutTip.text(wiiu = false))
+    }
+
+    @Test fun eachConsoleHidesOnlyItsOwnTip() {
+        for (console in DsKind.entries) {
+            val flags = DsKind.entries.associateWith { it == console }
+            for (asked in DsKind.entries) {
+                assertEquals(
+                    asked == console,
+                    LayoutTip.hidden(asked, ds = flags.getValue(DsKind.DS), n3ds = flags.getValue(DsKind.N3DS), wiiu = flags.getValue(DsKind.WIIU)),
+                    "$asked with only $console hidden",
+                )
+            }
+        }
     }
 }

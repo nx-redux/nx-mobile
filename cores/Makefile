@@ -68,15 +68,18 @@ check-tools:
 	@test -x $(NINJA) || (echo "ninja not found at $(NINJA). Set NINJA=." && exit 1)
 	@test -x $(READELF) || (echo "llvm-readelf not found at $(READELF)." && exit 1)
 	@git --version >/dev/null
+	@command -v pkg-config >/dev/null || (echo "pkg-config not found (cemu's vcpkg ports need it)." && exit 1)
+	@command -v autoconf >/dev/null && command -v automake >/dev/null || (echo "autoconf/automake not found (cemu's vcpkg ports need them)." && exit 1)
+	@command -v libtoolize >/dev/null || command -v glibtoolize >/dev/null || (echo "libtool not found (cemu's vcpkg ports need it)." && exit 1)
 	@echo "tools ok: NDK=$(NDK)"
 
 # ---- core list and per-core variables ------------------------------------
 # <core>_LICENSE lists the licence files in the core's pinned checkout; the build concatenates them into
 # output/licenses/<core>.txt and the app ships that as the asset licenses/<core>.txt. A core without one (fbneo, melondsds,
-# flycast) has a curated ../LICENSES/<core>.txt instead. check-licenses fails when a core has neither.
+# flycast, yabasanshiro) has a curated ../LICENSES/<core>.txt instead. check-licenses fails when a core has neither.
 CORES = gambatte fceumm snes9x genesis_plus_gx mgba melondsds mupen64plus_next ppsspp \
   race mednafen_pce_fast mednafen_vb handy stella2014 prosystem a5200 mednafen_wswan mednafen_supafaust pokemini fake08 prboom gpsp pcsx_rearmed \
-  swanstation picodrive gearcoleco fbneo flycast azahar dolphin armsx2
+  swanstation picodrive gearcoleco fbneo flycast yabasanshiro azahar dolphin armsx2 cemu
 
 gambatte_REPO = https://github.com/libretro/gambatte-libretro
 gambatte_HASH = 77f2567d718b8973d02caa2daa8dce4953faf811
@@ -388,6 +391,35 @@ flycast_SUBMODULES = --recursive core/deps/libchdr core/deps/tinygettext core/de
   core/deps/glslang core/deps/Vulkan-Headers core/deps/VulkanMemoryAllocator
 flycast_FLAGS = -DLIBRETRO=ON -DUSE_GLES=ON -DUSE_OPENMP=OFF -DCMAKE_OSX_ARCHITECTURES=arm64 -DNX_LIBRETRO_GGPO=ON
 
+# YabaSanshiro (Saturn): libretro/yabause's yabasanshiro branch, head c6de72c0 (2026-11-25). ndk-build in
+# yabause/src/libretro (jni/Android.mk, LOCAL_MODULE retro): GLES 3, the arm64 SH-2 dynarec. Its one submodule (eigen,
+# for the standalone retro_arena UI) is not built, so it is not fetched. Licence notices: LICENSES/yabasanshiro.txt.
+# patches/yabasanshiro/0001: Low and High Work RAM as one fixed block, exposed as SYSTEM_RAM and as a memory map at
+# their SH-2 addresses, in the layout RetroAchievements' Saturn sets use (the core exposed no RAM).
+# patches/yabasanshiro/0002: disk control (ext when the frontend has it) and .m3u, so multi-disc games change disc
+# through the CD block's tray (closing on no disc, or one that fails to open, keeps it open).
+# patches/yabasanshiro/0003: backup RAM per game, <save dir>/<content name>.bkr, instead of one shared
+# yabasanshiro/backup.bin, so it syncs and is deleted with its game like other battery saves. It is the core's 64 KB
+# layout, not its 8 MB extended file (every game's would travel with Device Sync), and as the core only loads that one,
+# the port writes it whenever a frame changed it and at unload, through a temporary file and a rename (no save lost or
+# torn by a kill); a failed write is retried at the next change and at unload, not every frame.
+# patches/yabasanshiro/0004: with yabasanshiro_force_hle_bios on, a missing BIOS file no longer aborts the load (the app
+# forces the option for a launch without one).
+# patches/yabasanshiro/0005: yabasanshiro_resolution_mode applies mid-game, between frames, through the core's own
+# resolution-change path; the frontend's framebuffer is re-read every frame, since it is remade for a larger frame.
+# patches/yabasanshiro/0006: retro_cheat_set splits a code into its address/value pairs on '+' and whitespace; the
+# database's '+'-joined codes reached CheatAddARCode whole, which read a wrong value and only the first pair.
+# patches/yabasanshiro/0007: the HLE BIOS reports the console's 32 KB backup RAM in the 64 KB layout, not 2 KB (games that
+# need more than 30 blocks refused to save).
+# patches/yabasanshiro/0008: save states no longer go through tmpfile(), which returns NULL in an Android app (the state
+# aborted the app): a temporary file in the system folder instead; a state that cannot be made fails cleanly.
+# patches/yabasanshiro/0009: the 68000 sound CPU's registers go into save states (the Musashi interface saved none, so a
+# state loaded before the BIOS started the sound CPU, a resume at launch, was silent); SCSP chunk version 4.
+yabasanshiro_REPO = https://github.com/libretro/yabause
+yabasanshiro_HASH = c6de72c08dda71b74648e9e055598cec1a974a11
+yabasanshiro_BUILD_PATH = yabause/src/libretro
+yabasanshiro_SUBMODULES = ':(exclude)yabause/src/retro_arena/nanogui-sdl/ext/eigen'
+
 # Azahar (Nintendo 3DS), 2126.2 (a lightweight tag on 219d743a1e698101fe1ab8bef43e6563126c3c27). The libretro core is
 # src/citra_libretro, the SHARED target citra_libretro (OUTPUT_NAME azahar_libretro, empty prefix) gated on
 # ENABLE_LIBRETRO=ON, which forces the Qt/SDL2/web/room/cubeb/OpenAL/libusb frontends off by itself. Its
@@ -513,6 +545,42 @@ armsx2_FLAGS = -DCMAKE_PREFIX_PATH=$(ARMSX2_DEPS)/prefix -DCMAKE_FIND_ROOT_PATH=
   -DDISABLE_ADVANCE_SIMD=OFF -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON -DARMSX2_EMBED_PATCHES=OFF \
   -DLTO_PCSX2_CORE=ON "-DCMAKE_C_FLAGS=$(ARMSX2_PGO)" "-DCMAKE_CXX_FLAGS=$(ARMSX2_PGO)"
 
+# Cemu (Wii U): WizzardSK/cemu-libretro's libretro branch, tracking upstream Cemu 2.6-411-gb487cb70. MPL-2.0. Its
+# dependencies (~95 packages: boost, openssl, curl, SDL2, libzip, zstd, glslang, ...) come from vcpkg, the submodule
+# dependencies/vcpkg, cross-built for arm64-android while CMake configures; the core's CMakeLists chainloads the NDK
+# toolchain into vcpkg's. Some ports run autotools, so the host needs pkg-config, autoconf, automake and libtool
+# (check-tools). vcpkg finds the NDK by ANDROID_NDK_HOME, and a CC/CXX from the environment would build its host tools
+# with the wrong compiler, so cemu_ENV sets the one and drops the other. Finished packages go to a binary cache beside
+# the build tree, which clean-cemu and distclean-cemu keep, so a rebuild does not recompile the dependency set.
+# Vulkan only on Android (the OpenGL backend is desktop GL). The library lands in the source tree's bin/ (the target's
+# LIBRARY_OUTPUT_DIRECTORY), so cemu_ARTIFACT_PATH names it there rather than under the build tree.
+# patches/cemu/0001: a Stacked screen layout, the TV picture over the GamePad picture at the same width (output W x 2H,
+# aspect 8:9), which the app cuts into its two screens. patches/cemu/0002: no mouse cursor over the GamePad picture; on
+# a touchscreen the finger is the pointer. patches/cemu/0003: the output image keeps each screen's last picture, so a
+# frame that brings only one screen leaves the other as it was instead of blank; cleared only when new or a screen moves.
+# patches/cemu/0004: the software keyboard's opening and closing told to the app (NX_ENVIRONMENT_SET_TEXT_INPUT), which
+# shows its own text box and types the answer through the keyboard callback.
+# notices/cemu-deps.txt holds the copyright files of the vcpkg packages linked in
+# (build/cemu/vcpkg_installed/arm64-android/share/*/copyright, the boost libraries' shared one once) and the licences of
+# the submodules compiled in (xbyak_aarch64, imgui, ZArchive, ih264d, Vulkan-Headers, the embedded graphic packs);
+# regenerate it on a pin bump, after the build: python3 cores/notices/gen_cemu_notices.py
+cemu_REPO = https://github.com/WizzardSK/cemu-libretro
+cemu_HASH = dbf18093970bd3091e201a0a893eacd0256f9c26
+cemu_KIND = cmake
+cemu_ARTIFACT_PATH = $(SRC_ROOT)/cemu/bin/cemu_libretro.so
+cemu_CMAKE = $(CMAKE_330)/cmake
+cemu_NINJA = $(CMAKE_330)/ninja
+cemu_PLATFORM = android-28
+cemu_LICENSE = LICENSE.txt
+cemu_LICENSE_EXTRA = notices/cemu-deps.txt
+CEMU_VCPKG_CACHE = $(abspath $(BUILD_ROOT))/cemu-vcpkg-cache
+CEMU_HOST_TRIPLET = $(if $(filter Darwin,$(UNAME_S)),arm64-osx,x64-linux)
+cemu_ENV = env -u CC -u CXX ANDROID_NDK_HOME=$(NDK) ANDROID_NDK_ROOT=$(NDK) \
+  VCPKG_BINARY_SOURCES="clear;files,$(CEMU_VCPKG_CACHE),readwrite" PATH="$(CMAKE_330):$$PATH"
+cemu_FLAGS = -DANDROID_STL=c++_static -DENABLE_LIBRETRO=ON -DENABLE_BLUEZ=OFF -DENABLE_FERAL_GAMEMODE=OFF \
+  -DENABLE_WAYLAND=OFF -DENABLE_DISCORD_RPC=OFF -DVCPKG_TARGET_TRIPLET=arm64-android \
+  -DVCPKG_HOST_TRIPLET=$(CEMU_HOST_TRIPLET)
+
 # Deviation from the generic pattern: ppsspp reads its data files (flash0, fonts,
 # shaders, ...) from <system>/PPSSPP/ at runtime, so stage the repo's assets/ dir
 # next to the core. This extra prerequisite on the ppsspp target runs after the
@@ -580,6 +648,11 @@ $(OUTPUT_ROOT)/system/pcsx2/resources/.staged: $(OUTPUT_ROOT)/armsx2_libretro_an
 	touch $(OUTPUT_ROOT)/system/pcsx2/resources/.staged
 armsx2: $(OUTPUT_ROOT)/system/pcsx2/resources/.staged
 
+# Deviation: the vcpkg binary cache (see cemu's entry) has to exist before vcpkg writes to it.
+$(CEMU_VCPKG_CACHE):
+	mkdir -p $@
+$(OUTPUT_ROOT)/cemu_libretro_android.so: | $(CEMU_VCPKG_CACHE)
+
 # Deviation: melonDS DS's dependencies (see its entry) are cloned at their pinned SHAs before its configure step. The
 # stamp names the whole list, so editing a pin re-runs the checkout.
 $(MELONDSDS_DEPS_DIR)/.checkout-$(MELONDSDS_DEPS_STAMP):
@@ -616,6 +689,7 @@ $1_CORE ?= $(1)_libretro_android.so
 $1_KIND ?= ndkbuild
 $1_BUILD_PATH ?= .
 $1_ARTIFACT ?= libs/$(ABI)/libretro.so
+$1_ARTIFACT_PATH ?= $(BUILD_ROOT)/$(1)/$$($1_ARTIFACT)
 $1_CMAKE_TARGET ?= $(1)_libretro
 $1_OPTIONS_ID ?= $(1)
 $1_CMAKE ?= $(CMAKE)
@@ -656,11 +730,11 @@ $(OUTPUT_ROOT)/$$($1_CORE): $(SRC_ROOT)/$(1)/.patched
 else
 $(OUTPUT_ROOT)/$$($1_CORE): $(SRC_ROOT)/$(1)/.patched
 	mkdir -p $(OUTPUT_ROOT) $(BUILD_ROOT)/$(1)
-	$$($1_CMAKE) -S $(SRC_ROOT)/$(1)/$$($1_BUILD_PATH) -B $(BUILD_ROOT)/$(1) -G Ninja -DCMAKE_MAKE_PROGRAM=$$($1_NINJA) \
+	$$($1_ENV) $$($1_CMAKE) -S $(SRC_ROOT)/$(1)/$$($1_BUILD_PATH) -B $(BUILD_ROOT)/$(1) -G Ninja -DCMAKE_MAKE_PROGRAM=$$($1_NINJA) \
 	  -DCMAKE_TOOLCHAIN_FILE=$(NDK)/build/cmake/android.toolchain.cmake -DANDROID_ABI=$(ABI) -DANDROID_PLATFORM=$$($1_PLATFORM) \
 	  -DCMAKE_BUILD_TYPE=Release "-DCMAKE_SHARED_LINKER_FLAGS=$(PAGE_LDFLAGS)" $$($1_FLAGS)
-	$$($1_CMAKE) --build $(BUILD_ROOT)/$(1) --target $$($1_CMAKE_TARGET) $(PROCS)
-	$(STRIP) --strip-unneeded -o $(OUTPUT_ROOT)/$$($1_CORE) $(BUILD_ROOT)/$(1)/$$($1_ARTIFACT)
+	$$($1_ENV) $$($1_CMAKE) --build $(BUILD_ROOT)/$(1) --target $$($1_CMAKE_TARGET) $(PROCS)
+	$(STRIP) --strip-unneeded -o $(OUTPUT_ROOT)/$$($1_CORE) $$($1_ARTIFACT_PATH)
 endif
 
 clone-$(1): $(SRC_ROOT)/$(1)/.checkout-$$($1_HASH)

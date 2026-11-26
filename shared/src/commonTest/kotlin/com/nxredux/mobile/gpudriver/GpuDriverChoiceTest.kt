@@ -111,4 +111,14 @@ class GpuDriverChoiceTest {
         val l = launch(apiValue = GraphicsApiOptions.GLES)
         assertEquals(GpuDriverChoice.Preflight(l, null, false), GpuDriverChoice.afterPreflight(l, false, "Turnip", false))
     }
+    @Test fun vulkanOnlyStartFailureFailsWithMessage() {
+        fun after(driverId: String?, coreFailed: Boolean, netplay: Boolean = false) =
+            GpuDriverChoice.afterStartFailure(true, driverId, coreFailed, netplay, vulkanOnly = true)
+        assertEquals(GpuDriverChoice.Next.FAIL_MESSAGE, after(null, coreFailed = false))
+        assertEquals(GpuDriverChoice.Next.FAIL_MESSAGE, after(null, coreFailed = true))
+        assertEquals(GpuDriverChoice.Next.SYSTEM_DRIVER, after("d1", coreFailed = false))
+        assertEquals(GpuDriverChoice.Next.SYSTEM_DRIVER, after("d1", coreFailed = true))
+        assertEquals(GpuDriverChoice.Next.FAIL_MESSAGE, after("d1", coreFailed = false, netplay = true))
+        assertEquals(GpuDriverChoice.Next.SHOW_ERROR, GpuDriverChoice.afterStartFailure(false, null, false, false, vulkanOnly = true))
+    }
 }

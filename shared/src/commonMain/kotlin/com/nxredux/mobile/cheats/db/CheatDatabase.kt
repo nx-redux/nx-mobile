@@ -71,6 +71,7 @@ object CheatDatabase {
         "SEGACD" to listOf("Sega - Mega-CD - Sega CD"),
         "SG1000" to listOf("Sega - SG-1000"),
         "DC" to listOf("Sega - Dreamcast"),
+        "SATURN" to listOf("Sega - Saturn"),
         "PS" to listOf("Sony - PlayStation"),
         "PSP" to listOf("Sony - PlayStation Portable"),
         "PCE" to listOf("NEC - PC Engine - TurboGrafx 16"),

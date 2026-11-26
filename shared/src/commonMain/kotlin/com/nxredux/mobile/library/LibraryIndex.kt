@@ -48,12 +48,14 @@ data class IndexedExtra(val id: String, val ref: String)
 
 /**
  * A disc probe's answer for [ref] at that [size] and [modified] time: a console id, or null (nothing recognised). A
- * sheet's answer also holds only while its [data] file is at [dataSize] and [dataModified].
+ * sheet's answer also holds only while its [data] file is at [dataSize] and [dataModified]. [signatures]: the
+ * [com.nxredux.mobile.library.disc.DiscSignatures.VERSION] that answered (0: an answer from before signatures were versioned).
  */
 @Serializable
 data class IndexedProbe(
     val ref: String, val size: Long?, val modified: Long?, val console: String?,
     val data: String? = null, val dataSize: Long? = null, val dataModified: Long? = null,
+    val signatures: Int = 0,
 )
 
 /**

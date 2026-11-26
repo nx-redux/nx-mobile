@@ -348,7 +348,10 @@ object NdsOptions {
     fun valueLabel(key: String, value: String): String = FrontendOptions.option(key)?.labelOf(value) ?: value
 }
 
-private fun scales(console: Res3dConsole, max: Int): List<String> = (1..max.coerceIn(1, console.coreMax)).map { it.toString() }
+private fun scales(console: Res3dConsole, max: Int): List<String> {
+    val top = max.coerceIn(1, console.coreMax)
+    return (1..top).filter { console.scaleSteps?.contains(it) ?: true }.map { it.toString() }
+}
 
 /**
  * [console]'s 3D Resolution row and its two sub-rows: Max Scale (Auto) and Scale (Performance). [displayMax] is the biggest
@@ -368,6 +371,8 @@ fun resolutionRows(console: Res3dConsole, displayMax: Int?, cap: Int = console.d
         Res3dConsole.PS1, Res3dConsole.PCSX -> "PS1"
         Res3dConsole.DC -> "Dreamcast"
         Res3dConsole.N64 -> "N64"
+        Res3dConsole.SATURN -> "Saturn"
+        Res3dConsole.CEMU -> "console"
     }
     // what the scale draws: the PS2 and PSP cores draw the whole picture at it, the DS and 3DS ones only the 3D
     val drawn = if (console.wholePicture) "the game" else "3D"
@@ -376,10 +381,13 @@ fun resolutionRows(console: Res3dConsole, displayMax: Int?, cap: Int = console.d
             console.modeKey, "3D Resolution", Nds3dMode.entries.map { it.value }, Nds3dMode.AUTO.value,
             (if (console.wholePicture) "How sharply the game is drawn. The screen's size doesn't change."
             else "How sharply 3D models are drawn. 2D art, text and the screen's size don't change.") +
-                "\nWith a shader on, Auto draws at 1x: the shader works from the console's own resolution.",
+                (if (console.autoNative) "\nAuto draws at Native (1x). Quality and Performance can draw above it, which breaks some games' graphics (black areas, missing effects)." +
+                    " A change applies the next time the game starts."
+                else "\nWith a shader on, Auto draws at 1x: the shader works from the console's own resolution."),
             visual = false, valueLabels = Nds3dMode.entries.map { it.label },
         ),
-        FrontendOption(
+        // Auto at native size: no cap to pick.
+        if (console.autoNative) null else FrontendOption(
             console.maxScaleKey, "Max Scale", maxScales, cap.toString(),
             if (console.wholePicture) "The most Auto draws the game at, as a multiple of the $screen's own resolution."
             else "The most Auto draws 3D at, as a multiple of the $screen screen.",
@@ -387,7 +395,7 @@ fun resolutionRows(console: Res3dConsole, displayMax: Int?, cap: Int = console.d
         ),
         // Performance at native size: no scale to pick.
         if (console.nativePerformance) null else FrontendOption(
-            console.scaleKey, "Scale", perfScales, Nds3dResolution.DEFAULT_PERFORMANCE_SCALE.toString(),
+            console.scaleKey, "Scale", perfScales, console.defaultScale.toString(),
             "The fixed resolution Performance draws $drawn at, as a multiple of the $screen screen.",
             visual = false, valueLabels = perfScales.map { "${it}x" }, shownWhen = console.modeKey to setOf(Nds3dMode.PERFORMANCE.value),
         ),

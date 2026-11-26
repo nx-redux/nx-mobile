@@ -3,6 +3,7 @@ package com.nxredux.mobile.storage
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 
 class AutoSlotGateTest {
@@ -34,5 +35,14 @@ class AutoSlotGateTest {
         assertEquals(ResumeInfo.NONE, gate.resumeInfo("GBA", "a.gba"))
         on = true
         assertEquals(ResumeInfo(NxPaths.AUTO_SLOT), gate.resumeInfo("GBA", "a.gba"))
+    }
+
+    // A core without save states never resumes, whatever slot file is left from before: Continue plays it fresh.
+    @Test fun noStateCoreNeverResumes() = runTest {
+        for (slot in listOf(NxPaths.AUTO_SLOT, 3)) {
+            val gate = AutoSlotGate(Store(ResumeInfo(slot, "file:///w.png"))) { true }
+            assertFalse(gate.resumeInfo("WIIU", "zelda.wua").canResume)
+            assertNull(gate.hiddenStateShot("WIIU", "zelda.wua"))
+        }
     }
 }

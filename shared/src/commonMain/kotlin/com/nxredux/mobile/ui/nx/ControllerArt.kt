@@ -17,7 +17,7 @@ import kotlin.math.min
 data class ConsolePad(val res: DrawableResource, val brightness: Float)
 
 /**
- * Console id to pad. Add-ons and siblings reuse one: Super Game Boy the SNES pad, Sega CD and 32X the Mega Drive pad,
+ * Console id to pad. Add-ons and siblings reuse one: Super Game Boy the SNES pad, Sega CD, 32X and Saturn the Mega Drive's six-button pad,
  * Neo Geo Pocket the Color's. Doom and Pico-8 use the VIC-20; Arcade the Competition Pro.
  */
 internal val consolePadsById: Map<String, ConsolePad> = run {
@@ -32,7 +32,7 @@ internal val consolePadsById: Map<String, ConsolePad> = run {
         "ps2" to ConsolePad(Res.drawable.menu_pad_ps2, 2.00f),
         "gb" to ConsolePad(Res.drawable.menu_pad_gb, 0.77f), "gbc" to ConsolePad(Res.drawable.menu_pad_gbc, 1.26f),
         "gba" to ConsolePad(Res.drawable.menu_pad_gba, 1.15f), "fc" to ConsolePad(Res.drawable.menu_pad_fc, 0.80f),
-        "sfc" to sfc, "sgb" to sfc, "md" to md, "segacd" to md, "32x" to md,
+        "sfc" to sfc, "sgb" to sfc, "md" to md, "segacd" to md, "32x" to md, "saturn" to md,
         "sms" to ConsolePad(Res.drawable.menu_pad_sms, 2.00f), "gg" to ConsolePad(Res.drawable.menu_pad_gg, 2.00f),
         "sg1000" to ConsolePad(Res.drawable.menu_pad_sg1000, 1.06f), "fds" to ConsolePad(Res.drawable.menu_pad_fds, 1.12f),
         "ngpc" to ngpc, "ngp" to ngpc,
@@ -43,6 +43,7 @@ internal val consolePadsById: Map<String, ConsolePad> = run {
         "coleco" to ConsolePad(Res.drawable.menu_pad_coleco, 2.00f), "dc" to ConsolePad(Res.drawable.menu_pad_dc, 0.64f),
         "fbn" to ConsolePad(Res.drawable.menu_pad_fbn, 0.80f), "prboom" to vic20, "p8" to vic20,
         "gc" to ConsolePad(Res.drawable.menu_pad_gc, 1.21f), "wii" to ConsolePad(Res.drawable.menu_pad_wii, 2.00f),
+        "wiiu" to ConsolePad(Res.drawable.menu_pad_wiiu, 1.13f),
     )
 }
 

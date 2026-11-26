@@ -483,6 +483,11 @@ interface AppSettings {
         get() = true
         set(@Suppress("UNUSED_PARAMETER") value) {}
 
+    /** Console tags whose "running on the built-in BIOS" notice was shown, so it comes once per console. Defaulted, like [debugLog]. */
+    var hleBiosNoticeShown: Set<String>
+        get() = emptySet()
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+
     /**
      * Settings → Emulation → A resumes (default on): A on a game with a save state continues from it. Off: A starts it
      * fresh, and its menu's Resume continues instead. Defaulted, like [debugLog].
@@ -516,8 +521,18 @@ interface AppSettings {
         get() = false
         set(@Suppress("UNUSED_PARAMETER") value) {}
 
-    /** The 3DS layout chord's tip ([com.nxredux.mobile.runner.LayoutTip]) hidden for good from its button. Defaulted, like [debugLog]. */
+    /** The DS layout chord's tip ([com.nxredux.mobile.runner.LayoutTip]) hidden for good from its button. Defaulted, like [debugLog]. */
     var layoutTipHidden: Boolean
+        get() = false
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+
+    /** The 3DS's own flag for the same tip. */
+    var layoutTipHidden3ds: Boolean
+        get() = false
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+
+    /** The Wii U's own flag for the same tip. */
+    var layoutTipHiddenWiiu: Boolean
         get() = false
         set(@Suppress("UNUSED_PARAMETER") value) {}
 
@@ -575,6 +590,10 @@ interface AppSettings {
      * written by every launch, read for the notice of a crash. Defaulted, like [debugLog].
      */
     var lastLaunchMaliSystemVulkan: Boolean
+        get() = false
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+    /** The low-RAM Wii U warning was answered once. Defaulted, like [debugLog]. */
+    var wiiuRamWarned: Boolean
         get() = false
         set(@Suppress("UNUSED_PARAMETER") value) {}
     /** The games a custom driver crashed in, one `gamePath<TAB>driverId` per line; null: none. Defaulted, like [debugLog]. */

@@ -38,7 +38,7 @@ object Tgdb {
     /** By refined ScreenScraper id; ids from thegamesdb.net's platform list. */
     private val byId: Map<Int, String> = mapOf(
         1 to "18,36", 2 to "35", 3 to "7", 4 to "6", 6 to "23", 7 to "23", 8 to "23", 75 to "23", 9 to "4", 10 to "41",
-        11 to "4918", 12 to "5", 13 to "2", 14 to "3", 15 to "8", 16 to "9", 17 to "4912", 19 to "33", 20 to "21", 21 to "20", 22 to "17", 23 to "16",
+        11 to "4918", 12 to "5", 13 to "2", 14 to "3", 15 to "8", 16 to "9", 17 to "4912", 18 to "38", 19 to "33", 20 to "21", 21 to "20", 22 to "17", 23 to "16",
         25 to "4922", 82 to "4923", 26 to "22", 27 to "28", 28 to "4924", 29 to "25", 31 to "34", 114 to "4955", 105 to "34",
         72 to "4930", 40 to "26", 41 to "27", 42 to "4937", 43 to "4943", 45 to "4925", 46 to "4926", 48 to "31", 52 to "4950",
         57 to "10", 58 to "11", 61 to "13", 64 to "4911", 65 to "4914", 66 to "40", 70 to "4956", 73 to "4945", 76 to "4913", 79 to "4931",

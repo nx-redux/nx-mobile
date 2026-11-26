@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui.skinlayout
 
+import com.nxredux.mobile.runner.DualScreenConsole
 import com.nxredux.mobile.settings.AppSettings
 import com.nxredux.mobile.skin.SkinPlacement
 import com.nxredux.mobile.skin.SkinTweaks
@@ -11,6 +12,12 @@ import com.nxredux.mobile.skin.TweakRules
  * Off), [AppSettings.overlayTweaks].
  */
 object SkinLayoutEdit {
+    /**
+     * Whether [tag]'s console is placed with two screens (no picture shape: the DS, 3DS and Wii U), as the game places
+     * its skin, so a tweak saved in the editor keys on the layout the game draws.
+     */
+    fun twoScreens(tag: String): Boolean = DualScreenConsole.appliesTo(tag)
+
     /**
      * The editor's state for [placement] (as placed for a [w] x [h] window before any tweak, both of a stick / d-pad
      * swap's sets still in it, as the game tweaks it), [useStick] picking the one shown, starting from [consoleId]'s

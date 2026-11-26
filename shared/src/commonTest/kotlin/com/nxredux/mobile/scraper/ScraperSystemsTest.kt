@@ -35,5 +35,6 @@ class ScraperSystemsTest {
             assertEquals(true, ScraperSystems.baseIdFor(tag) != null, "tag $tag has no scraper system")
         }
     }
+    @Test fun wiiuHasItsOwnSystem() = assertEquals(18, ScraperSystems.baseIdFor("WIIU"))
     @Test fun excludedTags() = assertEquals(setOf("PORTS", "CUSTOM", "EXTRAS"), ScraperSystems.EXCLUDED_TAGS)
 }

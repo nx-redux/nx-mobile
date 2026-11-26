@@ -30,6 +30,12 @@ nx-redux `.dev/TESTING.md`.
   (session pad, drawn pad, port devices) and the drift check (`debug.nx.netplay_pair=1`, debug builds only: both sides hash the work RAM
   every 120 frames). The first case forces a pad mismatch and passes only if the drift check catches it. Needs Debug
   log on both phones; report in `.local/device-tests/netplay-pads-<date>.md`.
+- `psp_cable.py`: PSP ad hoc over the phone-to-phone USB cable, hands-free over wireless adb (`--host SERIAL:ROM
+  --switch SERIAL:ROM:CROSS_XY:CIRCLE_XY`, `--only pull,replug,idle,late,nocable`). The switch phone is one whose USB
+  data the shell can turn off and on (`svc usb enableUsbDataSignal`, Android 14+): that is the pull and the plug. Each
+  phone needs a state one Cross press from the game's ad hoc lobby in `--slot` (default 7; Tekken 6: NETWORK with
+  BATTLE LOBBY selected). Android's USB dialogs are answered and listed. Both phones must be awake and unlocked;
+  report, screenshots and a log per check in `.local/device-tests/psp-cable-*`.
 - `dolphin_sav.py`: wraps the libretro Dolphin core's state in standalone Dolphin's .sav headers, for comparing both
   apps from one moment.
 

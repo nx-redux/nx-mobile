@@ -10,7 +10,8 @@ import android.hardware.SensorManager
  * The phone's accelerometer and gyroscope for the Wii's motion controls, turned into
  * Dolphin's Wiimote frame ([WiimoteFrame]) and handed to [onValues] in g and rad/s. Listens only between [start] and
  * [stop] (GameActivity stops it for pause, the menu and the background). [recenter] takes the next gravity reading as level.
- * [startN3ds] listens for a 3DS game instead: the console's frame ([N3dsFrame]), with no level.
+ * [startN3ds] listens for a 3DS game instead: the console's frame ([N3dsFrame]), with no level; [startGamePad] for a
+ * Wii U game: the GamePad's ([GamePadFrame]), with no level either.
  */
 class MotionSensors(context: Context, private val onValues: (accelG: Vec3, gyro: Vec3) -> Unit) : SensorEventListener {
     private val manager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
@@ -23,7 +24,8 @@ class MotionSensors(context: Context, private val onValues: (accelG: Vec3, gyro:
 
     private var rotation: () -> Int = { 0 }
     private var pad: () -> WiiPad = { WiiPad.SIDEWAYS }
-    private var n3ds = false
+    /** A frame read straight from the phone's axes, with no level ([startN3ds], [startGamePad]); null: the Wiimote's. */
+    private var unleveled: ((accelG: Vec3, gyro: Vec3, rotation: Int) -> Pair<Vec3, Vec3>)? = null
     private var level = WiimoteFrame.Level.NONE
     private var recenterPending = true
     private var lastAccel = Vec3(0f, 1f, 0f)   // display frame, g
@@ -34,7 +36,7 @@ class MotionSensors(context: Context, private val onValues: (accelG: Vec3, gyro:
         if (running || !hasSensors) return
         this.rotation = rotation
         this.pad = pad
-        n3ds = false
+        unleveled = null
         listen()
     }
 
@@ -42,7 +44,15 @@ class MotionSensors(context: Context, private val onValues: (accelG: Vec3, gyro:
     fun startN3ds(rotation: () -> Int) {
         if (running || !hasAccel) return
         this.rotation = rotation
-        n3ds = true
+        unleveled = { a, g, r -> N3dsFrame.accel(a, r) to N3dsFrame.gyro(g, r) }
+        listen()
+    }
+
+    /** Wii U: both sensors, as Cemu asks for both and turns GamePad Motion on only with both. */
+    fun startGamePad(rotation: () -> Int) {
+        if (running || !hasSensors) return
+        this.rotation = rotation
+        unleveled = { a, g, r -> GamePadFrame.accel(a, r) to GamePadFrame.gyro(g, r) }
         listen()
     }
 
@@ -63,7 +73,7 @@ class MotionSensors(context: Context, private val onValues: (accelG: Vec3, gyro:
 
     override fun onSensorChanged(event: SensorEvent) {
         val raw = Vec3(event.values[0], event.values[1], event.values[2])
-        if (n3ds) return onN3ds(event.sensor.type, raw)
+        unleveled?.let { return onUnleveled(event.sensor.type, raw, it) }
         val d = WiimoteFrame.display(raw, rotation())
         when (event.sensor.type) {
             Sensor.TYPE_ACCELEROMETER -> {
@@ -77,15 +87,15 @@ class MotionSensors(context: Context, private val onValues: (accelG: Vec3, gyro:
         onValues(WiimoteFrame.forPad(level.apply(lastAccel), p), WiimoteFrame.forPad(level.apply(lastGyro), p))
     }
 
-    /** 3DS: straight from the phone's axes ([N3dsFrame]); lastAccel/lastGyro hold them in the phone's frame here. */
-    private fun onN3ds(type: Int, raw: Vec3) {
+    /** 3DS and Wii U: straight from the phone's axes; lastAccel/lastGyro hold them in the phone's frame here. */
+    private fun onUnleveled(type: Int, raw: Vec3, frame: (Vec3, Vec3, Int) -> Pair<Vec3, Vec3>) {
         when (type) {
             Sensor.TYPE_ACCELEROMETER -> lastAccel = Vec3(raw.x / SensorManager.GRAVITY_EARTH, raw.y / SensorManager.GRAVITY_EARTH, raw.z / SensorManager.GRAVITY_EARTH)
             Sensor.TYPE_GYROSCOPE -> lastGyro = raw
             else -> return
         }
-        val r = rotation()
-        onValues(N3dsFrame.accel(lastAccel, r), N3dsFrame.gyro(lastGyro, r))
+        val (a, g) = frame(lastAccel, lastGyro, rotation())
+        onValues(a, g)
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit

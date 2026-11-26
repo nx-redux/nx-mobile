@@ -32,6 +32,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 /* Keys never written to the table: per-game options stay in game. */
 static const char *const dropped_prefixes[] = {"fbneo-dipswitch-", NULL};
@@ -315,7 +316,6 @@ int main(int argc, char **argv) {
 
    if (!skip_init)
       deinit();
-   dlclose(handle);
 
    schema_free(captured);
    for (int i = 0; i < n_retired; i++)
@@ -324,11 +324,15 @@ int main(int argc, char **argv) {
    free(save_dir);
    free(core_name);
 
+   int rc = 0;
    if (rc_load || (write_failed && !wrote))
-      return 1;
-   if (!wrote) {
+      rc = 1;
+   else if (!wrote) {
       fprintf(stderr, "nxprobe: %s declared no options\n", core_path);
-      return 2;
+      rc = 2;
    }
-   return 0;
+   /* Left loaded and ended with _exit: a core that keeps its library loaded for good (Cemu) aborts in the static
+    * destructors that dlclose and a normal exit run. */
+   fflush(NULL);
+   _exit(rc);
 }

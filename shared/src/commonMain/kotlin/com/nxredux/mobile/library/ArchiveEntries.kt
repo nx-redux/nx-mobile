@@ -4,8 +4,9 @@ package com.nxredux.mobile.library
  * Which entry of a ROM archive is the ROM. Directory entries, anything under `__MACOSX/` and dotfiles are never
  * candidates. A lone candidate is the ROM whatever its extension, so the launch can name the real inner file when the
  * core does not run it. Among several candidates only those with one of [pick]'s `romExtensions` (the core's) count, as
- * the Brick picks the entry matching the core: a ROM beside a readme plays, while two ROMs (a disc sheet and its track
- * included) or none are refused.
+ * the Brick picks the entry matching the core: a ROM beside a readme plays, while two ROMs or none are refused. A disc
+ * sheet among other entries is refused on its own ([Pick.Sheet]): only one entry is unpacked, so its tracks would be left
+ * behind, and a core whose extensions do not include the tracks' would boot with no disc.
  */
 object ArchiveEntries {
     sealed class Pick {
@@ -18,12 +19,18 @@ object ArchiveEntries {
         data class Many(val names: List<String>) : Pick() {
             val count: Int get() = names.size
         }
+        /** A disc sheet ([sheet], its base name) packed with other entries, its tracks among them. */
+        data class Sheet(val sheet: String) : Pick()
     }
+
+    private val SHEET_EXTENSIONS = setOf("cue", "ccd", "gdi", "toc", "m3u")
 
     fun pick(entryNames: List<String>, romExtensions: Set<String>): Pick {
         val candidates = entryNames.filter(::isCandidate)
         if (candidates.isEmpty()) return Pick.Empty
         if (candidates.size == 1) return Pick.Single(candidates[0])
+        candidates.firstOrNull { Names.extensionOf(it.substringAfterLast('/')) in SHEET_EXTENSIONS }
+            ?.let { return Pick.Sheet(it.substringAfterLast('/')) }
         val roms = candidates.filter { Names.extensionOf(it.substringAfterLast('/')) in romExtensions }
         return if (roms.size == 1) Pick.Single(roms[0]) else Pick.Many(candidates.map { it.substringAfterLast('/') })
     }

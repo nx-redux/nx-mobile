@@ -6,6 +6,7 @@ import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.NdsScreen
 import com.nxredux.mobile.options.NdsSettings
 import com.nxredux.mobile.options.PxRect
+import com.nxredux.mobile.options.resolutionRows
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -246,5 +247,108 @@ class Nds3dResolutionTest {
         assertEquals(6, Nds3dResolution.value(Nds3dMode.QUALITY, 4, 2, 6, 9, shaded = true))
         assertEquals(2, Nds3dResolution.value(Nds3dMode.PERFORMANCE, 4, 2, 6, 9, shaded = true))
         assertEquals(1, Nds3dResolution.valueFor(emptyMap(), 3, 9, Res3dConsole.N3DS, shaded = true))
+    }
+
+    @Test fun wiiUDrawsTheWholePictureOnCemuAtItsNamedScales() {
+        val cemu = Res3dConsole.CEMU
+        assertEquals(cemu, Res3dConsole.forTag("WIIU"))
+        assertEquals("cemu", cemu.coreId)
+        assertEquals("cemu_internal_resolution", cemu.coreKey)
+        assertEquals(listOf("native", "2x", "3x"), (1..3).map { cemu.coreValue(it) })
+        assertTrue(cemu.wholePicture)
+        // the Stacked frame is two 1280 x 720 screens: 1x needs 1280 x 1440 px, so a phone reaches 1x at most
+        assertEquals(1, cemu.displayMaxOf(1080 to 2400, null))
+        assertEquals(2, cemu.displayMaxOf(2560 to 2880, null))
+        assertTrue("cemu_internal_resolution" in CoreRegistry.forTag("WIIU")!!.lockedOptions)
+        assertEquals("native", CoreRegistry.forTag("WIIU")!!.defaultOptions["cemu_internal_resolution"])
+    }
+
+    @Test fun wiiUAutoDrawsAtNativeOnEveryDisplayAboveItSomeGamesBreak() {
+        val cemu = Res3dConsole.CEMU
+        // a phone, the Fold's inner screen, a 1080p second display, a 1440p one and a 4K TV
+        for (window in listOf(1080 to 2400, 2176 to 1812, 1920 to 1080, 2560 to 1440, 2560 to 2880, 3840 to 2160)) {
+            val max = cemu.displayMaxOf(window, null)!!
+            assertEquals(1, Nds3dResolution.valueFor(emptyMap(), null, max, cemu), "launch at $window")
+            assertEquals(1, Nds3dResolution.valueFor(emptyMap(), max, max, cemu), "shown at $window")
+            assertEquals(1, Nds3dResolution.valueFor(mapOf(cemu.maxScaleKey to "3"), 3, 3, cemu), "a stored Max Scale at $window")
+        }
+        // the picked modes still go above it where the display reaches
+        assertEquals(2, Nds3dResolution.valueFor(mapOf(cemu.modeKey to Nds3dMode.QUALITY.value), 2, 2, cemu))
+        assertEquals(3, Nds3dResolution.valueFor(mapOf(cemu.modeKey to Nds3dMode.QUALITY.value), 3, 3, cemu))
+        assertEquals(2, Nds3dResolution.valueFor(mapOf(cemu.modeKey to Nds3dMode.PERFORMANCE.value, cemu.scaleKey to "2"), 3, 3, cemu))
+    }
+
+    @Test fun autoOnTheOtherConsolesStillFollowsTheDisplay() {
+        assertEquals(3, Nds3dResolution.valueFor(emptyMap(), 3, 3, Res3dConsole.DOLPHIN))
+        assertEquals(3, Nds3dResolution.valueFor(emptyMap(), 3, 3, Res3dConsole.DC))
+        assertEquals(2, Nds3dResolution.valueFor(emptyMap(), 2, 2, Res3dConsole.PSP))
+    }
+
+    @Test fun wiiURowsHaveNoMaxScaleAndSayAboveNativeCanBreakGraphics() {
+        val cemu = Res3dConsole.CEMU
+        val rows = resolutionRows(cemu, displayMax = 3)
+        assertEquals(listOf(cemu.modeKey, cemu.scaleKey), rows.map { it.key })
+        assertTrue("Auto draws at Native" in rows[0].info, rows[0].info)
+        assertTrue("Quality and Performance can draw above it, which breaks some games' graphics" in rows[0].info, rows[0].info)
+        assertEquals(
+            listOf(Res3dConsole.DOLPHIN.modeKey, Res3dConsole.DOLPHIN.maxScaleKey, Res3dConsole.DOLPHIN.scaleKey),
+            resolutionRows(Res3dConsole.DOLPHIN, displayMax = 3).map { it.key },
+        )
+    }
+
+    @Test fun wiiUKeepsItsLaunchScaleThroughEverySizeChangeTheOthersFollowLive() {
+        val cemu = Res3dConsole.CEMU
+        val quality = mapOf(cemu.modeKey to Nds3dMode.QUALITY.value)
+        // launched at 1x on the phone; a 1440p second display plugged in, the Fold unfolded, a layout change
+        for ((current, max) in listOf(1 to 1, 2 to 2, 3 to 3, null to 2)) {
+            assertEquals(1, Nds3dResolution.liveValue(1, quality, current, max, cemu), "shown $current of $max")
+        }
+        assertEquals(2, Nds3dResolution.liveValue(2, quality, 1, 1, cemu))
+        // a row changed in the menu waits for the next launch too
+        assertEquals(1, Nds3dResolution.liveValue(1, mapOf(cemu.modeKey to Nds3dMode.PERFORMANCE.value, cemu.scaleKey to "3"), 3, 3, cemu))
+        // nothing sent at launch yet: the first value goes
+        assertEquals(2, Nds3dResolution.liveValue(null, quality, 2, 2, cemu))
+        assertTrue(cemu.launchOnly)
+        for (other in Res3dConsole.entries - cemu) assertTrue(!other.launchOnly, other.name)
+        // a launch with no window size sent nothing: the core's native default holds, as if sent
+        assertEquals(1, cemu.unsizedLaunchValue)
+        assertEquals("native", cemu.coreValue(1))
+        assertEquals(1, Nds3dResolution.liveValue(cemu.unsizedLaunchValue, quality, 2, 2, cemu))
+        for (other in Res3dConsole.entries - cemu) assertEquals(null, other.unsizedLaunchValue, other.name)
+        assertEquals(3, Nds3dResolution.liveValue(1, mapOf(Res3dConsole.DOLPHIN.modeKey to Nds3dMode.QUALITY.value), 3, 3, Res3dConsole.DOLPHIN))
+        assertEquals(2, Nds3dResolution.liveValue(1, emptyMap(), 2, 2, Res3dConsole.PSP))
+    }
+
+    @Test fun wiiURowSaysAChangeAppliesAtTheNextLaunch() {
+        val info = resolutionRows(Res3dConsole.CEMU, displayMax = 3)[0].info
+        assertTrue("next time the game starts" in info, info)
+        assertTrue("next time the game starts" !in resolutionRows(Res3dConsole.DOLPHIN, displayMax = 3)[0].info)
+    }
+
+    @Test fun wiiUPerformanceOffersEveryScaleTheDisplayReachesFromNative() {
+        val cemu = Res3dConsole.CEMU
+        fun perf(displayMax: Int) = resolutionRows(cemu, displayMax).first { it.key == cemu.scaleKey }.values
+        assertEquals(listOf("1", "2"), perf(cemu.displayMaxOf(2448 to 1848, null)!!))      // the Fold's inner screen
+        assertEquals(listOf("1"), perf(cemu.displayMaxOf(1080 to 2400, null)!!))           // a phone
+        assertEquals(listOf("1"), perf(cemu.displayMaxOf(1280 to 960, null)!!))            // the Nova
+        assertEquals(listOf("1", "2"), perf(cemu.secondDisplayMaxOf(1920 to 1080, null)!!)) // a 1080p second display, the TV on it
+        assertEquals(listOf("1", "2", "3"), perf(cemu.secondDisplayMaxOf(3840 to 2160, null)!!))
+        // Native unless picked; the pick holds up to the display's reach
+        assertEquals("1", resolutionRows(cemu, 2).first { it.key == cemu.scaleKey }.default)
+        val performance = mapOf(cemu.modeKey to Nds3dMode.PERFORMANCE.value)
+        assertEquals(1, Nds3dResolution.valueFor(performance, 2, 2, cemu))
+        assertEquals(2, Nds3dResolution.valueFor(performance + (cemu.scaleKey to "2"), 1, 2, cemu))
+        assertEquals(2, Nds3dResolution.valueFor(performance + (cemu.scaleKey to "3"), 1, 2, cemu))
+    }
+
+    @Test fun theOtherConsolesPerformanceCeilingsAndSecondDisplaysAreUnchanged() {
+        assertEquals(2, Nds3dResolution.performanceCeiling(4, Res3dConsole.DOLPHIN))
+        assertEquals(2, Nds3dResolution.performanceCeiling(3, Res3dConsole.PSP))
+        assertEquals(1, Nds3dResolution.performanceCeiling(4, Res3dConsole.PS2))
+        assertEquals(2, Nds3dResolution.performanceCeiling(2, Res3dConsole.CEMU))
+        for (c in Res3dConsole.entries - Res3dConsole.CEMU) {
+            assertEquals(c.displayMaxOf(1920 to 1080, ScreenClass.REGULAR_PHONE), c.secondDisplayMaxOf(1920 to 1080, ScreenClass.REGULAR_PHONE), c.name)
+            assertEquals(Nds3dResolution.DEFAULT_PERFORMANCE_SCALE, c.defaultScale, c.name)
+        }
     }
 }

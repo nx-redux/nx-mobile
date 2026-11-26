@@ -929,12 +929,25 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_step(
     auto coreMessages = Environment::getInstance().takeCoreMessages();
     static jmethodID sendCoreMessage = nullptr;
     if (!coreMessages.empty() &&
-        viewMethod(env, glRetroView, sendCoreMessage, "sendCoreMessage", "(Ljava/lang/String;)V") != nullptr) {
+        viewMethod(env, glRetroView, sendCoreMessage, "sendCoreMessage", "(Ljava/lang/String;IZ)V") != nullptr) {
         for (auto& m : coreMessages) {
-            jstring text = newSafeJString(env, m);   // a core's text: never straight to NewStringUTF
-            env->CallVoidMethod(glRetroView, sendCoreMessage, text);
+            jstring text = newSafeJString(env, m.text);   // a core's text: never straight to NewStringUTF
+            env->CallVoidMethod(glRetroView, sendCoreMessage, text, (jint) m.durationMs, (jboolean) m.status);
             dropJavaException(env);
             env->DeleteLocalRef(text);
+        }
+    }
+
+    auto textInputs = Environment::getInstance().takeTextInputEvents();
+    static jmethodID sendTextInput = nullptr;
+    if (!textInputs.empty() &&
+        viewMethod(env, glRetroView, sendTextInput, "sendTextInput", "(ZLjava/lang/String;Ljava/lang/String;I)V") != nullptr) {
+        for (auto& t : textInputs) {
+            jstring text = newSafeJString(env, t.text), name = newSafeJString(env, t.name);
+            env->CallVoidMethod(glRetroView, sendTextInput, (jboolean) t.open, text, name, (jint) t.maxLength);
+            dropJavaException(env);
+            env->DeleteLocalRef(text);
+            env->DeleteLocalRef(name);
         }
     }
 
@@ -983,6 +996,23 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_step(
             dropJavaException(env);
         });
     }
+}
+
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_sendKeyboardKeys(
+    JNIEnv* env,
+    jclass obj,
+    jintArray keycodes,
+    jintArray characters
+) {
+    const jsize n = env->GetArrayLength(keycodes);
+    if (env->GetArrayLength(characters) != n) return;
+    std::vector<jint> codes(n), chars(n);
+    env->GetIntArrayRegion(keycodes, 0, n, codes.data());
+    env->GetIntArrayRegion(characters, 0, n, chars.data());
+    std::vector<std::pair<unsigned, uint32_t>> keys;
+    keys.reserve(n);
+    for (jsize i = 0; i < n; i++) keys.emplace_back((unsigned) codes[i], (uint32_t) chars[i]);
+    Environment::getInstance().queueKeyboardKeys(keys);
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_setRumbleEnabled(

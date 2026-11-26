@@ -24,6 +24,8 @@ class BiosChecksumTest {
             "syscard3.pce\t\tPCE\t262144,262656\tcard3a,card3b\t1\t0",
             "ps2-0230a-20080220.bin\t\tPS2\t4194304\tps2a\t1\t0",
             "SCPH-39001.bin\t\tPS2\t4194304\tps2b\t0\t0",
+            "saturn_bios.bin\t\tSATURN\t524288\tssjp\t0\t0",
+            "mpr-17933.bin\t\tSATURN\t524288\tssus\t0\t0",
         ).joinToString("\n"),
     )
 
@@ -137,6 +139,16 @@ class BiosChecksumTest {
         )
         // A pick no longer in the folder falls back to every .bin, as the core's Auto does.
         assertEquals(all, BiosChecksum.toCheck(known, "PS2", needs, "iso", present, "", null, "gone.bin"))
+    }
+
+    @Test fun saturn_takes_any_regions_dump_under_any_of_its_names() {
+        val needs = CoreRegistry.requiredBios("SATURN")
+        val groups = BiosChecksum.toCheck(known, "SATURN", needs, "cue", setOf("saturn_bios.bin"), "", null, null)
+        assertNull(BiosChecksum.problem(known, groups, files(BiosFile("saturn_bios.bin", 524288, "ssus"))))
+        // A revision the table misses still boots: no word.
+        assertNull(BiosChecksum.problem(known, groups, files(BiosFile("saturn_bios.bin", 524288, "unlisted"))))
+        val ps1 = assertIs<BiosProblem.OtherDump>(BiosChecksum.problem(known, groups, files(BiosFile("saturn_bios.bin", 524288, "ps1"))))
+        assertTrue(ps1.refuses)
     }
 
     @Test fun md5_cache_keeps_a_row_while_size_and_time_match() {

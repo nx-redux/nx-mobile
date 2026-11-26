@@ -3,6 +3,7 @@ package com.nxredux.mobile.settings
 import com.nxredux.mobile.netplay.NetplayCores
 import com.nxredux.mobile.kids.KidsPin
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.core.content.edit
 import com.nxredux.mobile.BuildConfig
 import com.nxredux.mobile.gpudriver.GpuDriverChoice
@@ -95,6 +96,11 @@ class AndroidAppSettings(context: Context) : AppSettings {
     override var micAsked: Boolean by bool(KEY_MIC_ASKED, false)
     override var micButtonShown: Boolean by bool(KEY_MIC_BUTTON_SHOWN, false)
     override var layoutTipHidden: Boolean by bool(KEY_LAYOUT_TIP_HIDDEN, false)
+    // Falls back to the DS flag (which the 3DS shared before it had its own) until this one is written.
+    override var layoutTipHidden3ds: Boolean
+        get() = prefs.booleanOrFallback(KEY_LAYOUT_TIP_HIDDEN_3DS, KEY_LAYOUT_TIP_HIDDEN)
+        set(value) = prefs.edit { putBoolean(KEY_LAYOUT_TIP_HIDDEN_3DS, value) }
+    override var layoutTipHiddenWiiu: Boolean by bool(KEY_LAYOUT_TIP_HIDDEN_WIIU, false)
 
     override var allFilesAsked: Boolean by bool(KEY_ALL_FILES_ASKED, false)
 
@@ -259,6 +265,10 @@ class AndroidAppSettings(context: Context) : AppSettings {
         get() = prefs.getStringSet(KEY_KIDS_APPS, null)?.toSet() ?: emptySet()
         set(value) = prefs.edit { putStringSet(KEY_KIDS_APPS, value.toSet()) }
 
+    override var hleBiosNoticeShown: Set<String>
+        get() = prefs.getStringSet(KEY_HLE_BIOS_NOTICE_SHOWN, null)?.toSet() ?: emptySet()
+        set(value) = prefs.edit { putStringSet(KEY_HLE_BIOS_NOTICE_SHOWN, value.toSet()) }
+
     override var kidsUnlockUntil: Long
         get() = prefs.getLong(KEY_KIDS_UNLOCK_UNTIL, 0L)
         set(value) = prefs.edit { putLong(KEY_KIDS_UNLOCK_UNTIL, value) }
@@ -307,6 +317,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
     override var gpuDriverCrashes: String? by nullableString(KEY_GPU_DRIVER_CRASHES)
 
     override var lastLaunchMaliSystemVulkan: Boolean by bool(KEY_LAST_LAUNCH_MALI_SYSTEM_VULKAN, false)
+    override var wiiuRamWarned: Boolean by bool(KEY_WIIU_RAM_WARNED, false)
 
     /** The cores Vulkan failed on for this phone ([VulkanFallback]), kept per build (its version name and commit). */
     override val vulkanFailedCores: Set<String>
@@ -350,6 +361,8 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_MIC_ASKED = "mic_asked"
         private const val KEY_MIC_BUTTON_SHOWN = "mic_button_shown"
         private const val KEY_LAYOUT_TIP_HIDDEN = "layout_tip_hidden"
+        private const val KEY_LAYOUT_TIP_HIDDEN_3DS = "layout_tip_hidden_3ds"
+        private const val KEY_LAYOUT_TIP_HIDDEN_WIIU = "layout_tip_hidden_wiiu"
         private const val KEY_ONBOARDING_DONE = "onboarding_done"
         private const val KEY_ONBOARDING_STEP = "onboarding_step"
         private const val KEY_ANDROID_PINS = "android_pins"
@@ -407,6 +420,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_KIDS_ENABLED = "kids_enabled"
         private const val KEY_KIDS_SCHEDULE = "kids_schedule"
         private const val KEY_KIDS_APPS = "kids_apps"
+        private const val KEY_HLE_BIOS_NOTICE_SHOWN = "hle_bios_notice_shown"
         private const val KEY_KIDS_UNLOCK_UNTIL = "kids_unlock_until"
         private const val KEY_KIDS_FLAG_HOME = "kids_flag_home"
         private const val KEY_KIDS_ON_WHEN_HOME = "kids_on_when_home"
@@ -426,6 +440,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_GPU_DRIVER_MARKER = "gpu_driver_marker"
         private const val KEY_GPU_DRIVER_CRASHES = "gpu_driver_crashes"
         private const val KEY_LAST_LAUNCH_MALI_SYSTEM_VULKAN = "last_launch_mali_system_vulkan"
+        private const val KEY_WIIU_RAM_WARNED = "wiiu_ram_warned"
         /** The build a Vulkan failure is recorded for: a new release, or a new debug build, tries Vulkan again. */
         private const val APP_VERSION = BuildConfig.VERSION_NAME + "-" + BuildConfig.GIT_COMMIT
         private const val KEY_MENU_ACCENT = "menu_accent"
@@ -435,3 +450,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_GAME_TIME_DEVICE = "game_time_device_id"
     }
 }
+
+/** [key]'s value, or [fallbackKey]'s (false when neither is stored) while [key] has never been written. */
+internal fun SharedPreferences.booleanOrFallback(key: String, fallbackKey: String): Boolean =
+    if (contains(key)) getBoolean(key, false) else getBoolean(fallbackKey, false)

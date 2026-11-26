@@ -22,6 +22,9 @@ object GpuDriverChoice {
     /** [Next.FAIL_MESSAGE] when a custom driver was in use; the driver's name replaces `%s`. */
     const val NETPLAY_FAIL = "%s could not start for this game. Set Display → GPU driver to System driver."
 
+    /** [Next.FAIL_MESSAGE] on a [com.nxredux.mobile.runner.VulkanSwitch.vulkanOnly] core on the system driver. */
+    const val VULKAN_ONLY_FAIL = "Vulkan could not start for this game on this device."
+
     /** [template] with the driver's [name] in place of `%s` (a name may hold a `%`, so no format string). */
     fun named(template: String, name: String): String = template.replace("%s", name)
 
@@ -91,10 +94,15 @@ object GpuDriverChoice {
         SHOW_ERROR,
     }
 
-    /** After ERROR_GL_NOT_COMPATIBLE. */
-    fun afterStartFailure(launchedOnVulkan: Boolean, driverId: String?, coreFailedOnSystem: Boolean, netplaySession: Boolean): Next = when {
+    /**
+     * After ERROR_GL_NOT_COMPATIBLE. A [vulkanOnly] core has no OpenGL ES to fall back to: a custom driver's failure retries
+     * on the system driver (its own failure is never recorded, so [coreFailedOnSystem] does not apply), the system
+     * driver's ends the launch with a message.
+     */
+    fun afterStartFailure(launchedOnVulkan: Boolean, driverId: String?, coreFailedOnSystem: Boolean, netplaySession: Boolean, vulkanOnly: Boolean = false): Next = when {
         !launchedOnVulkan -> Next.SHOW_ERROR
         netplaySession -> Next.FAIL_MESSAGE
+        vulkanOnly -> if (driverId != null) Next.SYSTEM_DRIVER else Next.FAIL_MESSAGE
         driverId != null && !coreFailedOnSystem -> Next.SYSTEM_DRIVER
         driverId != null -> Next.GLES_NO_RECORD
         else -> Next.GLES_RECORD

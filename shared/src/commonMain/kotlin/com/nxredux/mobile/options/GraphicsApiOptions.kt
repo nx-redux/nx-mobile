@@ -58,8 +58,11 @@ object GraphicsApiOptions {
         return if (notes.isEmpty()) base else base.copy(info = (listOf(base.info) + notes).joinToString("\n"))
     }
 
-    /** The row shows for a console whose core can render with Vulkan ([com.nxredux.mobile.runner.CoreDescriptor.vulkan]). */
-    fun appliesTo(tag: String): Boolean = CoreRegistry.forTag(tag)?.vulkan != null
+    /**
+     * The row shows for a console whose core can render with Vulkan ([com.nxredux.mobile.runner.CoreDescriptor.vulkan]),
+     * unless Vulkan is all it has ([VulkanSwitch.vulkanOnly]).
+     */
+    fun appliesTo(tag: String): Boolean = CoreRegistry.forTag(tag)?.vulkan?.let { !it.vulkanOnly } == true
 
     /**
      * The launch for [value] on a core with [switch]: Vulkan (its options, offered) only when picked and the phone can run
@@ -67,14 +70,28 @@ object GraphicsApiOptions {
      * Azahar) never asks on a phone that would refuse it. A core without a Vulkan path gets nothing. [vulkanSupported] is
      * the device probe (a Vulkan instance + device enumeration), so it is asked only when Vulkan is picked on such a core.
      * [vulkanFailed]: Vulkan could not start for this core on this phone, or this launch is the relaunch after it did
-     * ([VulkanFallback]): OpenGL ES, as on a phone without Vulkan, and the probe is not asked.
+     * ([VulkanFallback]): OpenGL ES, as on a phone without Vulkan, and the probe is not asked. A
+     * [VulkanSwitch.vulkanOnly] core is offered Vulkan whatever [value] and [vulkanFailed] say, wherever the phone has it
+     * ([vulkanRefusal] refuses the rest).
      */
     fun resolve(value: String?, switch: VulkanSwitch?, vulkanSupported: () -> Boolean, vulkanFailed: Boolean = false): GraphicsApiLaunch {
         if (switch == null) return GraphicsApiLaunch(false, emptyMap(), false)
-        val vulkan = preferVulkan(value) && !vulkanFailed && vulkanSupported()
+        val vulkan = (switch.vulkanOnly || preferVulkan(value) && !vulkanFailed) && vulkanSupported()
         val env: Map<String, String?> = if (vulkan) switch.vulkanEnv else switch.vulkanEnv.mapValues { null }
         return GraphicsApiLaunch(vulkan, if (vulkan) switch.vulkan else switch.gles, vulkan && switch.swapchainFrames, env)
     }
+
+    /** Why a launch on a [VulkanSwitch.vulkanOnly] core is refused before it loads: the phone has no Vulkan ([supported]). */
+    fun vulkanRefusal(switch: VulkanSwitch?, supported: () -> Boolean): String? =
+        VULKAN_REFUSAL.takeIf { switch?.vulkanOnly == true && !supported() }
+
+    const val VULKAN_REFUSAL = "Wii U needs Vulkan, which this phone's GPU driver doesn't offer."
+
+    /**
+     * Whether the core's [recorded] Vulkan failure ([VulkanFallback]) counts: never on a [VulkanSwitch.vulkanOnly] core,
+     * which has no OpenGL ES to go to.
+     */
+    fun recordedFailure(switch: VulkanSwitch?, recorded: Boolean): Boolean = recorded && switch?.vulkanOnly != true
 
     /**
      * [launch]'s process environment with the switch's [VulkanSwitch.adrenoSystemDriverEnv]: set on a Vulkan launch on an
@@ -97,10 +114,12 @@ object GraphicsApiOptions {
 
     /**
      * The value a launch reads for the stored [value]: Vulkan in place of Auto (or no value) where [autoIsVulkan], else
-     * [value] itself. [gpu] is asked only for Auto on a core that follows the GPU.
+     * [value] itself. [gpu] is asked only for Auto on a core that follows the GPU. Always Vulkan on a
+     * [VulkanSwitch.vulkanOnly] core, so its GPU driver loads as on any Vulkan launch.
      */
     inline fun effective(value: String?, switch: VulkanSwitch?, customDriver: Boolean = false, gpu: () -> String?): String? =
-        if ((value == null || value == AUTO) && switch?.followsGpu == true && autoIsVulkan(switch, gpu(), customDriver)) VULKAN else value
+        if (switch?.vulkanOnly == true) VULKAN
+        else if ((value == null || value == AUTO) && switch?.followsGpu == true && autoIsVulkan(switch, gpu(), customDriver)) VULKAN else value
 
     /** Whether the runner offers the core Vulkan: only for the Vulkan value ([effective] turns Auto into it where it should be). */
     fun preferVulkan(value: String?): Boolean = value == VULKAN
