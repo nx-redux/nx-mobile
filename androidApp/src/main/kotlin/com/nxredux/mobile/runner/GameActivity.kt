@@ -743,12 +743,18 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private fun syncDsMenuCap() = dsMenuCap.sync(menuOpen && !quitting && dsRoom.current == DsPresence.ROOM)
 
     /**
-     * A sheet session's room again after a leave for the background or a lost focus. Never on the automatic route, where
-     * only switching Local Wireless on rejoins: a session that fell back to it may still be a session in Azahar until
-     * its next frame, and a rejoin would put it back in the room it was left for.
+     * The room again after a leave for the background or a lost focus (a system dialog, such as the USB cable's). On the
+     * automatic route only while Local Wireless shows On: a session that fell back to it shows Off ([leaveLinkSession])
+     * and may still be a session in Azahar until its next frame, where a rejoin would put it back in the room it left.
      */
     private fun rejoinSessionRoom() {
-        if (!launchPipeline.dsAutoRoute) LibretroNetplay.dsRejoin()
+        if (!launchPipeline.dsAutoRoute || localWirelessShownOn()) LibretroNetplay.dsRejoin()
+    }
+
+    private fun localWirelessShownOn(): Boolean = when {
+        isNds -> NdsOptions.localWireless(frontendValues)
+        isN3ds -> N3dsOptions.localWireless(frontendValues)
+        else -> false
     }
 
     /** Leaves the room with the game running: on the automatic route, Local Wireless switched off (PSP has no row). */
