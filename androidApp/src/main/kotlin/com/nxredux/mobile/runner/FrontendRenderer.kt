@@ -3,6 +3,7 @@ package com.nxredux.mobile.runner
 import com.nxredux.mobile.skin.GlassScreen
 import com.nxredux.mobile.skin.SkinN3ds
 import com.nxredux.mobile.skin.SkinDual
+import com.nxredux.mobile.skin.menuShownScreens
 import com.swordfish.libretrodroid.FrameComposition
 import android.content.Context
 import android.content.res.Configuration
@@ -717,7 +718,10 @@ internal class FrontendRenderer(
             // Under a skin the speed indicator goes on the top glass's screen.
             pictureBox.value = windowRect(origin, skinDs?.top ?: shown)
             shownPicture = null
-            view.screenRegions = nds.map { NdsOptions.shaded(it, host.frontendValues).toScreenRegion(w, h) }
+            // the in-game menu over the skin's top screen: the bottom one goes from under it
+            val placement = padLayout.skinPlacement().takeIf { skinDs != null && padLayout.skinUnderMenu }
+            val drawn = placement?.let { menuShownScreens(nds, it) } ?: nds
+            view.screenRegions = drawn.map { NdsOptions.shaded(it, host.frontendValues).toScreenRegion(w, h) }
             // Under a skin the pad takes no room beside the screens.
             fitPad(if (skinDs != null) PadRoom.NONE else room, shown, frameKnown = true, h, overlayH)
             val screenH = if (isWiiu) WIIU_SCREEN_H else 192f

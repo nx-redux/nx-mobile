@@ -1,6 +1,8 @@
 package com.nxredux.mobile.skin
 
+import com.nxredux.mobile.options.NdsScreen
 import com.nxredux.mobile.options.PxRect
+import com.nxredux.mobile.runner.NdsRegion
 
 /**
  * The in-game menu's room over this skin when it sits in [glass]: the glass and the touch shortcut strip right under it
@@ -56,14 +58,16 @@ private const val SHOULDER_GAP = 32f
 /**
  * The skin as drawn under the menu stretched over [room] ([stackedMenuRoom]): one glass the room's size (the top
  * screen's corners), the shell drawn over the rest, so the touch screen is hidden; the pieces and controls the room
- * reaches left out (the top screen's frame, the touch screen's); and the layout's own frame round it ([menuFrame]).
+ * reaches left out whole (the top screen's frame, the touch screen's); and the layout's own frame round it ([menuFrame]).
  */
 fun SkinPlacement.underMenu(room: PxRect): SkinPlacement {
     fun inside(r: PxRect) = r.x + r.width > room.x + 1f && r.x < room.x + room.width - 1f && r.y + r.height > room.y + 1f && r.y < room.y + room.height - 1f
     val corner = glass(GlassScreen.TOP)?.corner ?: 0f
+    // a piece's slices go together: the touch screen's frame reaches below the room, and its foot alone would hang there
+    val reached = pieces.filter { it.piece >= 0 && inside(it.dst) }.map { it.piece }.toSet()
     return copy(
         glasses = listOf(PlacedGlass(MENU_GLASS_ID, GlassScreen.TOP, room, glasses.firstOrNull()?.scale ?: k, corner)),
-        pieces = pieces.filterNot { inside(it.dst) } + menuFrame(room),
+        pieces = pieces.filterNot { inside(it.dst) || it.piece in reached } + menuFrame(room),
         controls = controls.filterNot { it.x in room.x..(room.x + room.width) && it.y in room.y..(room.y + room.height) },
     )
 }
@@ -90,3 +94,16 @@ private const val MENU_GLASS_ID = "menu"
 
 /** The touch shortcut slots' control ids: TOUCH_1..TOUCH_4. */
 private const val STRIP_SLOT = "TOUCH_"
+
+/**
+ * Whether the in-game menu, open in this skin, hides the game's bottom screen (the DS / 3DS touch screen, the Wii U
+ * GamePad): it lies over the top screen there (stretched down over the touch screen, or across both in one glass), and a
+ * slice of the bottom screen through its wash only clutters it. Not on a two-screen board ([SkinFamily.FLEX]), where
+ * the menu takes the bottom screen's own glass, nor on a one-screen console's skin.
+ */
+fun SkinPlacement.menuHidesBottom(): Boolean = glass(GlassScreen.STACK) != null ||
+    (glass(GlassScreen.TOP) != null && glass(GlassScreen.TOUCH) != null && spec.family != SkinFamily.FLEX)
+
+/** The screens drawn under the in-game menu open in [placement]: [regions] less the bottom screen where it hides it ([menuHidesBottom]). */
+fun menuShownScreens(regions: List<NdsRegion>, placement: SkinPlacement): List<NdsRegion> =
+    if (placement.menuHidesBottom()) regions.filterNot { it.screen == NdsScreen.BOTTOM } else regions

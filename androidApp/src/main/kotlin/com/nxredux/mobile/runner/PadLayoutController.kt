@@ -186,9 +186,17 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val hidden = stripHiddenNow()
         skinViews().forEach { it.stripHidden = hidden }
     }
-    /** The in-game menu sits in the skin: stacked screens draw as one glass in the frame ([PadSkinView.underMenu]). */
+    /**
+     * The in-game menu sits in the skin: stacked screens draw as one glass in the frame ([PadSkinView.underMenu]), and the
+     * game's bottom screen may go from under it ([com.nxredux.mobile.skin.menuShownScreens]), so the screens are laid out again.
+     */
     var skinUnderMenu: Boolean = false
-        set(value) { field = value; skinView?.underMenu = value }
+        set(value) {
+            if (field == value) return
+            field = value
+            skinView?.underMenu = value
+            if (skinShown) host.relayoutFrontend()
+        }
     /** The last [skinPlacement] / [barePlacement] worked out, and what it was worked out for. */
     private var skinCache: Pair<SkinKey, SkinPlacement?>? = null
     private var bareCache: Pair<SkinKey, BareLayout?>? = null
