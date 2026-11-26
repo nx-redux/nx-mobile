@@ -6,6 +6,7 @@ import androidx.lifecycle.lifecycleScope
 import com.nxredux.mobile.options.WiiOptions
 import com.nxredux.mobile.options.WiiScreen
 import com.nxredux.mobile.settings.AndroidAppSettings
+import com.nxredux.mobile.ui.nx.PadMotion
 import com.nxredux.mobile.ui.nx.PadProfile
 import com.swordfish.libretrodroid.GLRetroView
 import com.swordfish.libretrodroid.LibretroDroid
@@ -260,8 +261,8 @@ internal class WiiDolphinController(
     fun recenterMotion() { motion.recenter() }
 
     /** The pad's motion button ([PadMotion]): Wiimote types on a phone with both sensors; none without them. */
-    fun padMotion(): com.nxredux.mobile.ui.nx.PadMotion? =
-        if (host.isWii && host.padProfile().motionButton && hasSensors) com.nxredux.mobile.ui.nx.PadMotion(motionOn, ::toggleMotion, ::recenterMotion) else null
+    fun padMotion(): PadMotion? =
+        if (host.isWii && host.padProfile().motionButton && hasSensors) PadMotion(motionOn, ::toggleMotion, ::recenterMotion) else null
 
     /**
      * Display → Wii Screen for a Wii game: Dolphin's widescreen system setting, chosen from the orientation the

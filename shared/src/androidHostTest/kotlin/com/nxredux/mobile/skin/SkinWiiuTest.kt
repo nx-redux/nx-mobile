@@ -289,26 +289,11 @@ class SkinWiiuTest {
                     val r = c.getValue("CSTICK").spec.r
                     assertTrue(r > n3ds.controls.first { it.spec.id == "CSTICK" }.spec.r && r < want, "$label right stick r $r")
                 } else assertEquals(want, c.getValue("CSTICK").spec.r, 0.5f, "$label right stick r")
-                fun reach(pc: PlacedControl) = when (pc.spec.shape) { ControlShape.STICK -> pc.spec.r * 1.25f; ControlShape.RECT -> 0f; else -> pc.spec.r }
-                fun box(pc: PlacedControl): FloatArray { val r = reach(pc); val hw = if (r > 0f) r else pc.spec.hw; val hh = if (r > 0f) r else pc.spec.hh; return floatArrayOf(pc.x - hw, pc.y - hh, pc.x + hw, pc.y + hh) }
-                val face = setOf("A", "B", "X", "Y")
-                for (useStick in listOf(true, false)) {
-                    val cs = p.forStick(useStick).controls
-                    for (i in cs.indices) for (j in i + 1 until cs.size) {
-                        val a = cs[i]; val b = cs[j]
-                        if (a.spec.id in face && b.spec.id in face) continue
-                        if (a.spec.id.startsWith("TOUCH_") && b.spec.id.startsWith("TOUCH_")) continue   // (the strip's slots tile it)
-                        val round = a.spec.shape != ControlShape.RECT && b.spec.shape != ControlShape.RECT
-                        val ok = if (round) kotlin.math.hypot(a.x - b.x, a.y - b.y) >= reach(a) + reach(b) - 1f
-                            else box(a).let { x -> box(b).let { y -> x[2] <= y[0] || y[2] <= x[0] || x[3] <= y[1] || y[3] <= x[1] } }
-                        assertTrue(ok, "$label ${a.spec.id} on ${b.spec.id}")
-                    }
-                    for (x in cs) assertTrue(x.x >= 0f && x.x <= d.w && x.y >= 0f && x.y <= d.h, "$label ${x.spec.id} off the window")
-                }
+                assertNoOverlaps(p, d.w, d.h, label)
                 for (id in listOf("CSTICK", "L3", "R3", "SELECT", "START")) for (g in p.glasses) {
                     val pc = c.getValue(id); val r = g.rect
                     val nx = pc.x.coerceIn(r.x, r.x + r.width); val ny = pc.y.coerceIn(r.y, r.y + r.height)
-                    assertTrue(kotlin.math.hypot(pc.x - nx, pc.y - ny) >= reach(pc) - 1f, "$label $id's reach on the ${g.screen} glass")
+                    assertTrue(kotlin.math.hypot(pc.x - nx, pc.y - ny) >= pc.touchReach() - 1f, "$label $id's reach on the ${g.screen} glass")
                 }
             }
         }
@@ -441,14 +426,15 @@ class SkinWiiuTest {
     }
 
     private fun assertNoOverlaps(p: SkinPlacement, w: Int, h: Int, label: String) {
-        fun reach(pc: PlacedControl) = when (pc.spec.shape) { ControlShape.STICK -> pc.spec.r * 1.25f; ControlShape.RECT -> 0f; else -> pc.spec.r }
-        fun box(pc: PlacedControl): FloatArray { val r = reach(pc); val hw = if (r > 0f) r else pc.spec.hw; val hh = if (r > 0f) r else pc.spec.hh; return floatArrayOf(pc.x - hw, pc.y - hh, pc.x + hw, pc.y + hh) }
+        fun reach(pc: PlacedControl) = pc.touchReach()
+        fun box(pc: PlacedControl): FloatArray { val (hw, hh) = pc.touchHalf(); return floatArrayOf(pc.x - hw, pc.y - hh, pc.x + hw, pc.y + hh) }
         val face = setOf("A", "B", "X", "Y")
         for (useStick in listOf(true, false)) {
             val cs = p.forStick(useStick).controls
             for (i in cs.indices) for (j in i + 1 until cs.size) {
                 val a = cs[i]; val b = cs[j]
-                if (a.spec.id in face && b.spec.id in face || a.spec.id.startsWith("TOUCH_") && b.spec.id.startsWith("TOUCH_")) continue
+                if (a.spec.id in face && b.spec.id in face) continue
+                if (a.spec.id.startsWith("TOUCH_") && b.spec.id.startsWith("TOUCH_")) continue   // (the strip's slots tile it)
                 val ok = if (a.spec.shape != ControlShape.RECT && b.spec.shape != ControlShape.RECT) kotlin.math.hypot(a.x - b.x, a.y - b.y) >= reach(a) + reach(b) - 1f
                     else box(a).let { x -> box(b).let { y -> x[2] <= y[0] || y[2] <= x[0] || x[3] <= y[1] || y[3] <= x[1] } }
                 assertTrue(ok, "$label ${a.spec.id} on ${b.spec.id}")
@@ -517,7 +503,7 @@ class SkinWiiuTest {
     @Test
     fun the_phone_sideways_has_the_tv_across_and_the_gamepad_under_it() {
         val d = GOLDEN_DEVICES.single { it.name == "phone_land" }
-        val layout = assertNotNull(com.nxredux.mobile.options.WiiuOptions.skinLayout(emptyMap(), landscape = true, controllerMode = false,
+        val layout = assertNotNull(com.nxredux.mobile.options.WiiuOptions.skinLayout(emptyMap(), landscape = true,
             com.nxredux.mobile.layout.ScreenClass.REGULAR_PHONE))
         for (id in packs) {
             val p = assertNotNull(SkinChoice.place(skinPack(id), d.w, d.h, d.dpi, d.tablet, ds = true, foldable = d.foldable, variant = SkinVariant.WIIU,

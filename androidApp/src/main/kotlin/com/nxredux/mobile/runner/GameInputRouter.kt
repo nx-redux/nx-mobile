@@ -852,8 +852,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
         // The menus follow the letter the on-screen pad shows (Dreamcast draws "A" on NxButton.B); the game gets the raw button.
         host.rumbles.firstOrNull()?.useDevice(null)   // the on-screen pad: the phone in the player's hands takes the rumble
         if (host.menuOpen) {
-            val wiiu = WiiuOptions.appliesTo(host.gameTag)
-            host.menuRouter.onEvent(event.map { host.padProfile().menuButton(openMenuButton(it, wiiu)) })
+            host.menuRouter.onEvent(event.map { host.padProfile().menuButton(openMenuButton(it, isWiiu)) })
             return
         }
         val btn = event.button
@@ -863,7 +862,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
         // The Wii's HOME: a resume point first, then a tap of the core's Home ([GameInputHost.pressWiiHome]); the release is the tap's.
         // Cemu has no GamePad HOME: the Wii U's HOME opens the pause menu as MENU does.
         if (btn == NxButton.HOME) {
-            if (down && host.isWii) host.pressWiiHome() else if (down && WiiuOptions.appliesTo(host.gameTag)) host.toggleMenu()
+            if (down && host.isWii) host.pressWiiHome() else if (down && isWiiu) host.toggleMenu()
             return
         }
         // SELECT + START held together also opens it (the on-screen pad is P1, port 0).

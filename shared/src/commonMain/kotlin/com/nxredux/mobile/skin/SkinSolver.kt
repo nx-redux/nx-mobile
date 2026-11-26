@@ -120,6 +120,16 @@ data class SkinPiece(val src: PxRect, val dst: PxRect, val strip: Boolean = fals
 /** A control's hit area placed in the window: its [spec] (id, shape, sizes scaled) at [x], [y]. */
 data class PlacedControl(val spec: ControlSpec, val x: Float, val y: Float)
 
+/** How far a round control takes touches from its middle, window px (a stick's ring is [TouchSlop.STICK] wider); 0 for a rect. */
+internal fun PlacedControl.touchReach(): Float = when (spec.shape) {
+    ControlShape.RECT -> 0f
+    ControlShape.STICK -> spec.r * TouchSlop.STICK
+    else -> spec.r
+}
+
+/** The half width and height of the box a control takes touches in: [touchReach] both ways, else a rect's own. */
+internal fun PlacedControl.touchHalf(): Pair<Float, Float> = touchReach().let { r -> if (r > 0f) r to r else spec.hw to spec.hh }
+
 /** A glass placed in the window: [rect] showing [screen] at [scale] window px per game px; [corner]: its corners' radius, window px. */
 data class PlacedGlass(val id: String, val screen: GlassScreen, val rect: PxRect, val scale: Float, val corner: Float = 0f)
 

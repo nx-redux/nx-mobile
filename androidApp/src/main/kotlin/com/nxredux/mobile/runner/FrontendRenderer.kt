@@ -1094,7 +1094,7 @@ internal class FrontendRenderer(
     private fun skinWiiuLayout(g: FloatArray): SkinDs? {
         if (!WiiuLayout.isWiiuFrame(g[0].roundToInt(), g[1].roundToInt())) return null
         val p = padLayout.skinPlacement() ?: return null
-        val layout = WiiuOptions.skinLayout(host.frontendValues, host.isLandscape(), ndsControllerMode(), activity.windowShape().screenClass)
+        val layout = WiiuOptions.skinLayout(host.frontendValues, host.isLandscape(), activity.windowShape().screenClass)
         val regions = WiiuLayout.skinRegions(
             p.glass(GlassScreen.STACK)?.rect, p.glass(GlassScreen.TOP)?.rect, p.glass(GlassScreen.TOUCH)?.rect,
             WiiuOptions.settings(host.frontendValues), layout, NDS_INSET_MARGIN_DP * resources.displayMetrics.density,

@@ -1,11 +1,11 @@
 package com.nxredux.mobile.runner
 
+import com.nxredux.mobile.layout.DsKind
+
 /**
  * The tip that SELECT + Left / Right changes the DS / 3DS / Wii U screen layout (first-time players do not know the
  * chord), on each launch until the player hides it for good from its button ([ACTION]).
  */
-enum class TipConsole { DS, N3DS, WIIU }
-
 object LayoutTip {
     /** The layout chord and the swap of the screens, the same on the DS and the 3DS. */
     const val TEXT = "SELECT + Left / Right changes the screen layout\nL3 or SELECT + L swaps the screens"
@@ -16,10 +16,10 @@ object LayoutTip {
     fun text(wiiu: Boolean): String = if (wiiu) WIIU_TEXT else TEXT
 
     /** Each console dismisses its own tip: a tip hidden on one says nothing about the others. */
-    fun hidden(console: TipConsole, ds: Boolean, n3ds: Boolean, wiiu: Boolean): Boolean = when (console) {
-        TipConsole.DS -> ds
-        TipConsole.N3DS -> n3ds
-        TipConsole.WIIU -> wiiu
+    fun hidden(console: DsKind, ds: Boolean, n3ds: Boolean, wiiu: Boolean): Boolean = when (console) {
+        DsKind.DS -> ds
+        DsKind.N3DS -> n3ds
+        DsKind.WIIU -> wiiu
     }
 
     /**

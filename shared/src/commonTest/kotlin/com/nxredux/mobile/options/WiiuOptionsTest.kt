@@ -141,12 +141,12 @@ class WiiuOptionsTest {
     }
     @Test fun under_a_skin_only_a_regular_phones_landscape_takes_the_players_layout() {
         val picked = mapOf(LAYOUT_LANDSCAPE to NdsLayoutChoice.SIDE_BY_SIDE.value)
-        assertEquals(NdsLayoutChoice.SIDE_BY_SIDE, WiiuOptions.skinLayout(picked, landscape = true, controllerMode = false, ScreenClass.REGULAR_PHONE))
+        assertEquals(NdsLayoutChoice.SIDE_BY_SIDE, WiiuOptions.skinLayout(picked, landscape = true, ScreenClass.REGULAR_PHONE))
         // before a pick, the TV across the skin's sideways glass, the GamePad under it
-        assertEquals(NdsLayoutChoice.STACKED, WiiuOptions.skinLayout(emptyMap(), landscape = true, controllerMode = false, ScreenClass.REGULAR_PHONE))
+        assertEquals(NdsLayoutChoice.STACKED, WiiuOptions.skinLayout(emptyMap(), landscape = true, ScreenClass.REGULAR_PHONE))
         for (screen in listOf(ScreenClass.STUBBY_PHONE, ScreenClass.WIDE_TABLET, ScreenClass.NEAR_SQUARE_TABLET))
-            assertEquals(null, WiiuOptions.skinLayout(picked, landscape = true, controllerMode = false, screen), "$screen")
-        for (screen in ScreenClass.entries) assertEquals(null, WiiuOptions.skinLayout(picked, landscape = false, controllerMode = false, screen), "$screen")
+            assertEquals(null, WiiuOptions.skinLayout(picked, landscape = true, screen), "$screen")
+        for (screen in ScreenClass.entries) assertEquals(null, WiiuOptions.skinLayout(picked, landscape = false, screen), "$screen")
     }
 
     @Test fun where_a_skin_takes_the_landscape_row_its_default_is_the_skins() {
@@ -155,7 +155,7 @@ class WiiuOptionsTest {
         assertTrue(WiiuOptions.skinTakesLandscape(phoneSkin))
         val row = { skin: Boolean -> WiiuOptions.tableFor(skin).single { it.key == LAYOUT_LANDSCAPE }.default }
         assertEquals(NdsLayoutChoice.STACKED.value, row(true))
-        assertEquals(WiiuOptions.skinLayout(emptyMap(), landscape = true, controllerMode = false, ScreenClass.REGULAR_PHONE)?.value, row(true))
+        assertEquals(WiiuOptions.skinLayout(emptyMap(), landscape = true, ScreenClass.REGULAR_PHONE)?.value, row(true))
         // elsewhere Large: no skin, the Fold, a tablet
         assertEquals(NdsLayoutChoice.LARGE.value, row(false))
         for (locked in listOf(WiiuOptions.lockedLayoutRows(false, ScreenClass.REGULAR_PHONE), WiiuOptions.lockedLayoutRows(true, ScreenClass.STUBBY_PHONE),
@@ -183,12 +183,12 @@ class WiiuOptionsTest {
         val values = FrontendOptions.fromConfig(emptyMap(), "WIIU")
         for (key in WiiuOptions.LAYOUT_KEYS) assertFalse(key in values, key)
         assertFalse(WiiuOptions.LAYOUT_PORTRAIT in FrontendOptions.defaults("WIIU"))
-        assertEquals(NdsLayoutChoice.STACKED, WiiuOptions.skinLayout(values, landscape = true, controllerMode = false, ScreenClass.REGULAR_PHONE))
+        assertEquals(NdsLayoutChoice.STACKED, WiiuOptions.skinLayout(values, landscape = true, ScreenClass.REGULAR_PHONE))
         assertEquals(NdsLayoutChoice.LARGE, WiiuOptions.layoutShown(values, landscape = true, controllerMode = false))
         assertEquals(NdsLayoutChoice.STACKED, WiiuOptions.layoutShown(values, landscape = false, controllerMode = false))
         assertEquals(NdsLayoutChoice.STACKED, WiiuOptions.layoutShown(values, landscape = false, controllerMode = true))
         val picked = FrontendOptions.fromConfig(mapOf(WiiuOptions.LAYOUT_LANDSCAPE to "single"), "WIIU")
-        assertEquals(NdsLayoutChoice.SINGLE, WiiuOptions.skinLayout(picked, landscape = true, controllerMode = false, ScreenClass.REGULAR_PHONE))
+        assertEquals(NdsLayoutChoice.SINGLE, WiiuOptions.skinLayout(picked, landscape = true, ScreenClass.REGULAR_PHONE))
     }
 
     @Test fun a_skin_locks_the_layout_rows_it_ignores() {

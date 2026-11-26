@@ -380,8 +380,7 @@ object SkinChoice {
         var left = top.minOf { it.dst.x }; var right = top.maxOf { it.dst.x + it.dst.width }
         for (c in controls) {
             if (c.spec.id.startsWith("TOUCH_") || c.spec.id in moving) continue
-            val r = if (c.spec.shape == ControlShape.RECT) 0f else c.spec.r * (if (c.spec.shape == ControlShape.STICK) 1.25f else 1f)
-            val hw = if (r > 0f) r else c.spec.hw; val hh = if (r > 0f) r else c.spec.hh
+            val (hw, hh) = c.touchHalf()
             if (c.y + hh <= y0 || c.y - hh >= y1) continue
             if (c.x < (l0 + r0) / 2f) left = maxOf(left, c.x + hw + gap) else right = minOf(right, c.x - hw - gap)
         }
@@ -416,9 +415,8 @@ object SkinChoice {
         if (mine.isEmpty() || mine.size != theirs.size || g == null || tg == null) return this
         val at = mine.zip(theirs).toMap()
         val slots = twin.controls.filter { it.spec.id.startsWith("TOUCH_") }.associateBy { it.spec.id }
-        val onAButton = slots.values.any { sl -> controls.any { c -> !c.spec.id.startsWith("TOUCH_") && c.spec.id in WIIU_PAD_IDS && run {
-            val r = if (c.spec.shape == ControlShape.RECT) 0f else c.spec.r * (if (c.spec.shape == ControlShape.STICK) 1.25f else 1f)
-            val hw = if (r > 0f) r else c.spec.hw; val hh = if (r > 0f) r else c.spec.hh
+        val onAButton = slots.values.any { sl -> controls.any { c -> !c.spec.id.startsWith("TOUCH_") && run {
+            val (hw, hh) = c.touchHalf()
             c.x + hw > sl.x - sl.spec.hw && c.x - hw < sl.x + sl.spec.hw && c.y + hh > sl.y - sl.spec.hh && c.y - hh < sl.y + sl.spec.hh
         } } }
         if (onAButton) return this
@@ -429,8 +427,12 @@ object SkinChoice {
         )
     }
 
-    /** Every button a Wii U skin draws but the strip's. */
-    private val WIIU_PAD_IDS = setOf("DPAD", "STICK", "CSTICK", "A", "B", "X", "Y", "L", "R", "L2", "R2", "L3", "R3", "SELECT", "START", "MENU", "STICK_SWAP")
+    /** The sets the shared one-screen set never stands in for: itself, and those with a stick or two screens. */
+    private val NO_SHARED_FALLBACK = setOf(
+        SkinVariant.DS, SkinVariant.SINGLE, SkinVariant.DC, SkinVariant.N3DS, SkinVariant.N3DS_REGULAR, SkinVariant.GC,
+        SkinVariant.WII_CLASSIC, SkinVariant.WII_NUNCHUK, SkinVariant.WII_SIDEWAYS, SkinVariant.WII_UPRIGHT, SkinVariant.WIIU,
+        SkinVariant.PS1, SkinVariant.PSP,
+    )
 
     /** The 3DS's top screen, game px. */
     private val N3DS_TOP = 400f to 240f
@@ -533,9 +535,7 @@ object SkinChoice {
         val own = placeAs(pack, windowW, windowH, densityDpi, tablet, ds, picture, hingeY, topInset, foldable, v)?.let { if (foldable) it.wiiuStackTo(stackAspect) else it }
         // a console's own set the pack lacks for this screen (an older pack, or a player's partly made one): the shared
         // one-screen set, decided per screen, so a missing landscape layout never leaves the game without a skin
-        // (never for the Dreamcast, the 3DS, the GameCube, the Wii pads, the Wii U, the PlayStations or the PSP: the shared
-        // set has no stick, nor two screens)
-        if (own != null || v == SkinVariant.DS || v == SkinVariant.SINGLE || v == SkinVariant.DC || v == SkinVariant.N3DS || v == SkinVariant.N3DS_REGULAR || v == SkinVariant.GC || v == SkinVariant.WII_CLASSIC || v == SkinVariant.WII_NUNCHUK || v == SkinVariant.WII_SIDEWAYS || v == SkinVariant.WII_UPRIGHT || v == SkinVariant.WIIU || v == SkinVariant.PS1 || v == SkinVariant.PSP) return own
+        if (own != null || v in NO_SHARED_FALLBACK) return own
         return placeAs(pack, windowW, windowH, densityDpi, tablet, ds, picture, hingeY, topInset, foldable, SkinVariant.SINGLE)
     }
 

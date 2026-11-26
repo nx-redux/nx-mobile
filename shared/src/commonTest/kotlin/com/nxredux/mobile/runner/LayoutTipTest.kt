@@ -1,5 +1,7 @@
 package com.nxredux.mobile.runner
 
+import com.nxredux.mobile.layout.DsKind
+
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -30,12 +32,12 @@ class LayoutTipTest {
     }
 
     @Test fun eachConsoleHidesOnlyItsOwnTip() {
-        for (console in TipConsole.entries) {
-            val flags = TipConsole.entries.associateWith { it == console }
-            for (asked in TipConsole.entries) {
+        for (console in DsKind.entries) {
+            val flags = DsKind.entries.associateWith { it == console }
+            for (asked in DsKind.entries) {
                 assertEquals(
                     asked == console,
-                    LayoutTip.hidden(asked, ds = flags.getValue(TipConsole.DS), n3ds = flags.getValue(TipConsole.N3DS), wiiu = flags.getValue(TipConsole.WIIU)),
+                    LayoutTip.hidden(asked, ds = flags.getValue(DsKind.DS), n3ds = flags.getValue(DsKind.N3DS), wiiu = flags.getValue(DsKind.WIIU)),
                     "$asked with only $console hidden",
                 )
             }

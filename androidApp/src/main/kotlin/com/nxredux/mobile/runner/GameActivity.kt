@@ -4,6 +4,7 @@ import android.app.Activity
 import android.app.ActivityManager
 import android.app.AlertDialog
 import android.content.BroadcastReceiver
+import android.content.DialogInterface
 import android.content.Context
 import android.content.IntentFilter
 import android.content.Intent
@@ -84,6 +85,7 @@ import com.nxredux.mobile.gametime.GameTimeRecorder
 import com.nxredux.mobile.gametime.GameTimeService
 import com.nxredux.mobile.gametime.GameTimeStore
 import com.nxredux.mobile.launcher.bringHomeTaskToFront
+import com.nxredux.mobile.layout.DsKind
 import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.library.Names
 import com.nxredux.mobile.netplay.LocalWirelessText
@@ -106,6 +108,7 @@ import com.nxredux.mobile.options.WiiOptions
 import com.nxredux.mobile.options.WiiuOptions
 import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.NdsScreen
+import com.nxredux.mobile.options.NdsView
 import com.nxredux.mobile.options.PadOptions
 import com.nxredux.mobile.options.ScreenScaling
 import com.nxredux.mobile.options.SpeedOptions
@@ -499,8 +502,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     // ---- DS / 3DS 3D resolution (Nds3dResolution, N3ds3dResolution): melonDS's GL scale, Azahar's factor follow the layout ----
     private val res3d = Res3dController(this, renderer)
-    override val ndsView: com.nxredux.mobile.options.NdsView?
-        get() = if (DualScreenConsole.appliesTo(gameTag)) com.nxredux.mobile.options.NdsView(isLandscape(), renderer.ndsControllerMode()) else null
+    override val ndsView: NdsView?
+        get() = if (DualScreenConsole.appliesTo(gameTag)) NdsView(isLandscape(), renderer.ndsControllerMode()) else null
     override val nds3dDisplayMax: Int? get() = res3d.displayMax
     override val configWrites = Mutex()           // hotkey saves land in press order
     override val isNds: Boolean get() = NdsOptions.appliesTo(gameTag)
@@ -1283,22 +1286,13 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             if (driverMarker.abandon()) thread(name = "gpu-marker-clear") { driverMarker.clear() }
         }
         rumbles.forEach { it.release() }
-        // A controller's A only focuses the button (Android clicks on ENTER): A, B and BACK leave on release. A release
-        // needs its press here first, so a button held from the game as the dialog opens does not close it unseen.
-        var pressed = -1
+        // A controller's A only focuses the button (Android clicks on ENTER): A, B and BACK leave ([releaseKeyListener]).
         AlertDialog.Builder(this)
             .setTitle(title)
             .setMessage(message)
             .setCancelable(false)
             .setPositiveButton("Back") { _, _ -> finish() }
-            .setOnKeyListener { dialog, keyCode, event ->
-                val leaves = keyCode == KeyEvent.KEYCODE_BACK || PadKeymap.buttonFor(keyCode).let { it == NxButton.A || it == NxButton.B }
-                if (leaves) when (event.action) {
-                    KeyEvent.ACTION_DOWN -> if (event.repeatCount == 0) pressed = keyCode
-                    KeyEvent.ACTION_UP -> if (pressed == keyCode) { dialog.dismiss(); finish() }
-                }
-                leaves
-            }
+            .setOnKeyListener(releaseKeyListener(back = true) { dialog, _ -> dialog.dismiss(); finish() })
             .show()
             .also { dialog ->
                 // Android 16+ (targetSdk 36) sends Back to the dialog's callbacks, not its key listener: leave the same way.
@@ -1308,23 +1302,32 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             }
     }
 
-    /** A one-button notice the launch waits on. A controller's A or B leaves on release, as in [fail]. */
+    /**
+     * A dialog's controller keys: A or B (and BACK with [back]) act on release, given the button (null for BACK). A
+     * release needs its press here first, so a button held from the game as the dialog opens does not act unseen.
+     */
+    private fun releaseKeyListener(back: Boolean, onRelease: (DialogInterface, NxButton?) -> Unit): DialogInterface.OnKeyListener {
+        var pressed = -1
+        return DialogInterface.OnKeyListener { dialog, keyCode, event ->
+            val button = PadKeymap.buttonFor(keyCode).takeIf { it == NxButton.A || it == NxButton.B }
+            if (button == null && !(back && keyCode == KeyEvent.KEYCODE_BACK)) return@OnKeyListener false
+            when (event.action) {
+                KeyEvent.ACTION_DOWN -> if (event.repeatCount == 0) pressed = keyCode
+                KeyEvent.ACTION_UP -> if (pressed == keyCode) onRelease(dialog, button)
+            }
+            true
+        }
+    }
+
+    /** A one-button notice the launch waits on. A controller's A or B leaves ([releaseKeyListener]). */
     suspend fun confirmNotice(message: String) {
         if (isFinishing || isDestroyed) return
         val answered = CompletableDeferred<Unit>()
-        var pressed = -1
         val dialog = AlertDialog.Builder(this)
             .setMessage(message)
             .setCancelable(false)
             .setPositiveButton("OK") { _, _ -> answered.complete(Unit) }
-            .setOnKeyListener { dialog, keyCode, event ->
-                val leaves = keyCode == KeyEvent.KEYCODE_BACK || PadKeymap.buttonFor(keyCode).let { it == NxButton.A || it == NxButton.B }
-                if (leaves) when (event.action) {
-                    KeyEvent.ACTION_DOWN -> if (event.repeatCount == 0) pressed = keyCode
-                    KeyEvent.ACTION_UP -> if (pressed == keyCode) { dialog.dismiss(); answered.complete(Unit) }
-                }
-                leaves
-            }
+            .setOnKeyListener(releaseKeyListener(back = true) { dialog, _ -> dialog.dismiss(); answered.complete(Unit) })
             .setOnDismissListener { answered.complete(Unit) }
             .show()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) dialog.onBackInvokedDispatcher.registerOnBackInvokedCallback(
@@ -1355,7 +1358,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /**
      * The text box for the core's open entry: OK types the answer into the core ([CoreTextInput]: the account's name with
      * nothing typed); Cancel leaves the game's keyboard open, its Start still answering, with a notice to bring the box
-     * back. A controller's A answers OK and B cancels, on release after their press here, as in [fail].
+     * back. A controller's A answers OK and B cancels ([releaseKeyListener]).
      */
     private fun showCoreTextBox(t: GLRetroView.TextInput) {
         if (isFinishing || isDestroyed) return
@@ -1389,21 +1392,13 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             }
         }
         field.setOnEditorActionListener { _, action, _ -> (action == EditorInfo.IME_ACTION_DONE).also { if (it) answer(true) } }
-        var pressed = -1
         dialog = AlertDialog.Builder(this)
             .setTitle("Keyboard")
             .setView(frame)
             .setPositiveButton("OK") { _, _ -> answer(true) }
             .setNegativeButton("Cancel") { _, _ -> answer(false) }
             .setOnCancelListener { answer(false) }
-            .setOnKeyListener { _, keyCode, event ->
-                val button = PadKeymap.buttonFor(keyCode).takeIf { it == NxButton.A || it == NxButton.B } ?: return@setOnKeyListener false
-                when (event.action) {
-                    KeyEvent.ACTION_DOWN -> if (event.repeatCount == 0) pressed = keyCode
-                    KeyEvent.ACTION_UP -> if (pressed == keyCode) answer(button == NxButton.A)
-                }
-                true
-            }
+            .setOnKeyListener(releaseKeyListener(back = false) { _, button -> answer(button == NxButton.A) })
             .create()
         dialog.setCanceledOnTouchOutside(false)
         dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
@@ -1513,14 +1508,14 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /** On a DS, 3DS or Wii U game where SELECT + Left / Right changes the layout: the tip saying so, until hidden from its button ([LayoutTip]). */
     private fun offerLayoutTip() {
         val wiiu = WiiuOptions.appliesTo(gameTag)
-        val tipConsole = if (wiiu) TipConsole.WIIU else if (isN3ds) TipConsole.N3DS else TipConsole.DS
+        val tipConsole = if (wiiu) DsKind.WIIU else if (isN3ds) DsKind.N3DS else DsKind.DS
         if (!LayoutTip.due((isN3ds || isNds || wiiu) && !netplayLocks, padLayout.skinShown, input.skinLayouts, LayoutTip.hidden(tipConsole, settings.layoutTipHidden, settings.layoutTipHidden3ds, settings.layoutTipHiddenWiiu))) return
         // up until closed: Close, or its button to hide it for good
-        input.showNotice(LayoutTip.text(wiiu), com.nxredux.mobile.ui.nx.NotificationQueue.UNTIL_CLOSED, LayoutTip.ACTION) {
+        input.showNotice(LayoutTip.text(wiiu), NotificationQueue.UNTIL_CLOSED, LayoutTip.ACTION) {
             when (tipConsole) {
-                TipConsole.WIIU -> settings.layoutTipHiddenWiiu = true
-                TipConsole.N3DS -> settings.layoutTipHidden3ds = true
-                TipConsole.DS -> settings.layoutTipHidden = true
+                DsKind.WIIU -> settings.layoutTipHiddenWiiu = true
+                DsKind.N3DS -> settings.layoutTipHidden3ds = true
+                DsKind.DS -> settings.layoutTipHidden = true
             }
         }
     }

@@ -445,7 +445,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val variant = SkinChoice.variantFor(CoreRegistry.baseTag(tag), NdsOptions.appliesTo(tag), host.dcArcadeSet, host.padProfile().kind == com.nxredux.mobile.ui.nx.PadProfile.Kind.GC, host.wiiPad, host.padProfile().cStick, host.padProfile().segaThree)
         val settings = host.settings
         // the Wii U's frame cut to what it shows: the player's layout on a regular phone sideways, else the TV over the GamePad
-        val stackAspect = WiiuOptions.skinLayout(host.frontendValues, host.isLandscape(resources.configuration.orientation), controllerMode = false, activity.windowShape().screenClass)
+        val stackAspect = WiiuOptions.skinLayout(host.frontendValues, host.isLandscape(resources.configuration.orientation), activity.windowShape().screenClass)
             ?.takeIf { WiiuOptions.appliesTo(tag) }?.let { WiiuLayout.skinAspect(it) } ?: SkinChoice.WIIU_STACK_ASPECT
         return SkinKey(w, h, resources.displayMetrics.densityDpi, tablet, tag, aspect, hinge, variant, settings.skinTweaks, settings.overlayTweaks, micHidden = ds && !settings.micButtonShown, stackAspect = stackAspect)
     }
