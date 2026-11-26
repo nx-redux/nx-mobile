@@ -106,6 +106,8 @@ class SyncAreasTest {
             "3DS/Azahar/sysdata/nx_dlp_child.key",
             "3DS/Azahar/nand/00000000000000000000000000000000/title/00040001/00030800/content/00000000.app",
             "3DS/Azahar/nand/dbs/ticket.db/0004000100030800.0004949B34CACAFD.tik",
+            "3DS/Azahar/sdmc/nx-redux/children/0004000100030800.txt",
+            "3DS/Azahar/sdmc/nx-redux/download-play.txt",
         ).forEach { assertTrue(SyncAreas.isPerDevice(it), it) }
         listOf(
             "3DS/Azahar/nand/00000000000000000000000000000000/title/00040000/00030800/content/00000000.app",

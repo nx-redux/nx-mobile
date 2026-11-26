@@ -185,10 +185,13 @@ static void fail(const char* text) {
 static void announce(u64 child) {
     mkdir(PICK_DIR, 0777);
     unlink(PICK_ACK);
-    FILE* f = fopen(PICK_FILE, "w");
+    // Written aside and renamed in, so the app never reads it half written.
+    FILE* f = fopen(PICK_FILE ".part", "w");
     if (!f) return;
     fprintf(f, "%016llX\n", child);
     fclose(f);
+    unlink(PICK_FILE);
+    if (rename(PICK_FILE ".part", PICK_FILE) != 0) return;
     for (int i = 0; i < 90 && aptMainLoop(); i++) { // up to 1.5 s
         if (access(PICK_ACK, F_OK) == 0) break;
         gspWaitForVBlank();
@@ -235,7 +238,7 @@ int main(void) {
             if (host_count > 0 && (down & KEY_UP)) picked = (picked + host_count - 1) % host_count;
             if (host_count > 0 && (down & KEY_A || tapped)) {
                 dlpStopScan();
-                dlpDropStaleChild(dlpChildOf(&hosts[picked]), hosts[picked].version);
+                dlpCheckKeptChild(dlpChildOf(&hosts[picked]), hosts[picked].size);
                 if (R_SUCCEEDED(dlpStartSession(hosts[picked].mac, dlpChildOf(&hosts[picked])))) {
                     phase = DOWNLOADING;
                     was_connected = false;
@@ -258,10 +261,12 @@ int main(void) {
                     u64 child = dlpChildOf(&hosts[picked]);
                     dlpPassphrase(pass);
                     dlpStopSession();
+                    dlpRememberChild(child, hosts[picked].size);
                     announce(child);
                     dlpStartChild(mac, pass, child);
                     // The restart takes over from here.
                     for (int i = 0; i < 600 && aptMainLoop(); i++) gspWaitForVBlank();
+                    dlpForgetChild(child);
                     fail("The game did not start.");
                 } else if ((was_connected && !now.connected) || (!now.connected && osGetTime() - phase_started > 10000)) {
                     dlpStopSession();

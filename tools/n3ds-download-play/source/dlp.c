@@ -1,5 +1,8 @@
 // Command layouts follow Azahar's dlp:CLNT and ns:s handlers (src/core/hle/service/dlp, apt/apt.cpp).
 #include <malloc.h>
+#include <stdio.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <string.h>
 
 #include "dlp.h"
@@ -154,12 +157,40 @@ Result dlpStartChild(const u8 mac[6], const u8 passphrase[9], u64 child) {
     return call(ns);
 }
 
-bool dlpDropStaleChild(u64 child, u16 host_version) {
-    if (host_version == 0 || R_FAILED(amInit())) return false; // no version to compare: keep what is there
-    AM_TitleEntry entry;
-    bool dropped = false;
-    if (R_SUCCEEDED(AM_GetTitleInfo(MEDIATYPE_NAND, 1, &child, &entry)) && entry.version != host_version)
-        dropped = R_SUCCEEDED(AM_DeleteTitle(MEDIATYPE_NAND, child));
+#define KEPT_DIR "sdmc:/nx-redux/children"
+
+static void keptPath(char* out, size_t n, u64 child) { snprintf(out, n, KEPT_DIR "/%016llX.txt", child); }
+
+static void deleteChild(u64 child) {
+    if (R_FAILED(amInit())) return;
+    AM_DeleteTitle(MEDIATYPE_NAND, child);
     amExit();
-    return dropped;
+}
+
+void dlpCheckKeptChild(u64 child, u32 size) {
+    char path[64];
+    keptPath(path, sizeof path, child);
+    unsigned long kept = 0;
+    FILE* f = fopen(path, "r");
+    bool known = f && fscanf(f, "%lu", &kept) == 1 && kept == size;
+    if (f) fclose(f);
+    if (!known) dlpForgetChild(child);
+}
+
+void dlpRememberChild(u64 child, u32 size) {
+    char path[64];
+    keptPath(path, sizeof path, child);
+    mkdir("sdmc:/nx-redux", 0777);
+    mkdir(KEPT_DIR, 0777);
+    FILE* f = fopen(path, "w");
+    if (!f) return;
+    fprintf(f, "%lu\n", (unsigned long)size);
+    fclose(f);
+}
+
+void dlpForgetChild(u64 child) {
+    char path[64];
+    keptPath(path, sizeof path, child);
+    unlink(path);
+    deleteChild(child);
 }

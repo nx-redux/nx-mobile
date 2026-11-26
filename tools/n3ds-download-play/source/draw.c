@@ -7,7 +7,14 @@
 static C3D_RenderTarget *top, *bottom;
 static C3D_Tex atlas;
 static C3D_Tex icon_tex[ICON_SLOTS];
-static const u16* icon_src[ICON_SLOTS];
+// What each slot holds, by content: a list slot's host can change under the same address.
+static u32 icon_hash[ICON_SLOTS];
+
+static u32 iconHash(const u16* src) {
+    u32 h = 2166136261u;
+    for (int i = 0; i < 48 * 48; i++) h = (h ^ src[i]) * 16777619u;
+    return h | 1; // never 0, an empty slot's
+}
 
 // Where (x, y) of a w-wide texture lands in the GPU's tiled layout: 8x8 tiles, Morton order inside each.
 static inline u32 tiled(u32 x, u32 y, u32 w) {
@@ -114,7 +121,8 @@ float text(const Font* f, float x, float y, const char* s, Color c) {
 void icon(int slot, const u16* src, float x, float y, float size) {
     if (slot < 0 || slot >= ICON_SLOTS) return;
     C3D_Tex* t = &icon_tex[slot];
-    if (icon_src[slot] != src) {
+    u32 h = iconHash(src);
+    if (icon_hash[slot] != h) {
         // Decode the icon's own tiling, then lay it out as the top-left 48x48 of a 64x64 texture.
         u16* px = (u16*)t->data;
         memset(px, 0, 64 * 64 * 2);
@@ -127,7 +135,7 @@ void icon(int slot, const u16* src, float x, float y, float size) {
                     px[tiled(ix, iy, 64)] = src[n];
                 }
         C3D_TexFlush(t);
-        icon_src[slot] = src;
+        icon_hash[slot] = h;
     }
     Tex3DS_SubTexture sub = {48, 48, 0.0f, 1.0f, 48.0f / 64, 1.0f - 48.0f / 64};
     C2D_Image img = {t, &sub};

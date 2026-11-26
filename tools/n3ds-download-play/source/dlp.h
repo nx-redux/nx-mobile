@@ -41,6 +41,10 @@ Result dlpStopSession(void);
 u64 dlpChildOf(const DlpTitleInfo* info);
 // Hands the child its host (MAC and passphrase) and restarts into it.
 Result dlpStartChild(const u8 mac[6], const u8 passphrase[9], u64 child);
-// Keeps an installed child only when it is the version the host offers (Azahar downloads a child only when none is
-// installed): an older one is removed so the next session downloads the host's. True when it was removed.
-bool dlpDropStaleChild(u64 child, u16 host_version);
+// Azahar downloads a child only when none is installed, so one is kept between sessions only with a record, written
+// once its download completed, of the size the host offered: a half-installed child, or one from another version of
+// the host's game, is removed so the session downloads it afresh.
+void dlpCheckKeptChild(u64 child, u32 size);
+void dlpRememberChild(u64 child, u32 size);
+// Removes a child and its record: one that would not start.
+void dlpForgetChild(u64 child);
