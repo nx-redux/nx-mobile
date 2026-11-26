@@ -116,8 +116,12 @@ internal fun gameInfoLabel(achievements: Boolean): String = if (achievements) "A
  */
 internal fun consoleInfoLines(row: MainRow.System): List<InfoLine> {
     val games = row.systems.sumOf { it.gameCount }
-    // The DS console the dumps bring into a library without DS games: its one row is DS Download Play, not "0 games".
-    val label = if (games == 0 && row.systems.any { it.tag == "NDS" }) com.nxredux.mobile.runner.DsMenu.TITLE else gamesLabel(games)
+    // The DS or 3DS console a library without its games gets: its one row is Download Play, not "0 games".
+    val label = when {
+        games == 0 && row.systems.any { it.tag == "NDS" } -> com.nxredux.mobile.runner.DsMenu.TITLE
+        games == 0 && row.systems.any { it.tag == "3DS" } -> com.nxredux.mobile.runner.N3dsDownloadPlay.TITLE
+        else -> gamesLabel(games)
+    }
     return listOf(InfoLine(InfoKind.COUNT, label))
 }
 

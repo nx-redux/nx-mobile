@@ -14,7 +14,7 @@ import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.runner.ClassicNes
 import com.nxredux.mobile.runner.CoreDescriptor
 import com.nxredux.mobile.runner.CoreRegistry
-import com.nxredux.mobile.runner.DsMenu
+import com.nxredux.mobile.runner.SystemRows
 import com.nxredux.mobile.runner.GameSession
 import com.nxredux.mobile.settings.MenuCategory
 import com.nxredux.mobile.settings.MenuStyle
@@ -129,9 +129,10 @@ internal class LaunchController(
         if (launchJob?.isActive == true) return null   // a launch is already in flight
         switcher.cancelLoad()   // a switcher still loading must not open over the launched game
         val job = scope.launch {
-            if (DsMenu.isMenu(game.ref.value)) {
-                // No file to check or companions to find: the game process boots the DS menu (and checks its BIOS). It
-                // still opens its own config and battery save, so an import or a sync refuses it as any game.
+            if (SystemRows.isRow(game.ref.value)) {
+                // No file to check or companions to find: the game process boots the console's own program (and checks
+                // what it needs). It still opens its own config and battery save, so an import or a sync refuses it as
+                // any game.
                 val core = listed.core ?: return@launch
                 SaveTransferRules.launchRefusal(deps.saveTransfer?.importing == true, deps.deviceSync?.running == true)?.let { host.showNotice(it); return@launch }
                 if (host.kidsLocked()) return@launch
