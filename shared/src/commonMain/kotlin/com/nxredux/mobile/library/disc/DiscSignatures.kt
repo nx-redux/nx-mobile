@@ -2,8 +2,8 @@ package com.nxredux.mobile.library.disc
 
 import com.nxredux.mobile.storage.Bytes
 
-/** What a disc image is, by its own bytes ([DiscSignatures]); [consoleId] null: recognised but never placed (Saturn). */
-enum class DiscKind(val consoleId: String?) { PS("ps"), PSP("psp"), SEGACD("segacd"), SATURN(null), DC("dc"), PCE("pce"), GC("gc"), WII("wii") }
+/** What a disc image is, by its own bytes ([DiscSignatures]), and the console it places under. */
+enum class DiscKind(val consoleId: String) { PS("ps"), PSP("psp"), SEGACD("segacd"), SATURN("saturn"), DC("dc"), PCE("pce"), GC("gc"), WII("wii") }
 
 /** The 2048-byte user data of the first data track's sectors 0, 1 and 16 (null: not read, or past the end). */
 class DataSectors(val s0: ByteArray?, val s1: ByteArray?, val s16: ByteArray?)
@@ -14,6 +14,12 @@ class DataSectors(val s0: ByteArray?, val s1: ByteArray?, val s16: ByteArray?)
  * GameCube and Wii by their header magic.
  */
 object DiscSignatures {
+    /**
+     * Goes up whenever a disc that answered nothing may now place (a kind becomes placeable): a stored nothing-recognised
+     * answer from an older version is probed again, without the full rescan a new index version costs.
+     */
+    const val VERSION = 2
+
     fun identify(d: DataSectors): DiscKind? {
         d.s0?.let { s ->
             when {

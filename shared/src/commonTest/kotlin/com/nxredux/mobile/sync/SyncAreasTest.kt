@@ -83,7 +83,7 @@ class SyncAreasTest {
             "3DS/Azahar/dump/x", "PSP/SYSTEM/ppsspp.ini", "PSP/SYSTEM/controls.ini", "PSP/SYSTEM/CACHE/ULUS10160.cache",
         )
         val saves = listOf(
-            "GBA/Advance Wars.srm", "DC/Soulcalibur (USA).A1.bin", "FBN/fbneo/mslug.fs", "N64/Paper Mario.srm",
+            "GBA/Advance Wars.srm", "DC/Soulcalibur (USA).A1.bin", "SATURN/Panzer Dragoon.bkr", "FBN/fbneo/mslug.fs", "N64/Paper Mario.srm",
             "PS2/God of War II (USA)/Mcd001.ps2", "PSP/SAVEDATA/ULUS10160DATA00/DATA.BIN", "PSP/Cheats/ULUS10160.ini",
             "PSP/NAND/flash0/font/ltn0.pgf", "NDS/melonDS DS/dldi_sd_card.bin",
             "GC/User/GC/USA/Card A/01-GMSE-super_mario_sunshine.gci", "GC/User/GC/SRAM.raw", "WII/User/GBA/Saves/x.sav",

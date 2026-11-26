@@ -17,7 +17,7 @@ import yaml
 CORE_PROFILES = {c: c for c in (
     "a5200 armsx2 azahar fake08 fbneo fceumm flycast gambatte gearcoleco genesis_plus_gx gpsp handy "
     "mednafen_pce_fast mednafen_supafaust mednafen_vb mednafen_wswan mgba mupen64plus_next pcsx_rearmed picodrive "
-    "pokemini ppsspp prboom prosystem race snes9x stella2014 swanstation"
+    "pokemini ppsspp prboom prosystem race snes9x stella2014 swanstation yabasanshiro"
 ).split()}
 CORE_PROFILES["melondsds"] = "melonds_ds"
 
@@ -28,7 +28,7 @@ CORE_DEFAULT = {
     "handy": "LYNX", "mednafen_pce_fast": "PCE", "mednafen_supafaust": "SFC", "mednafen_vb": "VB",
     "mednafen_wswan": "WSC", "mgba": "GBA", "mupen64plus_next": "N64", "pcsx_rearmed": "PS", "picodrive": "MD",
     "pokemini": "PKM", "ppsspp": "PSP", "prboom": "PRBOOM", "prosystem": "A7800", "race": "NGP", "snes9x": "SFC",
-    "stella2014": "A2600", "swanstation": "PS", "melonds_ds": "NDS",
+    "stella2014": "A2600", "swanstation": "PS", "yabasanshiro": "SATURN", "melonds_ds": "NDS",
 }
 
 ARCADE = ("snk-neogeo-mvs snk-neogeo-aes snk-neogeo-cd igs-pgm super-kaneko-nova deco-cassette namco-na1 "
@@ -41,7 +41,7 @@ SYSTEM_TAGS = {
     "nintendo-pokemon-mini": "PKM", "nintendo-64": "N64", "nintendo-64dd": "N64",
     "sega-megadrive": "MD", "sega-megacd": "SEGACD", "sega-mastersystem": "SMS", "sega-gamegear": "GG",
     "sega-32x": "32X", "sega-dreamcast": "DC", "sega-naomi": "DC", "sega-naomi2": "DC", "sega-atomiswave": "DC",
-    "sega-systemsp": "DC", "colecovision": "COLECO", "atari-lynx": "LYNX", "atari-7800": "A7800",
+    "sega-systemsp": "DC", "sega-saturn": "SATURN", "colecovision": "COLECO", "atari-lynx": "LYNX", "atari-7800": "A7800",
     "atari-5200": "A5200", "doom": "PRBOOM", "heretic": "PRBOOM",
     **{s: "FBN" for s in ARCADE},
 }

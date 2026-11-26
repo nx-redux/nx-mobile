@@ -11,7 +11,7 @@ enum class SegaPad { THREE, SIX }
  * on-screen/physical position sends to the core ([sends]) and what is drawn on it
  * ([label], null = the button's own glyph), which buttons are left off the pad ([isHidden]) or only off its face
  * cluster ([isHiddenInCluster]), and which button the app's menus act on for an on-screen press ([menuButton]).
- * The Genesis family draws the real Sega 6-button pad ([segaCluster]). DC, N64, 3DS, Wii and GameCube are not here
+ * The Genesis family and the Saturn draw the real Sega 6-button pad ([segaCluster]). DC, N64, 3DS, Wii and GameCube are not here
  * ([com.nxredux.mobile.ui.nx.PadProfile]).
  */
 class PadMap private constructor(
@@ -34,7 +34,7 @@ class PadMap private constructor(
     fun menuButton(button: NxButton): NxButton = menu[button] ?: button
 
     /** The Sega pad resolved to 3 buttons (no X Y Z, no Mode): its skin is the A B C one. */
-    val segaThree: Boolean get() = segaCluster && SELECT in hidden
+    val segaThree: Boolean get() = segaCluster && clusterHidden.isNotEmpty()
 
     /** The keycode a pressed [keyCode] reaches the core as; keys that are not face/shoulder/START/SELECT pass through. */
     fun sendKey(keyCode: Int): Int {
@@ -75,11 +75,18 @@ class PadMap private constructor(
         // 3-button: the cluster shows only A B C, Mode is gone, and the L1/R1 pills keep their own glyphs.
         private val SEGA_THREE = PadMap(SEGA_ROUTES, mapOf(Y to "A", X to "B", A to "C"), hidden = setOf(SELECT),
             menu = SEGA_MENU, clusterHidden = setOf(B, L1, R1), segaCluster = true)
+        // The skin keeps the Genesis six's spots; the core names its RetroPad buttons B=A, A=B, L=C, Y=X, X=Y, R=Z, L2=L, R2=R.
+        // No SELECT (the Saturn pad has none): MENU opens the menu on screen, a physical SELECT + START still does.
+        private val SATURN_PAD = PadMap(
+            mapOf(Y to B, X to A, A to L1, B to Y, L1 to X),
+            mapOf(Y to "A", X to "B", A to "C", B to "X", L1 to "Y", R1 to "Z", L2 to "L", R2 to "R"),
+            hidden = setOf(SELECT), menu = SEGA_MENU, segaCluster = true)
         private val SEGA_8BIT = PadMap(labels = mapOf(B to "1", A to "2"))
         private val TURBO_AB = mapOf(X to "TA", Y to "TB")
 
         fun forTag(tag: String, sega: SegaPad? = null): PadMap = when (CoreRegistry.baseTag(tag)) {
             in SEGA_TAGS -> if (sega == SegaPad.THREE) SEGA_THREE else SEGA_SIX
+            "SATURN" -> SATURN_PAD
             "SMS", "GG", "SG1000", "A7800" -> SEGA_8BIT
             "NGP", "NGPC" -> PadMap(labels = mapOf(B to "A", A to "B", START to "OPTION"), menu = mapOf(B to A, A to B, Y to X, X to Y))
             "PCE" -> PadMap(labels = mapOf(A to "I", B to "II", Y to "III", X to "IV", L1 to "V", R1 to "VI", L2 to "Mode", START to "RUN"))

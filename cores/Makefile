@@ -76,10 +76,10 @@ check-tools:
 # ---- core list and per-core variables ------------------------------------
 # <core>_LICENSE lists the licence files in the core's pinned checkout; the build concatenates them into
 # output/licenses/<core>.txt and the app ships that as the asset licenses/<core>.txt. A core without one (fbneo, melondsds,
-# flycast) has a curated ../LICENSES/<core>.txt instead. check-licenses fails when a core has neither.
+# flycast, yabasanshiro) has a curated ../LICENSES/<core>.txt instead. check-licenses fails when a core has neither.
 CORES = gambatte fceumm snes9x genesis_plus_gx mgba melondsds mupen64plus_next ppsspp \
   race mednafen_pce_fast mednafen_vb handy stella2014 prosystem a5200 mednafen_wswan mednafen_supafaust pokemini fake08 prboom gpsp pcsx_rearmed \
-  swanstation picodrive gearcoleco fbneo flycast azahar dolphin armsx2 cemu
+  swanstation picodrive gearcoleco fbneo flycast yabasanshiro azahar dolphin armsx2 cemu
 
 gambatte_REPO = https://github.com/libretro/gambatte-libretro
 gambatte_HASH = 77f2567d718b8973d02caa2daa8dce4953faf811
@@ -390,6 +390,35 @@ flycast_ARTIFACT = flycast_libretro.so
 flycast_SUBMODULES = --recursive core/deps/libchdr core/deps/tinygettext core/deps/asio \
   core/deps/glslang core/deps/Vulkan-Headers core/deps/VulkanMemoryAllocator
 flycast_FLAGS = -DLIBRETRO=ON -DUSE_GLES=ON -DUSE_OPENMP=OFF -DCMAKE_OSX_ARCHITECTURES=arm64 -DNX_LIBRETRO_GGPO=ON
+
+# YabaSanshiro (Saturn): libretro/yabause's yabasanshiro branch, head c6de72c0 (2026-11-25). ndk-build in
+# yabause/src/libretro (jni/Android.mk, LOCAL_MODULE retro): GLES 3, the arm64 SH-2 dynarec. Its one submodule (eigen,
+# for the standalone retro_arena UI) is not built, so it is not fetched. Licence notices: LICENSES/yabasanshiro.txt.
+# patches/yabasanshiro/0001: Low and High Work RAM as one fixed block, exposed as SYSTEM_RAM and as a memory map at
+# their SH-2 addresses, in the layout RetroAchievements' Saturn sets use (the core exposed no RAM).
+# patches/yabasanshiro/0002: disk control (ext when the frontend has it) and .m3u, so multi-disc games change disc
+# through the CD block's tray (closing on no disc, or one that fails to open, keeps it open).
+# patches/yabasanshiro/0003: backup RAM per game, <save dir>/<content name>.bkr, instead of one shared
+# yabasanshiro/backup.bin, so it syncs and is deleted with its game like other battery saves. It is the core's 64 KB
+# layout, not its 8 MB extended file (every game's would travel with Device Sync), and as the core only loads that one,
+# the port writes it whenever a frame changed it and at unload, through a temporary file and a rename (no save lost or
+# torn by a kill); a failed write is retried at the next change and at unload, not every frame.
+# patches/yabasanshiro/0004: with yabasanshiro_force_hle_bios on, a missing BIOS file no longer aborts the load (the app
+# forces the option for a launch without one).
+# patches/yabasanshiro/0005: yabasanshiro_resolution_mode applies mid-game, between frames, through the core's own
+# resolution-change path; the frontend's framebuffer is re-read every frame, since it is remade for a larger frame.
+# patches/yabasanshiro/0006: retro_cheat_set splits a code into its address/value pairs on '+' and whitespace; the
+# database's '+'-joined codes reached CheatAddARCode whole, which read a wrong value and only the first pair.
+# patches/yabasanshiro/0007: the HLE BIOS reports the console's 32 KB backup RAM in the 64 KB layout, not 2 KB (games that
+# need more than 30 blocks refused to save).
+# patches/yabasanshiro/0008: save states no longer go through tmpfile(), which returns NULL in an Android app (the state
+# aborted the app): a temporary file in the system folder instead; a state that cannot be made fails cleanly.
+# patches/yabasanshiro/0009: the 68000 sound CPU's registers go into save states (the Musashi interface saved none, so a
+# state loaded before the BIOS started the sound CPU, a resume at launch, was silent); SCSP chunk version 4.
+yabasanshiro_REPO = https://github.com/libretro/yabause
+yabasanshiro_HASH = c6de72c08dda71b74648e9e055598cec1a974a11
+yabasanshiro_BUILD_PATH = yabause/src/libretro
+yabasanshiro_SUBMODULES = ':(exclude)yabause/src/retro_arena/nanogui-sdl/ext/eigen'
 
 # Azahar (Nintendo 3DS), 2126.2 (a lightweight tag on 219d743a1e698101fe1ab8bef43e6563126c3c27). The libretro core is
 # src/citra_libretro, the SHARED target citra_libretro (OUTPUT_NAME azahar_libretro, empty prefix) gated on

@@ -1,0 +1,111 @@
+# license: modifies YabaSanshiro (https://github.com/libretro/yabause), GPL-2.0 (LICENSE); this patch is distributed under the same license.
+# RetroAchievements (and RAM cheats) read nothing: retro_get_memory_data returned NULL. Low and High Work RAM now live in
+# one 2 MB block at a fixed address (Low first), exposed as SYSTEM_RAM and as a memory map at their SH-2 addresses
+# (0x00200000 and 0x06000000), each byte where the core keeps it: 16-bit words in host order, the layout RA's Saturn
+# sets were made against. The map is handed in retro_load_game, before the machine (and its RAM) is set up at the first
+# context reset, hence the static block.
+diff --git a/yabause/src/libretro/libretro.c b/yabause/src/libretro/libretro.c
+index 9aa9254..4c5acbd 100644
+--- a/yabause/src/libretro/libretro.c
++++ b/yabause/src/libretro/libretro.c
+@@ -23,6 +23,7 @@
+ #include "yabause.h"
+ #include "yui.h"
+ #include "cheat.h"
++#include "memory.h"
+ 
+ #include "cs0.h"
+ #include "cs2.h"
+@@ -1304,6 +1305,14 @@ bool retro_load_game(const struct retro_game_info *info)
+ 
+    environ_cb(RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS, desc);
+ 
++   /* The Work RAMs at their SH-2 addresses, so a frontend that maps memory by address (rcheevos) finds them. */
++   static struct retro_memory_descriptor mem_desc[] = {
++      { RETRO_MEMDESC_SYSTEM_RAM, WorkRam, 0, 0x00200000, 0, 0, 0x100000, "LWRAM" },
++      { RETRO_MEMDESC_SYSTEM_RAM, WorkRam + 0x100000, 0, 0x06000000, 0, 0, 0x100000, "HWRAM" },
++   };
++   struct retro_memory_map mem_map = { mem_desc, sizeof(mem_desc) / sizeof(mem_desc[0]) };
++   environ_cb(RETRO_ENVIRONMENT_SET_MEMORY_MAPS, &mem_map);
++
+    yinit.cdcoretype       = CDCORE_ISO;
+    yinit.cdpath           = full_path;
+    yinit.biospath         = (hle_bios_force ? NULL : bios_path);
+@@ -1336,13 +1345,18 @@ unsigned retro_api_version(void)
+     return RETRO_API_VERSION;
+ }
+ 
++/* Both Work RAMs as one linear block, each byte where the SH-2s keep it (16-bit words in host order). */
+ void *retro_get_memory_data(unsigned id)
+ {
++   if (id == RETRO_MEMORY_SYSTEM_RAM)
++      return WorkRam;
+    return NULL;
+ }
+ 
+ size_t retro_get_memory_size(unsigned id)
+ {
++   if (id == RETRO_MEMORY_SYSTEM_RAM)
++      return sizeof(WorkRam);
+    return 0;
+ }
+ 
+diff --git a/yabause/src/memory.c b/yabause/src/memory.c
+index ee7be64..50faa59 100644
+--- a/yabause/src/memory.c
++++ b/yabause/src/memory.c
+@@ -99,6 +99,10 @@ readlongfunc ReadLongList[0x1000];
+ 
+ u8 *HighWram;
+ u8 *LowWram;
++/* Low then High Work RAM in one block at a fixed address: the frontend reads it as linear system RAM (Low at 0x000000,
++ * High at 0x100000, the layout RetroAchievements' Saturn sets use) and through the memory map retro_load_game hands it
++ * before the machine is set up. */
++u8 WorkRam[0x200000] __attribute__((aligned(64)));
+ u8 *BiosRom;
+ u8 *BupRam;
+ 
+diff --git a/yabause/src/memory.h b/yabause/src/memory.h
+index 3c8363b..d4728d3 100644
+--- a/yabause/src/memory.h
++++ b/yabause/src/memory.h
+@@ -377,6 +377,7 @@ extern "C" {
+ 
+   extern u8 *HighWram;
+   extern u8 *LowWram;
++  extern u8 WorkRam[0x200000];
+   extern u8 *BiosRom;
+   extern u8 *BupRam;
+   extern u8 BupRamWritten;
+diff --git a/yabause/src/yabause.c b/yabause/src/yabause.c
+index 5034521..74a542d 100644
+--- a/yabause/src/yabause.c
++++ b/yabause/src/yabause.c
+@@ -212,11 +212,9 @@ int YabauseInit(yabauseinit_struct *init)
+    if ((BiosRom = T2MemoryInit(0x80000)) == NULL)
+       return -1;
+ 
+-   if ((HighWram = T2MemoryInit(0x100000)) == NULL)
+-      return -1;
+-
+-   if ((LowWram = T2MemoryInit(0x100000)) == NULL)
+-      return -1;
++   memset(WorkRam, 0, sizeof(WorkRam));
++   LowWram = WorkRam;
++   HighWram = WorkRam + 0x100000;
+ 
+    yabsys.extend_backup = init->extend_backup;
+    if (yabsys.extend_backup) {
+@@ -482,12 +480,7 @@ void YabauseDeInit(void) {
+       T2MemoryDeInit(BiosRom);
+    BiosRom = NULL;
+ 
+-   if (HighWram)
+-      T2MemoryDeInit(HighWram);
+    HighWram = NULL;
+-
+-   if (LowWram)
+-      T2MemoryDeInit(LowWram);
+    LowWram = NULL;
+ 
+    if (BupRam)

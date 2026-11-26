@@ -348,7 +348,10 @@ object NdsOptions {
     fun valueLabel(key: String, value: String): String = FrontendOptions.option(key)?.labelOf(value) ?: value
 }
 
-private fun scales(console: Res3dConsole, max: Int): List<String> = (1..max.coerceIn(1, console.coreMax)).map { it.toString() }
+private fun scales(console: Res3dConsole, max: Int): List<String> {
+    val top = max.coerceIn(1, console.coreMax)
+    return (1..top).filter { console.scaleSteps?.contains(it) ?: true }.map { it.toString() }
+}
 
 /**
  * [console]'s 3D Resolution row and its two sub-rows: Max Scale (Auto) and Scale (Performance). [displayMax] is the biggest
@@ -368,6 +371,7 @@ fun resolutionRows(console: Res3dConsole, displayMax: Int?, cap: Int = console.d
         Res3dConsole.PS1, Res3dConsole.PCSX -> "PS1"
         Res3dConsole.DC -> "Dreamcast"
         Res3dConsole.N64 -> "N64"
+        Res3dConsole.SATURN -> "Saturn"
         Res3dConsole.CEMU -> "console"
     }
     // what the scale draws: the PS2 and PSP cores draw the whole picture at it, the DS and 3DS ones only the 3D

@@ -1,5 +1,6 @@
 package com.nxredux.mobile.library
 
+import com.nxredux.mobile.library.disc.DiscSignatures
 import com.nxredux.mobile.runner.Console
 import com.nxredux.mobile.runner.ContentRef
 import com.nxredux.mobile.runner.CoreRegistry
@@ -107,9 +108,10 @@ private val DISC_EXTENSIONS = setOf("iso", "bin", "img", "cue", "gdi", "chd", "m
 
 /**
  * A scan's disc probes, each file's answer reused from [previous] while its size and modified time (and a sheet's data
- * file's) are unchanged; every readable answer this scan used is in [used], for the next index. An answer from a failed
- * read (or a sheet whose data file is missing) is not kept, so the next scan asks again; neither is one for a file (or
- * data file) whose provider reports no modified time, as in [HeadReads].
+ * file's) are unchanged, and, for a nothing-recognised answer, while [DiscSignatures.VERSION] is too; every readable
+ * answer this scan used is in [used], for the next index. An answer from a failed read (or a sheet whose data file is
+ * missing) is not kept, so the next scan asks again; neither is one for a file (or data file) whose provider reports no
+ * modified time, as in [HeadReads].
  */
 internal class DiscProbes(private val probe: com.nxredux.mobile.library.disc.DiscProbe, previous: List<IndexedProbe>) {
     private val before = previous.associateBy { it.ref }
@@ -120,12 +122,15 @@ internal class DiscProbes(private val probe: com.nxredux.mobile.library.disc.Dis
     suspend fun consoleOf(file: Entry, siblings: List<Entry>): String? {
         val modified = file.lastModified
         val known = before[file.ref.value]?.takeIf { p ->
-            modified != null && p.size == file.sizeBytes && p.modified == modified && dataUnchanged(p, siblings)
+            modified != null && p.size == file.sizeBytes && p.modified == modified && dataUnchanged(p, siblings) &&
+                (p.console != null || p.signatures == DiscSignatures.VERSION)
         }
         if (known != null) { kept[known.ref] = known; return known.console }
         val r = probe.probe(file, siblings)
         if (r.read && modified != null && (r.data == null || r.data.lastModified != null)) {
-            kept[file.ref.value] = IndexedProbe(file.ref.value, file.sizeBytes, modified, r.console, r.data?.ref?.value, r.data?.sizeBytes, r.data?.lastModified)
+            kept[file.ref.value] = IndexedProbe(
+                file.ref.value, file.sizeBytes, modified, r.console, r.data?.ref?.value, r.data?.sizeBytes, r.data?.lastModified, DiscSignatures.VERSION,
+            )
         }
         return r.console
     }

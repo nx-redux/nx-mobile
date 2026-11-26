@@ -100,6 +100,13 @@ class BiosCheckTest {
         assertEquals(BiosPlan.Hle(mapOf("reicast_hle_bios" to "enabled"),
             "Running without a Dreamcast BIOS: some games may not work. Put dc_boot.bin in Bios/DC/."), p)
     }
+    @Test fun plan_saturn_without_bios_runs_hle() {
+        val p = BiosCheck.plan("SATURN", CoreRegistry.requiredBios("SATURN"), "cue", emptySet(), netplay = false)
+        assertEquals(BiosPlan.Hle(mapOf("yabasanshiro_force_hle_bios" to "enabled"),
+            "Running without a Sega Saturn BIOS: some games may not work. Put saturn_bios.bin in Bios/SATURN/."), p)
+    }
+    @Test fun plan_saturn_with_sega_101_is_ok() =
+        assertEquals(BiosPlan.Ok, BiosCheck.plan("SATURN", CoreRegistry.requiredBios("SATURN"), "chd", setOf("sega_101.bin"), false))
     @Test fun plan_dc_with_bios_is_ok() =
         assertEquals(BiosPlan.Ok, BiosCheck.plan("DC", CoreRegistry.requiredBios("DC"), "chd", setOf("dc_boot.bin"), false))
     @Test fun plan_present_bios_is_ok_even_if_bad() =   // the checksum check is the pipeline's, after the plan

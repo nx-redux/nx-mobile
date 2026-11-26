@@ -9,6 +9,8 @@ What it does: every visible filled shape (all white) becomes one <path> with its
 (svgelements' abs(Path)), arcs as cubics, 2 decimals; one white fill (#FFFFFFFF), evenodd kept; Pico-8's pixel squares
 merged into one path so no seams show. The drawable is sized to fit 512 x 128 dp.
 Doom (menu_logo_prboom.xml) is not in the pack: it is the project's own drawing, traced from an earlier PNG.
+Saturn and Wii U (src/saturn.svg, src/wiiu.svg) are not in the pack either: user-supplied, recoloured white, their
+viewBoxes trimmed to the logo.
 
     pip install svgelements
     python3 tools/console-logos/convert.py          # writes shared/src/commonMain/composeResources/drawable/
@@ -43,7 +45,7 @@ def d_of(path):
     return ' '.join(out)
 
 
-NOT_FROM_THE_PACK = {'wiiu'}  # user-supplied: no pack credit line in the drawable
+NOT_FROM_THE_PACK = {'saturn', 'wiiu'}  # user-supplied: no pack credit line in the drawable
 
 
 def convert(k):

@@ -309,3 +309,26 @@ A before LEFT / RIGHT (#160):
 N64 hi-res packs (#45):
 - [ ] Play build (no All files access): a pack in `Textures/N64/` loads.
 - [ ] A phone with more than 3 GB RAM: Auto VRAM limit picks the right size.
+
+## Sega Saturn
+
+- [x] Saturn menu art: the Saturn logo in the Consoles tab and the six-button Sega pad behind it, both orientations
+- [x] With a BIOS in `Bios/SATURN/`: a disc boots and plays (Daytona USA, Nova, full speed).
+- [x] An in-game save creates `<game>.bkr` in `Saves/SATURN/`, and it survives a killed app (Daytona's own file, process killed right after; Fold).
+- [x] Save state and load state work (Daytona USA, Mega Man X4, Nova).
+- [x] An Action Replay cheat takes effect (Daytona Infinite Time: the clock holds; Fold).
+- [x] A multi-part database cheat (e.g. `+`-joined) works (the libretro file's codes, Master Code's pairs logged as not core writes; Fold).
+- [ ] An achievement unlocks (if not: Saturn is show-only).
+- [x] No BIOS: a disc boots on the HLE BIOS (Daytona USA, Nova, full speed, its save created). Notice once: the toast shows on the Fold (two lines, the folder cut off as on the Dreamcast).
+- [x] Mega Man X4 on HLE (no BIOS): intro and in-game demo at full speed (Fold).
+- [x] A multi-disc game by its `.m3u`: swap to disc 2, on the real BIOS (disc 2 boots on reset) and on HLE (loads at once); debug GAME_DISC hook, Fold.
+- [x] An `.m3u` game's `.bkr` is named after the playlist (Fold).
+- [x] A zipped cue+bin is refused with a clear message (only one entry unpacks; it booted with no disc). A zipped .chd/.iso still plays.
+- [x] 3D Resolution 1x, then 2x, then 4x mid-game: each change shows at once (Nova).
+- [x] 3D Resolution Auto across the Fold opening and closing (device-state override: relaid out, stays at the 2x cap).
+- [x] Frame rate at the default cap on the Nova (full speed).
+- [x] AYANEO (2 GB): both games full speed at Auto, 1x and 2x, 400+ MB free; its 1280×960 screen caps 4x at 2x.
+- [x] A slang shader (CRT) at 2x looks right (crt-geom, full speed; Fold).
+- [x] Saturn skin: the on-screen layout (L and R on the trigger slots) checked on the Fold.
+- [ ] Saturn on a physical pad: C and Z are reachable.
+- [ ] Device Sync carries a Saturn `.bkr` to another phone.

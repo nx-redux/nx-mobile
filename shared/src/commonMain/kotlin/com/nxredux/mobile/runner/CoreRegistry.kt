@@ -427,6 +427,33 @@ object CoreRegistry {
         rewind = false,
     )
 
+    // Saturn discs. The core reads its BIOS from the system folder's root and keeps one 64 KB backup RAM file per game,
+    // <saves>/<content name>.bkr, written by the core itself.
+    private val yabasanshiro = CoreDescriptor(
+        "yabasanshiro", "libyabasanshiro_libretro_android.so", setOf("cue", "chd", "ccd", "iso", "m3u"),
+        biosFiles = listOf("saturn_bios.bin", "sega_101.bin", "mpr-17933.bin"),
+        // Its disc reader opens the sheet and its tracks with fopen, never the frontend's VFS, so it needs real paths.
+        loadMode = LoadMode.REAL_PATH,
+        defaultOptions = mapOf(
+            "yabasanshiro_sh2coretype" to "dynarec",
+            "yabasanshiro_addon_cart" to "4M_extended_ram",
+            "yabasanshiro_frameskip" to "enabled",
+            "yabasanshiro_system_language" to "english",
+            // Forced per launch by the BIOS plan when no BIOS is present, never stored.
+            "yabasanshiro_force_hle_bios" to "disabled",
+            // The app's (3D Resolution rows); native until the launch sends it.
+            "yabasanshiro_resolution_mode" to "original",
+        ),
+        lockedOptions = setOf("yabasanshiro_force_hle_bios", "yabasanshiro_resolution_mode"),
+        cheats = true, ramCheats = true,   // action-replay codes through retro_cheat_set; the RAM patches go to the system RAM
+        controllerPort0 = CoreDescriptor.JOYPAD,
+        controllerPortCount = 2,
+        savesNamedAfterContent = true,   // the backup RAM is <content>.bkr: a zipped disc unpacks as <archive stem>.<ext>
+        players = 2,
+        name = "YabaSanshiro",
+        rewind = false,
+    )
+
     // Nintendo 3DS on Azahar (azahar-emu/azahar 2126.2, src/citra_libretro, patched; cores/Makefile), GLES or Vulkan
     // (Graphics API). Content through the runner's VFS: the game is /rom/<name>, read from the SAF descriptor in place, not
     // a multi-GB copy into the cache. FileUtil's plain stat misses that file, so the patch asks the VFS when stat finds
@@ -625,6 +652,7 @@ object CoreRegistry {
         "PRBOOM" to prboom,
         "32X" to picodrive, "COLECO" to gearcoleco, "FBN" to fbneo,
         "DC" to flycast,
+        "SATURN" to yabasanshiro,
         "3DS" to azahar,
         "WII" to dolphinWii, "GC" to dolphinGc,
         "PS2" to armsx2,
@@ -677,6 +705,7 @@ object CoreRegistry {
         Console("fbn", "Arcade", listOf("FBN"), setOf("arcade", "fbn", "fbneo", "fba", "finalburn neo", "final burn neo"), emptySet(), rawSram = false),
         // Discs only: an arcade zip in a Dreamcast folder still reaches flycast by folder, never by extension.
         Console("dc", "Dreamcast", listOf("DC"), setOf("dc", "dreamcast", "sega dreamcast"), setOf("chd", "cdi", "gdi", "cue", "m3u"), rawSram = false),
+        Console("saturn", "Sega Saturn", listOf("SATURN"), setOf("saturn", "ss", "sega saturn"), setOf("cue", "chd", "ccd", "iso", "m3u"), rawSram = false),
         // elf, axf and app are left to the folder: too generic to name a 3DS game (PSP runs elf too).
         Console("3ds", "Nintendo 3DS", listOf("3DS"), setOf("3ds", "n3ds", "nintendo 3ds", "azahar", "citra"), setOf("3ds", "3dsx", "z3dsx", "cci", "zcci", "cxi", "zcxi"), rawSram = false),
         // iso, elf, dol, wad (Doom's) and m3u go by folder; a GameCube rvz or wia reaches GC by its folder too.
@@ -862,6 +891,7 @@ object CoreRegistry {
         "PCE" to listOf(pceCdCard),
         "COLECO" to listOf(BiosNeed(listOf("colecovision.rom", "coleco.rom"))),
         "DC" to listOf(BiosNeed(listOf("dc_boot.bin"), setOf("chd", "cdi", "gdi", "cue", "m3u"), hle = HleFallback("reicast_hle_bios", "enabled"))),   // arcade sets bring their own BIOS
+        "SATURN" to listOf(BiosNeed(listOf("saturn_bios.bin", "sega_101.bin", "mpr-17933.bin"), hle = HleFallback("yabasanshiro_force_hle_bios", "enabled"), anyRegion = true)),
         "PS2" to listOf(BiosNeed(emptyList(), anySuffix = ".bin")),   // the core's scan takes ".bin" only: .nvm / .mec do not count
     )
 

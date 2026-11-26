@@ -48,6 +48,7 @@ class SaveKeysTest {
     @Test fun other_files_have_no_key() {
         assertNull(SaveKeys.of("vmu_save_A1.bin"))
         assertNull(SaveKeys.of("Game.A1.bin"))
+        assertNull(SaveKeys.of("Game.bkr"))
         assertNull(SaveKeys.of("Game.srm.20261015-101010.bak"))
     }
     @Test fun rom_entries_drop_known_extensions_only() {

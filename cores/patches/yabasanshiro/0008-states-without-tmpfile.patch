@@ -1,0 +1,110 @@
+# license: modifies YabaSanshiro (https://github.com/libretro/yabause), GPL-2.0 (LICENSE); this patch is distributed under the same license.
+# A save state passes through tmpfile(), which has no writable folder in an Android app process: it returned NULL and the
+# first fwrite aborted the app. The state's temporary file falls back to one in the system folder, unlinked as soon as it
+# is open; a state that still cannot be made fails, and retro_serialize no longer copies from a missing buffer.
+--- a/yabause/src/libretro/libretro.c
++++ b/yabause/src/libretro/libretro.c
+@@ -895,10 +895,15 @@
+ 
+    int error = YabSaveStateBuffer (&buffer, &out_size);
+ 
+-   memcpy(data, buffer, size);
++   if (error || !buffer || out_size > size)
++   {
++      free(buffer);
++      return false;
++   }
++   memcpy(data, buffer, out_size);
+ 
+    free(buffer);
+-   return !error;
++   return true;
+ }
+ 
+ bool retro_unserialize(const void *data, size_t size)
+@@ -1266,6 +1271,7 @@
+    if (environ_cb(RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY, &dir) && dir)
+    {
+       strncpy(g_system_dir, dir, sizeof(g_system_dir));
++      YabSetTempDir(g_system_dir);
+    }
+ 
+    if (environ_cb(RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY, &dir) && dir)
+--- a/yabause/src/memory.c
++++ b/yabause/src/memory.c
+@@ -46,6 +46,9 @@
+ #endif
+ #include <stdio.h>
+ #include <stdlib.h>
++#ifndef _MSC_VER
++#include <unistd.h>
++#endif
+ #include <sys/stat.h>
+ #include <ctype.h>
+ 
+@@ -1448,7 +1451,35 @@
+ }
+ 
+ //////////////////////////////////////////////////////////////////////////////
++
++static char yab_temp_dir[512];
++
++void YabSetTempDir(const char *dir)
++{
++   snprintf(yab_temp_dir, sizeof(yab_temp_dir), "%s", dir ? dir : "");
++}
+ 
++/* A state passes through a temporary file. tmpfile() has no writable folder in an Android app process (it returns
++ * NULL), so it falls back to one in the frontend's folder, unlinked as soon as it is open. */
++static FILE *YabTempFile(void)
++{
++   FILE *fp = tmpfile();
++#ifndef _MSC_VER
++   char path[600];
++   int fd;
++
++   if (fp || !yab_temp_dir[0])
++      return fp;
++   snprintf(path, sizeof(path), "%s/yabstate-XXXXXX", yab_temp_dir);
++   if ((fd = mkstemp(path)) < 0)
++      return NULL;
++   unlink(path);
++   if ((fp = fdopen(fd, "w+b")) == NULL)
++      close(fd);
++#endif
++   return fp;
++}
++
+ int YabSaveStateBuffer(void ** buffer, size_t * size)
+ {
+    FILE * fp;
+@@ -1458,7 +1489,8 @@
+    if (buffer != NULL) *buffer = NULL;
+    *size = 0;
+ 
+-   fp = tmpfile();
++   if ((fp = YabTempFile()) == NULL)
++      return -1;
+ 
+    ScspLockThread();
+    status = YabSaveStateStream(fp);
+@@ -1642,7 +1674,8 @@
+    FILE * fp;
+    int status;
+ 
+-   fp = tmpfile();
++   if ((fp = YabTempFile()) == NULL)
++      return -1;
+    fwrite(buffer, 1, size, fp);
+ 
+    fseek(fp, 0, SEEK_SET);
+--- a/yabause/src/memory.h
++++ b/yabause/src/memory.h
+@@ -438,6 +438,7 @@
+   int YabLoadStateStream(FILE *stream);
+   int YabSaveStateBuffer(void **buffer, size_t *size);
+   int YabLoadStateBuffer(const void *buffer, size_t size);
++  void YabSetTempDir(const char *dir);
+ 
+   int YabLoadCompressedState(const char *filename);
+   int YabSaveCompressedState(const char *filename);

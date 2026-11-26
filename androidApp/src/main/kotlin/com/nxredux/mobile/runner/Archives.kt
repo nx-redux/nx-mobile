@@ -178,6 +178,11 @@ object Archives {
                 ArchiveException.Kind.ENTRY_COUNT,
                 "$archiveName must hold exactly one ROM file (found ${pick.count}: ${pick.names.joinToString(", ")})",
             )
+            is ArchiveEntries.Pick.Sheet -> throw ArchiveException(
+                ArchiveException.Kind.ENTRY_COUNT,
+                "$archiveName holds ${pick.sheet} with its tracks, which can't be played zipped. " +
+                    "Zip a single .chd or .iso instead, or keep the files unzipped.",
+            )
         }
 
     /** Writes through `<name>.part` then renames; a stale `.part` from a killed launch is dropped first and never served. */

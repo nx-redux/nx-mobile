@@ -6,7 +6,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class CoreRegistryRewindTest {
-    private val noRewind = setOf("azahar", "flycast", "ppsspp", "prboom", "dolphin", "armsx2", "cemu")
+    private val noRewind = setOf("azahar", "flycast", "yabasanshiro", "ppsspp", "prboom", "dolphin", "armsx2", "cemu")
 
     @Test fun noRewindCores() {
         val found = CoreRegistry.all.filter { it.id in noRewind }

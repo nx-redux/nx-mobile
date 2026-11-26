@@ -95,8 +95,8 @@ object SkinChoice {
     private val GB_TAGS = setOf("GB", "GBC", "SGB", "FC")   // the NES too: A B, fceumm's turbo on TA / TB, no DISK
     private val GBA_TAGS = setOf("GBA", "MGBA")
     private val MD_TAGS = setOf("MD", "GPGX", "SEGACD", "32X")   // the Sega pad's ([com.nxredux.mobile.runner.PadMap.isSegaPadTag])
-    // the Saturn's tags (as other frontends name it), for when a Saturn core is added: its face as the Genesis's (A on Y,
-    // B on B, C on A, X on L, Y on X, Z on R), its L / R on L2 / R2
+    // the Saturn's tags (SS: as other frontends name it): the Genesis's six on the same spots ([com.nxredux.mobile.runner.PadMap]
+    // sends each to the button the Saturn core names that letter), its L / R on L2 / R2
     private val SATURN_TAGS = setOf("SATURN", "SS")
     private val ARCADE_TAGS = setOf("FBN")
 

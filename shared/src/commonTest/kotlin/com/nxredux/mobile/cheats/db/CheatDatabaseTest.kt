@@ -9,8 +9,8 @@ import kotlin.test.assertTrue
 class CheatDatabaseTest {
     @Test fun the_table_is_the_nx_redux_one() {
         // nx-redux's 35, WS folded into WSC, MSX dropped, MGBA, SUPA and PSX read their console's folder, plus PCECD and
-        // BS (route targets, not tags)
-        assertEquals(32, CheatDatabase.FOLDERS.size)
+        // BS (route targets, not tags), and Saturn
+        assertEquals(33, CheatDatabase.FOLDERS.size)
         assertEquals(listOf("Nintendo - Game Boy"), CheatDatabase.FOLDERS["GB"])
         assertEquals(listOf("Nintendo - Game Boy"), CheatDatabase.FOLDERS["SGB"])
         assertEquals(listOf("Sony - PlayStation"), CheatDatabase.FOLDERS["PS"])
@@ -31,9 +31,14 @@ class CheatDatabaseTest {
         // (no system RAM), NGP, NGPC, PKM, P8 and 3DS ignore cheats.
         assertEquals(
             listOf("FC", "FDS", "GB", "SGB", "GBC", "GBA", "SFC", "BS", "N64", "NDS", "SMS", "GG", "MD",
-                "32X", "SEGACD", "SG1000", "DC", "PS", "PSP", "PCE", "PCECD", "A7800", "LYNX", "COLECO", "WSC", "FBN", "PRBOOM"),
+                "32X", "SEGACD", "SG1000", "DC", "SATURN", "PS", "PSP", "PCE", "PCECD", "A7800", "LYNX", "COLECO", "WSC", "FBN", "PRBOOM"),
             folders.keys.toList(),
         )
+    }
+
+    @Test fun saturn_installs_the_saturn_folder() {
+        assertEquals(listOf("Sega - Saturn"), CheatDatabase.FOLDERS["SATURN"])
+        assertEquals(mapOf("SATURN" to listOf("Sega - Saturn")), CheatDatabase.foldersFor(listOf("SATURN")))
     }
 
     @Test fun a_second_cores_tag_installs_its_consoles_folder() {
@@ -64,7 +69,7 @@ class CheatDatabaseTest {
         assertEquals(
             setOf("NDS", "N64", "PSP", "GB", "GBC", "GBA", "MGBA", "SGB", "FC", "FDS", "SFC", "SUPA", "GPGX", "MD", "SMS", "GG",
                 "SG1000", "SEGACD", "PS", "PSX", "PS2", "NGP", "NGPC", "PCE", "VB", "LYNX", "A2600", "A5200", "A7800", "PKM", "WSC", "P8", "PRBOOM",
-                "32X", "COLECO", "FBN", "DC", "3DS", "WII", "GC", "WIIU", "GPGX_SMS", "GPGX_GG", "GPGX_SEGACD", "GPGX_SG1000"),
+                "32X", "COLECO", "FBN", "DC", "SATURN", "3DS", "WII", "GC", "WIIU", "GPGX_SMS", "GPGX_GG", "GPGX_SEGACD", "GPGX_SG1000"),
             CoreRegistry.tags,
         )
     }

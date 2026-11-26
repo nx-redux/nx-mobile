@@ -1,0 +1,277 @@
+# license: modifies YabaSanshiro (https://github.com/libretro/yabause), GPL-2.0 (LICENSE); this patch is distributed under the same license.
+# Multi-disc games had no way to change disc: no disk control interface and no .m3u. The core now loads an .m3u (one
+# disc per line, relative to the playlist) and offers disk control (the ext interface when the frontend has it, with
+# image paths, labels and the initial disc): ejecting opens the CD block's tray, closing it puts the selected disc in, as
+# when swapping on a console. Closing on the empty tray, or on a disc the CD block cannot open, fails and the tray
+# stays open.
+diff --git a/yabause/src/libretro/libretro.c b/yabause/src/libretro/libretro.c
+index 4c5acbd..079f3e1 100644
+--- a/yabause/src/libretro/libretro.c
++++ b/yabause/src/libretro/libretro.c
+@@ -11,6 +11,9 @@
+ #endif
+ 
+ #include <sys/stat.h>
++#ifndef _MSC_VER
++#include <strings.h>
++#endif
+ 
+ #include <libretro.h>
+ 
+@@ -671,7 +674,7 @@ void retro_get_system_info(struct retro_system_info *info)
+    info->library_version  = "v" VERSION GIT_VERSION;
+    info->need_fullpath    = true;
+    info->block_extract    = true;
+-   info->valid_extensions = "cue|iso|mds|ccd|chd";
++   info->valid_extensions = "cue|iso|mds|ccd|chd|m3u";
+ }
+ 
+ void check_variables(void)
+@@ -940,6 +943,209 @@ static void extract_basename(char *buf, const char *path, size_t size)
+       *ext = '\0';
+ }
+ 
++/* Disc swap: the frontend opens the tray, picks a disc and closes it; the CD block sees a new disc as on a console. */
++#ifndef RETRO_ENVIRONMENT_SET_DISK_CONTROL_EXT_INTERFACE
++#define RETRO_ENVIRONMENT_GET_DISK_CONTROL_INTERFACE_VERSION 57
++#define RETRO_ENVIRONMENT_SET_DISK_CONTROL_EXT_INTERFACE 58
++typedef bool (RETRO_CALLCONV *retro_set_initial_image_t)(unsigned index, const char *path);
++typedef bool (RETRO_CALLCONV *retro_get_image_path_t)(unsigned index, char *path, size_t len);
++typedef bool (RETRO_CALLCONV *retro_get_image_label_t)(unsigned index, char *label, size_t len);
++struct retro_disk_control_ext_callback
++{
++   retro_set_eject_state_t set_eject_state;
++   retro_get_eject_state_t get_eject_state;
++   retro_get_image_index_t get_image_index;
++   retro_set_image_index_t set_image_index;
++   retro_get_num_images_t get_num_images;
++   retro_replace_image_index_t replace_image_index;
++   retro_add_image_index_t add_image_index;
++   retro_set_initial_image_t set_initial_image;
++   retro_get_image_path_t get_image_path;
++   retro_get_image_label_t get_image_label;
++};
++#endif
++
++#define MAX_DISKS 16
++
++static char disk_paths[MAX_DISKS][PATH_MAX];
++static unsigned disk_count;
++static unsigned disk_index;
++static bool disk_ejected;
++static unsigned disk_initial_index;
++static char disk_initial_path[PATH_MAX];
++
++static bool disk_set_eject_state(bool ejected)
++{
++   if (ejected == disk_ejected)
++      return true;
++   /* Closing on the empty tray, or on a disc that will not open, leaves the tray open. */
++   if (!ejected && (disk_index >= disk_count || !disk_paths[disk_index][0]))
++      return false;
++   if (Cs2Area)
++   {
++      if (ejected)
++         Cs2ForceOpenTray();
++      /* On a disc that will not open the CD block puts in its empty dummy drive and still returns 0. */
++      else if (Cs2ForceCloseTray(CDCORE_ISO, disk_paths[disk_index]) != 0 || Cs2Area->cdi == &DummyCD)
++      {
++         Cs2ForceOpenTray();
++         if (log_cb)
++            log_cb(RETRO_LOG_ERROR, "Cannot put in %s\n", disk_paths[disk_index]);
++         return false;
++      }
++   }
++   disk_ejected = ejected;
++   return true;
++}
++
++static bool disk_get_eject_state(void)
++{
++   return disk_ejected;
++}
++
++static unsigned disk_get_image_index(void)
++{
++   return disk_index;
++}
++
++/* index == disk_count is the empty tray. */
++static bool disk_set_image_index(unsigned index)
++{
++   if (!disk_ejected || index > disk_count)
++      return false;
++   disk_index = index;
++   return true;
++}
++
++static unsigned disk_get_num_images(void)
++{
++   return disk_count;
++}
++
++static bool disk_replace_image_index(unsigned index, const struct retro_game_info *info)
++{
++   if (index >= disk_count)
++      return false;
++   if (info && info->path)
++   {
++      snprintf(disk_paths[index], PATH_MAX, "%s", info->path);
++      return true;
++   }
++   /* No info removes the image; the later ones move down. */
++   memmove(disk_paths[index], disk_paths[index + 1], (disk_count - index - 1) * sizeof(disk_paths[0]));
++   disk_count--;
++   if (disk_index > index)
++      disk_index--;
++   return true;
++}
++
++static bool disk_add_image_index(void)
++{
++   if (disk_count >= MAX_DISKS)
++      return false;
++   disk_paths[disk_count++][0] = '\0';
++   return true;
++}
++
++static bool disk_set_initial_image(unsigned index, const char *path)
++{
++   disk_initial_index = index;
++   snprintf(disk_initial_path, sizeof(disk_initial_path), "%s", path ? path : "");
++   return true;
++}
++
++static bool disk_get_image_path(unsigned index, char *path, size_t len)
++{
++   if (index >= disk_count || !disk_paths[index][0] || len == 0)
++      return false;
++   snprintf(path, len, "%s", disk_paths[index]);
++   return true;
++}
++
++static bool disk_get_image_label(unsigned index, char *label, size_t len)
++{
++   if (index >= disk_count || !disk_paths[index][0] || len == 0)
++      return false;
++   extract_basename(label, disk_paths[index], len);
++   return true;
++}
++
++static struct retro_disk_control_callback disk_control = {
++   disk_set_eject_state,
++   disk_get_eject_state,
++   disk_get_image_index,
++   disk_set_image_index,
++   disk_get_num_images,
++   disk_replace_image_index,
++   disk_add_image_index,
++};
++
++static struct retro_disk_control_ext_callback disk_control_ext = {
++   disk_set_eject_state,
++   disk_get_eject_state,
++   disk_get_image_index,
++   disk_set_image_index,
++   disk_get_num_images,
++   disk_replace_image_index,
++   disk_add_image_index,
++   disk_set_initial_image,
++   disk_get_image_path,
++   disk_get_image_label,
++};
++
++/* The content's discs: each line of an .m3u (relative to the playlist's folder; blank lines and # comments skipped), or
++ * the one disc given. */
++static bool disk_load_list(const char *path)
++{
++   const char *ext = strrchr(path, '.');
++   disk_count = 0;
++   disk_index = 0;
++   disk_ejected = false;
++
++   if (ext && strcasecmp(ext, ".m3u") == 0)
++   {
++      char dir[PATH_MAX];
++      char line[PATH_MAX];
++      FILE *list = fopen(path, "r");
++      if (!list)
++         return false;
++      fill_pathname_basedir(dir, path, sizeof(dir));
++      while (disk_count < MAX_DISKS && fgets(line, sizeof(line), list))
++      {
++         char *entry = line;
++         size_t n;
++         if ((unsigned char)entry[0] == 0xEF && (unsigned char)entry[1] == 0xBB && (unsigned char)entry[2] == 0xBF)
++            entry += 3;
++         while (*entry == ' ' || *entry == '\t')
++            entry++;
++         n = strlen(entry);
++         while (n > 0 && (entry[n - 1] == '\n' || entry[n - 1] == '\r' || entry[n - 1] == ' ' || entry[n - 1] == '\t'))
++            entry[--n] = '\0';
++         if (n == 0 || entry[0] == '#')
++            continue;
++         if (path_is_absolute(entry))
++            snprintf(disk_paths[disk_count], PATH_MAX, "%s", entry);
++         else
++            snprintf(disk_paths[disk_count], PATH_MAX, "%s%s", dir, entry);
++         disk_count++;
++      }
++      fclose(list);
++   }
++   else
++   {
++      snprintf(disk_paths[0], PATH_MAX, "%s", path);
++      disk_count = 1;
++   }
++
++   if (disk_count == 0)
++      return false;
++   /* The disc the frontend had in at the last session, while its list is unchanged. */
++   if (disk_initial_index < disk_count && disk_initial_path[0] &&
++         strcmp(disk_initial_path, disk_paths[disk_initial_index]) == 0)
++      disk_index = disk_initial_index;
++   return true;
++}
++
+ void retro_init(void)
+ {
+    struct retro_log_callback log;
+@@ -977,6 +1183,13 @@ void retro_init(void)
+    environ_cb(RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL, &level);
+ 
+    environ_cb(RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS, &serialization_quirks);
++
++   unsigned disk_control_version = 0;
++   if (environ_cb(RETRO_ENVIRONMENT_GET_DISK_CONTROL_INTERFACE_VERSION, &disk_control_version) &&
++         disk_control_version >= 1)
++      environ_cb(RETRO_ENVIRONMENT_SET_DISK_CONTROL_EXT_INTERFACE, &disk_control_ext);
++   else
++      environ_cb(RETRO_ENVIRONMENT_SET_DISK_CONTROL_INTERFACE, &disk_control);
+ }
+ 
+ bool retro_load_game_common()
+@@ -1051,7 +1264,12 @@ bool retro_load_game(const struct retro_game_info *info)
+          break;
+    }
+ 
+-   snprintf(full_path, sizeof(full_path), "%s", info->path);
++   if (!disk_load_list(info->path))
++   {
++      log_cb(RETRO_LOG_ERROR, "No disc in %s\n", info->path);
++      return false;
++   }
++   snprintf(full_path, sizeof(full_path), "%s", disk_paths[disk_index]);
+    snprintf(bios_path, sizeof(bios_path), "%s%csaturn_bios.bin", g_system_dir, slash);
+    if (does_file_exist(bios_path) != 1)
+    {
+@@ -1333,6 +1551,9 @@ void retro_unload_game(void)
+    if (!renderer_running)
+       VIDCore->Init();
+    YabauseDeInit();
++   disk_count = 0;
++   disk_index = 0;
++   disk_ejected = false;
+ }
+ 
+ unsigned retro_get_region(void)
