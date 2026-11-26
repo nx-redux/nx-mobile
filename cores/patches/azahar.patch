@@ -44,7 +44,7 @@ index e28f9941b..4312b31f7 100644
  if(ENABLE_VULKAN)
    target_link_libraries(citra_libretro PRIVATE sirit vulkan-headers vma)
 diff --git a/src/citra_libretro/citra_libretro.cpp b/src/citra_libretro/citra_libretro.cpp
-index 8a65f9da8..1e6896da2 100644
+index 8a65f9da8..bdf4f25cf 100644
 --- a/src/citra_libretro/citra_libretro.cpp
 +++ b/src/citra_libretro/citra_libretro.cpp
 @@ -2,6 +2,7 @@
@@ -207,7 +207,20 @@ index 8a65f9da8..1e6896da2 100644
  #ifdef ENABLE_OPENGL
      if (Settings::values.graphics_api.GetValue() == Settings::GraphicsAPI::OpenGL) {
          // We can't assume that the frontend has been nice and preserved all OpenGL settings. Reset.
-@@ -368,12 +458,33 @@ static void setup_memory_maps() {
+@@ -287,6 +377,12 @@ void retro_run() {
+     while (!emu_instance->emu_window->HasSubmittedFrame()) {
+         auto result = Core::System::GetInstance().RunLoop();
+ 
++        // The program asked for a shutdown (a homebrew app returning from main, our Download Play
++        // client included): the session ends as a quit, not as an error.
++        if (result == Core::System::ResultStatus::ShutdownRequested) {
++            LibRetro::Shutdown();
++            return;
++        }
+         if (result != Core::System::ResultStatus::Success) {
+             std::string errorContent = Core::System::GetInstance().GetStatusDetails();
+             std::string msg;
+@@ -368,12 +464,33 @@ static void setup_memory_maps() {
      }
  }
  
@@ -241,7 +254,7 @@ index 8a65f9da8..1e6896da2 100644
          break; // Expected case
      case Core::System::ResultStatus::ErrorGetLoader:
          LibRetro::DisplayMessage("Failed to obtain loader for specified ROM!");
-@@ -513,6 +624,8 @@ bool retro_load_game(const struct retro_game_info* info) {
+@@ -513,6 +630,8 @@ bool retro_load_game(const struct retro_game_info* info) {
  #endif
  
      UpdateSettings();
@@ -250,7 +263,7 @@ index 8a65f9da8..1e6896da2 100644
  
      // If using HW rendering, don't actually load the game here. azahar wants
      // the graphics context ready and available before calling System::Load.
-@@ -634,7 +747,16 @@ bool retro_load_game(const struct retro_game_info* info) {
+@@ -634,7 +753,16 @@ bool retro_load_game(const struct retro_game_info* info) {
  
  void retro_unload_game() {
      LOG_DEBUG(Frontend, "Unloading game...");
@@ -267,7 +280,7 @@ index 8a65f9da8..1e6896da2 100644
  }
  
  unsigned retro_get_region() {
-@@ -727,6 +849,11 @@ bool retro_unserialize(const void* data, size_t size) {
+@@ -727,6 +855,11 @@ bool retro_unserialize(const void* data, size_t size) {
      if (!DrainAsyncOperations(system)) {
          return false;
      }
