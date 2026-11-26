@@ -332,8 +332,8 @@ object SkinChoice {
     /**
      * The row under the touch screen's frame (the centred pieces and controls below it) up to [gap] under the frame, where
      * it is lower. With [shoulders] (the tablet upright's GamePad, room to spare), the frame first comes down to [gap] over
-     * the shoulder buttons' pieces (its glass taller; the strip and its band with the foot) and widens across the room
-     * beside it ([touchAcross]), and the row goes under it. As it is with no row, or one already as near.
+     * the shoulder buttons' pieces (its glass taller; the strip and its band with the foot) and widens to the GamePad at
+     * that height ([touchAcross]), and the row goes under it. As it is with no row, or one already as near.
      */
     private fun SkinPlacement.rowUnderTouch(gap: Float, shoulders: Boolean = false): SkinPlacement {
         val gi = spec.pieces.indexOfFirst { it.glass?.screen == GlassScreen.TOUCH }
@@ -369,10 +369,10 @@ object SkinChoice {
     }
 
     /**
-     * The touch screen's frame (piece [gi]) widened about its middle as far as the top screen's frame reaches across, the
-     * same each side, to [gap] from any control's touch area beside it: its edges out, its middle stretched, its glass
-     * wider and the strip's slots an even share of it (the GamePad then fills the taller glass's height); [moving]: the
-     * row going under it, not in the way. As it is with no room.
+     * The touch screen's frame (piece [gi]) widened about its middle to its 16:9 picture at the glass's height (no black
+     * either side), never past the top screen's frame nor nearer than [gap] to a control's touch area beside it: its
+     * edges out, its middle stretched, its glass wider and the strip's slots an even share of it; [moving]: the row going
+     * under it, not in the way. As it is with no room.
      */
     private fun SkinPlacement.touchAcross(gi: Int, gap: Float, moving: Set<String>): SkinPlacement {
         val frame = pieces.filter { it.piece == gi && gi >= 0 && !it.strip }
@@ -388,9 +388,10 @@ object SkinChoice {
             if (c.y + hh <= y0 || c.y - hh >= y1) continue
             if (c.x < (l0 + r0) / 2f) left = maxOf(left, c.x + hw + gap) else right = minOf(right, c.x - hw - gap)
         }
-        val d = minOf(l0 - left, right - r0)
-        if (d < 0.5f) return this
         val g = glass(GlassScreen.TOUCH) ?: return this
+        // no wider than its picture: the frame hugs the GamePad at the glass's height
+        val d = minOf(l0 - left, right - r0, (g.rect.height * 16f / 9f - g.rect.width) / 2f)
+        if (d < 0.5f) return this
         val gw = g.rect.width + 2f * d
         val slots = controls.filter { it.spec.id.startsWith("TOUCH_") }
         val share = gw / slots.size.coerceAtLeast(1)
