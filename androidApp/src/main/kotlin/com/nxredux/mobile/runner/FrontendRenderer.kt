@@ -718,7 +718,7 @@ internal class FrontendRenderer(
             // Under a skin the speed indicator goes on the top glass's screen.
             pictureBox.value = windowRect(origin, skinDs?.top ?: shown)
             shownPicture = null
-            // the in-game menu over the skin's top screen: the bottom one goes from under it
+            // the in-game menu over the skin's top glass: the screen in the lower one goes from under it
             val placement = padLayout.skinPlacement().takeIf { skinDs != null && padLayout.skinUnderMenu }
             val drawn = placement?.let { menuShownScreens(nds, it) } ?: nds
             view.screenRegions = drawn.map { NdsOptions.shaded(it, host.frontendValues).toScreenRegion(w, h) }

@@ -152,6 +152,9 @@ class SkinMenuRectTest {
         val regions = listOf(region(NdsScreen.TOP, 0f), region(NdsScreen.BOTTOM, 20f))
         val cover = assertNotNull(SkinChoice.place(carbon, 1248, 1972, 420, tablet = false, ds = true, foldable = true, variant = SkinVariant.N3DS))
         assertEquals(listOf(regions[0]), menuShownScreens(regions, cover))
+        // after SWAP the touch screen is the one in the top glass, under the menu: the top screen goes
+        val swapped = listOf(region(NdsScreen.BOTTOM, 0f), region(NdsScreen.TOP, 20f))
+        assertEquals(listOf(swapped[0]), menuShownScreens(swapped, cover))
         val inner = assertNotNull(SkinChoice.place(carbon, 1848, 2448, 420, tablet = true, ds = true, foldable = true, variant = SkinVariant.N3DS))
         assertEquals(regions, menuShownScreens(regions, inner))
     }

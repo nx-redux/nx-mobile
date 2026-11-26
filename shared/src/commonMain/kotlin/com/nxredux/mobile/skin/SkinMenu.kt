@@ -1,6 +1,5 @@
 package com.nxredux.mobile.skin
 
-import com.nxredux.mobile.options.NdsScreen
 import com.nxredux.mobile.options.PxRect
 import com.nxredux.mobile.runner.NdsRegion
 
@@ -104,6 +103,9 @@ private const val STRIP_SLOT = "TOUCH_"
 fun SkinPlacement.menuHidesBottom(): Boolean = glass(GlassScreen.STACK) != null ||
     (glass(GlassScreen.TOP) != null && glass(GlassScreen.TOUCH) != null && spec.family != SkinFamily.FLEX)
 
-/** The screens drawn under the in-game menu open in [placement]: [regions] less the bottom screen where it hides it ([menuHidesBottom]). */
+/**
+ * The screens drawn under the in-game menu open in [placement]: where it hides the lower one ([menuHidesBottom]), only
+ * the first of [regions], the big screen in the menu's glass (the skin's regions put it first, the touch screen after SWAP).
+ */
 fun menuShownScreens(regions: List<NdsRegion>, placement: SkinPlacement): List<NdsRegion> =
-    if (placement.menuHidesBottom()) regions.filterNot { it.screen == NdsScreen.BOTTOM } else regions
+    if (placement.menuHidesBottom()) regions.take(1) else regions
