@@ -148,9 +148,9 @@ class SkinWiiuTest {
                     assertTrue(c.x - c.spec.hw >= under.x - 1f && c.x + c.spec.hw <= under.x + under.width + 1f, "$label ${c.spec.id} not across $under")
                 }
                 val top = assertNotNull(p.glass(GlassScreen.TOP) ?: p.glass(GlassScreen.STACK), label).rect
-                // the GamePad's glass and picture 16:9
+                // the GamePad's glass and picture 16:9 (the fold board upright: the 3DS's bottom glass, the GamePad letterboxed)
                 p.glass(GlassScreen.TOUCH)?.rect?.let { g ->
-                    assertEquals(16f / 9f, aspect(g), 0.01f, "$label GamePad glass $g")
+                    if (d.name !in FOLD_UPRIGHT || d.name == "inner_half") assertEquals(16f / 9f, aspect(g), 0.01f, "$label GamePad glass $g")
                     val (_, pad) = assertNotNull(WiiuLayout.skinRegions(null, p.glass(GlassScreen.TOP)?.rect, g, NdsSettings()), label).map { it.dst }
                     assertEquals(16f / 9f, aspect(pad), 0.01f, "$label GamePad picture $pad")
                 }
@@ -204,7 +204,7 @@ class SkinWiiuTest {
     fun the_screens_are_as_far_apart_as_the_3ds_screens() {
         for (id in packs) {
             val pack = skinPack(id)
-            for (d in GOLDEN_DEVICES.filter { it.name != "ultra_land" }) {
+            for (d in GOLDEN_DEVICES.filter { it.name != "ultra_land" && it.name !in FOLD_UPRIGHT }) {   // (upright fold boards: the 3DS's own frame)
                 val label = "$id ${d.name}"
                 val p = assertNotNull(place(pack, d), label)
                 val n3ds = assertNotNull(SkinChoice.place(pack, d.w, d.h, d.dpi, d.tablet, ds = true, hingeY = d.hingeY, foldable = d.foldable, variant = SkinVariant.N3DS), label)
@@ -232,7 +232,8 @@ class SkinWiiuTest {
                 val n3ds = assertNotNull(SkinChoice.place(pack, d.w, d.h, d.dpi, d.tablet, ds = true, hingeY = d.hingeY, foldable = d.foldable, variant = SkinVariant.N3DS), label)
                 fun at(pl: SkinPlacement, cid: String) = pl.controls.first { it.spec.id == cid }
                 val stacked = p.spec.family == SkinFamily.STACKED; val large = p.spec.family == SkinFamily.LARGE
-                for (cid in listOf("DPAD", "STICK", "X", "Y", "A", "B") + (if (large) emptyList() else listOf("L", "R")) + (if (stacked || large) emptyList() else listOf("L2", "R2"))) {
+                val swapped = d.name in FOLD_UPRIGHT   // (the face and the right stick swapped there: the_fold_boards_gamepad_frame_is_the_3ds_bottom_frame)
+                for (cid in listOf("DPAD", "STICK") + (if (swapped) emptyList() else listOf("X", "Y", "A", "B")) + (if (large) emptyList() else listOf("L", "R")) + (if (stacked || large) emptyList() else listOf("L2", "R2"))) {
                     val w = at(p, cid); val n = at(n3ds, cid)
                     assertEquals(n.x, w.x, 1f, "$label $cid x"); assertEquals(n.y, w.y, 1f, "$label $cid y")
                     for ((a, b) in listOf(n.spec.r to w.spec.r, n.spec.hw to w.spec.hw, n.spec.hh to w.spec.hh)) assertEquals(a, b, 0.5f, "$label $cid size")
@@ -355,10 +356,10 @@ class SkinWiiuTest {
         }
     }
 
-    /** The fold boards (the Fold and the Ultra inside, a tablet upright): L3 and R3 by their sticks, on the screen's side, low. */
+    /** A tablet upright: L3 and R3 by their sticks, on the screen's side, low. */
     @Test
     fun the_fold_boards_stick_presses_sit_by_their_sticks() {
-        for (id in packs) for (d in GOLDEN_DEVICES.filter { it.name in setOf("inner", "inner_half", "ultra", "ultra_half", "tablet") }) {
+        for (id in packs) for (d in GOLDEN_DEVICES.filter { it.name == "tablet" }) {
             val label = "$id ${d.name}"
             val p = assertNotNull(place(skinPack(id), d), label)
             val c = p.controls.associateBy { it.spec.id }
@@ -455,6 +456,46 @@ class SkinWiiuTest {
             for (x in cs) assertTrue(x.x >= 0f && x.x <= w && x.y >= 0f && x.y <= h, "$label ${x.spec.id} off the window")
         }
     }
+
+    /**
+     * The fold board upright (the Fold's and the Ultra's inner screen, flat or half-folded): the GamePad's frame the 3DS's
+     * bottom frame on the same window, the GamePad letterboxed across its glass; the GamePad's own pad, the right stick
+     * over the face (where the 3DS has the face, mirroring the left stick) and the face under it (mirroring the d-pad),
+     * L3 at the left block's lower left and R3 at the right block's lower right.
+     */
+    @Test
+    fun the_fold_boards_gamepad_frame_is_the_3ds_bottom_frame() {
+        for (id in packs) for (d in GOLDEN_DEVICES.filter { it.name in FOLD_UPRIGHT }) {
+            val label = "$id ${d.name}"
+            val pack = skinPack(id)
+            val p = assertNotNull(place(pack, d), label)
+            val n = assertNotNull(SkinChoice.place(pack, d.w, d.h, d.dpi, d.tablet, ds = true, hingeY = d.hingeY, foldable = d.foldable, variant = SkinVariant.N3DS), label)
+            val wf = assertNotNull(frames(p).second, label); val nf = assertNotNull(frames(n).second, label)
+            val g = assertNotNull(p.glass(GlassScreen.TOUCH), label).rect
+            if (d.name == "inner_half") {
+                // the 3DS's taller frame would bring the strip down on the face's X there: the GamePad's own frame, its top the 3DS's
+                assertEquals(16f / 9f, aspect(g), 0.01f, "$label GamePad's own glass $g"); assertEquals(nf.y, wf.y, 1f, "$label frame top")
+            } else for ((a, b) in listOf(nf.x to wf.x, nf.y to wf.y, nf.width to wf.width, nf.height to wf.height)) assertEquals(a, b, 1f, "$label frame $wf, the 3DS's $nf")
+            val (_, pad) = assertNotNull(WiiuLayout.skinRegions(null, p.glass(GlassScreen.TOP)?.rect, g, NdsSettings()), label).map { it.dst }
+            assertEquals(g.width, pad.width, 1f, "$label GamePad across the glass"); assertEquals(16f / 9f, aspect(pad), 0.01f, "$label GamePad")
+            assertEquals(g.y + g.height / 2f, pad.y + pad.height / 2f, 1f, "$label GamePad centred down")
+            assertNoOverlaps(p, d.w, d.h, label)
+            val c = p.controls.associateBy { it.spec.id }; val nc = n.controls.associateBy { it.spec.id }
+            val face = listOf("X", "Y", "A", "B").map { c.getValue(it) }; val nFace = listOf("X", "Y", "A", "B").map { nc.getValue(it) }
+            val fx = face.map { it.x }.average().toFloat(); val fy = face.map { it.y }.average().toFloat()
+            assertEquals(nFace.map { it.x }.average().toFloat(), c.getValue("CSTICK").x, 1f, "$label right stick where the 3DS's face is")
+            assertEquals(nFace.map { it.y }.average().toFloat(), c.getValue("CSTICK").y, 1f, "$label right stick where the 3DS's face is")
+            assertEquals(nc.getValue("CSTICK").x, fx, 1f, "$label face where the 3DS's right stick is"); assertEquals(nc.getValue("CSTICK").y, fy, 1f, "$label face where the 3DS's right stick is")
+            assertEquals(c.getValue("STICK").y, c.getValue("CSTICK").y, 1f, "$label sticks level"); assertEquals(c.getValue("DPAD").y, fy, 1f, "$label face level with the d-pad")
+            val l3 = c.getValue("L3"); val r3 = c.getValue("R3"); val dp = c.getValue("DPAD")
+            assertTrue(l3.x < dp.x && l3.y >= dp.y - 1f, "$label L3 ${l3.x},${l3.y} not at the d-pad's lower left")
+            assertTrue(r3.x > fx && r3.y >= fy - 1f, "$label R3 ${r3.x},${r3.y} not at the face's lower right")
+            assertEquals(d.w - l3.x, r3.x, 8f, "$label R3 mirrors L3 across"); assertEquals(l3.y, r3.y, 8f, "$label R3 level with L3")
+        }
+    }
+
+    /** The fold board upright: the Fold's and the Ultra's inner screen, flat or half-folded. */
+    private val FOLD_UPRIGHT = setOf("inner", "inner_half", "ultra", "ultra_half")
 
     /** The Button layout editor's dummy strip as the game's with every slot filled: the Wii U's SWAP in the middle. */
     @Test

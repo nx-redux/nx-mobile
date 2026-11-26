@@ -407,6 +407,39 @@ object SkinChoice {
         )
     }
 
+    /**
+     * This placement with [twin]'s touch screen frame (the 3DS twin's bottom frame on the same window): its frame's pieces
+     * where [twin]'s are, its glass and its strip's slots; the GamePad letterboxed in it. As it is where the two frames
+     * are not cut the same, or the taller frame's strip would come down on a button (the Fold half-folded: the face).
+     */
+    private fun SkinPlacement.touchAs(twin: SkinPlacement): SkinPlacement {
+        val gi = spec.pieces.indexOfFirst { it.glass?.screen == GlassScreen.TOUCH }
+        val ti = twin.spec.pieces.indexOfFirst { it.glass?.screen == GlassScreen.TOUCH }
+        val mine = pieces.filter { it.piece == gi && gi >= 0 }; val theirs = twin.pieces.filter { it.piece == ti && ti >= 0 }
+        val g = glass(GlassScreen.TOUCH); val tg = twin.glass(GlassScreen.TOUCH)
+        if (mine.isEmpty() || mine.size != theirs.size || g == null || tg == null) return this
+        val at = mine.zip(theirs).toMap()
+        val slots = twin.controls.filter { it.spec.id.startsWith("TOUCH_") }.associateBy { it.spec.id }
+        // (where the taller frame's strip would come down on a button, the GamePad's own frame stays)
+        val onAButton = slots.values.any { sl -> controls.any { c -> !c.spec.id.startsWith("TOUCH_") && c.spec.id in WIIU_PAD_IDS && run {
+            val r = if (c.spec.shape == ControlShape.RECT) 0f else c.spec.r * (if (c.spec.shape == ControlShape.STICK) 1.25f else 1f)
+            val hw = if (r > 0f) r else c.spec.hw; val hh = if (r > 0f) r else c.spec.hh
+            c.x + hw > sl.x - sl.spec.hw && c.x - hw < sl.x + sl.spec.hw && c.y + hh > sl.y - sl.spec.hh && c.y - hh < sl.y + sl.spec.hh
+        } } }
+        if (onAButton) return this
+        return copy(
+            pieces = pieces.map { p -> at[p]?.let { t -> p.copy(dst = t.dst) } ?: p },
+            glasses = glasses.map { if (it === g) it.copy(rect = tg.rect) else it },
+            controls = controls.map { c -> slots[c.spec.id] ?: c },
+        )
+    }
+
+    /** Every button a Wii U skin draws but the strip's. */
+    private val WIIU_PAD_IDS = setOf("DPAD", "STICK", "CSTICK", "A", "B", "X", "Y", "L", "R", "L2", "R2", "L3", "R3", "SELECT", "START", "MENU", "STICK_SWAP")
+
+    /** The 3DS's top screen, game px. */
+    private val N3DS_TOP = 400f to 240f
+
     /** The shoulder buttons' control ids. */
     private val SHOULDER_IDS = setOf("L", "R", "L2", "R2")
 
@@ -542,7 +575,7 @@ object SkinChoice {
         val dp = densityDpi / 160f
         val row = rowSpacing(densityDpi, k)
         // the top screen's game size: the large layout's top frame takes its shape
-        val top = when (v) { SkinVariant.N3DS, SkinVariant.N3DS_REGULAR -> 400f to 240f; SkinVariant.DS -> 256f to 192f; SkinVariant.WIIU -> 1280f to 720f; else -> null }
+        val top = when (v) { SkinVariant.N3DS, SkinVariant.N3DS_REGULAR -> N3DS_TOP; SkinVariant.DS -> 256f to 192f; SkinVariant.WIIU -> 1280f to 720f; else -> null }
         val landscape = windowW > windowH
         // sideways: the main menu's landscape shell, the game in its screen frame (the strip under it; a DS's MIC, SWAP)
         // [both]: the Dreamcast's board with the stick and the d-pad both, tried first at every scale (shrunk to fit) over the
@@ -557,8 +590,14 @@ object SkinChoice {
                 val placed = fold() ?: return@widest null
                 // the GamePad's boxes, sideways and flat: the bottom half as half-folded at the window's middle, as the 3DS's
                 if (v == SkinVariant.WIIU && landscape && hingeY == null && spec.boxes.isNotEmpty()) return@widest fold(windowH / 2f)?.let { placed.bottomOf(it) } ?: placed
-                // upright, its row under the GamePad's frame (which hugs its picture), as the 3DS's row follows its touch frame up
-                if (v == SkinVariant.WIIU && !landscape && spec.boxes.isNotEmpty()) return@widest placed.rowUnderTouch(SkinBoxes.GAP_DP * dp, shoulders = spec.id.endsWith("_fold_tab"))
+                // upright, its row under the GamePad's frame (which hugs its picture), as the 3DS's row follows its touch frame up;
+                // the fold board's frame the 3DS's bottom frame itself, the GamePad letterboxed in it
+                if (v == SkinVariant.WIIU && !landscape && spec.boxes.isNotEmpty()) {
+                    val twin = pack.layouts.firstOrNull { it.id == spec.id.replace("_wiiugp", "_3ds") }.takeIf { !spec.id.endsWith("_fold_tab") }
+                    val theirs = twin?.let { t -> foldPieces(t, windowW, windowH, s, picture, topInset, hingeY, densityDpi, N3DS_TOP, bottomMargin = shellMargin(pack),
+                        bottomGlass = flatEnd, row = rowSpacing(densityDpi, s), centreControls = false)?.touchToItsPicture()?.touchToItsPictureHeight() }
+                    return@widest (theirs?.let { placed.touchAs(it) } ?: placed).rowUnderTouch(SkinBoxes.GAP_DP * dp, shoulders = spec.id.endsWith("_fold_tab"))
+                }
                 if (v !in N3DS_VARIANTS || spec.boxes.isEmpty()) return@widest placed
                 // the 3DS's touch screen, its 4:3 picture in a frame between the boxes: sideways (the room beside it) the frame
                 // cut to the picture's height and widened to the boxes, bars beside the picture; upright cut to the picture
