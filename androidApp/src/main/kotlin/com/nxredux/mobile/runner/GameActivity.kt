@@ -2220,6 +2220,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         speed.setToggle(rewind = false)
         lifecycleScope.launch(Dispatchers.IO) {
             runCatching { view.reset() }.onFailure { NxLog.w(TAG_LOG, "reset failed", it) }
+            // A reset console leaves its room as a real one would; on the automatic route it looks for rooms again
+            // (only switching Local Wireless on would bring it back otherwise).
+            withContext(Dispatchers.Main) { if (launchPipeline.dsAutoRoute && localWirelessShownOn()) LibretroNetplay.dsRejoin() }
         }
     }
 

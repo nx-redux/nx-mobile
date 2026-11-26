@@ -11,6 +11,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.flowWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.nxredux.mobile.BuildConfig
+import com.nxredux.mobile.N3dsDownloadPlayFiles
 import com.nxredux.mobile.DebugLogFile
 import com.nxredux.mobile.R
 import com.nxredux.mobile.lowLatencyWifiLock
@@ -995,7 +996,9 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             if (biosPlan is BiosPlan.Hle) NxLog.i(TAG_LOG, "BIOS missing: HLE")
             if (cfg.n3dsDownloadPlay) {
                 n3dsDownloadPlayRefusal(N3dsOptions.localWireless(frontendValues))?.let { return refuse(it) }
-                // The client is copied out of the APK at the first start after an install or update.
+                // The menu process copies the client out of the APK (once per install or update); this, the game
+                // process, only finds the copy.
+                if (N3dsDownloadPlay.dir == null) N3dsDownloadPlay.dir = withContext(Dispatchers.IO) { N3dsDownloadPlayFiles.current(activity) }
                 if (N3dsDownloadPlay.appPath == null) return refuse("3DS Download Play is still being set up. Try again in a moment.")
             }
             if (cfg.dsMenu) {
