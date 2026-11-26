@@ -141,7 +141,8 @@ class WiiuOptionsTest {
     @Test fun under_a_skin_only_a_regular_phones_landscape_takes_the_players_layout() {
         val picked = mapOf(LAYOUT_LANDSCAPE to NdsLayoutChoice.SIDE_BY_SIDE.value)
         assertEquals(NdsLayoutChoice.SIDE_BY_SIDE, WiiuOptions.skinLayout(picked, landscape = true, controllerMode = false, ScreenClass.REGULAR_PHONE))
-        assertEquals(NdsLayoutChoice.LARGE, WiiuOptions.skinLayout(emptyMap(), landscape = true, controllerMode = false, ScreenClass.REGULAR_PHONE))
+        // before a pick, the TV across the skin's sideways glass, the GamePad under it
+        assertEquals(NdsLayoutChoice.STACKED, WiiuOptions.skinLayout(emptyMap(), landscape = true, controllerMode = false, ScreenClass.REGULAR_PHONE))
         for (screen in listOf(ScreenClass.STUBBY_PHONE, ScreenClass.WIDE_TABLET, ScreenClass.NEAR_SQUARE_TABLET))
             assertEquals(null, WiiuOptions.skinLayout(picked, landscape = true, controllerMode = false, screen), "$screen")
         for (screen in ScreenClass.entries) assertEquals(null, WiiuOptions.skinLayout(picked, landscape = false, controllerMode = false, screen), "$screen")

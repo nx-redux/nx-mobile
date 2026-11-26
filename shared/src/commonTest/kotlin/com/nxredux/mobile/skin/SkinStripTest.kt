@@ -10,9 +10,12 @@ class SkinStripTest {
 
     private fun at(cs: List<PlacedControl>) = cs.map { it.spec.id to it.x }
 
-    @Test fun swap_alone_takes_the_whole_strip_centred() {
+    @Test fun swap_alone_is_one_normal_button_in_the_middle() {
+        // one share of three (its place in Save · SWAP · Load): its touch area that slot only, the rest of the strip bare
         val (swap) = arrangeStrip(slots, emptyList(), STRIP_SWAP)
-        assertEquals(STRIP_SWAP, swap.spec.id); assertEquals(250f, swap.x, 0.01f); assertEquals(200f, swap.spec.hw, 0.01f)
+        val third = arrangeStrip(slots, listOf(slots[0], slots[2]), STRIP_SWAP)[1]
+        assertEquals(STRIP_SWAP, swap.spec.id); assertEquals(250f, swap.x, 0.01f); assertEquals(400f / 6f, swap.spec.hw, 0.01f)
+        assertEquals(third.x, swap.x, 0.01f); assertEquals(third.spec.hw, swap.spec.hw, 0.01f)
         assertEquals(900f, swap.y); assertEquals(30f, swap.spec.hh); assertEquals(-22f, swap.spec.labelDy)
     }
 

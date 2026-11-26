@@ -216,6 +216,16 @@ class WiiuLayoutTest {
         assertEquals(tv2.dst.width, pad2.dst.width, 0.01f)
     }
 
+    @Test fun stacked_in_a_wide_skin_glass_has_the_tv_across_and_the_gamepad_under_it() {
+        val glass = PxRect(642f, 89f, 1235f, 827f)   // the phone sideways: the 3DS's glass
+        val (tv, pad) = assertNotNull(WiiuLayout.skinRegions(glass, null, null, NdsSettings(big = NdsScreen.TOP), NdsLayoutChoice.STACKED))
+        assert16by9(tv); assert16by9(pad)
+        assertEquals(glass.x, tv.dst.x, 0.01f); assertEquals(glass.width, tv.dst.width, 0.01f); assertEquals(glass.y, tv.dst.y, 0.01f)
+        assertEquals(tv.dst.y + tv.dst.height, pad.dst.y, 0.01f); assertEquals(glass.y + glass.height, pad.dst.y + pad.dst.height, 0.01f)
+        assertEquals(glass.x + glass.width / 2f, pad.dst.x + pad.dst.width / 2f, 0.01f)
+        assertEquals(WiiuLayout.PAD_SRC, pad.src); assertTrue(pad.touch); assertEquals(WiiuLayout.TV_SRC, tv.src)
+    }
+
     @Test fun a_skins_top_and_touch_glasses_hold_the_tv_and_the_gamepad() {
         val top = PxRect(24f, 60f, 1800f, 1012f)
         val touch = PxRect(300f, 1200f, 1300f, 700f)   // wider than 16:9: the GamePad centred in it

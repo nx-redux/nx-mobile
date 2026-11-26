@@ -93,11 +93,15 @@ object WiiuOptions {
 
     /**
      * The layout the app draws under a pad skin: on a regular phone in [landscape] (as the DS's) the row in use's in the
-     * skin's one glass, whose width the two stacked would leave mostly empty; null elsewhere (the Fold, a tablet,
-     * portrait), where the skin's own TV over GamePad stays.
+     * skin's one glass, before a pick [SKIN_LANDSCAPE_DEFAULT] (Stacked there: the TV across, the GamePad under it,
+     * [WiiuLayout.skinRegions]); null elsewhere (the Fold, a tablet, portrait), where the skin's own TV over GamePad stays.
      */
     fun skinLayout(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, screen: ScreenClass): NdsLayoutChoice? =
-        if (!landscape || screen.isFoldShaped || screen.isTablet) null else layoutShown(values, landscape, controllerMode)
+        if (!landscape || screen.isFoldShaped || screen.isTablet) null
+        else settings(values).landscape ?: SKIN_LANDSCAPE_DEFAULT
+
+    /** Before a pick, the skin's sideways glass (the 3DS's size): the TV across its width, the GamePad under it. */
+    val SKIN_LANDSCAPE_DEFAULT = NdsLayoutChoice.STACKED
 
     /** The layout rows a pad skin ([skinOn]) ignores on [screen], shown unavailable ([skinLayout] null there). */
     fun lockedLayoutRows(skinOn: Boolean, screen: ScreenClass): Set<String> = when {

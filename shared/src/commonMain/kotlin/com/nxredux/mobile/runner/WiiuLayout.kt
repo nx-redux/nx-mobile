@@ -56,7 +56,8 @@ object WiiuLayout {
     /**
      * The screens in a pad skin's glasses (the big one, [NdsSettings.big], first). Its one [stack] glass: [layout] in it
      * where the player's layout applies ([com.nxredux.mobile.options.WiiuOptions.skinLayout]: a regular phone's wide
-     * landscape glass), else the TV over the GamePad, each 16:9 (never the DS's 4:3 halves): halved, the pair 16:18 and
+     * landscape glass; Stacked there the TV across its width, the GamePad centred in the height left under it), else
+     * the TV over the GamePad, each 16:9 (never the DS's 4:3 halves): halved, the pair 16:18 and
      * centred, where the glass is within a tenth of that shape or narrower, or too short to keep the GamePad at least
      * half the TV's size under it; else the TV across the glass's top and the GamePad centred in the height under it
      * (the Fold cover's one frame: black either side of the GamePad). Else the TV in its [top] glass and the GamePad in
@@ -65,10 +66,14 @@ object WiiuLayout {
     fun skinRegions(
         stack: PxRect?, top: PxRect?, touch: PxRect?, settings: NdsSettings, layout: NdsLayoutChoice? = null, insetMarginPx: Float = 0f,
     ): List<NdsRegion>? {
-        if (stack != null && layout != null) return regions(stack, layout, settings, insetMarginPx).ifEmpty { null }
         val tvH = stack?.let { it.width / ASPECT } ?: 0f
+        // the TV across the glass's top, the GamePad centred in the height under it
+        fun across(g: PxRect) = PxRect(g.x, g.y, g.width, tvH) to centredFit(PxRect(g.x, g.y + tvH, g.width, g.height - tvH), ASPECT)
+        if (stack != null && layout == NdsLayoutChoice.STACKED && tvH < stack.height - 1f)
+            return across(stack).let { (a, b) -> dsScreenRegions(a, b, DsKind.WIIU, settings.big) }
+        if (stack != null && layout != null) return regions(stack, layout, settings, insetMarginPx).ifEmpty { null }
         val (first, second) = if (stack != null && stack.width / stack.height > FRAME_ASPECT * 1.1f && stack.height - tvH >= tvH / 2f) {
-            PxRect(stack.x, stack.y, stack.width, tvH) to centredFit(PxRect(stack.x, stack.y + tvH, stack.width, stack.height - tvH), ASPECT)
+            across(stack)
         } else if (stack != null) {
             val pair = centredFit(stack, FRAME_ASPECT)
             pair.copy(height = pair.height / 2f) to pair.copy(y = pair.y + pair.height / 2f, height = pair.height / 2f)
