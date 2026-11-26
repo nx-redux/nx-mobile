@@ -103,16 +103,17 @@ class SkinPackDrawingTest {
         }
     }
 
-    // The DS on the Fold cover sideways, as the regular shell: MIC, MENU on the left 16 dp under the d-pad; SELECT, START
-    // across from them on the right 16 dp under the face buttons, level with them.
+    // The DS on the Fold cover sideways: MIC over MENU on the left under the d-pad; SELECT over START across from them on
+    // the right 16 dp under the face buttons, level with them.
     @Test
     fun theDsCoverSidewaysHasItsRowsUnderThePads() {
         val d = GOLDEN_DEVICES.first { it.name == "cover_land" }
         val p = assertNotNull(placeFor(pack, SkinVariant.DS, d))
         fun c(id: String) = p.controls.first { it.spec.id == id }
-        for (id in listOf("MENU", "SELECT", "START")) kotlin.test.assertEquals(c("MIC").y, c(id).y, 1f, "$id level with MIC")
-        assertTrue(c("MIC").x < c("MENU").x && c("MENU").x < d.w / 2f, "MIC, MENU on the left")
-        kotlin.test.assertEquals(d.w - c("MENU").x, c("SELECT").x, 1f, "SELECT across from MENU"); kotlin.test.assertEquals(d.w - c("MIC").x, c("START").x, 1f, "START across from MIC")
+        // MIC over MENU on the left, SELECT over START on the right: upright pairs, level, mirrored (the GBA's)
+        kotlin.test.assertEquals(c("MIC").x, c("MENU").x, 1f, "MIC over MENU"); assertTrue(c("MENU").y > c("MIC").y && c("MIC").x < d.w / 2f, "MIC over MENU on the left")
+        kotlin.test.assertEquals(c("SELECT").x, c("START").x, 1f, "SELECT over START"); assertTrue(c("START").y > c("SELECT").y, "SELECT over START")
+        kotlin.test.assertEquals(c("MIC").y, c("SELECT").y, 1f, "pairs level"); kotlin.test.assertEquals(d.w - c("MIC").x, c("SELECT").x, 1f, "SELECT across from MIC")
         val dp = d.dpi / 160f
         fun ringFoot(ids: Set<String>) = p.pieces.filter { q -> q.piece >= 0 && p.spec.pieces[q.piece].group?.split("+")?.any { it in ids } == true }.maxOf { it.dst.y + it.dst.height }
         fun wellTop(ids: Set<String>) = p.pieces.filter { q -> q.piece >= 0 && p.spec.pieces[q.piece].group?.split("+")?.any { it in ids } == true }.minOf { it.dst.y }

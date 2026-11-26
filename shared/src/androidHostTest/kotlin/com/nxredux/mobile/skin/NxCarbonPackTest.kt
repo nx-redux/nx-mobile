@@ -996,18 +996,21 @@ class NxCarbonPackTest {
                 // START on the right, level; the pads where the main menu's are
                 val name = "$v $win ${p.spec.id}"
                 if (v == SkinVariant.DS) {
+                    // MIC over MENU on the left, SELECT over START on the right, upright pairs, level, mirrored
                     for ((a, b) in listOf("MIC" to "MENU", "SELECT" to "START")) {
-                        assertEquals(c(a).y, c(b).y, 1f, "$name $a $b a row"); assertTrue(c(b).x > c(a).x, "$name $a before $b")
+                        assertEquals(c(a).x, c(b).x, 1f, "$name $a $b a column"); assertTrue(c(b).y > c(a).y, "$name $a over $b")
                     }
-                    assertEquals(c("MIC").y, c("SELECT").y, 1f, "$name rows level")
-                    // SELECT / START the mirror of MIC / MENU
-                    assertEquals(ww - c("MENU").x, c("SELECT").x, 1f, "$name SELECT across from MENU"); assertEquals(ww - c("MIC").x, c("START").x, 1f, "$name START across from MIC")
-                    assertTrue(c("START").y + c("START").spec.r + c("START").spec.labelDy + c("START").spec.labelH < wh, "$name words on the window")
+                    assertEquals(c("MIC").y, c("SELECT").y, 1f, "$name pairs level")
+                    assertEquals(ww - c("MIC").x, c("SELECT").x, 1f, "$name SELECT across from MIC")
+                    assertTrue(c("START").y + c("START").spec.r < wh, "$name on the window")
                 }
                 if (v != SkinVariant.DS) {
-                    for (row in listOf(listOf("STICK_SWAP", "MIC", "MENU"), listOf("SELECT", "START"))) for ((a, b) in row.zipWithNext()) {
+                    // (the 3DS's: no switch, the stick and the d-pad both, MIC MENU SELECT START in one row under the screen, the N64's)
+                    assertTrue(p.controls.none { it.spec.id == "STICK_SWAP" }, "$name no switch")
+                    val glass = p.glasses.maxOf { it.rect.y + it.rect.height }
+                    for ((a, b) in listOf("MIC", "MENU", "SELECT", "START").zipWithNext()) {
                         assertEquals(c(a).y, c(b).y, 1f, "$name $a $b a row"); assertTrue(c(b).x > c(a).x, "$name $a before $b")
-                        assertTrue(c(b).y + c(b).spec.r + c(b).spec.labelDy + c(b).spec.labelH < wh, "$name $b's word on the window")
+                        assertTrue(c(b).y > glass && c(b).y + c(b).spec.r + c(b).spec.labelDy + c(b).spec.labelH < wh, "$name $b under the screen, its word on the window")
                     }
                     assertEquals(c("MIC").y, c("SELECT").y, 1f, "$name rows level")
                 }

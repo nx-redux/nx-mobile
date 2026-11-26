@@ -247,7 +247,7 @@ class SkinWiiuTest {
                     for (s in listOf("L", "R")) assertEquals(menu.getValue(s).y, at(p, s).y, 1f, "$label $s level with the menu's")
                     continue
                 }
-                val swapped = d.name in FOLD_UPRIGHT || d.name == "tablet" || d.name == "tablet_land"   // (the face and the right stick swapped on the fold boards and the tablet)
+                val swapped = d.name in FOLD_UPRIGHT || d.name in setOf("tablet", "tablet_land", "cover_land")   // (the face and the right stick swapped on the fold boards, the tablet and the cover sideways)
                 for (cid in listOf("DPAD", "STICK") + (if (swapped) emptyList() else listOf("X", "Y", "A", "B")) + (if (large) emptyList() else listOf("L", "R")) + (if (stacked || large) emptyList() else listOf("L2", "R2"))) {
                     val w = at(p, cid); val n = at(n3ds, cid)
                     assertEquals(n.x, w.x, 1f, "$label $cid x"); assertEquals(n.y, w.y, 1f, "$label $cid y")
@@ -301,7 +301,7 @@ class SkinWiiuTest {
                     val n3ds = assertNotNull(SkinChoice.place(pack, d.w, d.h, d.dpi, d.tablet, ds = true, hingeY = d.hingeY, foldable = d.foldable, variant = SkinVariant.N3DS), label)
                     val r = c.getValue("CSTICK").spec.r
                     assertTrue(r > n3ds.controls.first { it.spec.id == "CSTICK" }.spec.r && r < want, "$label right stick r $r")
-                } else if (d.name == "tablet" || d.name == "tablet_land") assertEquals(c.getValue("STICK").spec.r, c.getValue("CSTICK").spec.r, 0.5f, "$label right stick as the left")   // (in the face's place)
+                } else if (d.name in setOf("tablet", "tablet_land", "cover_land")) assertEquals(c.getValue("STICK").spec.r, c.getValue("CSTICK").spec.r, 0.5f, "$label right stick as the left")   // (in the face's place)
                 else assertEquals(want, c.getValue("CSTICK").spec.r, 0.5f, "$label right stick r")
                 assertNoOverlaps(p, d.w, d.h, label)
                 for (id in listOf("CSTICK", "L3", "R3", "SELECT", "START")) for (g in p.glasses) {
@@ -315,8 +315,7 @@ class SkinWiiuTest {
 
     /**
      * The Fold cover: upright the bottom row L3 the stick swap MENU R3 (where the 3DS's row is), − + in the shoulder row
-     * between ZL and ZR; sideways the rows L3 + the stick swap and MENU + R3 on the 3DS's spots, − + shoulder pills over
-     * L / R.
+     * between ZL and ZR; sideways L3 MENU R3 in a row under the screen as the 3DS's row, − + shoulder pills over L / R.
      */
     @Test
     fun the_fold_covers_caps_rows_and_shoulders() {
@@ -339,17 +338,18 @@ class SkinWiiuTest {
                     for (cid in listOf("SELECT", "START")) assertEquals(c(p, "L").y, c(p, cid).y, 1f, "$label $cid in the shoulder row")
                     assertEquals((c(p, "L2").x + c(p, "R2").x) / 2f, (c(p, "SELECT").x + c(p, "START").x) / 2f, 1f, "$label − + midway")
                 } else {
-                    // the rows L3 + the stick swap and MENU + R3 on the 3DS's spots; − + pills over L / R
-                    val left = xs(n, "STICK_SWAP", "MIC", "MENU"); val right = xs(n, "SWAP", "SELECT", "START")
-                    for ((cid, x) in listOf("L3" to left[0], "STICK_SWAP" to left[1], "MENU" to right[1], "R3" to right[2])) {
-                        assertEquals(x, c(p, cid).x, 1f, "$label $cid x"); assertEquals(c(n, "MENU").y, c(p, cid).y, 1f, "$label $cid y")
+                    // − MENU + in a row under the screen, level with the 3DS's row; L3 / R3 at the sticks' lower outer
+                    // side; the right stick up in the face's place, the face under it (the tablet sideways's)
+                    assertTrue(p.controls.none { it.spec.id == "STICK_SWAP" }, "$label no switch")
+                    for ((a, b) in listOf("SELECT", "MENU", "START").zipWithNext()) {
+                        assertEquals(c(p, a).y, c(p, b).y, 1f, "$label $a $b a row"); assertTrue(c(p, b).x > c(p, a).x, "$label $a before $b")
                     }
-                    for ((pm, sh) in listOf("SELECT" to "L", "START" to "R")) {
-                        assertEquals(c(p, sh).x, c(p, pm).x, 1f, "$label $pm over $sh")
-                        assertTrue(c(p, pm).y < c(p, sh).y, "$label $pm not over $sh")
-                        assertEquals(ControlShape.RECT, c(p, pm).spec.shape, "$label $pm a pill")
-                        assertEquals(c(p, sh).spec.hw, c(p, pm).spec.hw, 0.5f, "$label $pm hw"); assertEquals(c(p, sh).spec.hh, c(p, pm).spec.hh, 0.5f, "$label $pm hh")
+                    assertEquals(c(n, "MENU").y, c(p, "MENU").y, 1f, "$label the row level with the 3DS's")
+                    for ((cap, stick, side) in listOf(Triple("L3", "STICK", -1f), Triple("R3", "CSTICK", 1f))) {
+                        val a = c(p, cap); val st = c(p, stick)
+                        assertTrue((a.x - st.x) * side > 0f && a.y > st.y, "$label $cap at $stick's lower outer side")
                     }
+                    assertEquals(c(p, "STICK").y, c(p, "CSTICK").y, 1f, "$label the sticks level")
                 }
             }
         }
@@ -527,7 +527,7 @@ class SkinWiiuTest {
     }
 
     /** Windows whose right stick's box has no room for 85% of the left stick without moving the 3DS's pads. */
-    private val SMALLER_RIGHT_STICK = setOf("phone", "phone_land", "cover_land", "flip_half")
+    private val SMALLER_RIGHT_STICK = setOf("phone", "phone_land", "flip_half")
 
     private fun assertFills(glass: PxRect, screens: List<PxRect>, label: String, px: Float = 1f) {
         val u = assertNotNull(union(screens), label)
