@@ -597,7 +597,7 @@ class NxCarbonPackTest {
     @Test
     fun ps1PhonePortrait() {
         // L2 L1 | SELECT START | R1 R2; the d-pad (the left stick by the swap cap); △ ○ × □ with the right stick nub by △; the
-        // swap cap L3 MENU R3 (the phone's: L3, the swap cap, SELECT, MENU, START, R3 in the bottom row)
+        // L3, the swap cap, MENU, R3 (the phone's: L3, the swap cap, SELECT, MENU, START, R3 in the bottom row)
         for (name in listOf("flip", "cover")) {
             val d = consoleDevices.toList().first { it.first == name }.second
             val p = assertNotNull(SkinChoice.place(pack, d.first, d.second, 420, false, false, 640f to 480f, d.third, variant = SkinVariant.PS1), name)
@@ -609,7 +609,7 @@ class NxCarbonPackTest {
             val phone = name == "flip"
             if (phone) assertTrue(c("L2").x < c("L").x && c("L").x < c("R").x && c("R").x < c("R2").x, "$name L2 L1 R1 R2")
             else assertTrue(c("L2").x < c("L").x && c("L").x < c("SELECT").x && c("START").x < c("R").x && c("R").x < c("R2").x, "$name L2 L1 SELECT START R1 R2")
-            val row = (if (phone) listOf("L3", "STICK_SWAP", "SELECT", "MENU", "START", "R3") else listOf("STICK_SWAP", "L3", "MENU", "R3")).map(::c)
+            val row = (if (phone) listOf("L3", "STICK_SWAP", "SELECT", "MENU", "START", "R3") else listOf("L3", "STICK_SWAP", "MENU", "R3")).map(::c)
             for (i in 1 until row.size) { assertEquals(row[0].y, row[i].y, 1f, "$name bottom row"); assertTrue(row[i].x > row[i - 1].x, "$name bottom row order") }
             assertTrue(c("CSTICK").x > c("X").x && c("CSTICK").y < c("A").y, "$name the right stick nub up and right of △")
             assertTrue(c("STICK").spec.r > c("DPAD").spec.r, "$name the swapped stick full size")

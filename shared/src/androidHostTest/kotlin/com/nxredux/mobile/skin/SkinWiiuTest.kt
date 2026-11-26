@@ -186,7 +186,12 @@ class SkinWiiuTest {
         when (p.spec.family) {
             SkinFamily.GRIP -> for ((a, b) in listOf(nf.x to wf.x, nf.y to wf.y, nf.width to wf.width, nf.height to wf.height)) assertEquals(a, b, 1f, "$label frame $wf, the 3DS's $nf")
             SkinFamily.STACKED -> assertEquals(nf.y + nf.height, wf.y + wf.height, 1f, "$label frame as tall as the 3DS's")
-            else -> {
+            else -> if (d.name == "cover") {
+                // the Fold cover: the frame as the other consoles' (the single set's), the GamePad's strip in it
+                val single = assertNotNull(SkinChoice.place(pack, d.w, d.h, d.dpi, d.tablet, ds = false, picture = 320f to 240f, foldable = d.foldable, variant = SkinVariant.SINGLE), label)
+                val sf = assertNotNull(frames(single).first, label)
+                assertEquals(sf.y + sf.height, wf.y + wf.height, 1f, "$label frame as tall as the other consoles'")
+            } else {
                 // the shoulder row's pieces (− + with them): the topmost a box gap under the frame
                 val row = p.controls.filter { it.spec.id in setOf("L", "SELECT", "START") }
                 val shoulder = p.pieces.filter { pc -> pc.piece >= 0 && pc.dst.width < 300f && row.any { c -> c.x in pc.dst.x..(pc.dst.x + pc.dst.width) && c.y in pc.dst.y..(pc.dst.y + pc.dst.height) } }
@@ -234,6 +239,14 @@ class SkinWiiuTest {
                 val n3ds = assertNotNull(SkinChoice.place(pack, d.w, d.h, d.dpi, d.tablet, ds = true, hingeY = d.hingeY, foldable = d.foldable, variant = SkinVariant.N3DS), label)
                 fun at(pl: SkinPlacement, cid: String) = pl.controls.first { it.spec.id == cid }
                 val stacked = p.spec.family == SkinFamily.STACKED; val large = p.spec.family == SkinFamily.LARGE
+                if (d.name == "cover") {   // the Fold cover: the stick, the face and the shoulders on the main menu's spots
+                    val menu = assertNotNull(placeFor(pack, null, d), label).controls.associateBy { it.spec.id }
+                    for ((w, m) in listOf("STICK" to "DPAD", "X" to "X", "Y" to "Y", "A" to "A", "B" to "B")) {
+                        assertEquals(menu.getValue(m).x, at(p, w).x, 1f, "$label $w x as the menu's $m"); assertEquals(menu.getValue(m).y, at(p, w).y, 1f, "$label $w y as the menu's $m")
+                    }
+                    for (s in listOf("L", "R")) assertEquals(menu.getValue(s).y, at(p, s).y, 1f, "$label $s level with the menu's")
+                    continue
+                }
                 val swapped = d.name in FOLD_UPRIGHT || d.name == "tablet" || d.name == "tablet_land"   // (the face and the right stick swapped on the fold boards and the tablet)
                 for (cid in listOf("DPAD", "STICK") + (if (swapped) emptyList() else listOf("X", "Y", "A", "B")) + (if (large) emptyList() else listOf("L", "R")) + (if (stacked || large) emptyList() else listOf("L2", "R2"))) {
                     val w = at(p, cid); val n = at(n3ds, cid)
@@ -279,10 +292,11 @@ class SkinWiiuTest {
                 val p = assertNotNull(place(pack, d), label)
                 val c = p.controls.associateBy { it.spec.id }
                 val want = 0.85f * c.getValue("STICK").spec.r
-                if (d.name == "cover") {   // the Fold cover: small in the middle, the 3DS's nub
+                if (d.name == "cover") {   // the Fold cover: small in the middle, the 3DS's nub, up between the pads with them
                     val n3ds = assertNotNull(SkinChoice.place(pack, d.w, d.h, d.dpi, d.tablet, ds = true, hingeY = d.hingeY, foldable = d.foldable, variant = SkinVariant.N3DS), label)
                     val nub = n3ds.controls.first { it.spec.id == "CSTICK" }; val cs = c.getValue("CSTICK")
-                    assertEquals(nub.spec.r, cs.spec.r, 0.5f, "$label nub r"); assertEquals(nub.x, cs.x, 1f, "$label nub x"); assertEquals(nub.y, cs.y, 1f, "$label nub y")
+                    assertEquals(nub.spec.r, cs.spec.r, 0.5f, "$label nub r"); assertEquals(nub.x, cs.x, 1f, "$label nub x")
+                    val st = c.getValue("STICK"); assertTrue(cs.y > st.y - st.spec.r && cs.y < st.y + st.spec.r, "$label nub ${cs.y} between the pads (${st.y})")
                 } else if (d.name in SMALLER_RIGHT_STICK) {
                     val n3ds = assertNotNull(SkinChoice.place(pack, d.w, d.h, d.dpi, d.tablet, ds = true, hingeY = d.hingeY, foldable = d.foldable, variant = SkinVariant.N3DS), label)
                     val r = c.getValue("CSTICK").spec.r
