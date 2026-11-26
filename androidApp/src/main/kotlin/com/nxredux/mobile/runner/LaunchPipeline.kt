@@ -242,6 +242,8 @@ internal interface LaunchHost : GameScreenHost {
     fun onAchievementEvent(e: RaEvent)
     /** A core's on-screen message, shown as the in-game toast when it is worth it ([CoreMessageToasts]). */
     fun showCoreMessage(m: GLRetroView.CoreMessage)
+    /** The core's text entry (the Wii U software keyboard) opened or closed: the app's text box answers it. */
+    fun onCoreTextInput(t: GLRetroView.TextInput)
 }
 
 /**
@@ -1301,6 +1303,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 b.deliverEvents { onAchievementEvent(it) }
             }
             lifecycleScope.launch { view.getCoreMessages().collect(::showCoreMessage) }
+            lifecycleScope.launch { view.getTextInputs().collect(::onCoreTextInput) }
             // The core loads the game on the GL thread once the view is added (SurfaceCreated follows): the waiting pads'
             // timeout counts from then, not through the load.
             lifecycleScope.launch {

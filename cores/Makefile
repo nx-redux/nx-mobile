@@ -529,6 +529,8 @@ armsx2_FLAGS = -DCMAKE_PREFIX_PATH=$(ARMSX2_DEPS)/prefix -DCMAKE_FIND_ROOT_PATH=
 # aspect 8:9), which the app cuts into its two screens. patches/cemu/0002: no mouse cursor over the GamePad picture; on
 # a touchscreen the finger is the pointer. patches/cemu/0003: the output image keeps each screen's last picture, so a
 # frame that brings only one screen leaves the other as it was instead of blank; cleared only when new or a screen moves.
+# patches/cemu/0004: the software keyboard's opening and closing told to the app (NX_ENVIRONMENT_SET_TEXT_INPUT), which
+# shows its own text box and types the answer through the keyboard callback.
 # notices/cemu-deps.txt holds the copyright files of the vcpkg packages linked in
 # (build/cemu/vcpkg_installed/arm64-android/share/*/copyright, the boost libraries' shared one once) and the licences of
 # the submodules compiled in (xbyak_aarch64, imgui, ZArchive, ih264d, Vulkan-Headers, the embedded graphic packs);

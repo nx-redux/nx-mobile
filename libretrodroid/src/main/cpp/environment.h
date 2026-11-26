@@ -67,6 +67,21 @@ public:
     /** The messages queued since the last call, oldest first; at most CORE_MESSAGES_MAX are kept. */
     std::vector<CoreMessage> takeCoreMessages();
 
+    /** A core's text entry opened ([open]: with its [text], the empty answer's [name] and [maxLength]) or closed. */
+    struct TextInputEvent {
+        bool open;
+        std::string text;
+        std::string name;
+        unsigned maxLength;
+    };
+    /** The entry changes since the last call, oldest first (the step drains them). */
+    std::vector<TextInputEvent> takeTextInputEvents();
+
+    /** Keys for the core's keyboard callback, typed one a frame from the next (deliverKeyboardKey). Nothing without a callback. */
+    void queueKeyboardKeys(const std::vector<std::pair<unsigned, uint32_t>>& keys);
+    /** Presses and releases the next queued key through the core's keyboard callback; on the core's thread, before a frame. */
+    void deliverKeyboardKey();
+
     static bool callback_set_rumble_state(
         unsigned port,
         enum retro_rumble_effect effect,
@@ -189,6 +204,10 @@ private:
     static constexpr size_t CORE_MESSAGES_MAX = 16;
     std::mutex coreMessagesMutex;
     std::vector<CoreMessage> coreMessages;
+    std::mutex textInputMutex;   // the events and the keys: the step drains one, the UI thread fills the other
+    std::vector<TextInputEvent> textInputEvents;
+    std::vector<std::pair<unsigned, uint32_t>> keyboardKeys;
+    retro_keyboard_event_t keyboardCallback = nullptr;
     bool preferVulkan = false;
     bool useVulkan = false;
     std::atomic<bool> loggedVulkanInterface { false };   // GET_HW_RENDER_INTERFACE logged this session

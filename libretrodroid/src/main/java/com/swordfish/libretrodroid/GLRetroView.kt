@@ -383,6 +383,7 @@ class GLRetroView(
     // Buffered so tryEmit from the GL thread never suspends; the host collects promptly.
     private val achievementEvents = MutableSharedFlow<AchievementEvent>(extraBufferCapacity = 64)
     private val coreMessages = MutableSharedFlow<CoreMessage>(extraBufferCapacity = 16)
+    private val textInputs = MutableSharedFlow<TextInput>(extraBufferCapacity = 8)
     // Unlimited channel: a server call must never be dropped, or rc_client waits for its answer forever.
     private val achievementServerCalls = Channel<AchievementServerCall>(Channel.UNLIMITED)
 
@@ -874,6 +875,18 @@ class GLRetroView(
     fun getCoreMessages(): Flow<CoreMessage> = coreMessages
 
     /**
+     * A core's text entry (a patched core's NX_ENVIRONMENT_SET_TEXT_INPUT: the Wii U software keyboard) [open]ed with
+     * the [text] it holds, the [name] it takes when nothing is typed and its [maxLength] (0: not known), or closed.
+     */
+    data class TextInput(val open: Boolean, val text: String, val name: String, val maxLength: Int)
+
+    /** The core's text entry opening and closing; the app answers an open one with [sendKeyboardKeys]. */
+    fun getTextInputs(): Flow<TextInput> = textInputs
+
+    /** Types [keycodes] (RETROK_ codes) with their [characters] through the core's keyboard callback, one a frame. */
+    fun sendKeyboardKeys(keycodes: IntArray, characters: IntArray) = LibretroDroid.sendKeyboardKeys(keycodes, characters)
+
+    /**
      * HTTP requests rc_client wants sent. Buffered until collected (single consumer); every call must be answered
      * with `LibretroDroid.achievementsServerResponse(requestId, …)` or rc_client keeps waiting for it.
      */
@@ -1159,6 +1172,11 @@ class GLRetroView(
         lifecycle?.coroutineScope?.launch {
             rumbleEventsSubject.emit(RumbleEvent(port, strengthWeak, strengthStrong))
         }
+    }
+
+    /** Called from the jni side (emulation thread) after each step. */
+    private fun sendTextInput(open: Boolean, text: String, name: String, maxLength: Int) {
+        textInputs.tryEmit(TextInput(open, text, name, maxLength))
     }
 
     /** Called from the jni side (emulation thread) after each step. */

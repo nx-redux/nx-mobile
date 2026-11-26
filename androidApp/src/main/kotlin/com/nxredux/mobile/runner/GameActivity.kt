@@ -18,12 +18,15 @@ import android.os.Handler
 import android.os.Looper
 import android.os.Process
 import android.os.SystemClock
+import android.text.InputFilter
 import android.view.Display
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewTreeObserver
 import android.view.WindowManager
+import android.view.inputmethod.EditorInfo
+import android.widget.EditText
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
@@ -243,6 +246,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         const val EXTRA_NETPLAY_RTC = "netplay_rtc"                      // Long: the session clock, epoch seconds
         /** Kids Mode's "Games close in 10 minutes" toast stays this long. */
         private const val KIDS_WARNING_MS = 6000L
+        /** After the core text box's Cancel: the game's keyboard is still waiting. */
+        private const val CORE_TEXT_CANCELLED = "The game's keyboard is still open. Start on the pad answers with the account's name."
+        private const val CORE_TEXT_CANCELLED_MS = 8000L
         /** The failure dialog's title unless a caller names another. */
         internal const val START_FAILED = "Could not start the game"
         /** [onCoreHung]: between the hung game's finish and the process kill. */
@@ -1328,6 +1334,75 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         try { answered.await() } finally { if (dialog.isShowing) dialog.dismiss() }
     }
 
+    /** The core's text entry open now (its box may be down, after Cancel); null: none. */
+    private var coreTextInput: GLRetroView.TextInput? = null
+    private var coreTextBox: AlertDialog? = null
+
+    /** The core's text entry opened or closed: its box comes up, or goes with it (answered elsewhere, as by Start). */
+    fun onCoreTextInput(t: GLRetroView.TextInput) {
+        coreTextInput = t.takeIf { it.open }
+        coreTextBox?.let { coreTextBox = null; it.dismiss() }
+        if (t.open) showCoreTextBox(t)
+    }
+
+    /**
+     * The text box for the core's open entry: OK types the answer into the core ([CoreTextInput]: the account's name with
+     * nothing typed); Cancel leaves the game's keyboard open, its Start still answering, with a notice to bring the box
+     * back. A controller's A answers OK and B cancels, on release after their press here, as in [fail].
+     */
+    private fun showCoreTextBox(t: GLRetroView.TextInput) {
+        if (isFinishing || isDestroyed) return
+        val field = EditText(this).apply {
+            setSingleLine(true)
+            setText(t.text)
+            setSelection(text.length)
+            if (t.name.isNotEmpty()) hint = t.name
+            imeOptions = EditorInfo.IME_ACTION_DONE
+            if (t.maxLength > 0) filters = arrayOf(InputFilter.LengthFilter(t.maxLength))
+        }
+        val pad = (20 * resources.displayMetrics.density).toInt()
+        val frame = FrameLayout(this).apply { setPadding(pad, pad / 2, pad, 0); addView(field) }
+        var settled = false
+        lateinit var dialog: AlertDialog
+        val answer = { ok: Boolean ->
+            if (!settled) {
+                settled = true
+                if (coreTextBox === dialog) coreTextBox = null
+                dialog.dismiss()
+                if (ok) {
+                    val keys = CoreTextInput.keys(t.text, CoreTextInput.answer(field.text.toString(), t.name, t.maxLength))
+                    retroView?.sendKeyboardKeys(keys.map { it.keycode }.toIntArray(), keys.map { it.character }.toIntArray())
+                } else {
+                    input.showNotice(CORE_TEXT_CANCELLED, CORE_TEXT_CANCELLED_MS, "Type") {
+                        coreTextInput?.takeIf { coreTextBox == null }?.let(::showCoreTextBox)
+                    }
+                }
+            }
+        }
+        field.setOnEditorActionListener { _, action, _ -> (action == EditorInfo.IME_ACTION_DONE).also { if (it) answer(true) } }
+        var pressed = -1
+        dialog = AlertDialog.Builder(this)
+            .setTitle("Keyboard")
+            .setView(frame)
+            .setPositiveButton("OK") { _, _ -> answer(true) }
+            .setNegativeButton("Cancel") { _, _ -> answer(false) }
+            .setOnCancelListener { answer(false) }
+            .setOnKeyListener { _, keyCode, event ->
+                val button = PadKeymap.buttonFor(keyCode).takeIf { it == NxButton.A || it == NxButton.B } ?: return@setOnKeyListener false
+                when (event.action) {
+                    KeyEvent.ACTION_DOWN -> if (event.repeatCount == 0) pressed = keyCode
+                    KeyEvent.ACTION_UP -> if (pressed == keyCode) answer(button == NxButton.A)
+                }
+                true
+            }
+            .create()
+        dialog.setCanceledOnTouchOutside(false)
+        dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
+        coreTextBox = dialog
+        dialog.show()
+        field.requestFocus()
+    }
+
     /** Opens the game's content and companions, SAF documents or file refs. */
     private val refs by lazy { AndroidRefs(contentResolver) }
 
@@ -2393,6 +2468,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             game.prepareAchievements(tag, romFileName, content, inner)
         override fun onAchievementEvent(e: RaEvent) = game.onAchievementEvent(e)
         override fun showCoreMessage(m: GLRetroView.CoreMessage) = game.showCoreMessage(m)
+        override fun onCoreTextInput(t: GLRetroView.TextInput) = game.onCoreTextInput(t)
     }
 }
 

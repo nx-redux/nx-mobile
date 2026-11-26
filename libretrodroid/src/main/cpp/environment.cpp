@@ -43,6 +43,7 @@
 #include "netplay/dslinkhooks.h"
 #include "netplay/nx_nds_radio.h"
 #include "netplay/nx_3ds_link.h"
+#include "nxtextinput.h"
 #include "netplay/nx_psp_link.h"
 #include "netplay/psplinkhooks.h"
 #include "sensorstate.h"
@@ -74,10 +75,45 @@ std::vector<Environment::CoreMessage> Environment::takeCoreMessages() {
     return out;
 }
 
+std::vector<Environment::TextInputEvent> Environment::takeTextInputEvents() {
+    std::lock_guard<std::mutex> lock(textInputMutex);
+    std::vector<TextInputEvent> out;
+    out.swap(textInputEvents);
+    return out;
+}
+
+void Environment::queueKeyboardKeys(const std::vector<std::pair<unsigned, uint32_t>>& keys) {
+    std::lock_guard<std::mutex> lock(textInputMutex);
+    if (keyboardCallback == nullptr) return;
+    keyboardKeys.insert(keyboardKeys.end(), keys.begin(), keys.end());
+}
+
+void Environment::deliverKeyboardKey() {
+    retro_keyboard_event_t callback;
+    std::pair<unsigned, uint32_t> key;
+    {
+        std::lock_guard<std::mutex> lock(textInputMutex);
+        if (keyboardKeys.empty() || keyboardCallback == nullptr) return;
+        callback = keyboardCallback;
+        key = keyboardKeys.front();
+        keyboardKeys.erase(keyboardKeys.begin());
+    }
+    // One a frame: a game reads its entry's text as it changes, the way it does from a real keyboard.
+    callback(true, key.first, key.second, 0);
+    callback(false, key.first, key.second, 0);
+}
+
 void Environment::deinitialize() {
     callback_get_current_framebuffer = nullptr;
     hw_context_reset = nullptr;
     hw_context_destroy = nullptr;
+
+    {
+        std::lock_guard<std::mutex> lock(textInputMutex);
+        keyboardCallback = nullptr;
+        keyboardKeys.clear();
+        textInputEvents.clear();
+    }
 
     hasDiskControl = false;
     diskControl = {};
@@ -833,6 +869,28 @@ bool Environment::handle_callback_environment(unsigned cmd, void *data) {
         case NX_ENVIRONMENT_SET_3DS_LINK:
             libretrodroid::dslink::setCoreRoom(static_cast<nx_3ds_link_interface*>(data));
             return true;
+
+        case RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK: {
+            LOGD("Called RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK");
+            auto keyboard = static_cast<const struct retro_keyboard_callback*>(data);
+            std::lock_guard<std::mutex> lock(textInputMutex);
+            keyboardCallback = keyboard ? keyboard->callback : nullptr;
+            return true;
+        }
+
+        case NX_ENVIRONMENT_SET_TEXT_INPUT: {
+            auto input = static_cast<const struct nx_text_input*>(data);
+            if (input == nullptr) return false;
+            LOGI("Core text entry %s", input->open ? "open" : "closed");
+            std::lock_guard<std::mutex> lock(textInputMutex);
+            // The box types through the keyboard callback: without one it could not answer.
+            if (input->open && keyboardCallback == nullptr) return false;
+            textInputEvents.push_back(TextInputEvent {
+                input->open, safeString(input->open ? input->text : nullptr), safeString(input->open ? input->name : nullptr),
+                input->open ? input->max_length : 0,
+            });
+            return true;
+        }
 
         case NX_ENVIRONMENT_SET_PSP_LINK:
             libretrodroid::psplink::setCore(static_cast<nx_psp_link_interface*>(data));
