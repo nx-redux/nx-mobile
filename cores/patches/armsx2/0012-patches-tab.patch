@@ -1,0 +1,182 @@
+diff --git a/pcsx2/Patch.h b/pcsx2/Patch.h
+--- a/pcsx2/Patch.h
++++ b/pcsx2/Patch.h
+@@ -20,6 +20,7 @@
+ #include "common/MemoryInterface.h"
+ #include "common/SmallString.h"
+ 
++#include <functional>
+ #include <string>
+ #include <string_view>
+ #include <vector>
+@@ -172,6 +173,20 @@
+ 	extern void ReloadPatches(const std::string& serial, u32 crc, bool reload_files, bool reload_enabled_list, bool verbose, bool verbose_if_changed);
+ 
+ 	extern void UpdateActivePatches(bool reload_enabled_list, bool verbose, bool verbose_if_changed, bool apply_new_patches);
++
++	/// A named group in the running game's patch files, as a frontend lists it.
++	struct NamedPatchInfo
++	{
++		std::string name;
++		bool boot_only; // has lines that only apply when the ELF loads (place 0 or 2)
++	};
++
++	/// Called on every load of the game's patch files for a known CRC, with its named groups in file order.
++	extern void SetGamePatchesLoadedCallback(std::function<void(u32 crc, const std::vector<NamedPatchInfo>& groups)> callback);
++
++	/// Patch names the frontend turned on, on top of the [Patches] Enable setting, which they never
++	/// reach: the settings file is shared by every game. CPU thread only.
++	extern void SetFrontendEnabledPatches(std::vector<std::string> names);
+ 	extern void ApplyPatchSettingOverrides();
+ 	extern bool ReloadPatchAffectingOptions();
+ 	extern void UnloadPatches();
+diff --git a/pcsx2/Patch.cpp b/pcsx2/Patch.cpp
+--- a/pcsx2/Patch.cpp
++++ b/pcsx2/Patch.cpp
+@@ -143,6 +143,8 @@
+ 	static std::vector<std::string> s_enabled_patches;
+ 	static std::vector<std::string> s_just_enabled_cheats;
+ 	static std::vector<std::string> s_just_enabled_patches;
++	static std::vector<std::string> s_frontend_enabled_patches;
++	static std::function<void(u32, const std::vector<NamedPatchInfo>&)> s_game_patches_loaded;
+ 	static u32 s_patches_crc;
+ 	static std::optional<float> s_override_aspect_ratio;
+ 	static std::optional<GSInterlaceMode> s_override_interlace_mode;
+@@ -663,6 +665,12 @@
+ 
+ 	const std::vector<std::string> prev_enabled_patches = std::exchange(s_enabled_patches, Host::GetStringListSetting(PATCHES_CONFIG_SECTION, PATCH_ENABLE_CONFIG_KEY));
+ 	const std::vector<std::string> disabled_patches = Host::GetStringListSetting(PATCHES_CONFIG_SECTION, PATCH_DISABLE_CONFIG_KEY);
++
++	for (const std::string& name : s_frontend_enabled_patches)
++	{
++		if (std::find(s_enabled_patches.begin(), s_enabled_patches.end(), name) == s_enabled_patches.end())
++			s_enabled_patches.push_back(name);
++	}
+ 
+ 	// Name based matching for widescreen/NI settings.
+ 	if (EmuConfig.EnableWideScreenPatches)
+@@ -924,11 +932,37 @@
+ 				if (patch_count > 0)
+ 					Console.WriteLn(Color_Green, fmt::format("Found {} cheats in {}.", patch_count, filename));
+ 			});
++
++		if (s_patches_crc != 0 && s_game_patches_loaded)
++		{
++			std::vector<NamedPatchInfo> groups;
++			for (const PatchGroup& group : s_game_patches)
++			{
++				if (group.name.empty() || std::any_of(groups.begin(), groups.end(),
++											  [&group](const NamedPatchInfo& it) { return it.name == group.name; }))
++					continue;
++				const bool boot_only = std::any_of(group.patches.begin(), group.patches.end(), [](const PatchCommand& c) {
++					return c.placetopatch == PPT_ONCE_ON_LOAD || c.placetopatch == PPT_COMBINED_0_1;
++				});
++				groups.push_back({group.name, boot_only});
++			}
++			s_game_patches_loaded(s_patches_crc, groups);
++		}
+ 	}
+ 
+ 	UpdateActivePatches(reload_enabled_list, verbose, verbose_if_changed, false);
++}
++
++void Patch::SetGamePatchesLoadedCallback(std::function<void(u32 crc, const std::vector<NamedPatchInfo>& groups)> callback)
++{
++	s_game_patches_loaded = std::move(callback);
+ }
+ 
++void Patch::SetFrontendEnabledPatches(std::vector<std::string> names)
++{
++	s_frontend_enabled_patches = std::move(names);
++}
++
+ void Patch::UpdateActivePatches(bool reload_enabled_list, bool verbose, bool verbose_if_changed, bool apply_new_patches)
+ {
+ 	if (reload_enabled_list)
+diff --git a/pcsx2-libretro/Main.cpp b/pcsx2-libretro/Main.cpp
+--- a/pcsx2-libretro/Main.cpp
++++ b/pcsx2-libretro/Main.cpp
+@@ -69,6 +69,7 @@
+ #include "pcsx2/Achievements.h"
+ #include "pcsx2/CDVD/CDVDcommon.h"
+ #include "pcsx2/GS.h"
++#include "pcsx2/Patch.h"
+ #ifdef ENABLE_VULKAN
+ #include "pcsx2/GS/Renderers/Vulkan/GSDeviceVK.h"
+ #include "pcsx2/GS/Renderers/Vulkan/VKLibretro.h"
+@@ -166,6 +167,11 @@
+ 
+ // Settings persistence (INI under the frontend's system directory).
+ static std::unique_ptr<INISettingsInterface> s_base_settings;
++
++// The game's patch groups for the frontend's Patches tab, beside its memory card.
++static constexpr const char* PATCH_LIST_FILE = "nx-patches.txt";
++// Patch groups the frontend turned on (retro_cheat_set "patch:<name>"), frontend thread.
++static std::vector<std::string> s_frontend_patches;
+ static std::unique_ptr<INISettingsInterface> s_secrets_settings;
+ 
+ static std::atomic<bool> s_shutdown_requested{false};
+@@ -1994,6 +2000,21 @@
+ 			}
+ 			EmuFolders::MemoryCards = card_dir;
+ 			EmuFolders::Savestates = state_dir;
++
++			// The frontend lists the game's patches from this file, and waits for it: a stale one
++			// would show the last session's game.
++			const std::string patch_list = Path::Combine(card_dir, PATCH_LIST_FILE);
++			FileSystem::DeleteFilePath(patch_list.c_str());
++			Patch::SetFrontendEnabledPatches({});
++			s_frontend_patches.clear();
++			Patch::SetGamePatchesLoadedCallback([patch_list](u32 crc, const std::vector<Patch::NamedPatchInfo>& groups) {
++				std::string text = fmt::format("crc={:08X}\n", crc);
++				for (const Patch::NamedPatchInfo& g : groups)
++					text += fmt::format("{}\t{}\n", g.boot_only ? "boot" : "live", g.name);
++				const std::string temp = patch_list + ".tmp";
++				if (!FileSystem::WriteStringToFile(temp.c_str(), text) || !FileSystem::RenamePath(temp.c_str(), patch_list.c_str()))
++					Console.ErrorFmt("Cannot write {}", patch_list);
++			});
+ 
+ 			// Cheats and patches from the user's folder beside the saves: a save
+ 			// directory <home>/Saves/<console> reads <home>/Cheats/<console> for
+@@ -2785,14 +2806,41 @@
+ #endif
+ 
+ 	return ok;
++}
++
++// Patch groups go to the CPU thread, which owns the patch lists; a vsync drains the queue.
++static void SendFrontendPatches()
++{
++	Host::RunOnCPUThread([names = s_frontend_patches]() mutable {
++		Patch::SetFrontendEnabledPatches(std::move(names));
++		Patch::UpdateActivePatches(true, false, true, true);
++	}, false);
+ }
+ 
+ RETRO_API void retro_cheat_reset(void)
+ {
++	if (s_frontend_patches.empty())
++		return;
++	s_frontend_patches.clear();
++	SendFrontendPatches();
+ }
+ 
++// Only "patch:<group name>": turns that group of the game's patch files on or off. Cheats come
++// from the Enable Cheats option instead.
+ RETRO_API void retro_cheat_set(unsigned index, bool enabled, const char* code)
+ {
++	static constexpr std::string_view PREFIX = "patch:";
++	if (!code || std::strncmp(code, PREFIX.data(), PREFIX.size()) != 0)
++		return;
++	const std::string name(code + PREFIX.size());
++	const auto it = std::find(s_frontend_patches.begin(), s_frontend_patches.end(), name);
++	if (enabled == (it != s_frontend_patches.end()))
++		return;
++	if (enabled)
++		s_frontend_patches.push_back(name);
++	else
++		s_frontend_patches.erase(it);
++	SendFrontendPatches();
+ }
+ 
+ RETRO_API unsigned retro_get_region(void)
