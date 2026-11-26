@@ -11,11 +11,13 @@ import com.nxredux.mobile.options.GraphicsApiOptions
 /**
  * The 3DS Download Play row's defaults, under any value the player set: a guest slower than full speed pulls the race out
  * of sync with the host. On a Mali GPU with a custom Vulkan driver, Vulkan with that driver; on Mali without one, the 3D
- * at its native 1x (OpenGL ES at 2x ran ~52 fps there); elsewhere the console's own settings.
+ * at its native 1x (OpenGL ES at 2x ran ~52 fps there); elsewhere the console's own settings. The driver is the one the
+ * 3DS console [chosen] when it is installed, else the first.
  */
-fun n3dsDownloadPlayDefaults(gpu: String?, installedDrivers: List<String>): Map<String, String> = when {
+fun n3dsDownloadPlayDefaults(gpu: String?, installedDrivers: List<String>, chosen: String? = null): Map<String, String> = when {
     !DeviceTraits.isMali(gpu) -> emptyMap()
-    installedDrivers.isNotEmpty() -> mapOf(GraphicsApiOptions.KEY to GraphicsApiOptions.VULKAN, GpuDriverOptions.KEY to installedDrivers.first())
+    installedDrivers.isNotEmpty() -> mapOf(GraphicsApiOptions.KEY to GraphicsApiOptions.VULKAN,
+        GpuDriverOptions.KEY to (chosen?.takeIf { it in installedDrivers } ?: installedDrivers.first()))
     else -> mapOf(Res3dConsole.N3DS.modeKey to Nds3dMode.PERFORMANCE.value, Res3dConsole.N3DS.scaleKey to "1")
 }
 
