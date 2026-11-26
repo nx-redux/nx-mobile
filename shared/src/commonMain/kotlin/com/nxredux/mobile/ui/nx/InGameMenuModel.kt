@@ -6,6 +6,7 @@ import com.nxredux.mobile.achievements.RaBadgeFolders
 import com.nxredux.mobile.achievements.RaSortOrder
 import com.nxredux.mobile.achievements.sortedBy
 import com.nxredux.mobile.cheats.CheatEntry
+import com.nxredux.mobile.cheats.Ps2PatchSet
 import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.netplay.NetplayText
 import com.nxredux.mobile.options.ConfigSource
@@ -240,6 +241,8 @@ sealed interface MenuEffect {
     data class SetShaders(val entries: List<Pair<String, String>>) : MenuEffect
     /** Turn one cheat on/off now (the host re-applies the whole enabled set); persisted only by Save Changes > For game. */
     data class SetCheat(val index: Int, val enabled: Boolean) : MenuEffect
+    /** Turn PS2 patch group [name] on/off now; by name, as the core's list can arrive under the player. Saved as cheats are. */
+    data class SetPatch(val name: String, val on: Boolean) : MenuEffect
     /** Put disc [index] (0-based) in the drive now; not persisted. [toast]: the panel's Swap disc, which says "Disc N of M". */
     data class ChangeDisc(val index: Int, val toast: Boolean = false) : MenuEffect
     /** Flip achievement [id]'s notification mute (already flipped in the model); the host persists it. */
@@ -570,6 +573,13 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     /** True for a core that takes cheats (the host sets it as the menu opens): the panel's Cheats tab. */
     var cheatsAvailable: Boolean = false
         set(value) { field = value; fixPanel() }
+
+    /** True for a PS2 game (the host sets it as the menu opens): the panel's Patches tab. */
+    var patchesAvailable: Boolean = false
+        set(value) { field = value; fixPanel() }
+
+    /** The game's patch switches ([setPatches]): the panel's Patches tab. */
+    private var patches: Ps2PatchSet = Ps2PatchSet.EMPTY
 
     /** The game's cheats ([setCheats]): the panel's Cheats tab. */
     private var cheats: List<CheatEntry> = emptyList()
@@ -978,6 +988,12 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      * The cheats resolved for this game (the host's set, a toggle from the dual-screen panel included), the folder they
      * were looked for in and the first file name tried (both only for the empty Cheats tab's text). Refreshes the panel.
      */
+    /** The host's patch switches (a dual-screen toggle and the core's list arriving included). Refreshes the panel. */
+    fun setPatches(set: Ps2PatchSet) {
+        patches = set
+        fixPanel()
+    }
+
     fun setCheats(entries: List<CheatEntry>, folder: String, expected: String) {
         cheats = entries
         cheatsFolder = folder
@@ -1180,6 +1196,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         val key = listOf(
             state.panelTab, state.panelFocus, panelHeader, achievements, achievementsAvailable, achievementSummary, achievementOrder,
             badges, playerSlots, playerPads, sessionLocked, frontendTag, cheats, cheatsAvailable, cheatsFolder, cheatsExpected,
+            patches, patchesAvailable,
         )
         panelCache?.takeIf { it.first == key }?.let { return it.second }
         return buildPanelState().also { panelCache = key to it }
@@ -1197,7 +1214,9 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             // second-screen panel keeps its own, [GamePanelModel.shortcuts]).
             emptyList(), panelAchievements(),
             badges, playerSlots, playerPads, panelCheats(),
-            GamePanelModel.noCheatsText(cheatsFolder, cheatsExpected), focus = state.panelFocus,
+            GamePanelModel.noCheatsText(cheatsFolder, cheatsExpected),
+            patches = panelPatches(), patchesText = GamePanelModel.patchesText(patches), patchesReset = patches.needsReset(),
+            focus = state.panelFocus,
         )
     }
 
@@ -1227,6 +1246,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         }
         is GamePanelEvent.SetPlayer -> MenuEffect.SetPlayer(event.slot, event.key)
         is GamePanelEvent.SetCheat -> setCheat(event.index, event.on)
+        is GamePanelEvent.SetPatch -> setPatch(event.index, event.on)
         GamePanelEvent.ShowGame -> null
         // The tiles are hidden in netplay; a stale tap there does nothing.
         is GamePanelEvent.SetFastForward -> if (sessionLocked) null else GamePanelModel.speedEffect(event)
@@ -1274,11 +1294,17 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         raAvailable = achievementsAvailable && !achievements.isNullOrEmpty(),
         players = !sessionLocked && GamePanelModel.playersShown(playerSlots, playerPads),
         cheats = cheatsAvailable && !sessionLocked,
+        patches = patchesAvailable && !sessionLocked,
     )
 
     private fun panelAchievements(): List<RaAchievement> = achievements.orEmpty().sortedBy(achievementOrder)
 
     private fun panelCheats(): List<CheatRow> = GamePanelModel.cheatRows(cheats)
+
+    private fun panelPatches(): List<PatchRow> = GamePanelModel.patchRows(patches)
+
+    /** The Patches tab's items: its rows, then the Reset game button while a row waits for a reset. */
+    private fun patchItemCount(): Int = panelPatches().size + if (patches.needsReset()) 1 else 0
 
     private fun panelTab(): GamePanelTab = GamePanelModel.resolveTab(state.panelTab, panelTabs())
 
@@ -1287,6 +1313,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         GamePanelTab.SETTINGS -> 0    // the second-screen panel's only
         GamePanelTab.ACHIEVEMENTS -> achievements.orEmpty().size
         GamePanelTab.CHEATS -> cheats.size
+        GamePanelTab.PATCHES -> patchItemCount()
         GamePanelTab.PLAYERS -> playerSlots.size
     }
 
@@ -1351,7 +1378,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         when (tab) {
             GamePanelTab.ACHIEVEMENTS -> push(achievementsPage())
             GamePanelTab.PLAYERS -> push(playersPage())
-            GamePanelTab.SHORTCUTS, GamePanelTab.SETTINGS, GamePanelTab.CHEATS -> Unit
+            GamePanelTab.SHORTCUTS, GamePanelTab.SETTINGS, GamePanelTab.CHEATS, GamePanelTab.PATCHES -> Unit
         }
     }
 
@@ -1360,6 +1387,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         GamePanelTab.SHORTCUTS, GamePanelTab.SETTINGS -> null   // no items
         GamePanelTab.ACHIEVEMENTS -> null   // its rows ask for nothing
         GamePanelTab.CHEATS -> (event as? GamePanelEvent.SetCheat)?.index
+        GamePanelTab.PATCHES -> (event as? GamePanelEvent.SetPatch)?.index ?: if (event == GamePanelEvent.Reset) panelPatches().size else null
         GamePanelTab.PLAYERS -> (event as? GamePanelEvent.SetPlayer)?.slot
     }?.takeIf { it >= 0 }
 
@@ -1367,6 +1395,9 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private fun panelItemEvent(tab: GamePanelTab, index: Int): GamePanelEvent? = when (tab) {
         GamePanelTab.SHORTCUTS, GamePanelTab.SETTINGS, GamePanelTab.ACHIEVEMENTS -> null
         GamePanelTab.CHEATS -> GamePanelModel.cheatEvent(index, panelCheats())
+        GamePanelTab.PATCHES -> panelPatches().let { rows ->
+            if (index == rows.size && patches.needsReset()) GamePanelEvent.Reset else GamePanelModel.patchEvent(index, rows)
+        }
         GamePanelTab.PLAYERS -> if (index < playerSlots.size) GamePanelModel.nextPlayer(index, playerSlots, playerPads) else null
     }
 
@@ -1550,6 +1581,15 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     /** The Players page's values for a slot: Empty, then every connected pad ([GamePanelModel.cyclePlayer]'s order). */
     private fun playerCandidates(): List<String?> = listOf<String?>(null) + playerPads.map { it.key }
+
+    /** The panel's patch switch: group [index] [on] or off now (the host sends the enabled set); null when it already is. */
+    private fun setPatch(index: Int, on: Boolean): MenuEffect? {
+        val name = patches.groups?.getOrNull(index)?.name ?: return null
+        if (patches.isOn(name) == on) return null
+        patches = patches.toggle(name, on)
+        fixPanel()
+        return MenuEffect.SetPatch(name, on)
+    }
 
     /** The panel's cheat switch: cheat [index] [on] or off now (the host applies the enabled set); null when it already is. */
     private fun setCheat(index: Int, on: Boolean): MenuEffect? {

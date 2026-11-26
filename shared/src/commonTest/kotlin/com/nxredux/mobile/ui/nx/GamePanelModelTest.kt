@@ -3,6 +3,8 @@ package com.nxredux.mobile.ui.nx
 import com.nxredux.mobile.achievements.RaAchievement
 import com.nxredux.mobile.achievements.RaAchievementState
 import com.nxredux.mobile.cheats.CheatEntry
+import com.nxredux.mobile.cheats.Ps2PatchGroup
+import com.nxredux.mobile.cheats.Ps2PatchSet
 import com.nxredux.mobile.netplay.NetplayRole
 import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.netplay.NetplayText
@@ -59,6 +61,40 @@ class GamePanelModelTest {
             GamePanelModel.tabs(raAvailable = true, players = true, cheats = true),
         )
         assertEquals(GamePanelTab.SHORTCUTS, GamePanelModel.resolveTab(GamePanelTab.CHEATS, GamePanelModel.tabs(raAvailable = true, players = true)))
+    }
+
+    @Test fun tabs_with_patches_sit_after_cheats() {
+        assertEquals(
+            listOf(GamePanelTab.SHORTCUTS, GamePanelTab.CHEATS, GamePanelTab.PATCHES, GamePanelTab.PLAYERS),
+            GamePanelModel.tabs(raAvailable = false, players = true, cheats = true, patches = true),
+        )
+        assertEquals(listOf(GamePanelTab.SHORTCUTS, GamePanelTab.PATCHES), GamePanelModel.tabs(raAvailable = false, players = false, patches = true))
+    }
+
+    @Test fun patch_rows_carry_notes() {
+        val set = Ps2PatchSet.start(setOf("Widescreen 16:9"))
+            .withGroups(listOf(Ps2PatchGroup("60 FPS", bootOnly = true), Ps2PatchGroup("Widescreen 16:9", bootOnly = false)))
+            .toggle("60 FPS", true).toggle("Widescreen 16:9", false)
+        assertEquals(
+            listOf(PatchRow("60 FPS", "Takes effect after Reset", true), PatchRow("Widescreen 16:9", "Fully off after Reset", false)),
+            GamePanelModel.patchRows(set),
+        )
+    }
+
+    @Test fun patches_text_loading_then_none() {
+        assertEquals("Loading the game's patches…", GamePanelModel.patchesText(Ps2PatchSet.EMPTY))
+        assertEquals(
+            "No patches for this game.\nDownload them with Tools → Cheats & Patches.",
+            GamePanelModel.patchesText(Ps2PatchSet.EMPTY.withGroups(emptyList())),
+        )
+        assertEquals("", GamePanelModel.patchesText(Ps2PatchSet.EMPTY.withGroups(listOf(Ps2PatchGroup("60 FPS", false)))))
+    }
+
+    @Test fun a_patch_tap_flips_its_switch() {
+        val rows = listOf(PatchRow("A", "", false), PatchRow("B", "", true))
+        assertEquals(GamePanelEvent.SetPatch(0, on = true), GamePanelModel.patchEvent(0, rows))
+        assertEquals(GamePanelEvent.SetPatch(1, on = false), GamePanelModel.patchEvent(1, rows))
+        assertNull(GamePanelModel.patchEvent(2, rows))
     }
 
     @Test fun cheat_rows_take_the_source_from_the_info() {

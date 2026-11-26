@@ -4,6 +4,8 @@ import com.nxredux.mobile.achievements.RaAchievement
 import com.nxredux.mobile.achievements.RaAchievementState
 import com.nxredux.mobile.achievements.RaSortOrder
 import com.nxredux.mobile.cheats.CheatEntry
+import com.nxredux.mobile.cheats.Ps2PatchGroup
+import com.nxredux.mobile.cheats.Ps2PatchSet
 import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.options.ConfigSource
 import com.nxredux.mobile.options.BottomScreenOptions
@@ -905,6 +907,50 @@ class InGameMenuModelTest {
         assertEquals(PageKind.Adjust("nx_shader_param_SCAN"), m.state.page.kind)
         m.setShaders(mapOf("nx_shader" to "nx/line.glslp"), presets, emptyList())
         assertEquals(PageKind.ShaderParams, m.state.page.kind)
+    }
+
+    private val bootFps = Ps2PatchGroup("60 FPS", bootOnly = true)
+    private val wide = Ps2PatchGroup("Widescreen 16:9", bootOnly = false)
+
+    /** A PS2 game with [groups] listed; the panel on its Patches tab, the focus on its tab row. */
+    private fun patchesModel(vararg groups: Ps2PatchGroup, on: Set<String> = emptySet()): InGameMenuModel = model().apply {
+        patchesAvailable = true
+        setPatches(Ps2PatchSet.start(on).withGroups(groups.toList()))
+        press(NxButton.UP)
+        toTab(GamePanelTab.PATCHES)
+    }
+
+    @Test fun patches_tab_shows_only_when_available() {
+        val m = model()
+        m.setPatches(Ps2PatchSet.EMPTY)
+        assertEquals(listOf(GamePanelTab.SHORTCUTS), m.panelState().tabs)
+        m.patchesAvailable = true
+        assertEquals(listOf(GamePanelTab.SHORTCUTS, GamePanelTab.PATCHES), m.panelState().tabs)
+        assertEquals("Loading the game's patches…", m.panelState().patchesText)
+        m.netplay = true
+        m.refresh()
+        assertEquals(listOf(GamePanelTab.SHORTCUTS), m.panelState().tabs)
+    }
+
+    @Test fun a_patch_tap_emits_set_patch_by_name() {
+        val m = patchesModel(wide, bootFps)
+        m.press(NxButton.DOWN); m.press(NxButton.DOWN)                // the second row
+        assertEquals(MenuEffect.SetPatch("60 FPS", true), m.press(NxButton.A))
+        assertEquals(PatchRow("60 FPS", "Takes effect after Reset", true), m.panelState().patches[1])
+        assertNull(m.panelEvent(GamePanelEvent.SetPatch(1, on = true)))   // already on
+        assertEquals(MenuEffect.SetPatch("Widescreen 16:9", true), m.panelEvent(GamePanelEvent.SetPatch(0, on = true)))
+    }
+
+    @Test fun reset_button_appears_when_a_note_is_shown() {
+        val m = patchesModel(wide, on = setOf("Widescreen 16:9"))
+        assertFalse(m.panelState().patchesReset)
+        m.press(NxButton.DOWN)
+        assertEquals(MenuEffect.SetPatch("Widescreen 16:9", false), m.press(NxButton.A))
+        assertTrue(m.panelState().patchesReset)
+        m.press(NxButton.DOWN)                                           // the Reset game row
+        assertEquals(PanelFocus.Item(1), m.state.panelFocus)
+        m.press(NxButton.A)
+        assertEquals(PageKind.ResetGame, m.state.page.kind)
     }
 
     private val lives = CheatEntry("Infinite Lives", "01", "Infinite Lives", enabled = false)
