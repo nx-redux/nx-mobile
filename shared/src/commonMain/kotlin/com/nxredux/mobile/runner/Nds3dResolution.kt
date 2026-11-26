@@ -69,6 +69,13 @@ enum class Res3dConsole(
     /** The core draws its whole picture at the scale (PS1, PS2, PSP, Dolphin, Dreamcast, Wii U), not only the 3D: the rows say "the game". */
     val wholePicture: Boolean get() = this == PS1 || this == PCSX || this == PS2 || this == PSP || this == DOLPHIN || this == DC || this == N64 || this == CEMU
 
+    /**
+     * Auto draws at native size whatever the display (so no Max Scale row): Cemu's internal resolution resizes every
+     * screen-shaped render target, and some games break when they are (Wind Waker HD's shadows and foliage go black at 2x,
+     * Mario Kart 8 loses effects).
+     */
+    val autoNative: Boolean get() = this == CEMU
+
     /** Performance draws at native size: no Scale row (the PS2 runs slowly above it; PCSX-ReARMed has only 1x and 2x). */
     val nativePerformance: Boolean get() = this == PS2 || this == PCSX
 
@@ -187,14 +194,15 @@ object Nds3dResolution {
     /**
      * The scale to send for [mode]: [current] is the shown scale (null: no screens placed yet, so [displayMax] stands in),
      * [maxScale] the Auto cap and [scale] the Performance pick. [shaded]: a shader preset is on; it is drawn from the native
-     * picture, so Auto draws at 1x rather than render detail the shader shrinks away.
+     * picture, so Auto draws at 1x rather than render detail the shader shrinks away. Auto is 1x too where
+     * [Res3dConsole.autoNative].
      */
     fun value(
         mode: Nds3dMode, maxScale: Int, scale: Int, current: Int?, displayMax: Int, console: Res3dConsole = Res3dConsole.DS,
         shaded: Boolean = false,
     ): Int {
         val v = when (mode) {
-            Nds3dMode.AUTO -> if (shaded) 1 else minOf(current ?: displayMax, maxScale, displayMax)
+            Nds3dMode.AUTO -> if (shaded || console.autoNative) 1 else minOf(current ?: displayMax, maxScale, displayMax)
             Nds3dMode.QUALITY -> min(current ?: displayMax, displayMax)
             Nds3dMode.PERFORMANCE -> min(scale, performanceCeiling(displayMax, console))
         }

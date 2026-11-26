@@ -261,4 +261,37 @@ class Nds3dResolutionTest {
         assertTrue("cemu_internal_resolution" in CoreRegistry.forTag("WIIU")!!.lockedOptions)
         assertEquals("native", CoreRegistry.forTag("WIIU")!!.defaultOptions["cemu_internal_resolution"])
     }
+
+    @Test fun wiiUAutoDrawsAtNativeOnEveryDisplayAboveItSomeGamesBreak() {
+        val cemu = Res3dConsole.CEMU
+        // a phone, the Fold's inner screen, a 1080p second display, a 1440p one and a 4K TV
+        for (window in listOf(1080 to 2400, 2176 to 1812, 1920 to 1080, 2560 to 1440, 2560 to 2880, 3840 to 2160)) {
+            val max = cemu.displayMaxOf(window, null)!!
+            assertEquals(1, Nds3dResolution.valueFor(emptyMap(), null, max, cemu), "launch at $window")
+            assertEquals(1, Nds3dResolution.valueFor(emptyMap(), max, max, cemu), "shown at $window")
+            assertEquals(1, Nds3dResolution.valueFor(mapOf(cemu.maxScaleKey to "3"), 3, 3, cemu), "a stored Max Scale at $window")
+        }
+        // the picked modes still go above it where the display reaches
+        assertEquals(2, Nds3dResolution.valueFor(mapOf(cemu.modeKey to Nds3dMode.QUALITY.value), 2, 2, cemu))
+        assertEquals(3, Nds3dResolution.valueFor(mapOf(cemu.modeKey to Nds3dMode.QUALITY.value), 3, 3, cemu))
+        assertEquals(2, Nds3dResolution.valueFor(mapOf(cemu.modeKey to Nds3dMode.PERFORMANCE.value, cemu.scaleKey to "2"), 3, 3, cemu))
+    }
+
+    @Test fun autoOnTheOtherConsolesStillFollowsTheDisplay() {
+        assertEquals(3, Nds3dResolution.valueFor(emptyMap(), 3, 3, Res3dConsole.DOLPHIN))
+        assertEquals(3, Nds3dResolution.valueFor(emptyMap(), 3, 3, Res3dConsole.DC))
+        assertEquals(2, Nds3dResolution.valueFor(emptyMap(), 2, 2, Res3dConsole.PSP))
+    }
+
+    @Test fun wiiURowsHaveNoMaxScaleAndSayAboveNativeCanBreakGraphics() {
+        val cemu = Res3dConsole.CEMU
+        val rows = com.nxredux.mobile.options.resolutionRows(cemu, displayMax = 3)
+        assertEquals(listOf(cemu.modeKey, cemu.scaleKey), rows.map { it.key })
+        assertTrue("Auto draws at Native" in rows[0].info, rows[0].info)
+        assertTrue("break" in rows[0].info, rows[0].info)
+        assertEquals(
+            listOf(Res3dConsole.DOLPHIN.modeKey, Res3dConsole.DOLPHIN.maxScaleKey, Res3dConsole.DOLPHIN.scaleKey),
+            com.nxredux.mobile.options.resolutionRows(Res3dConsole.DOLPHIN, displayMax = 3).map { it.key },
+        )
+    }
 }
