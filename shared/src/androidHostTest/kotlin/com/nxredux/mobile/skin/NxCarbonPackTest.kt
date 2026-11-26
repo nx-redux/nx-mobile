@@ -31,9 +31,11 @@ class NxCarbonPackTest {
     }
     private val dir = File("../androidApp/src/main/assets/skins/nx-carbon")
     private val pack = skinPack()
+    /** The pack as a two-screen console's game draws it: SWAP in the strip, off the pad ([withStripSwap]). */
+    private val drawn = pack.withStripSwap(micHidden = false)
 
     private fun place(name: String, w: Int, h: Int, dpi: Int = 420, tablet: Boolean = false, ds: Boolean = true, picture: Pair<Float, Float>? = null, hinge: Float? = null, foldable: Boolean = false): SkinPlacement? =
-        SkinChoice.place(pack, w, h, dpi, tablet, ds, picture, hinge, foldable = foldable).also { p -> dump(name, w, h, p) }
+        SkinChoice.place(if (ds) drawn else pack, w, h, dpi, tablet, ds, picture, hinge, foldable = foldable).also { p -> dump(name, w, h, p) }
 
     private fun dump(name: String, w: Int, h: Int, p: SkinPlacement?) {
         val out = System.getenv("SKIN_PREVIEW_DIR") ?: return
@@ -917,14 +919,14 @@ class NxCarbonPackTest {
     @Test
     fun dsAnd3dsLandscapeRowsSpreadIntoTheExtraHeight() {
         for (v in listOf(SkinVariant.DS, SkinVariant.N3DS, SkinVariant.N3DS_REGULAR)) {
-            val p = assertNotNull(SkinChoice.place(pack, 2400, 1080, 420, false, true, null, null, variant = v), "$v")
-            val spec = pack.layouts.single { it.id == p.spec.id }
+            val p = assertNotNull(SkinChoice.place(drawn, 2400, 1080, 420, false, true, null, null, variant = v), "$v")
+            val spec = drawn.layouts.single { it.id == p.spec.id }
             fun placed(id: String) = p.controls.first { it.spec.id == id }.y
             fun ref(id: String) = spec.controls.first { it.id == id }.y
             val pad = "DPAD"
-            val row1 = listOf("MIC", "MENU", "SELECT", "START", "SWAP").filter { id -> spec.controls.any { it.id == id } }
+            val row1 = listOf("MIC", "MENU", "SELECT", "START").filter { id -> spec.controls.any { it.id == id } }
                 .minBy { ref(it) }
-            val row2 = listOf("MIC", "MENU", "SELECT", "START", "SWAP").filter { id -> spec.controls.any { it.id == id } }
+            val row2 = listOf("MIC", "MENU", "SELECT", "START").filter { id -> spec.controls.any { it.id == id } }
                 .maxBy { ref(it) }
             assertTrue(placed(row1) - placed(pad) > (ref(row1) - ref(pad)) * p.k + 20f, "$v ${p.spec.id}: pads to the first row")
             // (the 3DS's caps in one row each side, the height short of two; the DS's START / SELECT where the menu's are)
@@ -955,33 +957,34 @@ class NxCarbonPackTest {
         val windows = listOf(Triple(1972, 1248, 420), Triple(2448, 1848, 420), Triple(2304, 1440, 280))
         for ((win, v) in windows.flatMap { w -> listOf(SkinVariant.DS, SkinVariant.N3DS, SkinVariant.N3DS_REGULAR).map { w to it } }) {
             val (ww, wh, dpi) = win
-            val p = assertNotNull(SkinChoice.place(pack, ww, wh, dpi, dpi == 280, true, null, null, variant = v), "$v $win")
+            val p = assertNotNull(SkinChoice.place(drawn, ww, wh, dpi, dpi == 280, true, null, null, variant = v), "$v $win")
             fun c(id: String) = p.controls.first { it.spec.id == id }
             val left = listOfNotNull(p.controls.firstOrNull { it.spec.id == "STICK_SWAP" }, c("MIC"), c("MENU"))
-            val right = listOf(c("SELECT"), c("START"), c("SWAP"))
+            val right = listOf(c("SELECT"), c("START"))
             val pad = c("DPAD")
             val stick = p.controls.firstOrNull { it.spec.id == "STICK" }
             val padFoot = maxOf(pad.y + pad.spec.r, stick?.let { it.y + it.spec.r } ?: 0f)
             val face = listOf(c("Y"), c("A")).map { it.x }.average().toFloat()
             if (p.spec.id.endsWith("_col")) {
-                // the DS and the 3DS on the cover: MIC, MENU (the 3DS's switch before them) in a row on the left and SWAP,
-                // SELECT, START on the right, level; the pads where the main menu's are
+                // the DS and the 3DS on the cover: MIC, MENU (the 3DS's switch before them) in a row on the left and SELECT,
+                // START on the right, level; the pads where the main menu's are
                 val name = "$v $win ${p.spec.id}"
                 if (v == SkinVariant.DS) {
-                    for ((a, b) in listOf("MIC" to "MENU", "SWAP" to "SELECT", "SELECT" to "START")) {
+                    for ((a, b) in listOf("MIC" to "MENU", "SELECT" to "START")) {
                         assertEquals(c(a).y, c(b).y, 1f, "$name $a $b a row"); assertTrue(c(b).x > c(a).x, "$name $a before $b")
                     }
                     assertEquals(c("MIC").y, c("SELECT").y, 1f, "$name rows level")
-                    assertTrue(c("SWAP").y + c("SWAP").spec.r + c("SWAP").spec.labelDy + c("SWAP").spec.labelH < wh, "$name words on the window")
+                    // SELECT / START the mirror of MIC / MENU
+                    assertEquals(ww - c("MENU").x, c("SELECT").x, 1f, "$name SELECT across from MENU"); assertEquals(ww - c("MIC").x, c("START").x, 1f, "$name START across from MIC")
+                    assertTrue(c("START").y + c("START").spec.r + c("START").spec.labelDy + c("START").spec.labelH < wh, "$name words on the window")
                 }
                 if (v != SkinVariant.DS) {
-                    for (row in listOf(listOf("STICK_SWAP", "MIC", "MENU"), listOf("SWAP", "SELECT", "START"))) for ((a, b) in row.zipWithNext()) {
+                    for (row in listOf(listOf("STICK_SWAP", "MIC", "MENU"), listOf("SELECT", "START"))) for ((a, b) in row.zipWithNext()) {
                         assertEquals(c(a).y, c(b).y, 1f, "$name $a $b a row"); assertTrue(c(b).x > c(a).x, "$name $a before $b")
                         assertTrue(c(b).y + c(b).spec.r + c(b).spec.labelDy + c(b).spec.labelH < wh, "$name $b's word on the window")
                     }
                     assertEquals(c("MIC").y, c("SELECT").y, 1f, "$name rows level")
                 }
-                if (v == SkinVariant.DS) assertTrue(c("SWAP").x > ww / 2f, "$name SWAP on the right with SELECT / START")
                 val menu = assertNotNull(SkinChoice.placeMenu(pack, ww, wh, dpi, foldable = true)).controls.associateBy { it.spec.id }
                 val stick = p.controls.firstOrNull { it.spec.id == "STICK" } ?: c("DPAD")
                 assertEquals(menu.getValue("DPAD").x, stick.x, 1f, "$name stick x as the menu's d-pad"); assertEquals(menu.getValue("DPAD").y, stick.y, 1f, "$name stick y")
@@ -991,11 +994,11 @@ class NxCarbonPackTest {
             if (v != SkinVariant.DS && p.spec.id.contains("_tall")) {
                 // the 3DS's tall shell: a row each side under its lower pad (the right's the New 3DS's C-stick), level
                 val name = "$v $win ${p.spec.id}"
-                val rows = listOf(listOf(c("MIC"), c("MENU")), listOf(c("SWAP"), c("SELECT"), c("START")))
+                val rows = listOf(listOf(c("MIC"), c("MENU")), listOf(c("SELECT"), c("START")))
                 for (r in rows) for ((a, b) in r.zipWithNext()) { assertEquals(a.y, b.y, 1f, "$name ${b.spec.id} in the row"); assertTrue(b.x > a.x, "$name ${b.spec.id} in order") }
-                assertEquals(c("MIC").y, c("SWAP").y, 1f, "$name rows level")
+                assertEquals(c("MIC").y, c("SELECT").y, 1f, "$name rows level")
                 val rightFoot = (p.controls.firstOrNull { it.spec.id == "CSTICK" }?.let { it.y + it.spec.r } ?: 0f).coerceAtLeast(c("B").y + c("B").spec.r)
-                assertTrue(c("MIC").y - c("MIC").spec.r > padFoot && c("SWAP").y - c("SWAP").spec.r > rightFoot, "$name rows under the pads")
+                assertTrue(c("MIC").y - c("MIC").spec.r > padFoot && c("SELECT").y - c("SELECT").spec.r > rightFoot, "$name rows under the pads")
                 assertTrue(c("MIC").y + c("MIC").spec.r + c("MIC").spec.labelDy + c("MIC").spec.labelH < wh, "$name words on the window")
                 continue
             }
@@ -1013,7 +1016,7 @@ class NxCarbonPackTest {
                 assertTrue(p.pieces.any { w -> w.dst.height > w.dst.width * 1.5f && kotlin.math.abs(w.dst.x + w.dst.width / 2f - mx) < 2f &&
                     kotlin.math.abs(w.dst.y + w.dst.height / 2f - my) < 2f }, "$id: the top two in a well")
             }
-            // the columns level at the foot: MENU with SWAP, MIC with START (the left's fewer caps start lower)
+            // the columns level: MIC with SELECT, MENU with START
             for (i in 1..left.size) assertEquals(right[right.size - i].y, left[left.size - i].y, 1f, "$v $win ${left[left.size - i].spec.id} level with ${right[right.size - i].spec.id}")
             assertTrue(left[0].x > pad.x, "$v: the left column on the screen's side of the pad")
             assertTrue(right[0].x < face, "$v: the right column on the screen's side of the face")
@@ -1021,7 +1024,7 @@ class NxCarbonPackTest {
             assertTrue(right[0].y - right[0].spec.r - (b.y + b.spec.r) >= 20f * p.k, "$v $win: the column clear of B")
             if (ww != 1972) continue
             // a phone's lower landscape keeps the rows
-            val phone = assertNotNull(SkinChoice.place(pack, 2520, 1080, 420, false, true, null, null, variant = v), "$v phone")
+            val phone = assertNotNull(SkinChoice.place(drawn, 2520, 1080, 420, false, true, null, null, variant = v), "$v phone")
             assertEquals(phone.controls.first { it.spec.id == "SELECT" }.y, phone.controls.first { it.spec.id == "START" }.y, 0.5f, "$v phone: SELECT START in a row")
         }
     }
@@ -1428,12 +1431,12 @@ class NxCarbonPackTest {
     @Test
     fun n3dsLayoutsInEveryFamily() {
         // the DS's layouts with the Circle Pad (Dreamcast's stick: both shown on tablets, else swapped with the d-pad), a
-        // C-stick nub above the face, ZL / ZR beside L / R; MIC SWAP MENU where the DS has them (phone landscape: SWAP
-        // joins SELECT START on the right, the switch cap goes left)
+        // C-stick nub above the face, ZL / ZR beside L / R; MIC MENU where the DS has them (phone landscape: the switch
+        // cap goes left); SWAP in the strip, off both pads
         val roomy = setOf("tablet", "tablet_land", "inner", "inner_half", "inner_land")   // the fold board and tall landscape: both always
         for ((name, d) in consoleDevices + ("tablet_land" to Triple(2304, 1440, null))) {
             val tablet = name.startsWith("tablet")
-            fun at(v: SkinVariant) = assertNotNull(SkinChoice.place(pack, d.first, d.second, if (tablet) 280 else 420, tablet, true, null,
+            fun at(v: SkinVariant) = assertNotNull(SkinChoice.place(drawn, d.first, d.second, if (tablet) 280 else 420, tablet, true, null,
                 d.third, foldable = name.startsWith("inner"), variant = v), "$v $name")
             val ds = at(SkinVariant.DS)
             val p = at(SkinVariant.N3DS)
@@ -1444,19 +1447,24 @@ class NxCarbonPackTest {
                 fun row(vararg ids: String) { for (i in 1 until ids.size) {
                     assertEquals(k(ids[0]).y, k(ids[i]).y, 1f, "ds $name ${ids[i]} in the row"); assertTrue(k(ids[i]).x > k(ids[i - 1]).x, "ds $name ${ids.toList()}") } }
                 when {
-                    name == "flip" -> row("MIC", "SWAP", "MENU")
-                    // the fold board: MIC MENU on the left, SWAP SELECT START on the right, level
-                    name in setOf("inner", "inner_half", "tablet") -> row("MIC", "MENU", "SWAP", "SELECT", "START")
-                    name == "cover" -> row("MIC", "MENU", "SWAP")
+                    name == "flip" -> row("MIC", "MENU")
+                    // the fold board: MIC MENU on the left, SELECT START across from them on the right, level
+                    name in setOf("inner", "inner_half", "tablet") -> {
+                        row("MIC", "MENU", "SELECT", "START")
+                        assertEquals(d.first - k("MENU").x, k("SELECT").x, 1f, "ds $name SELECT across from MENU")
+                        assertEquals(d.first - k("MIC").x, k("START").x, 1f, "ds $name START across from MIC")
+                    }
+                    name == "cover" -> row("MIC", "MENU")
                     name in setOf("inner_land", "tablet_land") -> {   // tall landscape: each side's caps in one column
                         fun column(vararg ids: String) { for (i in 1 until ids.size) {
                             assertEquals(k(ids[0]).x, k(ids[i]).x, 1f, "ds $name ${ids[i]} in the column"); assertTrue(k(ids[i]).y > k(ids[i - 1]).y, "ds $name ${ids.toList()}") } }
-                        column("MIC", "MENU"); column("SELECT", "START", "SWAP")
-                        assertTrue(k("MIC").x < d.first / 2f && k("SWAP").x > d.first / 2f, "ds $name sides")
+                        column("MIC", "MENU"); column("SELECT", "START")
+                        assertEquals(k("SELECT").y, k("MIC").y, 1f, "ds $name MIC level with SELECT"); assertEquals(k("START").y, k("MENU").y, 1f, "ds $name MENU level with START")
+                        assertTrue(k("MIC").x < d.first / 2f && k("SELECT").x > d.first / 2f, "ds $name sides")
                     }
-                    else -> {   // landscape: SWAP SELECT START in a row on the right, MIC MENU side by side on the left
-                        row("MIC", "MENU"); row("SWAP", "SELECT", "START")
-                        assertTrue(k("MIC").x < d.first / 2f && k("SWAP").x > d.first / 2f, "ds $name sides")
+                    else -> {   // landscape: SELECT START in a row on the right, MIC MENU side by side on the left
+                        row("MIC", "MENU"); row("SELECT", "START")
+                        assertTrue(k("MIC").x < d.first / 2f && k("SELECT").x > d.first / 2f, "ds $name sides")
                     }
                 }
             }
@@ -1465,7 +1473,7 @@ class NxCarbonPackTest {
             assertEquals(ds.glasses.map { it.screen }, p.glasses.map { it.screen }, name)
             val dsIds = ds.controls.map { it.spec.id }.filterNot { it.startsWith("TOUCH_") }.toSet()
             val ids = p.controls.map { it.spec.id }.filterNot { it.startsWith("TOUCH_") }.toSet()
-            assertEquals(dsIds + setOf("STICK", "CSTICK", "L2", "R2", "SWAP") + (if (name in roomy) emptySet() else setOf("STICK_SWAP")), ids, name)   // SWAP on the phone's too
+            assertEquals(dsIds + setOf("STICK", "CSTICK", "L2", "R2") + (if (name in roomy) emptySet() else setOf("STICK_SWAP")), ids, name)
             assertEquals(setOf("STICK", "CSTICK"), p.pieces.filter { it.knob }.map { it.knobOf }.toSet(), name)
             fun c(id: String) = p.controls.first { it.spec.id == id }
             fun box(pc: PlacedControl): FloatArray {
@@ -1506,20 +1514,19 @@ class NxCarbonPackTest {
                 for (x in cs) assertEquals(cs[0].y, x.y, 1f, "$name ${x.spec.id} in the row")
                 for (i in 1 until cs.size) assertTrue(cs[i].x > cs[i - 1].x, "$name ${want.toList()} in order")
             }
-            if (name == "flip") {   // the row at the bottom, MENU in its middle; SWAP between the shoulders, nearest the screens
+            if (name == "flip") {   // the row at the bottom, MENU in its middle; the shoulders in a row
                 row("STICK_SWAP", "MIC", "MENU", "SELECT", "START")
                 assertEquals(d.first / 2f, c("MENU").x, 30f * p.k, "$name MENU in the middle")
-                row("L", "L2", "SWAP", "R2", "R")
-                assertEquals(d.first / 2f, c("SWAP").x, 30f * p.k, "$name SWAP in the middle")
+                row("L", "L2", "R2", "R")
             }
             // (the tablet's own board: its caps' rows are still to review)
             if (foldBoard && name != "tablet") {   // one row under the bottom screen, SELECT / START in it
-                // (MIC, MENU, SWAP, SELECT, START, SWAP in the middle)
-                val order = listOf("MIC", "MENU", "SWAP", "SELECT", "START")
+                // (MIC, MENU, SELECT, START, the row's middle under the screen's)
+                val order = listOf("MIC", "MENU", "SELECT", "START")
                 row(*order.toTypedArray())
                 val t = p.glasses.single { it.screen == GlassScreen.TOUCH }.rect
                 assertTrue(c("MENU").y > t.y + t.height, "$name row under the bottom screen")
-                assertEquals(t.x + t.width / 2f, c(order[2]).x, 2f, "$name ${order[2]} in the middle")
+                assertEquals(t.x + t.width / 2f, (c("MENU").x + c("SELECT").x) / 2f, 2f, "$name the row centred")
             }
             if (foldBoard) assertEquals(c("STICK").spec.r * 0.85f, c("CSTICK").spec.r, 0.5f, "$name C-stick a stick at the d-pad's 85%")
             // (two large controls in a box: the lower one, the C-stick under the face, at 85%)
@@ -1534,17 +1541,16 @@ class NxCarbonPackTest {
                 assertEquals(c("L").x, c("L2").x, 1f, "$name ZL over L"); assertTrue(c("L2").y < c("L").y, "$name ZL above L")
                 assertEquals(c("R").x, c("R2").x, 1f, "$name ZR over R"); assertTrue(c("R2").y < c("R").y, "$name ZR above R")
             } else { assertEquals(c("L").y, c("L2").y, 1f, "$name ZL beside L"); assertEquals(c("R").y, c("R2").y, 1f, "$name ZR beside R") }
-            if (name == "cover") row("STICK_SWAP", "MIC", "MENU", "SWAP")   // one group of four
-            if (tall) {   // each side's caps in a row under its pad: MIC MENU; SWAP SELECT START
-                row("MIC", "MENU"); row("SWAP", "SELECT", "START")
+            if (name == "cover") row("STICK_SWAP", "MIC", "MENU")
+            if (tall) {   // each side's caps in a row under its pad: MIC MENU; SELECT START
+                row("MIC", "MENU"); row("SELECT", "START")
                 assertTrue(c("MIC").y - c("DPAD").y > (c("MIC").spec.r + c("DPAD").spec.r) * p.k, "$name MIC clear of the d-pad")
-                assertTrue(c("SWAP").y - c("CSTICK").y > c("SWAP").spec.r + c("CSTICK").spec.r * 1.25f, "$name SWAP clear of the C-stick")
+                assertTrue(c("SELECT").y - c("CSTICK").y > c("SELECT").spec.r + c("CSTICK").spec.r * 1.25f, "$name SELECT clear of the C-stick")
             }
-            if (name == "phone_land") {   // SWAP on the right with SELECT START, the switch cap on the left
-                assertTrue(c("SWAP").x > d.first / 2f, "$name SWAP right")
+            if (name == "phone_land") {   // the switch cap on the left
                 assertTrue(c("STICK_SWAP").x < d.first / 2f, "$name switch left")
-                // the height short of two rows: one each side, switch MIC MENU; SWAP SELECT START
-                row("STICK_SWAP", "MIC", "MENU"); row("SWAP", "SELECT", "START")
+                // the height short of two rows: one each side, switch MIC MENU; SELECT START
+                row("STICK_SWAP", "MIC", "MENU"); row("SELECT", "START")
                 // the C-stick lowered toward A, clear of X by its reach
                 assertTrue(c("CSTICK").y > c("R").y + c("R").spec.hh + c("CSTICK").spec.r, "$name nub clear of R")
             }
@@ -1587,13 +1593,13 @@ class NxCarbonPackTest {
             assertEquals("flex_single_fold", gba.spec.id.removeSuffix("_tab"))
             assertHalfFolded(gba, 1224f)
         }
-        // the touch screen between the sides: MIC MENU left of it, SWAP SELECT START right of it, level
+        // the touch screen between the sides: MIC MENU left of it, SELECT START right of it, level
         val p = assertNotNull(place("fold_inner_ds", 1848, 2448, tablet = true, foldable = true))
         val t = p.glass(GlassScreen.TOUCH)!!.rect
         val c = p.controls.associateBy { it.spec.id }
-        val five = listOf("MIC", "MENU", "SWAP", "SELECT", "START").map(c::getValue)
-        for (i in 1 until five.size) { assertEquals(five[0].y, five[i].y, 1f, "one height"); assertTrue(five[i].x > five[i - 1].x, "in order") }
-        assertTrue(c.getValue("MENU").x + c.getValue("MENU").spec.r < t.x && c.getValue("SWAP").x - c.getValue("SWAP").spec.r > t.x + t.width, "beside the touch screen")
+        val four = listOf("MIC", "MENU", "SELECT", "START").map(c::getValue)
+        for (i in 1 until four.size) { assertEquals(four[0].y, four[i].y, 1f, "one height"); assertTrue(four[i].x > four[i - 1].x, "in order") }
+        assertTrue(c.getValue("MENU").x + c.getValue("MENU").spec.r < t.x && c.getValue("SELECT").x - c.getValue("SELECT").spec.r > t.x + t.width, "beside the touch screen")
         assertTrue(c.getValue("DPAD").x + c.getValue("DPAD").spec.r < t.x, "dpad")
         // a tablet that does not fold takes the fold board too (the menu's board: a game never changes it)
         assertEquals("flex_ds_fold", assertNotNull(place("inner_size_tablet", 1848, 2448, tablet = true)).spec.id.removeSuffix("_tab"))
@@ -1631,7 +1637,7 @@ class NxCarbonPackTest {
         val under = p.glass(if (ds) GlassScreen.TOUCH else GlassScreen.PANEL)?.rect
         if (p.slab && under != null) assertSlabGap(p, above, under) else assertTrue(above.y + above.height < hinge, "${p.spec.id} $above")
         if (ds) assertTrue(p.glass(GlassScreen.TOUCH)!!.rect.y > hinge)
-        val below = p.controls.filter { it.spec.id in setOf("DPAD", "A", "L", "R", "START", "MENU") + if (ds) setOf("MIC", "SWAP", "TOUCH_1") else emptySet() }
+        val below = p.controls.filter { it.spec.id in setOf("DPAD", "A", "L", "R", "START", "MENU") + if (ds) setOf("MIC", "TOUCH_1") else emptySet() }
         assertTrue(below.all { it.y > hinge }, "${p.spec.id} ${below.map { it.spec.id to it.y }}")
         // the touch shortcut strip on every game layout (the fold board's one-screen ones: under the panel, below the hinge)
         val panel = p.glass(GlassScreen.PANEL)
@@ -1655,7 +1661,7 @@ class NxCarbonPackTest {
             val ds = assertNotNull(place(name, w, h, dpi = dpi, tablet = true), name)
             assertTrue(ds.spec.id.startsWith("grip_ds"), "$name ${ds.spec.id}")
             val dsIds = ds.controls.map { it.spec.id }
-            assertTrue(dsIds.containsAll(listOf("MIC", "SWAP", "MENU", "TOUCH_1", "TOUCH_4", "DPAD", "A")), "$name $dsIds")
+            assertTrue(dsIds.containsAll(listOf("MIC", "MENU", "TOUCH_1", "TOUCH_4", "DPAD", "A")) && "SWAP" !in dsIds, "$name $dsIds")
             val stack = assertNotNull(ds.glass(GlassScreen.STACK), name).rect
             println("$name ds glass $stack")
             val gba = assertNotNull(place(name + "_gba", w, h, dpi = dpi, tablet = true, ds = false, picture = 240f to 160f), name)

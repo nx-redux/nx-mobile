@@ -1,6 +1,6 @@
 package com.nxredux.mobile.skinlayout
 
-import com.nxredux.mobile.skin.withoutControl
+import com.nxredux.mobile.skin.withStripSwap
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
@@ -131,8 +131,9 @@ class SkinLayoutActivity : ComponentActivity() {
         // The game's own checks that this can't make are left out: a game starts every Dual screen mode with the skin
         // allowed ([com.nxredux.mobile.skin.SkinDual.skinAllowed]; only flipping the panel up drops it), and its hinge
         // is placed only while half-folded in a game. The title says which layout this is ([SkinLayoutEdit.title]).
-        // without the mic button while the game hides it, so a nudge saved here is keyed on the group the game draws
-        val manifest = if (ds && !settings.micButtonShown) pack.manifest.withoutControl("MIC") else pack.manifest
+        // as the game draws it: SWAP in the strip, the mic button gone while the game hides it, so a nudge saved here
+        // is keyed on the group the game draws
+        val manifest = if (ds) pack.manifest.withStripSwap(micHidden = !settings.micButtonShown) else pack.manifest
         val skin = if (!settings.padSkin) null else SkinChoice.place(
             manifest, w, h, dpi, tablet, ds, picture, hingeY = null, topInset = 0, foldable = DeviceTraits.canHalfFold, variant = variant,
         )

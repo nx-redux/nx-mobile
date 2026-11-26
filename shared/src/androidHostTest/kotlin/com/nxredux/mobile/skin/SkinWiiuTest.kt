@@ -483,7 +483,7 @@ class SkinWiiuTest {
     /** The fold board upright: the Fold's and the Ultra's inner screen, flat or half-folded. */
     private val FOLD_UPRIGHT = setOf("inner", "inner_half", "ultra", "ultra_half")
 
-    /** The Button layout editor's dummy strip as the game's with every slot filled: the Wii U's SWAP in the middle. */
+    /** The Button layout editor's dummy strip as the game's with every slot filled: SWAP in the middle, the 3DS's too. */
     @Test
     fun the_layout_editors_dummy_strip_has_swap_in_the_middle() {
         val pack = skinPack()
@@ -495,7 +495,7 @@ class SkinWiiuTest {
             val mid = (slots.minOf { it.x - it.spec.hw } + slots.maxOf { it.x + it.spec.hw }) / 2f
             assertEquals(mid, dummies[2].x, 0.5f, "${d.name} SWAP centred")
             val n = assertNotNull(SkinChoice.place(pack, d.w, d.h, d.dpi, d.tablet, ds = true, hingeY = d.hingeY, foldable = d.foldable, variant = SkinVariant.N3DS), d.name)
-            assertTrue(n.stripDummies().none { it.spec.id == STRIP_SWAP }, "${d.name} 3DS")
+            assertEquals(listOf("TOUCH_1", "TOUCH_2", STRIP_SWAP, "TOUCH_3", "TOUCH_4"), n.stripDummies().map { it.spec.id }, "${d.name} 3DS")
         }
     }
 
