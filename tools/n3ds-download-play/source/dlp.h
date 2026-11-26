@@ -41,5 +41,6 @@ Result dlpStopSession(void);
 u64 dlpChildOf(const DlpTitleInfo* info);
 // Hands the child its host (MAC and passphrase) and restarts into it.
 Result dlpStartChild(const u8 mac[6], const u8 passphrase[9], u64 child);
-// Removes earlier Download Play children from the console's storage; how many went.
-int dlpRemoveOldChildren(void);
+// Keeps an installed child only when it is the version the host offers (Azahar downloads a child only when none is
+// installed): an older one is removed so the next session downloads the host's. True when it was removed.
+bool dlpDropStaleChild(u64 child, u16 host_version);

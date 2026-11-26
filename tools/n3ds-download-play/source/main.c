@@ -215,7 +215,6 @@ int main(void) {
         drawExit();
         return 0;
     }
-    dlpRemoveOldChildren(); // a child only works with its host: last time's is no use
     dlpStartScan();
 
     bool was_connected = false;
@@ -236,6 +235,7 @@ int main(void) {
             if (host_count > 0 && (down & KEY_UP)) picked = (picked + host_count - 1) % host_count;
             if (host_count > 0 && (down & KEY_A || tapped)) {
                 dlpStopScan();
+                dlpDropStaleChild(dlpChildOf(&hosts[picked]), hosts[picked].version);
                 if (R_SUCCEEDED(dlpStartSession(hosts[picked].mac, dlpChildOf(&hosts[picked])))) {
                     phase = DOWNLOADING;
                     was_connected = false;

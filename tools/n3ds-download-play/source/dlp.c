@@ -154,21 +154,12 @@ Result dlpStartChild(const u8 mac[6], const u8 passphrase[9], u64 child) {
     return call(ns);
 }
 
-int dlpRemoveOldChildren(void) {
-    if (R_FAILED(amInit())) return 0;
-    int removed = 0;
-    u32 count = 0;
-    if (R_SUCCEEDED(AM_GetTitleCount(MEDIATYPE_NAND, &count)) && count > 0) {
-        u64* ids = malloc(count * sizeof(u64));
-        u32 read = 0;
-        if (ids && R_SUCCEEDED(AM_GetTitleList(&read, MEDIATYPE_NAND, count, ids))) {
-            for (u32 i = 0; i < read; i++) {
-                if ((ids[i] >> 32) == (DLP_CHILD_HIGH >> 32) && R_SUCCEEDED(AM_DeleteTitle(MEDIATYPE_NAND, ids[i])))
-                    removed++;
-            }
-        }
-        free(ids);
-    }
+bool dlpDropStaleChild(u64 child, u16 host_version) {
+    if (host_version == 0 || R_FAILED(amInit())) return false; // no version to compare: keep what is there
+    AM_TitleEntry entry;
+    bool dropped = false;
+    if (R_SUCCEEDED(AM_GetTitleInfo(MEDIATYPE_NAND, 1, &child, &entry)) && entry.version != host_version)
+        dropped = R_SUCCEEDED(AM_DeleteTitle(MEDIATYPE_NAND, child));
     amExit();
-    return removed;
+    return dropped;
 }
