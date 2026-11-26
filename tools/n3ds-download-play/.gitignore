@@ -3,3 +3,5 @@ build/
 *.smdh
 *.3dsx
 *.map
+source/font_data.c
+.venv/

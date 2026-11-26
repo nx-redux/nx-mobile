@@ -184,6 +184,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.isActive
 import java.io.File
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
@@ -706,6 +707,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                 ownNetworks.start()
             }
             if (launchPipeline.dsCableAuto && !isDestroyed) dsCable.watch(launchPipeline.dsCableWithGame)
+            launchPipeline.n3dsDownloadPlayDirs?.let { (azahar, config) -> if (!isDestroyed) watchDownloadPlayPick(azahar, config) }
         }
     }
 
@@ -755,6 +757,37 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         isNds -> NdsOptions.localWireless(frontendValues)
         isN3ds -> N3dsOptions.localWireless(frontendValues)
         else -> false
+    }
+
+    /**
+     * 3DS Download Play: the client names the child it is about to start ([N3dsDownloadPlayHandoff.PICK_FILE]); the full
+     * game's own core options go to the core before the restart, then the answer lets the client go on. A game never
+     * launched here, or one with no settings of its own, starts on the row's.
+     */
+    private fun watchDownloadPlayPick(azahar: File, config: File) {
+        val pick = File(azahar, N3dsDownloadPlayHandoff.PICK_FILE)
+        lifecycleScope.launch(Dispatchers.IO) {
+            pick.delete()   // a stale one from a session that ended mid-hand-off
+            while (isActive) {
+                if (pick.isFile) {
+                    val child = runCatching { pick.readText() }.getOrDefault("")
+                    pick.delete()
+                    val live = N3dsDownloadPlayHandoff.parentOf(child)?.let { parent ->
+                        val name = runCatching { N3dsDownloadPlayHandoff.titles(File(config, N3dsDownloadPlayHandoff.INDEX_FILE).readText())[parent] }.getOrNull()
+                        val game = name?.let { File(config, "$it.cfg") }?.takeIf { it.isFile }
+                        game?.let { NxLog.i(TAG_LOG, "3DS Download Play: ${it.name}'s own settings for the child") }
+                        game?.let { N3dsDownloadPlayHandoff.liveOptions(CoreConfig.parse(it.readText()).values) }
+                    }.orEmpty()
+                    if (live.isNotEmpty()) withContext(Dispatchers.Main) {
+                        retroView?.let { view ->
+                            view.queueEvent { runCatching { view.updateVariables(*live.map { (k, v) -> Variable(k, v) }.toTypedArray()) } }
+                        }
+                    }
+                    runCatching { File(azahar, N3dsDownloadPlayHandoff.ACK_FILE).apply { parentFile?.mkdirs() }.writeText("ok") }
+                }
+                delay(250)
+            }
+        }
     }
 
     /** Leaves the room with the game running: on the automatic route, Local Wireless switched off (PSP has no row). */

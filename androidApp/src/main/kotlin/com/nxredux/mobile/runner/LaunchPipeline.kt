@@ -381,6 +381,9 @@ internal class LaunchPipeline(private val host: LaunchHost) {
     /** The launch's core starts its cable with the game ([NetplayCores.cableWithGame]): the watcher's rule, whenever it runs. */
     var dsCableWithGame = false
         private set
+    /** 3DS Download Play: Azahar's user folder (the client's hand-off file) and the 3DS config folder (the title index). */
+    var n3dsDownloadPlayDirs: Pair<File, File>? = null
+        private set
 
     /**
      * The automatic route's low-latency Wi-Fi lock, only while in a room: the DS waits on every member's reply each frame,
@@ -961,6 +964,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                         .getOrNull()
                 }
                 NxLog.i(TAG_LOG, "3DS title: ${n3dsTitle?.titleId?.toString(16)} ${n3dsTitle?.productCode}")
+                n3dsTitle?.titleId?.let { id -> withContext(Dispatchers.IO) { recordN3dsTitle(File(dataRoot, paths.configDir), id, cfg.romFileName) } }
                 // The current value: the menu may have changed it while the header was read.
                 val resolved = N3dsNewControls.resolve(frontendValues[N3dsOptions.NEW_CONTROLS], n3dsTitle)
                 if (resolved != n3dsNew) {
@@ -1029,6 +1033,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 }
             }
             val savesDir = (cfg.sessionDir ?: File(dataRoot, paths.savesDir)).apply { mkdirs() }
+            if (cfg.n3dsDownloadPlay) n3dsDownloadPlayDirs = File(savesDir, "Azahar") to File(dataRoot, paths.configDir)
             // A Dreamcast session on a copy: flycast's console settings (dc_nvmem) are the host's, so the core gets the copy's
             // own system folder with this device's BIOS files beside them (the real BIOS only when both sides boot it).
             val launchSystemDir = if (cfg.np?.ggpo == true && cfg.sessionDir != null) {
@@ -1664,6 +1669,13 @@ internal class LaunchPipeline(private val host: LaunchHost) {
      * and last-modified ([realPathCopyStamp]): a same-size patched ROM is copied again. The copy goes to `<file name>.part`
      * and is renamed into place, the old stamp dropped first, so a kill mid-copy leaves no torn copy that passes for whole.
      */
+    /** A 3DS game's title id against its file name, for 3DS Download Play's hand-off ([N3dsDownloadPlayHandoff]). */
+    private fun recordN3dsTitle(configDir: File, titleId: Long, romFileName: String) = runCatching {
+        val index = File(configDir.apply { mkdirs() }, N3dsDownloadPlayHandoff.INDEX_FILE)
+        val text = if (index.isFile) index.readText() else ""
+        if (N3dsDownloadPlayHandoff.titles(text)[titleId] != romFileName) index.writeText(N3dsDownloadPlayHandoff.withTitle(text, titleId, romFileName))
+    }.onFailure { NxLog.w(TAG_LOG, "recording the 3DS title failed", it) }
+
     private fun copyToCache(ref: ContentRef, fileName: String): File {
         val refs = host.refs
         val root = RomCache.root(host.activity).apply { mkdirs() }

@@ -1,18 +1,36 @@
-// 3DS Download Play: lists the Download Play games hosted nearby, downloads the one picked and starts it.
-// Top screen: text (list, progress, messages). Bottom screen: the picked game's icon and a progress bar; a tap there
-// does what A does.
+// 3DS Download Play: lists the Download Play games hosted nearby, downloads the one picked and starts it. Drawn the
+// way NX Redux draws its menus: black, light text, the selected row a light pill, button hints at the bottom.
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "dlp.h"
+#include "draw.h"
 
-#define MAX_HOSTS 8
+#define MAX_HOSTS 6
 
-typedef enum { LISTING, DOWNLOADING, FAILED } Phase;
+static const Rgb BG = {0, 0, 0};
+static const Rgb INK = {0xD8, 0xD8, 0xD8};
+static const Rgb HINT = {0x99, 0x99, 0x99};
+static const Rgb PILL = {0xE4, 0xE4, 0xE7};
+static const Rgb ON_PILL = {0, 0, 0};
+static const Rgb LINE = {0x1F, 0x1F, 0x1F};
+static const Rgb GOOD = {0x82, 0xDC, 0x82};
+
+// Where the app learns which game is about to start, so it can apply that game's own settings first.
+#define PICK_DIR "sdmc:/nx-redux"
+#define PICK_FILE PICK_DIR "/download-play.txt"
+#define PICK_ACK PICK_DIR "/download-play.ack"
+
+typedef enum { LISTING, DOWNLOADING, STARTING, FAILED } Phase;
 
 static DlpTitleInfo hosts[MAX_HOSTS];
 static int host_count, picked;
-static PrintConsole top;
+static Phase phase;
+static DlpStatus status;
+static const char* message;
+static u32 frame;
 
 static void ascii(char* out, const u16* in, int n) {
     int i = 0;
@@ -20,84 +38,126 @@ static void ascii(char* out, const u16* in, int n) {
     out[i] = 0;
 }
 
-// The bottom framebuffer is stored rotated: column-major, 240 pixels per column, bottom row first.
-static void pixel(u8* fb, int x, int y, u8 r, u8 g, u8 b) {
-    if (x < 0 || x >= 320 || y < 0 || y >= 240) return;
-    u8* p = fb + ((x * 240) + (239 - y)) * 3;
-    p[0] = b; p[1] = g; p[2] = r;
+// A button glyph as the app's hints draw it: the label in a light circle, then the action.
+static int hint(Canvas c, int x, int y, const char* key, const char* action) {
+    int kw = textWidth(&font_small, key);
+    int d = kw > 10 ? kw + 10 : 18;
+    roundRect(c, x, y, d, 18, 9, INK);
+    text(c, &font_small, x + (d - kw) / 2, y + 1, key, BG);
+    return d + 5 + text(c, &font_small, x + d + 5, y + 1, action, INK) + 16;
 }
 
-static void fill(u8* fb, int x0, int y0, int w, int h, u8 r, u8 g, u8 b) {
-    for (int x = x0; x < x0 + w; x++)
-        for (int y = y0; y < y0 + h; y++) pixel(fb, x, y, r, g, b);
+static void hintsRight(Canvas c, const char* k1, const char* a1, const char* k2, const char* a2) {
+    // Laid out right to left: measure first.
+    int w = 0;
+    const char* keys[2] = {k1, k2};
+    const char* acts[2] = {a1, a2};
+    for (int i = 0; i < 2; i++)
+        if (keys[i]) {
+            int kw = textWidth(&font_small, keys[i]);
+            w += (kw > 10 ? kw + 10 : 18) + 5 + textWidth(&font_small, acts[i]) + 16;
+        }
+    int x = c.w - 12 - (w - 16);
+    for (int i = 0; i < 2; i++)
+        if (keys[i]) x += hint(c, x, c.h - 26, keys[i], acts[i]);
 }
 
-// 3DS icons keep 8x8 tiles, each in Morton (Z) order.
-static void icon(u8* fb, const u16* src, int x0, int y0, int scale) {
-    int i = 0;
-    for (int ty = 0; ty < 48; ty += 8)
-        for (int tx = 0; tx < 48; tx += 8)
-            for (int k = 0; k < 64; k++, i++) {
-                int x = (k & 1) | ((k >> 1) & 2) | ((k >> 2) & 4);
-                int y = ((k >> 1) & 1) | ((k >> 2) & 2) | ((k >> 3) & 4);
-                u16 c = src[i];
-                u8 r = (c >> 11) << 3, g = ((c >> 5) & 0x3F) << 2, b = (c & 0x1F) << 3;
-                fill(fb, x0 + (tx + x) * scale, y0 + (ty + y) * scale, scale, scale, r, g, b);
-            }
+static void header(Canvas c, const char* title) {
+    text(c, &font_small, 16, 10, title, HINT);
 }
 
-static void drawBottom(Phase phase, const DlpStatus* st) {
-    u8* fb = gfxGetFramebuffer(GFX_BOTTOM, GFX_LEFT, NULL, NULL);
-    fill(fb, 0, 0, 320, 240, 24, 24, 28);
-    if (host_count > 0) icon(fb, hosts[picked].icon, 160 - 72, 30, 3);
-    if (phase == DOWNLOADING && st && st->total > 0) {
-        int w = (int)(280ULL * st->downloaded / st->total);
-        fill(fb, 20, 200, 280, 14, 60, 60, 66);
-        fill(fb, 20, 200, w, 14, 90, 200, 120);
+static void drawTop(void) {
+    Canvas c = canvasOf(GFX_TOP);
+    clear(c, BG);
+    header(c, "3DS Download Play");
+    char name[65];
+    if (phase == LISTING) {
+        if (host_count == 0) {
+            const char* dots[] = {"", ".", "..", "..."};
+            char line[48];
+            snprintf(line, sizeof line, "Looking for games nearby%s", dots[(frame / 30) % 4]);
+            text(c, &font_title, 24, 92, line, INK);
+            text(c, &font_body, 24, 122, "Ask the other player to open", HINT);
+            text(c, &font_body, 24, 142, "Download Play in their game.", HINT);
+            return;
+        }
+        for (int i = 0; i < host_count; i++) {
+            int y = 34 + i * 34;
+            bool on = i == picked;
+            if (on) roundRect(c, 10, y, 380, 32, 16, PILL);
+            ascii(name, hosts[i].title_short, 64);
+            text(c, &font_title, 26, y + 6, name, on ? ON_PILL : INK);
+            char size[24];
+            snprintf(size, sizeof size, "%lu MB", (unsigned long)((hosts[i].size + 512 * 1024) / (1024 * 1024)));
+            int sw = textWidth(&font_small, size);
+            text(c, &font_small, 380 - sw, y + 9, size, on ? ON_PILL : HINT);
+        }
+        return;
     }
+    ascii(name, hosts[picked].title_short, 64);
+    icon(c, hosts[picked].icon, 24, 50, 2);
+    text(c, &font_big, 132, 62, name, INK);
+    if (phase == FAILED) {
+        text(c, &font_body, 132, 96, message, INK);
+        return;
+    }
+    const char* line;
+    char pct[40];
+    if (phase == STARTING) line = "Starting...";
+    else if (status.total == 0) line = "Waiting for the host to start the game.";
+    else {
+        snprintf(pct, sizeof pct, "Downloading  %lu%%", (unsigned long)(100ULL * status.downloaded / status.total));
+        line = pct;
+    }
+    text(c, &font_body, 132, 96, line, phase == STARTING ? GOOD : HINT);
+    roundRect(c, 132, 128, 244, 8, 4, LINE);
+    int fill = status.total ? (int)(244ULL * status.downloaded / status.total) : 0;
+    if (phase == STARTING) fill = 244;
+    if (fill > 8) roundRect(c, 132, 128, fill, 8, 4, PILL);
+}
+
+static void drawBottom(void) {
+    Canvas c = canvasOf(GFX_BOTTOM);
+    clear(c, BG);
+    if (phase == LISTING && host_count > 0) {
+        char name[129];
+        ascii(name, hosts[picked].title_long, 128);
+        icon(c, hosts[picked].icon, 16, 20, 1);
+        // The long title over two lines at most, broken at a space.
+        char first[64] = {0};
+        const char* rest = name;
+        int n = (int)strlen(name);
+        if (textWidth(&font_body, name) > 230) {
+            int cut = n < (int)sizeof first - 1 ? n : (int)sizeof first - 1;
+            while (cut > 0) {
+                memcpy(first, name, cut);
+                first[cut] = 0;
+                if (textWidth(&font_body, first) <= 230 && (name[cut] == ' ' || name[cut] == 0)) break;
+                cut--;
+            }
+            rest = name + cut + (name[cut] == ' ');
+            text(c, &font_body, 76, 22, first, INK);
+            text(c, &font_body, 76, 42, rest, INK);
+        } else {
+            text(c, &font_body, 76, 30, name, INK);
+        }
+        text(c, &font_small, 16, 84, "Sent by the host for this session. Nothing", HINT);
+        text(c, &font_small, 16, 102, "of yours is needed.", HINT);
+        hintsRight(c, "A", "Download", "START", "Quit");
+    } else if (phase == DOWNLOADING) {
+        hintsRight(c, "B", "Back", "START", "Quit");
+    } else if (phase == FAILED) {
+        hintsRight(c, "A", "Back to the list", "START", "Quit");
+    } else if (phase == LISTING) {
+        hintsRight(c, NULL, NULL, "START", "Quit");
+    }
+}
+
+static void present(void) {
+    drawTop();
+    drawBottom();
     gfxFlushBuffers();
     gfxSwapBuffers();
-}
-
-static void drawList(void) {
-    consoleSelect(&top);
-    consoleClear();
-    printf("\x1b[1;2H3DS Download Play\n\n");
-    if (host_count == 0) {
-        printf("  Looking for games...\n\n");
-        printf("  Ask the other player to start\n");
-        printf("  Download Play in their game.\n");
-    } else {
-        for (int i = 0; i < host_count; i++) {
-            char name[65];
-            ascii(name, hosts[i].title_short, 64);
-            printf(" %s %-34.34s\n", i == picked ? ">" : " ", name);
-        }
-        printf("\n  A: download    UP/DOWN: choose\n");
-    }
-    printf("\x1b[29;2HSTART: quit");
-    drawBottom(LISTING, NULL);
-}
-
-static void drawProgress(const DlpStatus* st) {
-    char name[65];
-    ascii(name, hosts[picked].title_short, 64);
-    consoleSelect(&top);
-    consoleClear();
-    printf("\x1b[1;2H3DS Download Play\n\n  %s\n\n", name);
-    if (st->total == 0)
-        printf("  Waiting for the host to start the game.\n");
-    else
-        printf("  Downloading... %lu%%\n", (unsigned long)(100ULL * st->downloaded / st->total));
-    printf("\x1b[29;2HB: back    START: quit");
-    drawBottom(DOWNLOADING, st);
-}
-
-static void drawMessage(const char* text) {
-    consoleSelect(&top);
-    consoleClear();
-    printf("\x1b[1;2H3DS Download Play\n\n  %s\n\n  A: back to the list    START: quit", text);
-    drawBottom(FAILED, NULL);
 }
 
 // Adds or refreshes the hosts dlp:CLNT has seen since the last refresh.
@@ -116,16 +176,53 @@ static void refreshHosts(void) {
     }
 }
 
+static void backToList(void) {
+    phase = LISTING;
+    host_count = 0;
+    picked = 0;
+    dlpStartScan();
+}
+
+static void fail(const char* text) {
+    phase = FAILED;
+    message = text;
+}
+
+// Tells the app the game about to start and waits briefly for it to apply that game's settings.
+static void announce(u64 child) {
+    mkdir(PICK_DIR, 0777);
+    unlink(PICK_ACK);
+    FILE* f = fopen(PICK_FILE, "w");
+    if (!f) return;
+    fprintf(f, "%016llX\n", child);
+    fclose(f);
+    for (int i = 0; i < 90 && aptMainLoop(); i++) { // up to 1.5 s
+        if (access(PICK_ACK, F_OK) == 0) break;
+        gspWaitForVBlank();
+    }
+    unlink(PICK_ACK);
+}
+
 int main(void) {
     gfxInitDefault();
-    consoleInit(GFX_TOP, &top);
-    gfxSetDoubleBuffering(GFX_BOTTOM, false);
+    gfxSetDoubleBuffering(GFX_TOP, true);
+    gfxSetDoubleBuffering(GFX_BOTTOM, true);
 
     if (R_FAILED(dlpOpen())) {
-        drawMessage("Download Play could not start.");
+        fail("Download Play could not start.");
+        host_count = 0;
         while (aptMainLoop()) {
             hidScanInput();
             if (hidKeysDown() & (KEY_START | KEY_A)) break;
+            Canvas c = canvasOf(GFX_TOP);
+            clear(c, BG);
+            header(c, "3DS Download Play");
+            text(c, &font_title, 24, 100, message, INK);
+            Canvas b = canvasOf(GFX_BOTTOM);
+            clear(b, BG);
+            hintsRight(b, NULL, NULL, "START", "Quit");
+            gfxFlushBuffers();
+            gfxSwapBuffers();
             gspWaitForVBlank();
         }
         gfxExit();
@@ -134,12 +231,8 @@ int main(void) {
     dlpRemoveOldChildren(); // a child only works with its host: last time's is no use
     dlpStartScan();
 
-    Phase phase = LISTING;
-    DlpStatus st = {0};
     bool was_connected = false;
-    u64 phase_started = osGetTime();
-    u64 last_refresh = 0;
-    drawList();
+    u64 phase_started = osGetTime(), last_refresh = 0;
 
     while (aptMainLoop()) {
         hidScanInput();
@@ -150,72 +243,53 @@ int main(void) {
         if (phase == LISTING) {
             if (osGetTime() - last_refresh > 500) {
                 last_refresh = osGetTime();
-                int before = host_count;
                 refreshHosts();
-                if (host_count != before) drawList();
             }
-            if (host_count > 0 && (down & KEY_DOWN)) { picked = (picked + 1) % host_count; drawList(); }
-            if (host_count > 0 && (down & KEY_UP)) { picked = (picked + host_count - 1) % host_count; drawList(); }
-            if (host_count > 0 && ((down & KEY_A) || tapped)) {
+            if (host_count > 0 && (down & KEY_DOWN)) picked = (picked + 1) % host_count;
+            if (host_count > 0 && (down & KEY_UP)) picked = (picked + host_count - 1) % host_count;
+            if (host_count > 0 && (down & KEY_A || tapped)) {
                 dlpStopScan();
                 if (R_SUCCEEDED(dlpStartSession(hosts[picked].mac, dlpChildOf(&hosts[picked])))) {
                     phase = DOWNLOADING;
                     was_connected = false;
                     phase_started = osGetTime();
-                    memset(&st, 0, sizeof st);
-                    drawProgress(&st);
+                    memset(&status, 0, sizeof status);
                 } else {
-                    phase = FAILED;
-                    drawMessage("Could not reach that game. Try again.");
+                    fail("Could not reach that game. Try again.");
                 }
             }
         } else if (phase == DOWNLOADING) {
             DlpStatus now;
             if (R_SUCCEEDED(dlpStatus(&now))) {
-                if (now.state != st.state || now.downloaded != st.downloaded || now.total != st.total) {
-                    st = now;
-                    drawProgress(&st);
-                }
+                status = now;
                 was_connected = was_connected || now.connected;
                 if (now.state == DLP_STATE_COMPLETE) {
-                    u8 pass[9];
-                    u8 mac[6];
+                    phase = STARTING;
+                    present();
+                    u8 pass[9], mac[6];
                     memcpy(mac, hosts[picked].mac, 6);
                     u64 child = dlpChildOf(&hosts[picked]);
                     dlpPassphrase(pass);
                     dlpStopSession();
-                    consoleSelect(&top);
-                    consoleClear();
-                    printf("\x1b[1;2H3DS Download Play\n\n  Starting...\n");
+                    announce(child);
                     dlpStartChild(mac, pass, child);
                     // The restart takes over from here.
                     for (int i = 0; i < 600 && aptMainLoop(); i++) gspWaitForVBlank();
-                    phase = FAILED;
-                    drawMessage("The game did not start.");
-                } else if ((was_connected && !now.connected) ||
-                           (!now.connected && osGetTime() - phase_started > 10000)) {
+                    fail("The game did not start.");
+                } else if ((was_connected && !now.connected) || (!now.connected && osGetTime() - phase_started > 10000)) {
                     dlpStopSession();
-                    phase = FAILED;
-                    drawMessage(was_connected ? "The host left." : "Could not reach that game. Try again.");
+                    fail(was_connected ? "The host left." : "Could not reach that game. Try again.");
                 }
             }
             if (down & KEY_B) {
                 dlpStopSession();
-                phase = LISTING;
-                host_count = 0;
-                picked = 0;
-                dlpStartScan();
-                drawList();
+                backToList();
             }
-        } else { // FAILED
-            if ((down & KEY_A) || tapped) {
-                phase = LISTING;
-                host_count = 0;
-                picked = 0;
-                dlpStartScan();
-                drawList();
-            }
+        } else if (phase == FAILED) {
+            if (down & KEY_A || tapped) backToList();
         }
+        frame++;
+        present();
         gspWaitForVBlank();
     }
 
