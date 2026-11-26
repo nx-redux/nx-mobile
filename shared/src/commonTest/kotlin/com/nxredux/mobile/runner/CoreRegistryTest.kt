@@ -57,7 +57,7 @@ class CoreRegistryTest {
     @Test fun all_lists_each_core_once() {
         val ids = CoreRegistry.all.map { it.id }
         assertEquals(ids.size, ids.toSet().size)
-        assertEquals(30, ids.size)
+        assertEquals(31, ids.size)
     }
     @Test fun the_bricks_pak_defaults_are_carried() {
         // The second memory card stays out, as on the Brick (upstream's default is a shared card).
@@ -129,9 +129,18 @@ class CoreRegistryTest {
     @Test fun only_flycast_names_its_saves_after_the_content_so_only_it_unpacks_under_the_archive_name() {
         assertEquals(setOf("flycast"), CoreRegistry.all.filter { it.savesNamedAfterContent }.map { it.id }.toSet())
     }
-    @Test fun only_gpsp_stays_loaded_between_games() {
-        assertEquals(setOf("gpsp"), CoreRegistry.all.filter { it.keepLoaded }.map { it.id }.toSet())
+    @Test fun only_gpsp_and_cemu_stay_loaded_between_games() {
+        assertEquals(setOf("gpsp", "cemu"), CoreRegistry.all.filter { it.keepLoaded }.map { it.id }.toSet())
         assertEquals(true, CoreRegistry.forTag("GBA")!!.keepLoaded)
+        assertTrue(CoreRegistry.forTag("WIIU")!!.keepLoaded)
+    }
+    @Test fun only_cemu_has_no_save_states() {
+        assertEquals(setOf("cemu"), CoreRegistry.all.filterNot { it.saveStates }.map { it.id }.toSet())
+        assertFalse(CoreRegistry.forTag("WIIU")!!.saveStates)
+    }
+    @Test fun only_cemu_waits_two_minutes_before_its_frame_counts_as_hung() {
+        assertEquals(mapOf("cemu" to 120_000L), CoreRegistry.all.mapNotNull { d -> d.hangLimitMillis?.let { d.id to it } }.toMap())
+        assertEquals(120_000L, CoreRegistry.forTag("WIIU")!!.hangLimitMillis)
     }
     @Test fun mupen_hides_startup_only_options_but_not_live_ones() {
         val hidden = CoreRegistry.forTag("N64")!!.restartOnlyOptions
@@ -223,7 +232,7 @@ class CoreRegistryTest {
             listOf(
                 "nds", "n64", "psp", "ps2", "ps", "gb", "gbc", "gba", "fc", "sfc", "md",
                 "sms", "gg", "sg1000", "segacd", "fds", "sgb", "ngp", "ngpc", "pce", "vb",
-                "lynx", "a2600", "a5200", "a7800", "pkm", "wsc", "p8", "prboom", "32x", "coleco", "fbn", "dc", "3ds", "wii", "gc",
+                "lynx", "a2600", "a5200", "a7800", "pkm", "wsc", "p8", "prboom", "32x", "coleco", "fbn", "dc", "3ds", "wii", "gc", "wiiu",
             ),
             CoreRegistry.consoles.map { it.id },
         )
@@ -247,7 +256,7 @@ class CoreRegistryTest {
                 "Game Boy Advance", "Nintendo ES", "Super Nintendo ES", "Sega Genesis", "Sega Master System", "Sega Game Gear",
                 "Sega SG-1000", "Sega CD", "Famicom Disk System", "Super Game Boy", "Neo Geo Pocket", "Neo Geo Pocket Color",
                 "TurboGrafx-16", "Virtual Boy", "Atari Lynx", "Atari 2600", "Atari 5200", "Atari 7800", "Pokémon mini",
-                "Wonderswan Color", "Pico-8", "Doom", "Sega 32X", "Colecovision", "Arcade", "Dreamcast", "Nintendo 3DS", "Nintendo Wii", "Nintendo GameCube",
+                "Wonderswan Color", "Pico-8", "Doom", "Sega 32X", "Colecovision", "Arcade", "Dreamcast", "Nintendo 3DS", "Nintendo Wii", "Nintendo GameCube", "Nintendo Wii U",
             ),
             CoreRegistry.consoles.map { it.displayName },
         )

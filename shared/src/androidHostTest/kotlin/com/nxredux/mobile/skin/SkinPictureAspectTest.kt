@@ -1,9 +1,8 @@
 package com.nxredux.mobile.skin
 
 import com.nxredux.mobile.layout.CONSOLE_FRAMES
-import com.nxredux.mobile.options.N3dsOptions
-import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.runner.CoreRegistry
+import com.nxredux.mobile.runner.DualScreenConsole
 import com.nxredux.mobile.runner.WiiPad
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -37,7 +36,7 @@ class SkinPictureAspectTest {
             val pack = skinPack(packId)
             for (console in CoreRegistry.consoles) {
                 val tag = console.defaultTag
-                if (NdsOptions.appliesTo(tag) || N3dsOptions.appliesTo(tag)) continue   // two screens: no picture passed
+                if (DualScreenConsole.appliesTo(tag)) continue   // two screens: no picture passed
                 val base = CoreRegistry.baseTag(tag)
                 val pads = if (console.id == "wii") WiiPad.entries.toList() else listOf(null)
                 for (pad in pads) for (arcade in if (console.id == "dc") listOf(false, true) else listOf(false)) {
@@ -55,5 +54,24 @@ class SkinPictureAspectTest {
             }
         }
         assertTrue(compared > 100, "only $compared placements compared")
+    }
+
+    @Test
+    fun the_gamepads_glasses_are_16_by_9_or_two_of_them_stacked() {
+        var seen = 0
+        for (packId in listOf("nx-carbon", "nx-onyx", "nx-obsidian", "nx-plasma", "nx-ember", "nx-volt", "nx-tide")) {
+            for (spec in skinPack(packId).layouts.filter { it.variant == SkinVariant.WIIU }) {
+                assertTrue(spec.id.endsWith("_wiiugp") || "_wiiugp_" in spec.id, spec.id)
+                val glasses = listOfNotNull(spec.frame?.glass) + spec.pieces.mapNotNull { it.glass }
+                for (g in glasses) {
+                    val want = if (g.screen == GlassScreen.STACK) 16f / 18f else 16f / 9f
+                    assertTrue(g.screen in setOf(GlassScreen.STACK, GlassScreen.TOP, GlassScreen.TOUCH), "$packId ${spec.id} ${g.screen}")
+                    assertEquals(want, g.w.toFloat() / g.h, 0.01f, "$packId ${spec.id} ${g.screen}")
+                }
+                assertTrue(glasses.map { it.screen }.toSet().let { it == setOf(GlassScreen.STACK) || it == setOf(GlassScreen.TOP, GlassScreen.TOUCH) }, "$packId ${spec.id}")
+                seen++
+            }
+        }
+        assertEquals(7 * 10, seen)   // the GamePad's ten layouts in each pack
     }
 }

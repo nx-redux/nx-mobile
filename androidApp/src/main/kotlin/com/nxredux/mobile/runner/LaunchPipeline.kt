@@ -51,6 +51,7 @@ import com.nxredux.mobile.gpudriver.GpuDriverCrashSettle
 import android.os.Build
 import android.os.Process
 import com.nxredux.mobile.options.N3dsOptions
+import com.nxredux.mobile.options.WiiuOptions
 import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.OverlayResolver
 import com.nxredux.mobile.options.PadOptions
@@ -132,6 +133,7 @@ internal interface LaunchHost : GameScreenHost {
     val shortcuts: ShortcutsMicController
     val saves: SaveSession
     val wii: WiiDolphinController
+    val wiiuMotion: WiiuMotionController
     val res3d: Res3dController
     val gameNetplay: GameNetplay
     val speed: SpeedController
@@ -159,6 +161,7 @@ internal interface LaunchHost : GameScreenHost {
     var playerCount: Int
     var rumbles: Array<RumbleMotor>
     var canRewind: Boolean
+    var canSaveStates: Boolean
     var padMap: PadMap
     var segaPad: SegaPad?
     var segaHeader: SegaPad?
@@ -195,12 +198,14 @@ internal interface LaunchHost : GameScreenHost {
     fun onViewCreated(view: GLRetroView)
     /** The first frame rendered: the battery save and the auto state may be written from here. */
     fun onGameReady()
-    /** The core's stall watch, from the view's creation to the end of onDestroy. */
-    fun startCoreWatchdog(stalledMillis: () -> Long)
+    /** The core's stall watch, from the view's creation to the end of onDestroy, at [core]'s limits. */
+    fun startCoreWatchdog(core: CoreDescriptor?, stalledMillis: () -> Long)
     /** Game time's session for this launch, as onStart and onStop keep it from here. */
     fun startGameTime(rec: GameTimeRecorder)
 
     fun fail(message: String, title: String = GameActivity.START_FAILED)
+    /** A one-button notice the launch waits on; returns once the player has answered (at once when the screen is gone). */
+    suspend fun confirmNotice(message: String)
     /** [record] false: the core's Vulkan failure is not recorded (a custom driver failed); [notice]: the toast. */
     fun relaunchOnGles(record: Boolean = true, notice: String = VulkanFallback.NOTICE)
     /** The custom driver could not start: the same launch again on the system driver ([GameActivity.EXTRA_FORCE_SYSTEM_DRIVER]). */
@@ -235,6 +240,10 @@ internal interface LaunchHost : GameScreenHost {
     suspend fun refreshDolphinCheats()
     fun prepareAchievements(tag: String, romFileName: String, content: ContentRef, inner: File?)
     fun onAchievementEvent(e: RaEvent)
+    /** A core's on-screen message, shown as the in-game toast when it is worth it ([CoreMessageToasts]). */
+    fun showCoreMessage(m: GLRetroView.CoreMessage)
+    /** The core's text entry (the Wii U software keyboard) opened or closed: the app's text box answers it. */
+    fun onCoreTextInput(t: GLRetroView.TextInput)
 }
 
 /**
@@ -553,6 +562,9 @@ internal class LaunchPipeline(private val host: LaunchHost) {
         attachView(cfg, prepared, data)
     }
 
+    private fun totalRam(): Long =
+        ActivityManager.MemoryInfo().also { host.activity.getSystemService(ActivityManager::class.java).getMemoryInfo(it) }.totalMem
+
     private fun refuse(message: String, title: String = GameActivity.START_FAILED): Nothing? { host.fail(message, title); return null }
 
     private suspend fun resolveConfig(): LaunchConfig? {
@@ -568,6 +580,13 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // The tag's own descriptor: a tag view (SGB) carries its own extensions and defaults; the id alone would give plain mgba.
             val descriptor = CoreRegistry.forTag(tag)?.takeIf { it.id == coreId } ?: CoreRegistry.forId(coreId)
             DebugLogFile.nameGame(tag, coreId)
+            // A core with no OpenGL ES renderer on a phone without Vulkan: refused before anything is unpacked or loaded.
+            withContext(Dispatchers.IO) { GraphicsApiOptions.vulkanRefusal(descriptor?.vulkan) { LibretroDroid.isVulkanSupported() } }
+                ?.let { return refuse(it) }
+            if (WiiuRamWarning.due(tag, totalRam(), settings.wiiuRamWarned)) {
+                confirmNotice(WiiuRamWarning.MESSAGE)
+                settings.wiiuRamWarned = true
+            }
             val players = CoreRegistry.playersFor(tag, descriptor)
             playerCount = players
             // netplay: no slots, so every pad and the touch pad drive native port 0, the engine's local word.
@@ -666,10 +685,10 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             if (np?.endsAsLocalGame == true) gameNetplay.localCheats = { cheatsSupported = cheatsOk; loadCheats() }
             // Resolved and decoded before the view exists, so the first frame already has its overlay (the configured one;
             // with none stored the default is None).
-            // A DS game starts split (every DS layout draws its screens as regions), which shows no overlay: none is
+            // A DS or Wii U game starts split (every layout draws its screens as regions), which shows no overlay: none is
             // preloaded, and it counts as split until its first frame says otherwise, so the configured one never flashes.
             val landscape = activity.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-            val ndsAtStart = NdsOptions.appliesTo(tag)
+            val ndsAtStart = NdsOptions.appliesTo(tag) || WiiuOptions.appliesTo(tag)
             val (sets, preloaded) = withContext(Dispatchers.IO) {
                 val found = Overlays.sets(privateRoot, tag)
                 val overlay = FrontendSettings.parse(FrontendOptions.fromConfig(resolved.values)).overlay
@@ -686,8 +705,9 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             val sessionPad = np?.segaPad?.takeIf { PadMap.isSegaPadTag(tag) }
             if (np != null && PadMap.isSegaPadTag(tag)) frontendValues = frontendValues + (PadOptions.SEGA_PAD to (sessionPad ?: SegaPadType.AUTO))
             canRewind = descriptor?.rewind == true
+            canSaveStates = descriptor?.saveStates != false
             speed.setSession(netplay = np != null)   // first: the touch buttons [ShortcutsMicController.launch] builds follow the session
-            shortcuts.launch(microphone = descriptor?.microphone == true, netplay = np != null, tag, Shortcuts.fromConfig(resolved.values))
+            shortcuts.launch(microphone = descriptor?.microphone == true, netplay = np != null, tag, Shortcuts.fromConfig(resolved.values), saveStates = canSaveStates)
             val netplayPad = if (np != null) NetplayPads.forSession(tag, descriptor?.id, sessionPad) else null
             renderer.shaderValues = ShaderOptions.fromConfig(resolved.values)
             renderer.presetNames = withContext(Dispatchers.IO) { Shaders.presets(shaderRoots) }
@@ -867,7 +887,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             }
             // minarch names saves after the unpacked file when Use extracted file name is on (ma_game.c): known only now.
             paths = paths.withInner(inner?.let { unpackedEntry })
-            saves.open(if (cfg.np == null) SaveStates(dataRoot, paths) else null)   // netplay: no save states, no auto-resume
+            // netplay, or a core without save states: no save states, no auto-resume
+            saves.open(if (cfg.np == null && canSaveStates) SaveStates(dataRoot, paths) else null)
             if (!settings.saveOnQuit) saves.unlinkAuto()
             saves.refreshSlots()   // warm for the first menu open
             cfg.np?.let { gameNetplay.prepareSaves(it, cfg.tag, cfg.romFileName, dataRoot, paths) }
@@ -937,6 +958,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 inner?.let(WiiDiscIdReader::read) ?: WiiDiscIdReader.read(refs, cfg.content, cfg.romFileName)
             }
             wii.resolveAtLaunch(cfg.tag, wiiDisc)
+            wiiuMotion.resolveAtLaunch(cfg.tag)
             padMap = if (isDc) PadMap.IDENTITY else PadMap.forTag(cfg.tag, segaPad)
             // Only 3-button draws differently from the six the pad was composed with in onCreate: recompose it.
             if (segaPad == SegaPad.THREE) relayoutPad()
@@ -1051,12 +1073,14 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                     val drivers = if (mayLoadDriver) driverStore.installed() else emptyList()
                     // The driver's frames go through a swapchain on an image reader: what its preflight found it can do.
                     var driverReader = false
+                    // A Vulkan-only core's recorded failure is ignored: it has no OpenGL ES to go to.
+                    val coreFailedOnSystem = GraphicsApiOptions.recordedFailure(cfg.descriptor?.vulkan, cfg.descriptor?.id in settings.vulkanFailedCores)
                     var launch = GpuDriverChoice.launch(
                         apiValue, frontendValues[GpuDriverOptions.KEY], settings.gpuDriver, drivers.mapTo(HashSet()) { it.id },
                         GpuDriverCrash.crashed(settings.gpuDriverCrashes, gamePath.orEmpty()), available = driversAvailable,
                         forceGles = activity.intent.getBooleanExtra(EXTRA_FORCE_GLES, false),
                         forceSystem = activity.intent.getBooleanExtra(GameActivity.EXTRA_FORCE_SYSTEM_DRIVER, false),
-                        coreFailedOnSystem = cfg.descriptor?.id in settings.vulkanFailedCores,
+                        coreFailedOnSystem = coreFailedOnSystem,
                         netplayForcesGles = cfg.np != null && NetplayCores.forcesGles(cfg.descriptor?.id),
                     )
                     var graphics = GraphicsApiOptions.resolve(apiValue, cfg.descriptor?.vulkan, { LibretroDroid.isVulkanSupported() }, launch.vulkanFailed)
@@ -1073,7 +1097,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                         val handoff = GLRetroView.probeVulkanDriver(activity, driverStore.directory(driver.id).absolutePath + "/", driver.libraryName)
                         val ok = handoff != LibretroDroid.VULKAN_HANDOFF_NONE
                         driverReader = handoff == LibretroDroid.VULKAN_HANDOFF_READER
-                        val after = GpuDriverChoice.afterPreflight(launch, ok, driver.name, cfg.descriptor?.id in settings.vulkanFailedCores)
+                        val after = GpuDriverChoice.afterPreflight(launch, ok, driver.name, coreFailedOnSystem)
                         if (after.clearMarker) clearDriverLaunchMarker()
                         if (after.launch != launch) {
                             NxLog.w(TAG_LOG, "the GPU driver ${driver.name} failed its preflight: this launch goes on without it")
@@ -1103,7 +1127,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                         // session's (NetplayLinkOptions) the user's, set even when absent.
                         // N64: Max High-Res VRAM Limit's Auto becomes a number for this device's memory (N64HiresPack.vramLimit).
                         val n64Vram = if (cfg.descriptor?.id == MUPEN64PLUS_NEXT_ID) {
-                            val total = ActivityManager.MemoryInfo().also { activity.getSystemService(ActivityManager::class.java).getMemoryInfo(it) }.totalMem
+                            val total = totalRam()
                             val limit = N64HiresPack.vramLimit(cfg.option(N64HiresPack.VRAM_KEY), total)
                             NxLog.i(TAG_LOG, "N64 hi-res VRAM limit: $limit MB (device ${total / (1024 * 1024)} MB)")
                             mapOf(N64HiresPack.VRAM_KEY to limit)
@@ -1308,7 +1332,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             shortcuts.pushMicSource()   // a Mic toggle tapped before the view existed
             // Not in netplay: a link cable's step may wait out the peer's hold (sio_lockstep: up to 30 s), and the session
             // has its own timeouts.
-            startCoreWatchdog { if (netplay == null) view.stepStalledMillis() else 0L }
+            startCoreWatchdog(cfg.descriptor) { if (netplay == null) view.stepStalledMillis() else 0L }
             if (focusPaused) { view.frameSpeed = 0; view.audioEnabled = false }   // focus went to another app while loading
             // Collected before the view is added (its ON_CREATE) and long before the first frame: the runner reports a
             // change only, from an unbuffered flow, so a missed event would leave the motor wrong until the next one.
@@ -1333,8 +1357,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 b.attach(view)
                 b.deliverEvents { onAchievementEvent(it) }
             }
-            // The core's on-screen messages: the few worth showing (CoreMessages: the FDS disk side) as a toast on the picture.
-            lifecycleScope.launch { view.getCoreMessages().collect { m -> CoreMessages.toast(cfg.coreId, m)?.let(dual::pictureToast) } }
+            lifecycleScope.launch { view.getCoreMessages().collect(::showCoreMessage) }
+            lifecycleScope.launch { view.getTextInputs().collect(::onCoreTextInput) }
             // The core loads the game on the GL thread once the view is added (SurfaceCreated follows): the waiting pads'
             // timeout counts from then, not through the load.
             lifecycleScope.launch {
@@ -1387,7 +1411,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 // A Dreamcast session's load waits for the other device: refused, it never came (or the two did not agree).
                 if (cfg.np?.ggpo == true && (lines.isEmpty() || lines.any { GGPO_LOG in it })) {
                     NetplayText.FAILED_CONNECT to NetplayText.FAILED
-                } else LoadFailure.message(cfg.title, lines, cfg.romFileName.takeIf { prepared.archiveAsIs }, prepared.naomiBios, naomiParent)
+                } else LoadFailure.message(cfg.title, lines, cfg.romFileName.takeIf { prepared.archiveAsIs }, prepared.naomiBios, naomiParent, cfg.tag, Names.extensionOf(cfg.romFileName))
                     ?.let { it to GameActivity.START_FAILED }
             }
             // Debug builds: a file named simulate_vulkan_fail in the app's files dir makes a Vulkan launch take the fallback
@@ -1422,6 +1446,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             }
             clearDriverMarkerLater()   // a custom driver that keeps presenting is not blamed for a later crash
             wii.onFirstFrame(view)
+            wiiuMotion.onFirstFrame()
             dual.pushSecondSurface()   // a presentation shown before the view ran
             if (dual.panelShown()) dual.refreshDiscs()   // a panel up before the game ran asked too early
             // A core may change its geometry later (SET_GEOMETRY), as Azahar does a frame or so after a layout switch: the
@@ -1479,7 +1504,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // Where the picture is drawn: as last laid out, else (before the game view, or a DS / 3DS before its first
             // frame) the pad skin's glass for the picture the screenshot holds.
             val picture = { host.renderer.thumbnailPicture() ?: host.padLayout.takeIf { it.skinShown }?.skinPlacement()?.let(::coverGlass) }
-            val twoScreens = NdsOptions.appliesTo(tag) || N3dsOptions.appliesTo(tag)
+            val twoScreens = DualScreenConsole.appliesTo(tag)
             val dual = host.dual
             // A DS / 3DS split with the picture on the second display: the screenshot's screen is drawn there.
             val spot: () -> CoverSpot? = if (!twoScreens) { { CoverSpot(ThumbnailDisplay.MAIN, picture()) } } else { {
@@ -1549,7 +1574,11 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                     // A custom driver failed (to load, to create its device, or to share its frames): the system driver
                     // next, unless that failed here already; the system driver failed: OpenGL ES.
                     val driver = host.launchedDriver
-                    val next = GpuDriverChoice.afterStartFailure(host.launchedOnVulkan, driver?.id, host.gameCoreId in host.settings.vulkanFailedCores, netplaySession)
+                    val switch = CoreRegistry.forId(host.gameCoreId)?.vulkan
+                    val next = GpuDriverChoice.afterStartFailure(
+                        host.launchedOnVulkan, driver?.id, GraphicsApiOptions.recordedFailure(switch, host.gameCoreId in host.settings.vulkanFailedCores),
+                        netplaySession, vulkanOnly = switch?.vulkanOnly == true,
+                    )
                     when (next) {
                         GpuDriverChoice.Next.SYSTEM_DRIVER -> host.relaunchOnSystemDriver()
                         GpuDriverChoice.Next.GLES_NO_RECORD ->
@@ -1557,6 +1586,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                         GpuDriverChoice.Next.GLES_RECORD -> host.relaunchOnGles()
                         GpuDriverChoice.Next.FAIL_MESSAGE -> host.fail(
                             if (driver != null) GpuDriverChoice.named(GpuDriverChoice.NETPLAY_FAIL, driver.name)
+                            else if (switch?.vulkanOnly == true) GpuDriverChoice.VULKAN_ONLY_FAIL
                             else "Vulkan could not start for this game on this device. Set Display → Graphics API to OpenGL ES."
                         )
                         GpuDriverChoice.Next.SHOW_ERROR -> Unit

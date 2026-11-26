@@ -79,13 +79,13 @@ class CoreRegistryDcTest {
         assertEquals("Dreamcast needs a BIOS: put dc_boot.bin in Bios/DC/", BiosCheck.message("DC", needs.single()))
     }
 
-    @Test fun only_flycast_and_armsx2_keep_their_bios_in_a_subfolder() {
+    @Test fun only_flycast_armsx2_and_cemu_keep_their_bios_in_a_subfolder() {
         assertEquals("dc", BiosFolders.subdir("DC"))
         assertEquals("dc", BiosFolders.subdir(" dc "))
         assertEquals("", BiosFolders.subdir("PS"))
         assertEquals("", BiosFolders.subdir("FBN"))
         assertEquals("", BiosFolders.subdir("PORTS"))
-        assertEquals(setOf("flycast", "armsx2"), CoreRegistry.all.filter { it.biosSubdir.isNotEmpty() }.map { it.id }.toSet())
+        assertEquals(setOf("flycast", "armsx2", "cemu"), CoreRegistry.all.filter { it.biosSubdir.isNotEmpty() }.map { it.id }.toSet())
         assertEquals(listOf("DC"), BiosFolders.forTag("DC"))
     }
 

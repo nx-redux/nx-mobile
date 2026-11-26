@@ -204,6 +204,16 @@ class InGameMenuModelTest {
         assertEquals(MenuAction.QUIT, (model().state.page.rows.last() as MenuRow.Action).action)   // on: asks how to quit
     }
 
+    // A core without save states: no Save / Load, and Quit quits (no resume point to write or ask about).
+    @Test fun noStateCoreHasNoResumeAndPlainQuit() {
+        val m = model().apply { saveStates = false; refresh() }
+        val labels = m.state.page.rows.map { it.label }
+        assertEquals(listOf("Continue", "Reset", "Options", "Quit"), labels)
+        val quit = m.state.page.rows.last() as MenuRow.Action
+        assertEquals(MenuAction.QUIT_ONLY, quit.action)
+        assertEquals(MenuEffect.QuitWithoutResume, m.activate(m.state.page.rows.size - 1))
+    }
+
     @Test fun quit_on_the_quit_page_quits_without_a_resume_point() {
         val m = model()
         m.activate(5)
@@ -2800,6 +2810,24 @@ class InGameMenuModelTest {
         val labels = m.state.page.rows.map { it.label }
         assertTrue("Quit" in labels)
         assertFalse("Save & Quit" in labels)
+    }
+
+    // A core without save states: no Save State / Load State rows nor touch choices, and Save & Quit only quits.
+    @Test fun no_save_state_shortcuts_without_save_states() {
+        val m = model().apply { saveStates = false; refresh() }
+        m.setShortcuts(ShortcutSet.EMPTY, ShortcutOverrides.NONE, ConsoleHotkeys.claimed(plainTag), true, false, canSaveStates = false)
+        val options = m.state.page.rows.indexOfFirst { it.label == "Options" }
+        m.select(options); m.activate(options)
+        assertNull(m.activate(m.state.page.rows.indexOfFirst { it.label == "Shortcuts" }))
+        val labels = m.state.page.rows.map { it.label }
+        assertFalse("Save State" in labels)
+        assertFalse("Load State" in labels)
+        assertTrue("Quit" in labels)
+        assertFalse("Save & Quit" in labels)
+        val choices = m.row("Touch button 1").choices
+        assertFalse("Save State" in choices)
+        assertFalse("Load State" in choices)
+        assertTrue("Reset Game" in choices)
     }
 
     @Test fun inheritedShowsDefault() {

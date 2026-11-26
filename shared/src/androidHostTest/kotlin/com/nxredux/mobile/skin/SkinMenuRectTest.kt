@@ -1,6 +1,9 @@
 package com.nxredux.mobile.skin
 
+import com.nxredux.mobile.options.NdsScreen
 import com.nxredux.mobile.options.PxRect
+import com.nxredux.mobile.runner.FrameRect
+import com.nxredux.mobile.runner.NdsRegion
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -103,5 +106,56 @@ class SkinMenuRectTest {
                 assertEquals(p.menuRect(top), p.menuRoom(), "$variant $name")
             }
         }
+    }
+
+    // The stretched menu reaches into the touch screen's frame: the whole frame goes, its foot under the menu too.
+    @Test
+    fun under_a_stretched_menu_the_touch_screens_frame_goes_whole() {
+        for (variant in listOf(SkinVariant.DS, SkinVariant.N3DS_REGULAR, SkinVariant.N3DS)) {
+            val p = assertNotNull(SkinChoice.place(carbon, 1248, 1972, 420, tablet = false, ds = true, foldable = true, variant = variant), "$variant")
+            val touch = assertNotNull(p.glass(GlassScreen.TOUCH), "$variant").rect
+            val frame = p.pieces.filter { it.fill >= 0f && it.dst.x <= touch.x && it.dst.y <= touch.y &&
+                it.dst.x + it.dst.width >= touch.x + touch.width }.map { it.piece }.filter { it >= 0 }.toSet()
+            assertTrue(frame.isNotEmpty(), "$variant: the touch screen has its own frame")
+            val u = p.underMenu(assertNotNull(p.stackedMenuRoom(), "$variant"))
+            assertTrue(u.pieces.none { it.piece in frame }, "$variant: ${u.pieces.filter { it.piece in frame }.map { it.dst }}")
+            assertTrue(u.pieces.any { it.piece >= 0 && it.piece !in frame }, "$variant: the pad's pieces stay")
+        }
+    }
+
+    // DS / 3DS / Wii U with the menu over the top screen (or over both in one glass): the bottom screen is hidden.
+    @Test
+    fun the_menu_hides_the_bottom_screen_where_it_lies_over_the_top_one() {
+        for (variant in listOf(SkinVariant.DS, SkinVariant.N3DS_REGULAR, SkinVariant.N3DS, SkinVariant.WIIU)) {
+            for ((w, h, foldable) in listOf(Triple(1248, 1972, true), Triple(1972, 1248, true), Triple(2520, 1080, false))) {
+                val p = SkinChoice.place(carbon, w, h, 420, tablet = false, ds = true, foldable = foldable, variant = variant) ?: continue
+                assertTrue(p.menuHidesBottom(), "$variant ${w}x$h ${p.glasses.map { it.screen }}")
+            }
+        }
+    }
+
+    // A two-screen board puts the menu in the bottom screen's glass (the top keeps the paused picture); one screen has none.
+    @Test
+    fun the_menu_in_the_bottom_glass_or_on_one_screen_hides_nothing() {
+        for (variant in listOf(SkinVariant.DS, SkinVariant.N3DS, SkinVariant.WIIU)) {
+            val p = assertNotNull(SkinChoice.place(carbon, 1848, 2448, 420, tablet = true, ds = true, foldable = true, variant = variant), "$variant")
+            assertEquals(SkinFamily.FLEX, p.spec.family)
+            assertTrue(!p.menuHidesBottom(), "$variant inner")
+        }
+        val gba = assertNotNull(SkinChoice.place(carbon, 1248, 1972, 420, tablet = false, ds = false, picture = 240f to 160f, variant = SkinVariant.GBA))
+        assertTrue(!gba.menuHidesBottom())
+    }
+
+    @Test
+    fun the_screens_drawn_under_the_menu_leave_out_the_bottom_one_only_where_it_hides() {
+        fun region(s: NdsScreen, y: Float) = NdsRegion(s, FrameRect(0f, 0f, 1f, 1f), PxRect(0f, y, 10f, 10f), shaded = false, touch = s == NdsScreen.BOTTOM)
+        val regions = listOf(region(NdsScreen.TOP, 0f), region(NdsScreen.BOTTOM, 20f))
+        val cover = assertNotNull(SkinChoice.place(carbon, 1248, 1972, 420, tablet = false, ds = true, foldable = true, variant = SkinVariant.N3DS))
+        assertEquals(listOf(regions[0]), menuShownScreens(regions, cover))
+        // after SWAP the touch screen is the one in the top glass, under the menu: the top screen goes
+        val swapped = listOf(region(NdsScreen.BOTTOM, 0f), region(NdsScreen.TOP, 20f))
+        assertEquals(listOf(swapped[0]), menuShownScreens(swapped, cover))
+        val inner = assertNotNull(SkinChoice.place(carbon, 1848, 2448, 420, tablet = true, ds = true, foldable = true, variant = SkinVariant.N3DS))
+        assertEquals(regions, menuShownScreens(regions, inner))
     }
 }

@@ -15,7 +15,7 @@ object ScraperSystems {
     private val ids: Map<String, Int> = mapOf(
         "NES" to 3, "FC" to 3, "FAMICOM" to 3, "FDS" to 106, "SNES" to 4, "SFC" to 4, "SUPA" to 4, "N64" to 14,
         "GB" to 9, "SGB" to 9, "GBC" to 10, "GBA" to 12, "MGBA" to 12, "NDS" to 15, "DS" to 15, "VB" to 11,
-        "PKM" to 211, "POKE" to 211, "POKEMINI" to 211, "GC" to 13, "WII" to 16, "3DS" to 17,
+        "PKM" to 211, "POKE" to 211, "POKEMINI" to 211, "GC" to 13, "WII" to 16, "3DS" to 17, "WIIU" to 18,
         "SMS" to 2, "GG" to 21, "MD" to 1, "GPGX" to 1, "GENESIS" to 1, "GEN" to 1, "SMD" to 1, "32X" to 19,
         "SEGA32X" to 19, "SEGACD" to 20, "SCD" to 20, "MEGACD" to 20, "MDCD" to 20, "SATURN" to 22, "SS" to 22,
         "SAT" to 22, "DC" to 23, "SG1000" to 109, "SG" to 109,

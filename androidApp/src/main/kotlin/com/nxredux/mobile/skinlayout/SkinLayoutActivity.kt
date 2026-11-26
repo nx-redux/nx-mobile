@@ -23,7 +23,6 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.window.layout.WindowMetricsCalculator
 import com.nxredux.mobile.layout.DeviceTraits
-import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.runner.Console
 import com.nxredux.mobile.runner.CoreRegistry
@@ -120,7 +119,7 @@ class SkinLayoutActivity : ComponentActivity() {
     private fun place(pack: PadSkinPack, console: Console, tag: String, wiiPad: WiiPad?, n3dsNew: Boolean, segaThree: Boolean, w: Int, h: Int, settings: AppSettings): Pair<SkinEditorState, Placed>? {
         val base = CoreRegistry.baseTag(tag)
         val nds = NdsOptions.appliesTo(tag)
-        val ds = nds || N3dsOptions.appliesTo(tag)
+        val ds = SkinLayoutEdit.twoScreens(tag)
         // the 3DS: the regular pad or the New 3DS's (ZL / ZR, the C-stick), as asked
         val profile = PadProfile.forTag(tag, n3dsNew = n3dsNew, wii = wiiPad)
         val variant = SkinChoice.variantFor(base, nds, arcadeSet = false, gameCube = profile.kind == PadProfile.Kind.GC, wiiPad = wiiPad, n3dsNew = profile.cStick, segaThree = segaThree)

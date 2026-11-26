@@ -55,7 +55,10 @@ val BOXED = linkedMapOf<SkinVariant?, String>(null to "menu", SkinVariant.N64 to
     SkinVariant.PCE to "pce", SkinVariant.A2600 to "a2600", SkinVariant.LYNX to "lynx", SkinVariant.PKM to "pkm",
     SkinVariant.COLECO to "coleco", SkinVariant.VB to "vb", SkinVariant.WS to "ws")
 
-/** A one-screen console's picture size, game px (null: the DS / 3DS, two screens). */
+/** The consoles whose placements the pack snapshot records: the boxed ones and the Wii U GamePad's (built from pieces). */
+val PACK_SNAPSHOTS = BOXED + (SkinVariant.WIIU to "wiiu")
+
+/** A one-screen console's picture size, game px (null: the DS / 3DS / Wii U, two screens). */
 private fun pictureOf(v: SkinVariant): Pair<Float, Float>? = when (v) {
     SkinVariant.GB -> 160f to 144f
     SkinVariant.GBA -> 240f to 160f
@@ -72,7 +75,7 @@ private fun pictureOf(v: SkinVariant): Pair<Float, Float>? = when (v) {
     SkinVariant.COLECO -> 256f to 192f
     SkinVariant.VB -> 384f to 224f
     SkinVariant.WS -> 224f to 144f
-    SkinVariant.DS, SkinVariant.N3DS, SkinVariant.N3DS_REGULAR -> null
+    SkinVariant.DS, SkinVariant.N3DS, SkinVariant.N3DS_REGULAR, SkinVariant.WIIU -> null
     else -> 320f to 240f
 }
 

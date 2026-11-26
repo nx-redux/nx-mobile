@@ -545,6 +545,58 @@ object CoreRegistry {
         controllerPort0 = CoreDescriptor.JOYPAD,
     )
 
+    // Cemu loads by path through the VFS. Vulkan is the only API wanted on a phone; the layout is the stacked one for a
+    // single screen, and its logging and FPS overlay are off.
+    private val cemuLogKeys = listOf(
+        "cemu_log_to_file", "cemu_log_filesystem", "cemu_log_thread_sync", "cemu_log_system_api",
+        "cemu_log_texture_memory", "cemu_log_input_api", "cemu_log_audio", "cemu_log_thread_time",
+    )
+    private val cemuOptions = mapOf(
+        "cemu_gpu_api" to "Vulkan", "cemu_screen_layout1" to "Stacked", "cemu_number_of_screen_layouts" to "1",
+        "cemu_show_game_fps" to "disabled",
+        // A debug feature that writes files.
+        "cemu_dump_shaders" to "disabled",
+        // The app's (3D Resolution rows, Res3dConsole.CEMU); native until the launch sends the scale.
+        "cemu_internal_resolution" to "native",
+        // The app's (Motion Controls, WiiuOptions.motionOption): off at launch, so the row's On sent on the first frame,
+        // once the sensors are offered again, is a change that makes Cemu ask for them.
+        "cemu_gamepad_motion" to "disabled",
+    ) + cemuLogKeys.associateWith { "disabled" }
+    // Actions and screen setups the app has no page for: game installs and the WUA conversion (the games are loaded in
+    // place), the toy peripherals, the extra layouts and the button and position that cycle them (the app's own
+    // layouts replace them). Each keeps the core's default.
+    private val cemuHiddenKeys = setOf(
+        "cemu_install_game", "cemu_uninstall_game", "cemu_install_titles", "cemu_uninstall_titles", "cemu_install_remove_source",
+        "cemu_convert_to_wua", "cemu_wua_output_dir",
+        "cemu_emulate_skylander_portal", "cemu_emulate_infinity_base", "cemu_emulate_dimensions_toypad",
+        "cemu_next_screen_layout_button", "cemu_drc_position",
+        "cemu_screen_layout2", "cemu_screen_layout3", "cemu_screen_layout4", "cemu_screen_layout5",
+    )
+    private val cemu = CoreDescriptor(
+        "cemu", "libcemu_libretro_android.so", setOf("wua", "wux", "wud", "rpx"),
+        defaultOptions = cemuOptions,
+        lockedOptions = cemuOptions.keys + cemuHiddenKeys,
+        // keys.txt (disc keys for .wud/.wux) lands in system/Cemu/, where Cemu reads it; optional, since .wua and
+        // installed titles need none.
+        biosSubdir = "Cemu",
+        biosFiles = listOf("keys.txt"),
+        players = 1,
+        cheats = false,
+        name = "Cemu",
+        rewind = false,
+        // retro_serialize_size is 0: Cemu keeps no save states.
+        saveStates = false,
+        // Its static destructors lock mutexes already destroyed when the library is unloaded, crashing the quit; each
+        // game runs in its own process, which ends with the game, so the library is never unloaded.
+        keepLoaded = true,
+        // The start is one frame that loads the shader and pipeline caches, which grow with play (20 s seen with a full
+        // Mario Kart 8 cache): the default limit would kill it.
+        hangLimitMillis = 120_000L,
+        // Cemu presents its own image through set_image and announces every larger frame through its geometry, so its
+        // frames stay bounded by the max geometry, not the surface (swapchainFrames).
+        vulkan = VulkanSwitch(vulkanOnly = true),
+    )
+
     // Canonical descriptors before tag views, so `all` (distinct by id) keeps plain mgba.
     private val byTag: Map<String, CoreDescriptor> = mapOf(
         "NDS" to melondsds,
@@ -576,6 +628,7 @@ object CoreRegistry {
         "3DS" to azahar,
         "WII" to dolphinWii, "GC" to dolphinGc,
         "PS2" to armsx2,
+        "WIIU" to cemu,
     )
 
     /** Extensions too generic to name a console on their own (disc images and sheets shared by many systems). */
@@ -629,6 +682,7 @@ object CoreRegistry {
         // iso, elf, dol, wad (Doom's) and m3u go by folder; a GameCube rvz or wia reaches GC by its folder too.
         Console("wii", "Nintendo Wii", listOf("WII"), setOf("wii", "nintendo wii"), setOf("wbfs", "wia", "rvz"), rawSram = false),
         Console("gc", "Nintendo GameCube", listOf("GC"), setOf("gc", "gamecube", "nintendo gamecube"), setOf("gcm", "gcz", "tgc", "ciso"), rawSram = false),
+        Console("wiiu", "Nintendo Wii U", listOf("WIIU"), setOf("wiiu", "wii u", "nintendo wii u"), setOf("wua", "wux", "wud", "rpx", "wuhb"), rawSram = false),
     )
 
     /** Every extension some tag's core runs, console-owned or not (png, o, lmp, exe only by folder or sidecar). */

@@ -63,6 +63,7 @@ After a patch failure, or after editing a patch or a NOTICE it adds, run `gmake 
 | azahar (3DS) | azahar-emu/azahar | 219d743a1e698101fe1ab8bef43e6563126c3c27 (2126.2) | cmake 3.30.3 (GLES 3.2/Vulkan, patched; ~35 submodules) | |
 | dolphin | libretro/dolphin | 32c61f9d0e933331bb7087ba57e96883241b4960 | cmake 3.30.3 (LTO, GLES, patched; 34 submodules; + system/dolphin-emu/Sys 14 MB; ~15 MB stripped) | 4:09 |
 | armsx2 (PS2) | ARMSX2/ARMSX2 | 6d9511e29e3e00d5ab78899f5292b967ab850ddb (nightly-20261114) | cmake 3.30.3 (thin LTO + upstream's profile; upstream's dependency script into build/armsx2-deps; GLES/Vulkan; page size read at runtime, so 4 KB and 16 KB kernels; games open through the libretro VFS, no ISO copy; + system/pcsx2/resources 11 MB; 33.5 MB stripped) | 5:12 |
+| cemu (Wii U) | WizzardSK/cemu-libretro | dbf18093970bd3091e201a0a893eacd0256f9c26 (libretro branch, upstream Cemu 2.6-411-gb487cb70) | cmake 3.30.3 (Vulkan only, patched: Stacked layout, no cursor, screens keep their last picture; ~95 vcpkg packages built for arm64-android into a binary cache under build/cemu-vcpkg-cache; needs pkg-config and autotools; 22 MB stripped) | 2:09 (packages from the binary cache) |
 
 What each patch does is written above its core in `Makefile`; the notes below add what the Makefile does not say.
 

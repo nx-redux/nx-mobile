@@ -29,6 +29,7 @@ import com.nxredux.mobile.skin.overlayMode
 import com.nxredux.mobile.layout.PadRoom
 import com.nxredux.mobile.options.FrontendSettings
 import com.nxredux.mobile.options.N3dsOptions
+import com.nxredux.mobile.options.WiiuOptions
 import com.nxredux.mobile.options.NdsScreen
 import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.NdsLayoutChoice
@@ -185,9 +186,17 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val hidden = stripHiddenNow()
         skinViews().forEach { it.stripHidden = hidden }
     }
-    /** The in-game menu sits in the skin: stacked screens draw as one glass in the frame ([PadSkinView.underMenu]). */
+    /**
+     * The in-game menu sits in the skin: stacked screens draw as one glass in the frame ([PadSkinView.underMenu]), and the
+     * game's bottom screen may go from under it ([com.nxredux.mobile.skin.menuShownScreens]), so the screens are laid out again.
+     */
     var skinUnderMenu: Boolean = false
-        set(value) { field = value; skinView?.underMenu = value }
+        set(value) {
+            if (field == value) return
+            field = value
+            skinView?.underMenu = value
+            if (skinShown) host.relayoutFrontend()
+        }
     /** The last [skinPlacement] / [barePlacement] worked out, and what it was worked out for. */
     private var skinCache: Pair<SkinKey, SkinPlacement?>? = null
     private var bareCache: Pair<SkinKey, BareLayout?>? = null
@@ -199,6 +208,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     private data class SkinKey(
         val w: Int, val h: Int, val dpi: Int, val tablet: Boolean, val tag: String, val aspect: Float?, val hinge: Float?,
         val variant: com.nxredux.mobile.skin.SkinVariant, val tweaks: String, val overlayTweaks: String, val micHidden: Boolean = false,
+        val stackAspect: Float = SkinChoice.WIIU_STACK_ASPECT,
     )
     // the pack without the mic button, made once a pack ([placeUntweaked])
     private var noMic: Pair<PadSkinPack, com.nxredux.mobile.skin.SkinPackManifest>? = null
@@ -391,10 +401,12 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val tag = host.layoutTag()
         val ds = NdsOptions.appliesTo(tag)
         val n3ds = N3dsOptions.appliesTo(tag)
-        // with a second display: one-screen games and a DS / 3DS split keep the skin (its screen the touch screen, [SkinDual])
-        if (names.isNotEmpty() || !SkinDual.skinAllowed(host.dualMode, ds, n3ds)) return null
-        val key = skinKey(tag, ds || n3ds) ?: return null
-        val placed = skinCache?.takeIf { it.first == key }?.second ?: placeSkin(pack, key, ds || n3ds, closest = false).also { skinCache = key to it }
+        val wiiu = WiiuOptions.appliesTo(tag)
+        // with a second display: one-screen games and a two-screen split keep the skin (its screen the touch screen, [SkinDual])
+        if (names.isNotEmpty() || !SkinDual.skinAllowed(host.dualMode, ds, n3ds, wiiu)) return null
+        val twoScreens = DualScreenConsole.appliesTo(tag)
+        val key = skinKey(tag, twoScreens) ?: return null
+        val placed = skinCache?.takeIf { it.first == key }?.second ?: placeSkin(pack, key, twoScreens, closest = false).also { skinCache = key to it }
         val moved = skinView != null && skinView?.placement != placed
         skinView?.placement = placed
         if (moved) host.onSkinPlaced()   // a new size: the panel follows its glass
@@ -412,7 +424,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val pack = skinPack ?: return null
         if (names.isNotEmpty()) return null
         val tag = host.layoutTag()
-        val ds = NdsOptions.appliesTo(tag) || N3dsOptions.appliesTo(tag)
+        val ds = DualScreenConsole.appliesTo(tag)
         val key = skinKey(tag, ds) ?: return null
         val made = bareCache?.takeIf { it.first == key }?.second ?: placeBare(pack, key, ds).also { bareCache = key to it }
         val placed = made?.placement
@@ -423,7 +435,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         return placed
     }
 
-    /** What the skin is placed for now: the window, the fold, a one-screen console's picture aspect ([ds]: none), its layout set, the tweaks. */
+    /** What the skin is placed for now: the window, the fold, a one-screen console's picture aspect ([ds]: two screens, none), its layout set, the tweaks. */
     private fun skinKey(tag: String, ds: Boolean): SkinKey? {
         val (w, h) = rootSize()
         if (w <= 0 || h <= 0) return null
@@ -432,18 +444,21 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val aspect = if (ds) null else frame?.aspect?.takeIf { it > 0f } ?: (4f / 3f)
         val variant = SkinChoice.variantFor(CoreRegistry.baseTag(tag), NdsOptions.appliesTo(tag), host.dcArcadeSet, host.padProfile().kind == com.nxredux.mobile.ui.nx.PadProfile.Kind.GC, host.wiiPad, host.padProfile().cStick, host.padProfile().segaThree)
         val settings = host.settings
-        return SkinKey(w, h, resources.displayMetrics.densityDpi, tablet, tag, aspect, hinge, variant, settings.skinTweaks, settings.overlayTweaks, micHidden = ds && !settings.micButtonShown)
+        // the Wii U's frame cut to what it shows: the player's layout on a regular phone sideways, else the TV over the GamePad
+        val stackAspect = WiiuOptions.skinLayout(host.frontendValues, host.isLandscape(resources.configuration.orientation), activity.windowShape().screenClass)
+            ?.takeIf { WiiuOptions.appliesTo(tag) }?.let { WiiuLayout.skinAspect(it) } ?: SkinChoice.WIIU_STACK_ASPECT
+        return SkinKey(w, h, resources.displayMetrics.densityDpi, tablet, tag, aspect, hinge, variant, settings.skinTweaks, settings.overlayTweaks, micHidden = ds && !settings.micButtonShown, stackAspect = stackAspect)
     }
 
-    /** [pack]'s layout for [key] before any tweak ([SkinChoice.place], or [SkinChoice.placeClosest] when [closest]; [ds]: a DS or 3DS). */
+    /** [pack]'s layout for [key] before any tweak ([SkinChoice.place], or [SkinChoice.placeClosest] when [closest]; [ds]: a DS, 3DS or Wii U). */
     private fun placeUntweaked(pack: PadSkinPack, key: SkinKey, ds: Boolean, closest: Boolean): SkinPlacement? {
         val variant = key.variant
         val picture = key.aspect?.let { (it * 240f) to 240f }
         val manifest = if (!key.micHidden) pack.manifest
             else noMic?.takeIf { it.first === pack }?.second ?: pack.manifest.withoutControl("MIC").also { noMic = pack to it }
         // no top inset: the skin and its screen run under the top camera cutout too (the frame keeps its own margin)
-        return if (closest) SkinChoice.placeClosest(manifest, key.w, key.h, key.dpi, key.tablet, ds, picture, key.hinge, foldable = DeviceTraits.canHalfFold, variant = variant)
-            else SkinChoice.place(manifest, key.w, key.h, key.dpi, key.tablet, ds, picture, key.hinge, foldable = DeviceTraits.canHalfFold, variant = variant)
+        return if (closest) SkinChoice.placeClosest(manifest, key.w, key.h, key.dpi, key.tablet, ds, picture, key.hinge, foldable = DeviceTraits.canHalfFold, variant = variant, stackAspect = key.stackAspect)
+            else SkinChoice.place(manifest, key.w, key.h, key.dpi, key.tablet, ds, picture, key.hinge, foldable = DeviceTraits.canHalfFold, variant = variant, stackAspect = key.stackAspect)
     }
 
     /** The smallest a control's touch area may be shrunk to here, window px. */
@@ -482,7 +497,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val bare = view === bareView
         val pack = skinPack ?: return null
         val tag = host.layoutTag()
-        val ds = NdsOptions.appliesTo(tag) || N3dsOptions.appliesTo(tag)
+        val ds = DualScreenConsole.appliesTo(tag)
         val console = CoreRegistry.consoleOf(tag)?.id ?: return null
         // the same window, picture aspect and layout set as the drawn one, with no tweaks (the editor adds the stored ones)
         val key = skinKey(tag, ds) ?: return null
@@ -519,7 +534,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val view = PadSkinView(activity, pack, input::onPad, ::onSkinAction, haptics = padVibration != com.nxredux.mobile.settings.PadVibration.OFF,
             onResized = { root.post(onResized) }, onStick = input::onStick,
             // the GameCube's C-stick, the Classic Controller's and the PlayStation's right stick: the right analog
-            onCStick = { x, y -> if (skinRightStickIsAnalog(input.gcPad, host.isWii, host.wiiPad, psSkin())) input.onRightStick(x, y) else input.onCStick(x, y) },
+            onCStick = { x, y -> if (skinRightStickIsAnalog(input.gcPad, host.isWii, host.wiiPad, psSkin(), WiiuOptions.appliesTo(host.layoutTag()))) input.onRightStick(x, y) else input.onCStick(x, y) },
             onGlass = { x, y, down -> glassTouch(game, x, y, down) }, bare = bare)
         view.useStick = PadStickModes[padStickKey, stickDefault()]   // the player's choice, shared by the skin and its bare buttons
         view.dimmed = motionDim()
@@ -605,8 +620,12 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         action.slot?.let { host.onPadShortcut(it, down); return }   // a strip slot: the player's action
         when (action) {
             SkinAction.MIC -> if (down) host.padMic()?.onTap?.invoke()
-            // the 3DS's swap (held as long as the cap); the DS's on press
-            SkinAction.SWAP -> if (N3dsOptions.appliesTo(host.layoutTag())) input.onN3dsSwap(down) else if (down) input.applyNdsAction(NdsAction.SwapScreens)
+            // the 3DS's swap (held as long as the cap); the DS's and Wii U's on press
+            SkinAction.SWAP -> when {
+                N3dsOptions.appliesTo(host.layoutTag()) -> input.onN3dsSwap(down)
+                WiiuOptions.appliesTo(host.layoutTag()) -> if (down) input.swapWiiuScreens()
+                down -> input.applyNdsAction(NdsAction.SwapScreens)
+            }
             // the stick or the d-pad on a tight Dreamcast layout: the player's choice flipped (nothing held may stick;
             // the new placement lets go of the skin's own touches)
             SkinAction.STICK_SWAP -> if (down) {
@@ -638,7 +657,7 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     private var lastLayoutNames: List<String>? = null
 
     /**
-     * A DS or 3DS game whose pad skin will show: a pack picked, no controller in the layout (a built-in one hides it
+     * A DS, 3DS or Wii U game whose pad skin will show: a pack picked, no controller in the layout (a built-in one hides it
      * too), the Dual screen mode allowing it and a layout set for the console. No window measure, so it holds for
      * either orientation (decided before the turn to landscape): the Bottom screen's Auto then means the phone
      * ([DualScreen.pictureOn]'s skin).
@@ -649,8 +668,9 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val tag = host.layoutTag()
         val ds = NdsOptions.appliesTo(tag)
         val n3ds = N3dsOptions.appliesTo(tag)
-        if (!ds && !n3ds) return false
-        return layoutControllerNames().isEmpty() && SkinDual.skinAllowed(mode, ds, n3ds)
+        val wiiu = WiiuOptions.appliesTo(tag)
+        if (!ds && !n3ds && !wiiu) return false
+        return layoutControllerNames().isEmpty() && SkinDual.skinAllowed(mode, ds, n3ds, wiiu)
     }
 
     /** Whether the pad skin is the layout now. */
@@ -686,14 +706,15 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     }
 
     /**
-     * A DS / 3DS touch screen's glass on a two-screen board ([SkinFamily.FLEX]: the unfolded Fold, a tablet, a Flip
-     * half-folded), its top screen in a glass above: the bottom screen of the skin's own dual screen. Null elsewhere.
+     * A DS / 3DS touch screen's (the Wii U GamePad's) glass on a two-screen board ([SkinFamily.FLEX]: the unfolded Fold, a
+     * tablet, a Flip half-folded), its top screen in a glass above: the bottom screen of the skin's own dual screen. Null
+     * elsewhere.
      */
     fun boardTouchGlass(): com.nxredux.mobile.skin.PlacedGlass? {
         if (!skinShown) return null
         val p = skinPlacement() ?: return null
         val tag = host.layoutTag()
-        if (!NdsOptions.appliesTo(tag) && !N3dsOptions.appliesTo(tag)) return null
+        if (!DualScreenConsole.appliesTo(tag)) return null
         if (p.spec.family != com.nxredux.mobile.skin.SkinFamily.FLEX || p.glass(GlassScreen.TOP) == null) return null
         return p.glass(GlassScreen.TOUCH)
     }
@@ -779,6 +800,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
                 setOf(NdsLayoutChoice.LARGE, NdsLayoutChoice.STACKED)
             N3dsOptions.appliesTo(tag) -> N3dsOptions.appLayoutFor(host.frontendValues, landscape = false, controllerMode = false, screen) in
                 setOf("large", "stacked")
+            WiiuOptions.appliesTo(tag) -> WiiuOptions.layoutShown(host.frontendValues, landscape = false, controllerMode = false) in
+                setOf(NdsLayoutChoice.LARGE, NdsLayoutChoice.STACKED)
             else -> false
         }
     }
@@ -908,8 +931,9 @@ internal fun bareLayout(untweaked: SkinPlacement, skin: Map<String, SkinTweak>, 
 
 /**
  * The skin's right stick goes to the game's right analog ([GameInputRouter.onRightStick]): the GameCube's C-stick
- * ([gcPad]), the Classic Controller's on a Wii ([wiiPad]) and the PlayStation's ([psSkin]); else it is the N64's C
- * buttons. A Wii pad not yet known shows the Classic layout, so its right stick is the Classic Controller's too.
+ * ([gcPad]), the Classic Controller's on a Wii ([wiiPad]), the PlayStation's ([psSkin]) and the Wii U GamePad's
+ * ([wiiu]); else it is the N64's C buttons. A Wii pad not yet known shows the Classic layout, so its right stick is the
+ * Classic Controller's too.
  */
-internal fun skinRightStickIsAnalog(gcPad: Boolean, isWii: Boolean, wiiPad: WiiPad?, psSkin: Boolean): Boolean =
-    gcPad || (isWii && (wiiPad ?: WiiPad.CLASSIC) == WiiPad.CLASSIC) || psSkin
+internal fun skinRightStickIsAnalog(gcPad: Boolean, isWii: Boolean, wiiPad: WiiPad?, psSkin: Boolean, wiiu: Boolean): Boolean =
+    gcPad || (isWii && (wiiPad ?: WiiPad.CLASSIC) == WiiPad.CLASSIC) || psSkin || wiiu

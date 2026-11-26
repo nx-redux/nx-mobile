@@ -4,6 +4,7 @@ import android.app.Activity
 import android.app.ActivityManager
 import android.app.AlertDialog
 import android.content.BroadcastReceiver
+import android.content.DialogInterface
 import android.content.Context
 import android.content.IntentFilter
 import android.content.Intent
@@ -18,12 +19,15 @@ import android.os.Handler
 import android.os.Looper
 import android.os.Process
 import android.os.SystemClock
+import android.text.InputFilter
 import android.view.Display
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewTreeObserver
 import android.view.WindowManager
+import android.view.inputmethod.EditorInfo
+import android.widget.EditText
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
@@ -81,6 +85,7 @@ import com.nxredux.mobile.gametime.GameTimeRecorder
 import com.nxredux.mobile.gametime.GameTimeService
 import com.nxredux.mobile.gametime.GameTimeStore
 import com.nxredux.mobile.launcher.bringHomeTaskToFront
+import com.nxredux.mobile.layout.DsKind
 import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.library.Names
 import com.nxredux.mobile.netplay.LocalWirelessText
@@ -100,8 +105,10 @@ import com.nxredux.mobile.options.FrontendOptions
 import com.nxredux.mobile.options.FrontendSettings
 import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.options.WiiOptions
+import com.nxredux.mobile.options.WiiuOptions
 import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.NdsScreen
+import com.nxredux.mobile.options.NdsView
 import com.nxredux.mobile.options.PadOptions
 import com.nxredux.mobile.options.ScreenScaling
 import com.nxredux.mobile.options.SpeedOptions
@@ -242,6 +249,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         const val EXTRA_NETPLAY_RTC = "netplay_rtc"                      // Long: the session clock, epoch seconds
         /** Kids Mode's "Games close in 10 minutes" toast stays this long. */
         private const val KIDS_WARNING_MS = 6000L
+        /** After the core text box's Cancel: the game's keyboard is still waiting. */
+        private const val CORE_TEXT_CANCELLED = "The game's keyboard is still open. Start on the pad answers with the account's name."
         /** The failure dialog's title unless a caller names another. */
         internal const val START_FAILED = "Could not start the game"
         /** [onCoreHung]: between the hung game's finish and the process kill. */
@@ -383,7 +392,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override var focusPaused = false
         private set
     private val saves = SaveSession(this, renderer, menu, dual)
-    private val wii = WiiDolphinController(this, input, saves)
+    /** The phone's motion sensors, which a Wii, 3DS or Wii U game's controller feeds from. */
+    private val motion = PhoneMotion(this)
+    private val wii = WiiDolphinController(this, input, saves, motion)
+    private val wiiuMotion = WiiuMotionController(this, motion)
     private val launchPipeline = LaunchPipeline(LaunchState())
     private val dsRoom = DsRoomWatcher(lifecycleScope, { DsPresence.of(LibretroNetplay.dsPresence()) }, ::onDsPresenceChanged,
         readOthers = { LibretroNetplay.dsOthers() }, onOthers = ::onDsOthersChanged)
@@ -456,6 +468,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /** The core can rewind ([com.nxredux.mobile.runner.CoreDescriptor.rewind]); false until the launch resolves the core. */
     override var canRewind = false
         private set
+    /** The core saves states ([com.nxredux.mobile.runner.CoreDescriptor.saveStates]); set when the launch resolves the core. */
+    override var canSaveStates = true
+        private set
     /**
      * Fast forward and rewind on the view; the shortcuts drive it ([onShortcut]), the speed rows configure it ([applyFrontend]).
      * Off for a netplay session ([SpeedController.setSession]): a link session's end turns it back on ([becomeLocal]), a
@@ -487,8 +502,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     // ---- DS / 3DS 3D resolution (Nds3dResolution, N3ds3dResolution): melonDS's GL scale, Azahar's factor follow the layout ----
     private val res3d = Res3dController(this, renderer)
-    override val ndsView: com.nxredux.mobile.options.NdsView?
-        get() = if (isNds || isN3ds) com.nxredux.mobile.options.NdsView(isLandscape(), renderer.ndsControllerMode()) else null
+    override val ndsView: NdsView?
+        get() = if (DualScreenConsole.appliesTo(gameTag)) NdsView(isLandscape(), renderer.ndsControllerMode()) else null
     override val nds3dDisplayMax: Int? get() = res3d.displayMax
     override val configWrites = Mutex()           // hotkey saves land in press order
     override val isNds: Boolean get() = NdsOptions.appliesTo(gameTag)
@@ -815,7 +830,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         // A quit writes the battery save once itself, off the main thread (quitWithAutoState), so nothing here then.
         if (!quitting) saves.writeBatterySaveOnPause()
         gameNetplay.run?.pause()   // netplay: backgrounded: no input goes out; the other side stalls, 30 s ends the session
-        wii.syncMotionSensors(foreground = false)
+        syncMotionSensors(foreground = false)
         // Closes the phone mic at once (the paused core stops reading it); the toggle stays as it is for onResume.
         retroView?.microphoneSource = MicSource.SILENCE.native
         super.onPause()
@@ -829,7 +844,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             if (!quitting) rumbles.forEach { it.resume() }
             gameNetplay.run?.resume()   // netplay: input flows again; with the menu open it stays paused until Continue
         }
-        wii.syncMotionSensors(foreground = true)
+        syncMotionSensors(foreground = true)
         shortcuts.onResume()
         dual.syncDual()   // Settings → Second screen may have changed meanwhile
         refreshKidsSettings()
@@ -914,7 +929,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun pauseForMenu() {
         dsRoom.check()   // the menu opened on the watcher's last poll: a presence changed since reaches the open menu now
         syncKeepScreenOn()
-        wii.syncMotionSensors()   // no motion while paused
+        syncMotionSensors()
         holdCore()   // the phone mic closes under the menu too
         syncDsMenuCap()
         lifecycleScope.launch(Dispatchers.IO) { saves.writeBatterySave(notify = true) }
@@ -927,8 +942,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         closeSkinEdit()
         syncKeepScreenOn()
         syncDsMenuCap()
-        if (focusPaused) { wii.syncMotionSensors(); shortcuts.pushMicSource(); return }   // another app has the focus: focusResume plays on later
-        wii.syncMotionSensors()
+        if (focusPaused) { syncMotionSensors(); shortcuts.pushMicSource(); return }   // another app has the focus: focusResume plays on later
+        syncMotionSensors()
         releaseCore()
     }
 
@@ -1076,7 +1091,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         renderer.cancelGeometryWatch()
         res3d.cancelTick()
         rumbles.forEach { it.release() }
-        wii.onDestroy()
+        motion.onDestroy()
         if (isFinishing || relaunching) endGameTime()   // Back/finish without Quit (quit already ended it), or the GLES relaunch
         // A normal exit or a recreation: this launch did not die on its driver. Abandoned first, so a launch still writing
         // its marker (Back while loading) writes none, or the clear below waits for that write and undoes it.
@@ -1142,9 +1157,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     }
 
     /**
-     * The core has been stuck in one frame past [CoreWatchdog.LIMIT_MILLIS]; on the watchdog's thread, since the main
-     * thread may be blocked on the core's lock. Nothing in this process can stop the core or take that lock, so the game
-     * goes with the process: finished first (a binder call, whatever the main thread is doing) so Android does not
+     * The core has been stuck in one frame past its limit ([CoreWatchdog.limitFor]); on the watchdog's thread, since the
+     * main thread may be blocked on the core's lock. Nothing in this process can stop the core or take that lock, so the
+     * game goes with the process: finished first (a binder call, whatever the main thread is doing) so Android does not
      * recreate it, then the game process ends; the menu (in its own process) comes back to the front and tells the user
      * ([CoreHangNotice]). The battery save was written when the menu last opened and with the last auto state; play time
      * keeps its last minute ([startGameTimeTicker]).
@@ -1198,10 +1213,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * and launch, which the new screen reports to the launcher). Recreated, not finished and started again: a start from
      * a finishing activity is forced into a new task (the game would leave the menu's task), and singleTop would hand a
      * live one the intent. The old screen's onDestroy (the core's native destroy, the session release) runs before the
-     * new onCreate; not finishing, it keeps the launch for it.
+     * new onCreate; not finishing, it keeps the launch for it. A Vulkan-only core has no OpenGL ES to start on, so its
+     * launch ends with a message and nothing is recorded.
      */
     private fun relaunchOnGles(record: Boolean = true, notice: String = VulkanFallback.NOTICE) {
         if (isFinishing || relaunching || failShown) return
+        if (CoreRegistry.forId(gameCoreId)?.vulkan?.vulkanOnly == true) return fail(GpuDriverChoice.VULKAN_ONLY_FAIL, START_FAILED)
         relaunching = true
         clearDriverMarker()
         // [record] false: a custom driver failed on a core whose system-driver failure is already recorded.
@@ -1269,22 +1286,13 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             if (driverMarker.abandon()) thread(name = "gpu-marker-clear") { driverMarker.clear() }
         }
         rumbles.forEach { it.release() }
-        // A controller's A only focuses the button (Android clicks on ENTER): A, B and BACK leave on release. A release
-        // needs its press here first, so a button held from the game as the dialog opens does not close it unseen.
-        var pressed = -1
+        // A controller's A only focuses the button (Android clicks on ENTER): A, B and BACK leave ([releaseKeyListener]).
         AlertDialog.Builder(this)
             .setTitle(title)
             .setMessage(message)
             .setCancelable(false)
             .setPositiveButton("Back") { _, _ -> finish() }
-            .setOnKeyListener { dialog, keyCode, event ->
-                val leaves = keyCode == KeyEvent.KEYCODE_BACK || PadKeymap.buttonFor(keyCode).let { it == NxButton.A || it == NxButton.B }
-                if (leaves) when (event.action) {
-                    KeyEvent.ACTION_DOWN -> if (event.repeatCount == 0) pressed = keyCode
-                    KeyEvent.ACTION_UP -> if (pressed == keyCode) { dialog.dismiss(); finish() }
-                }
-                leaves
-            }
+            .setOnKeyListener(releaseKeyListener(back = true) { dialog, _ -> dialog.dismiss(); finish() })
             .show()
             .also { dialog ->
                 // Android 16+ (targetSdk 36) sends Back to the dialog's callbacks, not its key listener: leave the same way.
@@ -1292,6 +1300,113 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     OnBackInvokedDispatcher.PRIORITY_OVERLAY,
                 ) { dialog.dismiss(); finish() }
             }
+    }
+
+    /**
+     * A dialog's controller keys: A or B (and BACK with [back]) act on release, given the button (null for BACK). A
+     * release needs its press here first, so a button held from the game as the dialog opens does not act unseen.
+     */
+    private fun releaseKeyListener(back: Boolean, onRelease: (DialogInterface, NxButton?) -> Unit): DialogInterface.OnKeyListener {
+        var pressed = -1
+        return DialogInterface.OnKeyListener { dialog, keyCode, event ->
+            val button = PadKeymap.buttonFor(keyCode).takeIf { it == NxButton.A || it == NxButton.B }
+            if (button == null && !(back && keyCode == KeyEvent.KEYCODE_BACK)) return@OnKeyListener false
+            when (event.action) {
+                KeyEvent.ACTION_DOWN -> if (event.repeatCount == 0) pressed = keyCode
+                KeyEvent.ACTION_UP -> if (pressed == keyCode) onRelease(dialog, button)
+            }
+            true
+        }
+    }
+
+    /** A one-button notice the launch waits on. A controller's A or B leaves ([releaseKeyListener]). */
+    suspend fun confirmNotice(message: String) {
+        if (isFinishing || isDestroyed) return
+        val answered = CompletableDeferred<Unit>()
+        val dialog = AlertDialog.Builder(this)
+            .setMessage(message)
+            .setCancelable(false)
+            .setPositiveButton("OK") { _, _ -> answered.complete(Unit) }
+            .setOnKeyListener(releaseKeyListener(back = true) { dialog, _ -> dialog.dismiss(); answered.complete(Unit) })
+            .setOnDismissListener { answered.complete(Unit) }
+            .show()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) dialog.onBackInvokedDispatcher.registerOnBackInvokedCallback(
+            OnBackInvokedDispatcher.PRIORITY_OVERLAY,
+        ) { dialog.dismiss() }
+        try { answered.await() } finally { if (dialog.isShowing) dialog.dismiss() }
+    }
+
+    /** The core's text entry open now (its box may be down, after Cancel); null: none. */
+    private var coreTextInput: GLRetroView.TextInput? = null
+    private var coreTextBox: AlertDialog? = null
+    /** The notice after the box's Cancel; -1: none up. */
+    private var coreTextNotice = -1L
+
+    /** The core's text entry opened or closed: its box comes up, or goes with it (answered elsewhere, as by Start). */
+    fun onCoreTextInput(t: GLRetroView.TextInput) {
+        coreTextInput = t.takeIf { it.open }
+        coreTextBox?.let { coreTextBox = null; it.dismiss() }
+        dropCoreTextNotice()
+        if (t.open) showCoreTextBox(t)
+    }
+
+    private fun dropCoreTextNotice() {
+        if (coreTextNotice >= 0) input.onNoticeDismiss(coreTextNotice)
+        coreTextNotice = -1L
+    }
+
+    /**
+     * The text box for the core's open entry: OK types the answer into the core ([CoreTextInput]: the account's name with
+     * nothing typed); Cancel leaves the game's keyboard open, its Start still answering, with a notice to bring the box
+     * back. A controller's A answers OK and B cancels ([releaseKeyListener]).
+     */
+    private fun showCoreTextBox(t: GLRetroView.TextInput) {
+        if (isFinishing || isDestroyed) return
+        val field = EditText(this).apply {
+            setSingleLine(true)
+            setText(t.text)
+            setSelection(text.length)
+            if (t.name.isNotEmpty()) hint = t.name
+            imeOptions = EditorInfo.IME_ACTION_DONE
+            if (t.maxLength > 0) filters = arrayOf(InputFilter.LengthFilter(t.maxLength))
+        }
+        val pad = (20 * resources.displayMetrics.density).toInt()
+        val frame = FrameLayout(this).apply { setPadding(pad, pad / 2, pad, 0); addView(field) }
+        var settled = false
+        lateinit var dialog: AlertDialog
+        val answer = { ok: Boolean ->
+            if (!settled) {
+                settled = true
+                if (coreTextBox === dialog) coreTextBox = null
+                dialog.dismiss()
+                if (ok) {
+                    val keys = CoreTextInput.keys(t.text, CoreTextInput.answer(field.text.toString(), t.name, t.maxLength))
+                    retroView?.sendKeyboardKeys(keys.map { it.keycode }.toIntArray(), keys.map { it.character }.toIntArray())
+                } else {
+                    // Up until the keyboard is answered (Start in the game), the box is back, or it is closed.
+                    coreTextNotice = input.showNotice(CORE_TEXT_CANCELLED, NotificationQueue.UNTIL_CLOSED, "Type") {
+                        coreTextNotice = -1L
+                        coreTextInput?.takeIf { coreTextBox == null }?.let(::showCoreTextBox)
+                    }
+                }
+            }
+        }
+        field.setOnEditorActionListener { _, action, _ -> (action == EditorInfo.IME_ACTION_DONE).also { if (it) answer(true) } }
+        dialog = AlertDialog.Builder(this)
+            .setTitle("Keyboard")
+            .setView(frame)
+            .setPositiveButton("OK") { _, _ -> answer(true) }
+            .setNegativeButton("Cancel") { _, _ -> answer(false) }
+            .setOnCancelListener { answer(false) }
+            .setOnKeyListener(releaseKeyListener(back = false) { _, button -> answer(button == NxButton.A) })
+            .create()
+        dialog.setCanceledOnTouchOutside(false)
+        dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
+        coreTextBox = dialog
+        // The box takes key focus mid-press (a game opens its keyboard on A's press): the release would not reach the core.
+        input.releaseAllGameInput()
+        dialog.show()
+        field.requestFocus()
     }
 
     /** Opens the game's content and companions, SAF documents or file refs. */
@@ -1390,11 +1505,19 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /** A running session that allows no option changes ([NetplaySession.locksOptions]); a 3DS link is not one. */
     private val netplayLocks: Boolean get() = netplayNow?.locksOptions == true
 
-    /** On a DS or 3DS game where SELECT + Left / Right changes the layout: the tip saying so, until hidden from its button ([LayoutTip]). */
+    /** On a DS, 3DS or Wii U game where SELECT + Left / Right changes the layout: the tip saying so, until hidden from its button ([LayoutTip]). */
     private fun offerLayoutTip() {
-        if (!LayoutTip.due((isN3ds || isNds) && !netplayLocks, padLayout.skinShown, input.skinLayouts, settings.layoutTipHidden)) return
+        val wiiu = WiiuOptions.appliesTo(gameTag)
+        val tipConsole = if (wiiu) DsKind.WIIU else if (isN3ds) DsKind.N3DS else DsKind.DS
+        if (!LayoutTip.due((isN3ds || isNds || wiiu) && !netplayLocks, padLayout.skinShown, input.skinLayouts, LayoutTip.hidden(tipConsole, settings.layoutTipHidden, settings.layoutTipHidden3ds, settings.layoutTipHiddenWiiu))) return
         // up until closed: Close, or its button to hide it for good
-        input.showNotice(LayoutTip.TEXT, com.nxredux.mobile.ui.nx.NotificationQueue.UNTIL_CLOSED, LayoutTip.ACTION) { settings.layoutTipHidden = true }
+        input.showNotice(LayoutTip.text(wiiu), NotificationQueue.UNTIL_CLOSED, LayoutTip.ACTION) {
+            when (tipConsole) {
+                DsKind.WIIU -> settings.layoutTipHiddenWiiu = true
+                DsKind.N3DS -> settings.layoutTipHidden3ds = true
+                DsKind.DS -> settings.layoutTipHidden = true
+            }
+        }
     }
     override val n3dsStackPinned: Boolean get() = !netplayLocks
 
@@ -1478,6 +1601,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             syncN3dsCore()   // a layout row changed in the menu, or the hotkey's
         }
         wii.apply(values)
+        wiiuMotion.apply(values)
         speed.configure(SpeedSettings.parse(values, canRewind), canRewind)   // applied once the view exists, and on every row change
         val s = FrontendSettings.parse(values)
         padLayout.padLandscapeAlpha.value = s.padLandscapeAlpha
@@ -1541,10 +1665,14 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     override fun padMotion(): PadMotion? = wii.padMotion()
 
+    /** The phone's sensors listen for the game's feed (Wii, 3DS or Wii U) only while it runs ([PhoneMotion.sync]). */
+    private fun syncMotionSensors(foreground: Boolean = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) =
+        motion.sync(wii.motionFeed() ?: wiiuMotion.motionFeed(), foreground)
+
     override fun padMic(): PadMic? = shortcuts.padMic()
 
     /**
-     * The keys the menu leaves out: the .cfg's locks, Motion Controls on a Wii game without both sensors, both Wii rows
+     * The keys the menu leaves out: the .cfg's locks, Motion Controls on a Wii or Wii U game without both sensors, both Wii rows
      * for a GameCube disc under the WII tag, and the Rewind rows unless the core can rewind ([canRewind]: an unknown core
      * can't, as the shortcuts have it).
      */
@@ -1555,6 +1683,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         return noRewind + skinned + when {
             wii.gameCube -> lockedOptions + WiiOptions.table.map { it.key }
             isWii && !wii.hasSensors -> lockedOptions + WiiOptions.MOTION
+            WiiuOptions.appliesTo(gameTag) -> lockedOptions + WiiuOptions.hiddenMotionRows(wiiuMotion.hasSensors)
             else -> lockedOptions
         }
     }
@@ -1724,7 +1853,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun becomeLocal(localCheats: (() -> Job)?) {
         speed.setSession(netplay = false)   // the shortcuts work again
         shortcuts.onSessionEnded()
-        saves.openLocal(dataRoot, paths) { slot -> withMenu { it.showSlot(slot - 1) } }
+        if (canSaveStates) saves.openLocal(dataRoot, paths) { slot -> withMenu { it.showSlot(slot - 1) } }
         localCheats?.let { load ->
             val job = load().also { cheatsLoad = it }
             lifecycleScope.launch {
@@ -1869,6 +1998,18 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
     }
 
+    private val coreToasts = CoreMessageToasts()
+
+    /**
+     * A core's on-screen message as the in-game toast, when [CoreMessageToasts] lets it through; the game's own news
+     * also on the picture when that is on the second display ([CoreMessages.alsoOnPicture]), where the player looks.
+     */
+    fun showCoreMessage(m: GLRetroView.CoreMessage) {
+        val t = coreToasts.show(notifications, gameCoreId, m.text, m.durationMs, m.status, SystemClock.elapsedRealtime(), menuOpen) ?: return
+        publishNotifications()
+        if (CoreMessages.alsoOnPicture(gameCoreId) && dual.pictureOnSecond()) dual.pictureToast(t.text)
+    }
+
     /** Publishes the queue and keeps a 250 ms expiry tick running while anything is shown. */
     override fun publishNotifications() {
         notificationState.value = notifications.toasts to notifications.pill
@@ -1961,6 +2102,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun screenClass(): ScreenClass = windowShape().screenClass
     // Half-folded (no second screen's mode, which places the screens itself) the screens follow the fold.
     override fun layoutSetByDual(): Boolean = !DualScreen.layoutCycles(dual.dualMode)
+    override fun padSkinWanted(): Boolean = padLayout.dsSkinWanted()
 
     // The second display's state, owned by [dual]: read by the input, layout and picture code.
     override val presentation: SecondScreenPresentation? get() = dual.presentation
@@ -2226,6 +2368,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         override val shortcuts get() = game.shortcuts
         override val saves get() = game.saves
         override val wii get() = game.wii
+        override val wiiuMotion get() = game.wiiuMotion
         override val res3d get() = game.res3d
         override val gameNetplay get() = game.gameNetplay
         override val speed get() = game.speed
@@ -2255,6 +2398,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         override var playerCount by game::playerCount
         override var rumbles by game::rumbles
         override var canRewind by game::canRewind
+        override var canSaveStates by game::canSaveStates
         override var padMap by game::padMap
         override var segaPad by game::segaPad
         override var segaHeader by game::segaHeader
@@ -2288,8 +2432,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
         override fun onViewCreated(view: GLRetroView) { game.retroView = view }
         override fun onGameReady() { game.gameReady = true }
-        override fun startCoreWatchdog(stalledMillis: () -> Long) {
-            game.coreWatchdog = CoreWatchdog(stalledMillis, onHung = { onCoreHung(it) }).also { it.start() }
+        override fun startCoreWatchdog(core: CoreDescriptor?, stalledMillis: () -> Long) {
+            val limit = { CoreWatchdog.limitFor(core, game.gameReady) }
+            game.coreWatchdog = CoreWatchdog(stalledMillis, limit, onHung = { onCoreHung(it) }).also { it.start() }
         }
         override fun startGameTime(rec: GameTimeRecorder) {
             game.gameTime = rec
@@ -2299,6 +2444,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
 
         override fun fail(message: String, title: String) = game.fail(message, title)
+        override suspend fun confirmNotice(message: String) = game.confirmNotice(message)
         override fun relaunchOnGles(record: Boolean, notice: String) = game.relaunchOnGles(record, notice)
         override fun relaunchOnSystemDriver() = game.relaunchOnSystemDriver()
         override fun clearDriverMarkerLater() = game.clearDriverMarkerLater()
@@ -2327,6 +2473,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         override fun prepareAchievements(tag: String, romFileName: String, content: ContentRef, inner: File?) =
             game.prepareAchievements(tag, romFileName, content, inner)
         override fun onAchievementEvent(e: RaEvent) = game.onAchievementEvent(e)
+        override fun showCoreMessage(m: GLRetroView.CoreMessage) = game.showCoreMessage(m)
+        override fun onCoreTextInput(t: GLRetroView.TextInput) = game.onCoreTextInput(t)
     }
 }
 

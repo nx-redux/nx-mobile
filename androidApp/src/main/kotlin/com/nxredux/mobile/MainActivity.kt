@@ -71,8 +71,7 @@ import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.netplay.AndroidNetplay
 import com.nxredux.mobile.netplay.NetplaySessionDir
 import com.nxredux.mobile.netplay.usb.UsbCables
-import com.nxredux.mobile.options.N3dsOptions
-import com.nxredux.mobile.options.NdsOptions
+import com.nxredux.mobile.runner.DualScreenConsole
 import com.nxredux.mobile.skinlayout.SkinLayoutActivity
 import com.nxredux.mobile.runner.AndroidEmulatorConfigStore
 import com.nxredux.mobile.runner.AndroidMicAccess
@@ -421,12 +420,12 @@ class MainActivity : ComponentActivity(), FolderPicker {
         // Launcher mode (this instance is the home task's): games get their own task; otherwise they share this one.
         val runner = LibretroRunner(this) { asHome }
         // GameActivity takes the display; nothing stays behind the game. An app on the top screen stays there for a
-        // one-screen game (watch while playing); a DS/3DS game needs both screens, so the menu takes it back for good.
+        // one-screen game (watch while playing); a DS/3DS/Wii U game needs both screens, so the menu takes it back for good.
         runner.beforeLaunch = { session ->
             launching = true
             TopScreenTaken.consume(this)
             val tag = session.systemTag
-            val leave = TopScreenHost.heldDisplay.takeIf { TopScreenHost.active && !NdsOptions.appliesTo(tag) && !N3dsOptions.appliesTo(tag) }
+            val leave = TopScreenHost.heldDisplay.takeIf { TopScreenHost.active && !DualScreenConsole.appliesTo(tag) }
             if (leave != null || !TopScreenHost.reclaim(this)) syncMenuScreen()
             leave
         }

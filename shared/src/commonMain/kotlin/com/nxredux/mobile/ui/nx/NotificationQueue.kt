@@ -5,7 +5,7 @@ data class NxToast(val id: Long, val text: String, val badgePath: String?, val u
 data class NxProgressPill(val title: String, val value: String, val badgePath: String?, val until: Long)
 
 /** The in-game notification model (nx-redux `notification.c`): up to [max] stacked toasts and one progress pill. Pure; the host ticks it. */
-class NotificationQueue(private val max: Int = 4) {
+class NotificationQueue(val max: Int = 4) {
     var toasts: List<NxToast> = emptyList(); private set
     var pill: NxProgressPill? = null; private set
     private var nextId = 1L

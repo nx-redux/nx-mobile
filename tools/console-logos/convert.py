@@ -43,6 +43,9 @@ def d_of(path):
     return ' '.join(out)
 
 
+NOT_FROM_THE_PACK = {'wiiu'}  # user-supplied: no pack credit line in the drawable
+
+
 def convert(k):
     svg = SVG.parse(os.path.join(HERE, 'src', f'{k}.svg'))
     vb = svg.viewbox
@@ -59,7 +62,7 @@ def convert(k):
         paths = [(' '.join(d for d, _ in paths), 'nonzero')]
     s = min(512 / vb.width, 128 / vb.height)
     x = ['<?xml version="1.0" encoding="utf-8"?>',
-         '<!-- Logo by Dan Patrick (Platform Logos, Professionally Redrawn). Never to be sold. -->',
+         *([] if k in NOT_FROM_THE_PACK else ['<!-- Logo by Dan Patrick (Platform Logos, Professionally Redrawn). Never to be sold. -->']),
          '<vector xmlns:android="http://schemas.android.com/apk/res/android"',
          f'    android:width="{round(vb.width * s)}dp"', f'    android:height="{round(vb.height * s)}dp"',
          f'    android:viewportWidth="{n(vb.width)}"', f'    android:viewportHeight="{n(vb.height)}">']

@@ -22,6 +22,8 @@ sealed interface N3dsAction {
     data class CycleLayout(val delta: Int) : N3dsAction
     /** SELECT + R: stylus mode turned on or off. */
     data class Stylus(val on: Boolean) : N3dsAction
+    /** The Wii U's SELECT + L: the other screen big (the 3DS's goes to the core as [N3dsKey.L3]). */
+    data object SwapScreens : N3dsAction
 }
 
 /** [forward]: pass the event on to the core as is. [action]: what the frontend does. */
@@ -43,10 +45,14 @@ data class N3dsDecision(val forward: Boolean, val action: N3dsAction? = null)
  * second at full tilt, so a held d-pad starts just past the core's [deadzone] and speeds up the longer it is held; the
  * stick goes as it is. A release always goes where its press went.
  *
+ * On the Wii U ([wiiu]) SELECT is the GamePad's minus, which games use as freely as the 3DS's Select, so the same hold-back
+ * carries its chords: SELECT + Left/Right cycles the app's layout and SELECT + L asks for [N3dsAction.SwapScreens]. R is
+ * no chord there (the GamePad has no stylus mode) and goes on to the game.
+ *
  * Pure: the host feeds events and ticks ([ticking]), sends [takeKeys] and [cursor] after each, and applies actions. Time
  * is only what [tick] is told.
  */
-class N3dsHotkeys {
+class N3dsHotkeys(private val wiiu: Boolean = false) {
     companion object {
         /** D-pad deflection past the deadzone the moment a direction is pressed. */
         const val CURSOR_START = 0.05f
@@ -125,10 +131,11 @@ class N3dsHotkeys {
         }
         // SELECT + START opens the in-game menu (the host's chord, not this): it too keeps SELECT from the core.
         if (button == NxButton.START && select == Select.PENDING) select = Select.CHORD
-        val chord = selectHeld && button in CHORD_BUTTONS
+        val chord = selectHeld && button in (if (wiiu) WIIU_CHORD_BUTTONS else CHORD_BUTTONS)
         if (chord && select == Select.PENDING) select = Select.CHORD   // the core never sees this SELECT
         var key: N3dsKey? = null
         val decision = when {
+            chord && button == NxButton.L1 && wiiu -> N3dsDecision(false, N3dsAction.SwapScreens)
             chord && button == NxButton.L1 -> { key = N3dsKey.L3; N3dsDecision(false) }
             chord && skinShown && !(skinLayouts && button.isHorizontal()) -> N3dsDecision(false)
             chord && button == NxButton.R1 -> N3dsDecision(false, toggleStylus())
@@ -251,6 +258,7 @@ class N3dsHotkeys {
 }
 
 private val CHORD_BUTTONS = setOf(NxButton.LEFT, NxButton.RIGHT, NxButton.L1, NxButton.R1)
+private val WIIU_CHORD_BUTTONS = setOf(NxButton.LEFT, NxButton.RIGHT, NxButton.L1)
 
 /** LEFT or RIGHT: the layout chord's buttons. */
 private fun NxButton.isHorizontal() = this == NxButton.LEFT || this == NxButton.RIGHT

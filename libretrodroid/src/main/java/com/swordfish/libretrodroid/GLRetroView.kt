@@ -382,7 +382,8 @@ class GLRetroView(
 
     // Buffered so tryEmit from the GL thread never suspends; the host collects promptly.
     private val achievementEvents = MutableSharedFlow<AchievementEvent>(extraBufferCapacity = 64)
-    private val coreMessages = MutableSharedFlow<String>(extraBufferCapacity = 16)
+    private val coreMessages = MutableSharedFlow<CoreMessage>(extraBufferCapacity = 16)
+    private val textInputs = MutableSharedFlow<TextInput>(extraBufferCapacity = 8)
     // Unlimited channel: a server call must never be dropped, or rc_client waits for its answer forever.
     private val achievementServerCalls = Channel<AchievementServerCall>(Channel.UNLIMITED)
 
@@ -864,8 +865,26 @@ class GLRetroView(
      */
     fun getAchievementEvents(): Flow<AchievementEvent> = achievementEvents
 
-    /** The core's on-screen messages (SET_MESSAGE), as it sends them; the app picks which to show. */
-    fun getCoreMessages(): Flow<String> = coreMessages
+    /**
+     * A core's on-screen message (SET_MESSAGE / _EXT): its [text], the [durationMs] it asks for (0: none given) and
+     * whether it is a [status] or progress line (one that replaces the core's previous one).
+     */
+    data class CoreMessage(val text: String, val durationMs: Int, val status: Boolean)
+
+    /** The core's on-screen messages, as it sends them (log-only ones left out); the app picks which to show. */
+    fun getCoreMessages(): Flow<CoreMessage> = coreMessages
+
+    /**
+     * A core's text entry (a patched core's NX_ENVIRONMENT_SET_TEXT_INPUT: the Wii U software keyboard) [open]ed with
+     * the [text] it holds, the [name] it takes when nothing is typed and its [maxLength] (0: not known), or closed.
+     */
+    data class TextInput(val open: Boolean, val text: String, val name: String, val maxLength: Int)
+
+    /** The core's text entry opening and closing; the app answers an open one with [sendKeyboardKeys]. */
+    fun getTextInputs(): Flow<TextInput> = textInputs
+
+    /** Types [keycodes] (RETROK_ codes) with their [characters] through the core's keyboard callback, one a frame. */
+    fun sendKeyboardKeys(keycodes: IntArray, characters: IntArray) = LibretroDroid.sendKeyboardKeys(keycodes, characters)
 
     /**
      * HTTP requests rc_client wants sent. Buffered until collected (single consumer); every call must be answered
@@ -1156,8 +1175,13 @@ class GLRetroView(
     }
 
     /** Called from the jni side (emulation thread) after each step. */
-    private fun sendCoreMessage(msg: String) {
-        coreMessages.tryEmit(msg)   // a full buffer drops it: messages are only shown, never needed
+    private fun sendTextInput(open: Boolean, text: String, name: String, maxLength: Int) {
+        textInputs.tryEmit(TextInput(open, text, name, maxLength))
+    }
+
+    /** Called from the jni side (emulation thread) after each step. */
+    private fun sendCoreMessage(msg: String, durationMs: Int, status: Boolean) {
+        coreMessages.tryEmit(CoreMessage(msg, durationMs, status))   // a full buffer drops it: messages are only shown, never needed
     }
 
     /** Called from the jni side (emulation thread) after each step. */

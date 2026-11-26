@@ -15,6 +15,7 @@ class RaConsolesTest {
         )
         // Dreamcast is identified by its disc extensions only (dreamcast_discs_are_console_40).
         for ((tag, id) in expected) assertEquals(id, RaConsoles.consoleId(tag, if (tag == "DC") "game.chd" else "game.bin"), tag)
+        assertNull(RaConsoles.consoleId("WIIU", "game.wua"))   // rcheevos has no Wii U hasher
         assertNull(RaConsoles.consoleId("P8", "x.p8"))
         assertNull(RaConsoles.consoleId("PRBOOM", "x.wad"))
         assertNull(RaConsoles.consoleId("nope", "x.bin"))

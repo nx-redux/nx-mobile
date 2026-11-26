@@ -20,6 +20,9 @@ import android.widget.FrameLayout
 import com.nxredux.mobile.options.PxRect
 import com.nxredux.mobile.shortcuts.TouchSlot
 import com.nxredux.mobile.skin.PlacedControl
+import com.nxredux.mobile.skin.STRIP_SWAP
+import com.nxredux.mobile.skin.SkinVariant
+import com.nxredux.mobile.skin.arrangeStrip
 import com.nxredux.mobile.skin.stripPill
 import com.nxredux.mobile.skin.stackedMenuRoom
 import com.nxredux.mobile.skin.underMenu
@@ -246,7 +249,7 @@ internal class PadSkinView(
         val p = placement?.forStick(useStick)
         val ids = p?.spec?.let { sp -> (listOfNotNull(sp.frame?.strip) + sp.pieces.mapNotNull { it.strip }).flatMap { st -> st.labels.map { it.id } } }?.toSet().orEmpty()
         val gone = if (stripHidden) ids else ids.filter { id -> slotOf(id)?.let { it !in shortcuts } ?: false }.toSet()
-        val drawn = if (p == null || gone.isEmpty()) p
+        val drawn = if (p == null || (gone.isEmpty() && stripCentre(p) == null)) p
             else p.copy(pieces = if (stripHidden) p.pieces.filterNot { it.strip } else p.pieces, controls = spread(p.controls.filterNot { it.spec.id in gone }, p, ids))
         // the menu's room from the whole placement (its strip controls mark the room's foot)
         shown = if (underMenu && drawn != null) p?.stackedMenuRoom()?.let { drawn.underMenu(it) } ?: drawn else drawn
@@ -295,18 +298,17 @@ internal class PadSkinView(
     }
     /**
      * The strip's filled slots spread over the strip's whole width, an even share each (two: centred in its halves),
-     * in slot order; the strip's other buttons as placed.
+     * in slot order, around the Wii U's SWAP in the middle ([arrangeStrip]); the strip's other buttons as placed.
      */
     private fun spread(controls: List<PlacedControl>, p: SkinPlacement, ids: Set<String>): List<PlacedControl> {
         val all = p.controls.filter { it.spec.id in ids && slotOf(it.spec.id) != null }
         val kept = controls.filter { it in all }
-        if (all.isEmpty() || kept.isEmpty() || kept.size == all.size) return controls
-        val share = all.first().spec.hw * 2f
-        val left = all.minOf { it.x } - share / 2f
-        val newShare = share * all.size / kept.size
-        val moved = kept.mapIndexed { i, c -> c to c.copy(spec = c.spec.copy(hw = newShare / 2f), x = left + newShare * (i + 0.5f)) }.toMap()
-        return controls.map { moved[it] ?: it }
+        val centre = stripCentre(p)
+        if (all.isEmpty() || (centre == null && (kept.isEmpty() || kept.size == all.size))) return controls
+        return controls.filterNot { it in all } + arrangeStrip(all, kept, centre)
     }
+    /** The strip's fixed middle button: the Wii U's SWAP while the strip shows; none on other consoles. */
+    private fun stripCentre(p: SkinPlacement): String? = STRIP_SWAP.takeIf { p.spec.variant == SkinVariant.WIIU && !stripHidden }
     private fun slotOf(id: String): TouchSlot? = SkinAction.entries.firstOrNull { it.name == id }?.slot
     private val shade = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.argb((SKIN_PRESS_SHADE * 255).roundToInt(), 0, 0, 0) }
 
@@ -372,21 +374,24 @@ internal class PadSkinView(
             canvas.drawText(text, c.x + dx, c.y + c.spec.labelDy + c.spec.labelH / 2f, label)   // the baseline: cap height centred
         }
         // the strip's touch slots: the action's short name, in the label grey (a running toggle in white); on the overlay
-        // (no frame under them) each on a see-through pill, as the corner shortcut buttons, lit while on
+        // (no frame under them) each on a see-through pill, as the corner shortcut buttons, lit while on. The Wii U's
+        // SWAP in its middle reads SWAP, never lit
+        val centre = stripCentre(p)
         for (c in p.controls) {
-            val sc = slotOf(c.spec.id)?.let(shortcuts::get) ?: continue
+            val sc = slotOf(c.spec.id)?.let(shortcuts::get)
+            val text = sc?.let { touchShortcutLabel(it.action).uppercase() } ?: STRIP_SWAP.takeIf { c.spec.id == centre } ?: continue
+            val on = sc?.on == true
             val cap = STRIP_CAP * p.k
-            val text = touchShortcutLabel(sc.action).uppercase()
             slotLabel.textSize = cap / SKIN_LABEL_CAP
             val wy = c.y + c.spec.labelDy   // the words' middle (a thin band's slot reaches below them, StripSpec.wordUp)
             if (bare) {
                 val r = stripPill(c.x, wy, c.spec.hw, c.spec.hh, slotLabel.measureText(text), p.k)
                 val round = r.height / 2f
-                pillFill.color = if (sc.on) STRIP_PILL_ON_FILL else STRIP_PILL_OFF_FILL
+                pillFill.color = if (on) STRIP_PILL_ON_FILL else STRIP_PILL_OFF_FILL
                 canvas.drawRoundRect(r, round, pillFill)
                 canvas.drawRoundRect(r, round, pillRing)
-                slotLabel.color = if (sc.on) STRIP_PILL_ON_INK else STRIP_PILL_OFF_INK
-            } else slotLabel.color = if (sc.on) android.graphics.Color.WHITE else SKIN_LABEL_GREY
+                slotLabel.color = if (on) STRIP_PILL_ON_INK else STRIP_PILL_OFF_INK
+            } else slotLabel.color = if (on) android.graphics.Color.WHITE else SKIN_LABEL_GREY
             canvas.drawText(text, c.x, wy + cap / 2f, slotLabel)
         }
         canvas.restore()

@@ -45,7 +45,10 @@ object EmulatorSettings {
             forced = descriptor.lockedOptions, hidden = descriptor.hiddenValues,
         )
         val software = resolved.values[NdsRenderer.RENDER_MODE] == NdsRenderer.SOFTWARE
-        val consoleRows = ConsoleSettings.tableFor(tag, screen, displayMax, biosFiles, gpuDrivers, autoVulkan, mali).filter { it.key !in resolved.locked && (descriptor.rewind || it.key !in SpeedOptions.REWIND_KEYS) && (secondScreen || it.key != BottomScreenOptions.KEY) }
+        // (the Wii U's landscape row: the skin's default where the device's window lets the skin take it, Pad skin's
+        // On being the default; the game reads only a stored pick, so the label alone follows)
+        val wiiuSkin = screen != null && WiiuOptions.skinTakesLandscape(WiiuOptions.lockedLayoutRows(true, screen))
+        val consoleRows = ConsoleSettings.tableFor(tag, screen, displayMax, biosFiles, gpuDrivers, autoVulkan, mali, wiiuSkinLandscape = wiiuSkin).filter { it.key !in resolved.locked && (descriptor.rewind || it.key !in SpeedOptions.REWIND_KEYS) && (secondScreen || it.key != BottomScreenOptions.KEY) }
             .shownFor(resolved.values)
             .map {
                 // The DS and 3DS layout rows read their old keys too, as the game does (no pick: the row default).
