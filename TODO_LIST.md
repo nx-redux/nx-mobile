@@ -310,5 +310,6 @@ N64 hi-res packs (#45):
 - [x] Frame rate at the default cap on the Nova (full speed).
 - [x] AYANEO (2 GB): both games full speed at Auto, 1x and 2x, 400+ MB free; its 1280×960 screen caps 4x at 2x.
 - [ ] A slang shader (CRT) at 2x looks right.
-- [ ] Saturn skin: L and R sit on the trigger slots; C and Z are reachable on a physical pad.
+- [x] Saturn skin: the on-screen layout (L and R on the trigger slots) checked on the Fold.
+- [ ] Saturn on a physical pad: C and Z are reachable.
 - [ ] Device Sync carries a Saturn `.bkr` to another phone.
