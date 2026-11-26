@@ -528,6 +528,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
         val linkOptions: Map<String, String>,
         val frontend: FrontendSettings,
     ) {
+        /** The DS menu with no game ([DsMenu]): no file to open, hash or keep states for. */
+        val dsMenu: Boolean get() = DsMenu.isMenu(content.value)
         fun option(key: String): String? = options.firstOrNull { it.key == key }?.value
     }
 
@@ -705,7 +707,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             val sessionPad = np?.segaPad?.takeIf { PadMap.isSegaPadTag(tag) }
             if (np != null && PadMap.isSegaPadTag(tag)) frontendValues = frontendValues + (PadOptions.SEGA_PAD to (sessionPad ?: SegaPadType.AUTO))
             canRewind = descriptor?.rewind == true
-            canSaveStates = descriptor?.saveStates != false
+            // The DS menu has none either: a state would hold the game it downloaded, which a relaunch cannot fetch again.
+            canSaveStates = descriptor?.saveStates != false && !DsMenu.isMenu(content.value)
             speed.setSession(netplay = np != null)   // first: the touch buttons [ShortcutsMicController.launch] builds follow the session
             shortcuts.launch(microphone = descriptor?.microphone == true, netplay = np != null, tag, Shortcuts.fromConfig(resolved.values), saveStates = canSaveStates)
             val netplayPad = if (np != null) NetplayPads.forSession(tag, descriptor?.id, sessionPad) else null
@@ -842,7 +845,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // The files this launch needs, looked up by name when a Bios folder will not list.
             val requiredBios = CoreRegistry.requiredBios(cfg.tag, cfg::option)
             val biosNames = requiredBios.flatMap { it.anyOf } +
-                (systemSets + listOfNotNull(naomiBios)).flatMap { listOf("$it.zip", "$it.7z") }
+                (systemSets + listOfNotNull(naomiBios)).flatMap { listOf("$it.zip", "$it.7z") } +
+                (if (cfg.dsMenu) DsMenu.FILES else emptyList())   // the DS menu's dumps, by name when Bios/NDS will not list
             // Usually a stamp check: MainActivity pre-warms the copy after an update; if it is still running, this waits on its lock.
             val systemDir = withContext(Dispatchers.IO) { SystemFiles.ensure(host.activity) }
             // Bios/<TAG>/ lands in the core's BIOS folder: the system dir, or a subfolder of it (flycast's <system>/dc/).
@@ -887,7 +891,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             }
             // minarch names saves after the unpacked file when Use extracted file name is on (ma_game.c): known only now.
             paths = paths.withInner(inner?.let { unpackedEntry })
-            // netplay, or a core without save states: no save states, no auto-resume
+            // netplay, or a launch without save states: no save states, no auto-resume
             saves.open(if (cfg.np == null && canSaveStates) SaveStates(dataRoot, paths) else null)
             if (!settings.saveOnQuit) saves.unlinkAuto()
             saves.refreshSlots()   // warm for the first menu open
@@ -978,6 +982,11 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             val biosPlan = BiosCheck.plan(cfg.tag, needs, biosExtension, biosPresent, netplay = cfg.np != null)
             if (biosPlan is BiosPlan.Refuse) return refuse(biosPlan.message)
             if (biosPlan is BiosPlan.Hle) NxLog.i(TAG_LOG, "BIOS missing: HLE")
+            if (cfg.dsMenu) {
+                // melonDS DS reads its dumps from the system dir or its own subfolder there.
+                val coreDir = withContext(Dispatchers.IO) { File(biosDir, DsMenu.CORE_SUBDIR).list()?.toSet() ?: emptySet() }
+                DsMenu.missing(biosPresent + coreDir).takeIf { it.isNotEmpty() }?.let { return refuse(DsMenu.missingMessage(it)) }
+            }
             discRegion?.let { region ->
                 val core = cfg.descriptor?.id.orEmpty()
                 SegaCdBios.missing(core, region, biosPresent)?.let { file ->
@@ -1007,7 +1016,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 withContext(Dispatchers.IO) { ggpoSystemDir(cfg.sessionDir, biosDir, cfg.np.dcHle) }
             } else systemDir
             // netplay: a link session's game is the player's own, so it gets achievements as a normal launch; lockstep has none.
-            if (cfg.np == null || cfg.np.allowsAchievements) prepareAchievements(cfg.tag, cfg.romFileName, cfg.content, inner)
+            if (!cfg.dsMenu && (cfg.np == null || cfg.np.allowsAchievements)) prepareAchievements(cfg.tag, cfg.romFileName, cfg.content, inner)
             return PreparedContent(inner, launchSystemDir, savesDir, sram, rtc, segaSetting, biosPresent, archiveAsIs, naomiSets, naomiBios,
                 (biosPlan as? BiosPlan.Hle)?.options.orEmpty(), BiosCheck.noticeDue(biosPlan, cfg.tag, settings.hleBiosNoticeShown))
         }
@@ -1132,7 +1141,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                             NxLog.i(TAG_LOG, "N64 hi-res VRAM limit: $limit MB (device ${total / (1024 * 1024)} MB)")
                             mapOf(N64HiresPack.VRAM_KEY to limit)
                         } else emptyMap()
-                        val forced = cfg.netplayPad?.options.orEmpty() + cfg.linkOptions + wii.screenOption() + nds3dLaunch + res3dAlso + ps2BiosOption + n64Vram + prepared.hleOptions + graphics.forcedOptions
+                        val forced = cfg.netplayPad?.options.orEmpty() + cfg.linkOptions + wii.screenOption() + nds3dLaunch + res3dAlso + ps2BiosOption + n64Vram + prepared.hleOptions + graphics.forcedOptions +
+                            (if (cfg.dsMenu) DsMenu.FORCED_OPTIONS else emptyMap())
                         variables = withForced(cfg.options, forced).toTypedArray()
                         rumbleEventsEnabled = gameRumble != GameRumble.OFF   // Game rumble Off: the runner does not even read the core's state
                         // DS / 3DS: the frontend feeds the core's mic ([ShortcutsMicController.applyMic] picks silence, the phone mic or noise).
@@ -1169,7 +1179,9 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                         if (BuildConfig.DEBUG && launchSega != null) NxTestResults.write(host.activity, "pad",
                             "session" to cfg.np?.segaPad, "setting" to launchSega, "drawn" to launchSegaPad?.name,
                             "port0" to controllerPorts[0], "port1" to controllerPorts[1])
-                        if (prepared.inner != null) {
+                        if (cfg.dsMenu) {
+                            loadWithoutContent = true
+                        } else if (prepared.inner != null) {
                             gameFilePath = prepared.inner.absolutePath
                         } else if (cfg.realPath) {
                             // A file ref (All files access) is opened in place when it and its companions are readable there;

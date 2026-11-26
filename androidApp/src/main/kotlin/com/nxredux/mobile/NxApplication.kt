@@ -47,6 +47,12 @@ class NxApplication : Application() {
         // installer already took or the user cancelled), then starts moving older private data into the home folder.
         // Not in the game process: the menu process owns this, and a second run would race it.
         val game = AppProcess.isGame()
+        // Only the menu lists the row. The stamp check is quick, so the first list already has its art; the copy (once per
+        // install or update) runs off the main thread, and lists built after it have the art.
+        if (!game) {
+            com.nxredux.mobile.runner.DsMenu.artDir = DsMenuArt.current(this)
+                ?: null.also { Thread({ com.nxredux.mobile.runner.DsMenu.artDir = DsMenuArt.copy(this) }, "ds-menu-art").start() }
+        }
         if (!game) {
             Thread({
                 File(cacheDir, "update").deleteRecursively()

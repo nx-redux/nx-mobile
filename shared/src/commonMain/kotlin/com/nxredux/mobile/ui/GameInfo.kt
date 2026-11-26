@@ -114,7 +114,12 @@ internal fun gameInfoLabel(achievements: Boolean): String = if (achievements) "A
  * A console row's info line: its games over every tag it merges (SFC and SUPA are one row). The systems are the
  * playable ones with hidden games already dropped, so this is what opening the console lists.
  */
-internal fun consoleInfoLines(row: MainRow.System): List<InfoLine> = listOf(InfoLine(InfoKind.COUNT, gamesLabel(row.systems.sumOf { it.gameCount })))
+internal fun consoleInfoLines(row: MainRow.System): List<InfoLine> {
+    val games = row.systems.sumOf { it.gameCount }
+    // The DS console the dumps bring into a library without DS games: its one row is DS Download Play, not "0 games".
+    val label = if (games == 0 && row.systems.any { it.tag == "NDS" }) com.nxredux.mobile.runner.DsMenu.TITLE else gamesLabel(games)
+    return listOf(InfoLine(InfoKind.COUNT, label))
+}
 
 /** A collection row's info line: the games its list shows ("1 game", "N games"); none when its file would not read. */
 internal fun collectionInfoLines(row: MainRow.Collection): List<InfoLine> = row.count?.let { listOf(InfoLine(InfoKind.COUNT, gamesLabel(it))) }.orEmpty()

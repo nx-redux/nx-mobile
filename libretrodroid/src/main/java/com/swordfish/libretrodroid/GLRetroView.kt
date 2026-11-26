@@ -1071,6 +1071,7 @@ class GLRetroView(
             data.gameFilePath != null -> loadGameFromPath(data.gameFilePath!!)
             data.gameFileBytes != null -> loadGameFromBytes(data.gameFileBytes!!)
             data.gameVirtualFiles.isNotEmpty() -> loadGameFromVirtualFiles(data.gameVirtualFiles)
+            data.loadWithoutContent -> LibretroDroid.loadNoContent()
         }
         // After load, before the first retro_run: cores such as flycast only plug a pad in at that point.
         data.controllerPorts.forEach { (port, type) -> LibretroDroid.setControllerType(port, type) }

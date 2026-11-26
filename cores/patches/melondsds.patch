@@ -4,7 +4,10 @@ melonDS DS on GLES 3.2: lets the GL renderer build against GLES3 (with patches/m
 dependency), requests a GLES 3.2 context, ports the compositor shaders to GLSL ES 3.00, and turns face culling off
 around the screen blit. Also carries JesseTG/melonds-ds#335 (video views: the frontend lays the screens out). Applied to cores/src/melondsds.
 
-Local wireless: tells the frontend when the emulated radio is on, off or hosting (nx_nds_radio.h), writes the firmware dump back with its own MAC and nickname, and waits for multiplayer replies by wall clock, counting blank replies by sender like standalone melonDS.
+Local wireless: tells the frontend when the emulated radio is on, off or hosting (nx_nds_radio.h), writes the firmware dump back with its own MAC and nickname, and waits for multiplayer replies by wall clock (up to 150 ms, so a Wi-Fi stall doesn't drop a console), counting blank replies by sender like standalone melonDS.
+
+Firmware Wi-fi settings: wfcsettings.bin (written only for melonDS's generated firmware) is loaded only into the
+generated firmware, not over a native dump's own access points, which left DS Download Play and PictoChat hanging.
 diff --git a/CHANGELOG.md b/CHANGELOG.md
 index 49d182d..9868bba 100644
 --- a/CHANGELOG.md
@@ -120,6 +123,26 @@ index 20c526d..f8d4416 100644
          unsigned _numberOfScreenLayouts = 1;
          std::array<ScreenLayout, config::screen::MAX_SCREEN_LAYOUTS> _screenLayouts;
          unsigned _screenGap = 0;
+diff --git a/src/libretro/config/console.cpp b/src/libretro/config/console.cpp
+index 73b7e24..9fc3236 100644
+--- a/src/libretro/config/console.cpp
++++ b/src/libretro/config/console.cpp
+@@ -1196,7 +1196,14 @@ static void MelonDsDs::CustomizeFirmware(const CoreConfig& config, Firmware& fir
+     // If using generated firmware, we keep the wi-fi settings on the host disk separately.
+     // Wi-fi access point data includes Nintendo WFC settings,
+     // and if we didn't keep them then the player would have to reset them in each session.
+-    if (retro::rfile_ptr file = retro::make_rfile(*wfcsettingspath, RETRO_VFS_FILE_ACCESS_READ)) {
++    // Only for generated firmware, as FlushFirmware writes the file: a native dump keeps its own settings, at offsets of
++    // its own, and copying the generated layout over them breaks the access point checksums, so the firmware's
++    // wireless apps (DS Download Play, PictoChat) hang while starting.
++    const bool generated = header.Identifier == melonDS::GENERATED_FIRMWARE_IDENTIFIER;
++    if (!generated) {
++        retro::debug("Native firmware keeps its own Wi-fi settings; not loading {}\n", *wfcsettingspath);
++    }
++    else if (retro::rfile_ptr file = retro::make_rfile(*wfcsettingspath, RETRO_VFS_FILE_ACCESS_READ)) {
+         // If we have Wi-fi settings to load...
+         constexpr unsigned TOTAL_WFC_SETTINGS_SIZE =
+             3 * (sizeof(Firmware::WifiAccessPoint) + sizeof(Firmware::ExtendedWifiAccessPoint));
 diff --git a/src/libretro/config/constants.hpp b/src/libretro/config/constants.hpp
 index e51359f..7b96732 100644
 --- a/src/libretro/config/constants.hpp
@@ -861,7 +884,7 @@ index 0000000..cfaa783
 +
 +#endif //MELONDS_DS_LIBRETRO_VIEWS_H
 diff --git a/src/libretro/net/mp.cpp b/src/libretro/net/mp.cpp
-index caa185d..2f4cda8 100644
+index caa185d..264c503 100644
 --- a/src/libretro/net/mp.cpp
 +++ b/src/libretro/net/mp.cpp
 @@ -15,7 +15,8 @@
@@ -874,10 +897,14 @@ index caa185d..2f4cda8 100644
  #include <libretro.h>
  #include <retro_assert.h>
  #include <retro_endianness.h>
-@@ -25,6 +26,16 @@ using namespace MelonDsDs;
+@@ -24,7 +25,19 @@ using namespace MelonDsDs;
+ // How many successive timeouts before
  // the player gets notified they are not supposed to use a VPN.
  constexpr int SUCCESSIVE_TIMEOUTS_WARNING = 6;
- constexpr long RECV_TIMEOUT_MS = 25;
+-constexpr long RECV_TIMEOUT_MS = 25;
++// Long enough to ride out a Wi-Fi stall: a reply that comes later than this counts as lost, and a game that loses a
++// few in a row drops the other console ("transmission error"). A reply in time ends the wait at once.
++constexpr long RECV_TIMEOUT_MS = 150;
 +// A console silent this long has left; the host stops waiting for its replies.
 +constexpr long PEER_FORGET_MS = 2000;
 +// A host silent this long has left. No shorter than the frontend's own limit for a silent member, so a host that
@@ -891,7 +918,7 @@ index caa185d..2f4cda8 100644
  
  uint64_t swapToNetwork(uint64_t n) {
      return swap_if_little64(n);
-@@ -95,6 +106,11 @@ bool MpState::IsReady() const noexcept {
+@@ -95,6 +108,11 @@ bool MpState::IsReady() const noexcept {
  void MpState::SetSendFn(retro_netpacket_send_t sendFn) noexcept {
      if (sendFn != nullptr) {
          retro::set_warn_message("LAN Multiplayer will NOT work using VPNs or tunnels such as Hamachi!");
@@ -903,7 +930,7 @@ index caa185d..2f4cda8 100644
      }
      _sendFn = sendFn;
  }
-@@ -106,9 +122,36 @@ void MpState::SetPollFn(retro_netpacket_poll_receive_t pollFn) noexcept {
+@@ -106,9 +124,36 @@ void MpState::SetPollFn(retro_netpacket_poll_receive_t pollFn) noexcept {
  void MpState::PacketReceived(const void *buf, size_t len, uint16_t client_id) noexcept {
      retro_assert(IsReady());
      Packet p = Packet::parsePk(buf, len);
@@ -940,12 +967,12 @@ index caa185d..2f4cda8 100644
      }
      receivedPackets.push(std::move(p));
  }
-@@ -132,9 +175,15 @@ std::optional<Packet> MpState::NextPacket() noexcept {
+@@ -132,9 +177,15 @@ std::optional<Packet> MpState::NextPacket() noexcept {
  std::optional<Packet> MpState::NextPacketBlock() noexcept {
      retro_assert(IsReady());
      if (receivedPackets.empty()) {
 -        for(std::clock_t start = std::clock(); std::clock() < (start + (RECV_TIMEOUT_MS * CLOCKS_PER_SEC / 1000));) {
-+        // Wall clock: std::clock counts CPU time, which stretches the wait to many times 25 ms while this thread sleeps in poll.
++        // Wall clock: std::clock counts CPU time, which stretches the wait many times over while this thread sleeps in poll.
 +        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(RECV_TIMEOUT_MS);
 +        while (std::chrono::steady_clock::now() < deadline) {
              _sendFn(RETRO_NETPACKET_FLUSH_HINT, NULL, 0, RETRO_NETPACKET_BROADCAST);
@@ -957,7 +984,7 @@ index caa185d..2f4cda8 100644
              if(!receivedPackets.empty()) {
                  return NextPacket();
              }
-@@ -151,14 +200,80 @@ std::optional<Packet> MpState::NextPacketBlock() noexcept {
+@@ -151,14 +202,80 @@ std::optional<Packet> MpState::NextPacketBlock() noexcept {
      return std::nullopt;
  }
  

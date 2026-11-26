@@ -2,6 +2,7 @@ package com.nxredux.mobile.ui
 
 import com.nxredux.mobile.library.GameEntry
 import com.nxredux.mobile.library.SystemFolder
+import com.nxredux.mobile.runner.DsMenu
 import com.nxredux.mobile.scraper.LibraryGameRef
 import com.nxredux.mobile.storage.ResumeInfo
 import com.nxredux.mobile.ui.nx.TopDetails
@@ -107,7 +108,8 @@ internal class TopScreenController(
         statsCache[key]?.takeIf { sameStatsTarget(it.first, top) }?.let { _topStats.value = it.second; return }
         if (_topStats.value?.key != key) _topStats.value = null   // never another target's page meanwhile
         // Built here: consoleEntries' cache belongs to the main thread.
-        val console = (top as? TopContent.ConsoleStats)?.let { it.systems to host.consoleEntries(it.systems) }
+        // The DS menu's row is no game: it neither counts nor takes a shelf tile.
+        val console = (top as? TopContent.ConsoleStats)?.let { it.systems to host.consoleEntries(it.systems).filterNot { e -> DsMenu.isMenu(e.game.ref.value) } }
         topStatsJob = scope.launch {
             val base = if (console != null) {
                 val (group, entries) = console
@@ -149,7 +151,7 @@ internal class TopScreenController(
      */
     fun followTopDetails(reread: Boolean = false) {
         val entry = (if (dualMenu.value) DualMenu.top(screen.value, selection.value.index) as? TopContent.GameDetails else null)?.entry
-        ra.followRaDetails(entry)
+        ra.followRaDetails(entry?.takeIf { !DsMenu.isMenu(it.game.ref.value) })   // the DS menu has no achievements to look up
         if (entry == null) {
             topDetailsJob?.cancel(); topDetailsJob = null
             _topDetails.value = null
@@ -167,7 +169,7 @@ internal class TopScreenController(
         topDetailsJob = scope.launch {
             val saves = !entry.system.android && !entry.system.unassigned
             val resume = if (saves) tryOr({ ResumeInfo.NONE }) { deps.userData.resumeInfo(entry.system.tag, entry.game.fileName) } else ResumeInfo.NONE
-            val scraped = ref?.let { r -> host.gameInfoStore()?.read(r) }
+            val scraped = if (DsMenu.isMenu(entry.game.ref.value)) DsMenu.INFO else ref?.let { r -> host.gameInfoStore()?.read(r) }
             val now = _topDetails.value?.takeIf { sameGame(it.entry, entry) } ?: return@launch
             _topDetails.value = now.copy(resume = resume, scraped = scraped)
         }
@@ -180,6 +182,13 @@ internal class TopScreenController(
      */
     fun followGameMeta() {
         val entry = (DualMenu.top(screen.value, selection.value.index) as? TopContent.GameDetails)?.entry
+        if (entry != null && DsMenu.isMenu(entry.game.ref.value)) {
+            val menuPath = entry.game.path
+            if (menuPath !in _gameMeta.value) _gameMeta.value += menuPath to DsMenu.INFO
+            metaFor = menuPath
+            host.infoFetcher()?.follow(null)
+            return
+        }
         val ref = entry?.let(::infoRef)
         val path = ref?.gamePath
         if (path == metaFor) return
@@ -191,7 +200,7 @@ internal class TopScreenController(
 
     /** [entry] as the info fetch and store name it; null for an Android or Unassigned game (no ScreenScraper info). */
     private fun infoRef(entry: Listed): LibraryGameRef? =
-        if (entry.system.android || entry.system.unassigned) null else host.artworkRef(entry.system.tag, entry.game)
+        if (entry.system.android || entry.system.unassigned || DsMenu.isMenu(entry.game.ref.value)) null else host.artworkRef(entry.system.tag, entry.game)
 
     /** [path]'s info was just fetched: the details page shows it when that game is still on it. */
     suspend fun showFetchedInfo(path: String) {

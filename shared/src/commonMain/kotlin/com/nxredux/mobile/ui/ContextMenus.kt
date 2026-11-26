@@ -6,6 +6,7 @@ import com.nxredux.mobile.library.Names
 import com.nxredux.mobile.library.SystemFolder
 import com.nxredux.mobile.netplay.NetplayCores
 import com.nxredux.mobile.runner.CoreRegistry
+import com.nxredux.mobile.runner.DsMenu
 import com.nxredux.mobile.settings.MenuCategory
 
 enum class ContextKind { PIN, UNPIN, HIDE, RENAME, ADD_TO_COLLECTION, GAME_SETTINGS, REMOVE_FROM_COLLECTION, REMOVE_RECENT, EMULATOR, CONSOLE, FETCH_ART, CHANGE_ART, PIN_TOOL, UNPIN_TOOL, ADD_TO_TOOLS, REMOVE_FROM_TOOLS, RENAME_COLLECTION, DELETE_COLLECTION, NETPLAY, PLAY_FROM_START, RESUME, OPEN_GAMES, OPEN_CONSOLES, OPEN_COLLECTIONS, OPEN_TOOLS, ACHIEVEMENTS, USE_TOP_SCREEN }
@@ -99,6 +100,8 @@ object ContextMenus {
         source: ListSource, entry: Listed, pinned: Boolean, art: ArtMenuItem = ArtMenuItem.NONE, netplay: Boolean = false,
         canResume: Boolean = false, netplayLeads: Boolean = false, aResumes: Boolean = true,
     ): List<ContextItem> {
+        // The DS menu is no file to pin, hide, rename, collect or re-art, nor a game to play over netplay.
+        if (DsMenu.isMenu(entry.game.ref.value)) return if (hasCore(entry)) listOf(gameSettings) else emptyList()
         val lead = leadItems(entry, canResume, netplay && netplayLeads, aResumes)
         val below = netplay && !netplayLeads && hasNetplay(entry)
         return when (source) {
@@ -190,7 +193,8 @@ object ContextMenus {
     private fun hasCore(entry: Listed) = !entry.system.unassigned && (entry.system.core ?: CoreRegistry.forTag(entry.system.tag)) != null
 
     /** Netplay (the context menu item, Y on a game list): the game's own tag has netplay cores and the game can launch. */
-    fun hasNetplay(entry: Listed): Boolean = hasCore(entry) && !entry.system.android && NetplayCores.supported(entry.system.tag)
+    fun hasNetplay(entry: Listed): Boolean =
+        hasCore(entry) && !entry.system.android && !DsMenu.isMenu(entry.game.ref.value) && NetplayCores.supported(entry.system.tag)
 
     /**
      * MENU on a pinned game row (Home's Pinned row, the All pinned list); [fromStart]: the game has a save state (A

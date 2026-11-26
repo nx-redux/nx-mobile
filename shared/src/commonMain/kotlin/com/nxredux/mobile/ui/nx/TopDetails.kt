@@ -26,6 +26,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.isSpecified
+import androidx.compose.ui.platform.LocalDensity
+import com.nxredux.mobile.runner.DsMenu
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
@@ -133,14 +135,18 @@ internal fun detailsPictureRatio(image: ShelfImage, width: Float?, height: Float
     return if (width > 0f && height > 0f && ratio.isFinite()) ratio.coerceIn(TD_RATIO_MIN, TD_RATIO_MAX) else TD_RATIO_DEFAULT
 }
 
-/** What a top screen [width] x [height] (inside its padding) keeps: a small one drops the synopsis first, then the picture, then the next goal. */
-internal data class DetailsFit(val picture: Boolean, val next: Boolean, val synopsis: Boolean)
+/** What a top screen [width] x [height] (inside its padding) keeps: a small one drops the picture, then the next goal. */
+internal data class DetailsFit(val picture: Boolean, val next: Boolean)
 
 internal fun detailsFit(width: Dp, height: Dp): DetailsFit =
-    DetailsFit(
-        picture = width >= TD_PICTURE_MIN_W && height >= TD_PICTURE_MIN_H, next = height >= TD_NEXT_MIN_H,
-        synopsis = height >= TD_SYNOPSIS_MIN_H,
-    )
+    DetailsFit(picture = width >= TD_PICTURE_MIN_W && height >= TD_PICTURE_MIN_H, next = height >= TD_NEXT_MIN_H)
+
+/**
+ * The synopsis lines that fit in the [space] the rest of the details leave (its gap above included), up to
+ * [TD_SYNOPSIS_LINES]: a game without achievements, or with a one-line title, has room a fixed rule would not give.
+ */
+internal fun synopsisLines(space: Dp, line: Dp): Int =
+    if (line <= 0.dp) 0 else ((space - TD_SYNOPSIS_GAP) / line).toInt().coerceIn(0, TD_SYNOPSIS_LINES)
 
 /**
  * The small mark fits above the details in a [width] x [height] page (inside its padding): only where they keep, in the
@@ -156,7 +162,8 @@ internal fun detailsMark(width: Dp, height: Dp): Boolean {
  * genre line, the play line and the achievements block (a count, a bar and the next goal); on the right, one picture
  * at its own aspect ([detailsImage], [detailsPictureRatio]) captioned "Continue · <when>" when it is the resume save's.
  * The small NX mark sits at the top right where it costs nothing ([detailsMark]).
- * Nothing scrolls; a small screen drops the synopsis, then the picture, then the next goal ([detailsFit]). [onAchievements]: the achievements block's clean tap, the only
+ * Nothing scrolls; the synopsis takes the lines the rest leaves ([synopsisLines]), and a small screen drops the picture, then
+ * the next goal ([detailsFit]). [onAchievements]: the achievements block's clean tap, the only
  * touch here. [prefer]: Layouts → Backdrop art, for a game whose only picture is its box.
  */
 @Composable
@@ -170,12 +177,16 @@ fun TopDetailsPage(details: TopDetails, onAchievements: () -> Unit, prefer: Back
             val mark = detailsMark(maxWidth, maxHeight)
             val fit = detailsFit(maxWidth, if (mark) maxHeight - TOP_MARK_BAND else maxHeight)
             if (mark) TopMark()
-            // Under the mark's band: a tall picture never reaches it.
-            Row(Modifier.fillMaxSize().padding(top = if (mark) TOP_MARK_BAND else 0.dp), verticalAlignment = Alignment.Bottom) {
-                DetailsText(details, now, fit, onAchievements, Modifier.weight(TD_TEXT_SHARE))
+            // The mark's band keeps the column under it clear: the picture's, beside a text column that keeps the full height
+            // for the synopsis; the text's when it takes the whole width (no picture).
+            Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.Bottom) {
+                DetailsText(
+                    details, now, fit, onAchievements,
+                    Modifier.weight(TD_TEXT_SHARE).padding(top = if (mark && !fit.picture) TOP_MARK_BAND else 0.dp),
+                )
                 if (fit.picture) {
                     Spacer(Modifier.width(gap))
-                    DetailsPicture(details, now, prefer, Modifier.weight(1f - TD_TEXT_SHARE))
+                    DetailsPicture(details, now, prefer, Modifier.weight(1f - TD_TEXT_SHARE).padding(top = if (mark) TOP_MARK_BAND else 0.dp))
                 }
             }
         }
@@ -189,13 +200,18 @@ private fun DetailsText(details: TopDetails, now: Long, fit: DetailsFit, onAchie
     Column(modifier.fillMaxHeight(), verticalArrangement = Arrangement.Bottom) {
         TopTitle(details.entry.shown)
         TopLine(genreLine(details.scraped, details.entry.system.displayName))
-        if (fit.synopsis) synopsisOf(details.scraped)?.let { synopsis ->
-            Text(
-                synopsis, color = colors.hint, fontFamily = font, fontSize = 16.sp, maxLines = TD_SYNOPSIS_LINES,
-                overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 10.dp),
-            )
+        synopsisOf(details.scraped)?.let { synopsis ->
+            // Weighted: measured after the other lines, in the height they leave.
+            BoxWithConstraints(Modifier.weight(1f, fill = false)) {
+                val lines = synopsisLines(maxHeight, with(LocalDensity.current) { TD_SYNOPSIS_LINE_HEIGHT.toDp() })
+                if (lines > 0) Text(
+                    synopsis, color = colors.hint, fontFamily = font, fontSize = 16.sp, lineHeight = TD_SYNOPSIS_LINE_HEIGHT,
+                    maxLines = lines, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = TD_SYNOPSIS_GAP),
+                )
+            }
         }
-        Text(
+        // The DS menu keeps no play time: its play line would always say it was never played.
+        if (!DsMenu.isMenu(details.entry.game.ref.value)) Text(
             playLine(details.info, now), color = colors.listText, fontFamily = font, fontSize = 18.sp, maxLines = 1,
             overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 16.dp),
         )
@@ -255,8 +271,9 @@ private const val TD_TEXT_SHARE = 0.55f          // the text column's share of t
 private const val TD_COLUMN_GAP = 0.05f          // between the columns, of the screen's width
 private val TD_PICTURE_MIN_W: Dp = 400.dp        // narrower: the text takes the width
 private val TD_PICTURE_MIN_H: Dp = 220.dp        // shorter: the picture goes first
-private const val TD_SYNOPSIS_LINES = 5
-private val TD_SYNOPSIS_MIN_H: Dp = 320.dp       // shorter: the synopsis goes first
+private const val TD_SYNOPSIS_LINES = 8
+private val TD_SYNOPSIS_GAP: Dp = 10.dp
+private val TD_SYNOPSIS_LINE_HEIGHT = 21.sp
 private val TD_NEXT_MIN_H: Dp = 176.dp           // then the next goal
 private const val TD_RATIO_DEFAULT = 16f / 9f
 private const val TD_RATIO_MIN = 1f              // the tallest picture: square
