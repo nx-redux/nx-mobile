@@ -293,7 +293,7 @@ N64 hi-res packs (#45):
 
 ## Sega Saturn
 
-- [ ] Saturn menu logo and pad art (files from the user; logo via tools/console-logos, pad via tools/controller-art/make_pads.py)
+- [ ] Saturn menu art: the Saturn logo in the Consoles tab and the six-button Sega pad behind it, both orientations
 - [ ] With a BIOS in `Bios/SATURN/`: a disc boots and plays.
 - [ ] An in-game save creates `<game>.bkr` in `Saves/SATURN/`, and it survives a killed app.
 - [ ] Save state and load state work.

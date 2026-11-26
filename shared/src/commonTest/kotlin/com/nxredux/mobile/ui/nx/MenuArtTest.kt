@@ -1,22 +1,25 @@
 package com.nxredux.mobile.ui.nx
 
 import com.nxredux.mobile.runner.CoreRegistry
+import com.nxredux.mobile.shared.res.*
 import com.nxredux.mobile.ui.ToolKind
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class MenuArtTest {
     @Test fun everyConsoleHasALogo() {
-        val missing = CoreRegistry.consoles.map { it.id }.filter { it !in consoleLogosById && it !in AWAITING_ART }
+        val missing = CoreRegistry.consoles.map { it.id }.filter { it !in consoleLogosById}
         assertTrue(missing.isEmpty(), "no logo for $missing")
     }
 
-    @Test fun saturnShowsNoOtherConsolesLogo() {
-        assertNull(consoleLogo("SATURN"))
-        assertTrue("saturn" in AWAITING_ART && "saturn" !in consoleLogosById)
+    @Test fun saturnHasItsOwnLogo() {
+        assertSame(Res.drawable.menu_logo_saturn, consoleLogo("SATURN"))
+        assertNotEquals(consoleLogosById["md"], consoleLogo("SATURN"))
     }
 
     @Test fun aTagFindsItsConsolesLogoWhateverItsCase() {
