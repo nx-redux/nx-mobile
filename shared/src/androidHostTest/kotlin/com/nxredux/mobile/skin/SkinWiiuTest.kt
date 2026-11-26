@@ -350,6 +350,22 @@ class SkinWiiuTest {
         }
     }
 
+    /** The fold boards (the Fold and the Ultra inside, a tablet upright): L3 and R3 by their sticks, on the screen's side, low. */
+    @Test
+    fun the_fold_boards_stick_presses_sit_by_their_sticks() {
+        for (id in packs) for (d in GOLDEN_DEVICES.filter { it.name in setOf("inner", "inner_half", "ultra", "ultra_half", "tablet") }) {
+            val label = "$id ${d.name}"
+            val p = assertNotNull(place(skinPack(id), d), label)
+            val c = p.controls.associateBy { it.spec.id }
+            for ((cap, stick, side) in listOf(Triple("L3", "STICK", 1f), Triple("R3", "CSTICK", -1f))) {
+                val a = c.getValue(cap); val s = c.getValue(stick)
+                assertTrue((a.x - s.x) * side > 0f && a.y > s.y, "$label $cap ${a.x},${a.y} not at $stick's lower inner side ${s.x},${s.y}")
+                val gap = kotlin.math.hypot(a.x - s.x, a.y - s.y) - 1.25f * s.spec.r - a.spec.r
+                assertTrue(gap <= 140f * p.k, "$label $cap ${gap}px off $stick's reach")
+            }
+        }
+    }
+
     /** The Button layout editor's dummy strip as the game's with every slot filled: the Wii U's SWAP in the middle. */
     @Test
     fun the_layout_editors_dummy_strip_has_swap_in_the_middle() {
