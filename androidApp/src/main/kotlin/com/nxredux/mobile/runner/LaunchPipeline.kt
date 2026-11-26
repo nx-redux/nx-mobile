@@ -1136,7 +1136,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                     // netplay link: the link options are this launch's too (a session's port, mode and peer; a solo mGBA's cable): never saved.
                     graphicsForcedOptions = graphics.forcedOptions.keys + cfg.linkOptions.keys + prepared.hleOptions.keys
                     // The core's card folder is named after the file it opens (/rom/<name>).
-                    if (patchesSupported) patchListPath = Ps2Patches.listPath(prepared.savesDir.absolutePath, CoreRegistry.contentName(cfg.tag, cfg.romFileName))
+                    if (patchesSupported) patchListPath = Ps2Patches.listPath(prepared.savesDir.absolutePath, CoreRegistry.contentName(cfg.tag, cfg.romFileName), prepared.inner?.name)
                     GLRetroViewData(host.activity).apply {
                         coreFilePath = cfg.coreFile
                         systemDirectory = prepared.systemDir.absolutePath

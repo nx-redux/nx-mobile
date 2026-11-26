@@ -984,16 +984,16 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         refreshFrontendPages()
     }
 
-    /**
-     * The cheats resolved for this game (the host's set, a toggle from the dual-screen panel included), the folder they
-     * were looked for in and the first file name tried (both only for the empty Cheats tab's text). Refreshes the panel.
-     */
     /** The host's patch switches (a dual-screen toggle and the core's list arriving included). Refreshes the panel. */
     fun setPatches(set: Ps2PatchSet) {
         patches = set
         fixPanel()
     }
 
+    /**
+     * The cheats resolved for this game (the host's set, a toggle from the dual-screen panel included), the folder they
+     * were looked for in and the first file name tried (both only for the empty Cheats tab's text). Refreshes the panel.
+     */
     fun setCheats(entries: List<CheatEntry>, folder: String, expected: String) {
         cheats = entries
         cheatsFolder = folder

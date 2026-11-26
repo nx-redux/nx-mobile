@@ -49,7 +49,9 @@ class CoreRegistryPs2Test {
 
     @Test fun a_save_never_overwrites_a_retired_patch_option() {   // its stored value stays the new-game default
         val running = listOf("armsx2_widescreen_patches" to "disabled", "armsx2_upscale" to "2x")
-        assertEquals(listOf("armsx2_upscale" to "2x"), CoreConfig.valuesToSave(running, emptyMap(), Ps2Patches.RETIRED_OPTIONS))
+        // The stored map holds the descriptor's default for the retired keys, so they leave the running values instead.
+        val stored = mapOf("armsx2_widescreen_patches" to "disabled", "armsx2_upscale" to "2x")
+        assertEquals(listOf("armsx2_upscale" to "2x"), CoreConfig.valuesToSave(Ps2Patches.withoutRetired(running), stored, emptySet()))
     }
 
     @Test fun softwareThreadsLocked() {

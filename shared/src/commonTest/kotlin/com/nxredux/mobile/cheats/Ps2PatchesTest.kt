@@ -85,6 +85,23 @@ class Ps2PatchesTest {
         assertTrue(restored.isOn("A|B"))
     }
 
+    @Test fun a_zipped_disc_lists_under_its_unpacked_file() {
+        assertEquals("/s/PS2/SLUS_201/nx-patches.txt", Ps2Patches.listPath("/s/PS2", "MyGame.7z", innerName = "SLUS_201.iso"))
+    }
+
+    @Test fun the_set_goes_again_when_the_list_renames_a_saved_name() {
+        val before = Ps2PatchSet.start(setOf("A/B"))
+        val after = before.withGroups(listOf(Ps2PatchGroup("A|B", false)))
+        assertTrue(Ps2PatchSet.resendAfterList(before, after))
+        val plain = Ps2PatchSet.start(setOf("60 FPS"))
+        assertFalse(Ps2PatchSet.resendAfterList(plain, plain.withGroups(listOf(Ps2PatchGroup("60 FPS", false)))))
+    }
+
+    @Test fun a_save_leaves_the_retired_options_lines_alone() {
+        val running = listOf("armsx2_widescreen_patches" to "disabled", "armsx2_no_interlacing_patches" to "disabled", "armsx2_upscale" to "2x")
+        assertEquals(listOf("armsx2_upscale" to "2x"), Ps2Patches.withoutRetired(running))
+    }
+
     @Test fun list_path_sits_in_the_game_save_folder() {
         assertEquals("/s/PS2/Ico (USA)/nx-patches.txt", Ps2Patches.listPath("/s/PS2", "Ico (USA).chd"))
     }

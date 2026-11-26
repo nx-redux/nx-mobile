@@ -664,9 +664,6 @@ internal class InGameMenuController(
         }
     }
 
-    /** The PS2 options the Patches tab replaced: a save keeps their stored line, the player's old default ([Ps2Patches.initialEnabled]). */
-    private fun retiredOptions(): Set<String> = if (host.patchesSupported) Ps2Patches.RETIRED_OPTIONS else emptySet()
-
     private fun saveOptions(game: Boolean) {
         val store = host.configStore
         // The menu has already popped to Options; say so rather than silently doing nothing.
@@ -686,7 +683,8 @@ internal class InGameMenuController(
                     // fires, so a later Controls → Shortcuts change still reaches the others; a row given back to the
                     // default loses its line ([Shortcuts.droppedOnSave]).
                     val overrides = host.shortcutOverrides
-                    val values = CoreConfig.valuesToSave(all.map { it.key to it.value }, host.storedValues, host.graphicsForcedOptions + dualForcedOptions() + retiredOptions()) + host.frontendValues.toList() +
+                    val running = all.map { it.key to it.value }.let { if (host.patchesSupported) Ps2Patches.withoutRetired(it) else it }
+                    val values = CoreConfig.valuesToSave(running, host.storedValues, host.graphicsForcedOptions + dualForcedOptions()) + host.frontendValues.toList() +
                         ShaderOptions.activeParamEntries(renderer.shaderValues, renderer.shaderParams) + Shortcuts.toConfig(overrides) +
                         if (game) listOf(FrontendOptions.CHEATS to CheatSet.encode(host.cheatSet.enabledKeys())) else emptyList()
                     val patchValues = if (game && host.patchesSupported) listOf(FrontendOptions.PATCHES to CheatSet.encode(host.patchSet.savedKeys())) else emptyList()

@@ -1794,12 +1794,6 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         dual.refreshDualPanel()
     }
 
-    /**
-     * Sends the enabled cheats to the core on the emulation thread in one job: a reset, then only the enabled
-     * ones with contiguous indices (PCSX-ReARMed treats the index as a slot and skips a cheat behind a gap,
-     * libretro issue #116), and the enabled RAM patches, which replace the last set. Caught so a JNI failure never kills
-     * the GL thread.
-     */
     /** The enabled patch groups to the core in one job, after a reset that drops the last set ([applyCheats]'s calls). */
     override fun applyPatches(view: GLRetroView) {
         val codes = patchSet.codes()
@@ -1817,8 +1811,10 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val groups = withContext(Dispatchers.IO) {
             runCatching { File(path).takeIf { it.isFile }?.readText() }.getOrNull()?.let(Ps2Patches::parse)
         } ?: return
+        val before = patchSet
         patchSet = patchSet.withGroups(groups)
         publishPatches()
+        if (gameReady && Ps2PatchSet.resendAfterList(before, patchSet)) retroView?.let(::applyPatches)
     }
 
     private fun publishPatches() {
@@ -1830,6 +1826,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (patchesSupported) retroView?.let(::applyPatches)
     }
 
+    /**
+     * Sends the enabled cheats to the core on the emulation thread in one job: a reset, then only the enabled
+     * ones with contiguous indices (PCSX-ReARMed treats the index as a slot and skips a cheat behind a gap,
+     * libretro issue #116), and the enabled RAM patches, which replace the last set. Caught so a JNI failure never kills
+     * the GL thread.
+     */
     override fun applyCheats(view: GLRetroView) {
         val codes = cheatSet.enabledCodes()
         // RetroArch RAM patches: the native side writes them before every frame (none outside a netplay session either).

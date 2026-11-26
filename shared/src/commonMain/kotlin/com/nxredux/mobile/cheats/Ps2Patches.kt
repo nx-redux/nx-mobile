@@ -20,8 +20,12 @@ object Ps2Patches {
     /** The core options the Patches tab replaced: locked off, their stored values kept ([initialEnabled]). */
     val RETIRED_OPTIONS = setOf(WIDESCREEN_OPTION, NO_INTERLACING_OPTION)
 
-    /** The core's card folder is `<saves>/<content file title>`. */
-    fun listPath(savesDir: String, romFileName: String): String = "$savesDir/${romFileName.substringBeforeLast('.')}/$LIST_FILE"
+    /** The core's card folder is `<saves>/<title of the file it opens>`: an archive's unpacked [innerName], else [romFileName]. */
+    fun listPath(savesDir: String, romFileName: String, innerName: String? = null): String =
+        "$savesDir/${(innerName ?: romFileName).substringBeforeLast('.')}/$LIST_FILE"
+
+    /** A save's running values without the retired options: their stored lines stay as written ([initialEnabled]'s default). */
+    fun withoutRetired(running: List<Pair<String, String>>): List<Pair<String, String>> = running.filter { it.first !in RETIRED_OPTIONS }
 
     /** The groups in a list file, or null when it is not one (the core writes the `crc=` line first, groups or not). */
     fun parse(text: String): List<Ps2PatchGroup>? {
@@ -103,5 +107,8 @@ data class Ps2PatchSet(
         val EMPTY = Ps2PatchSet(null, emptySet(), emptySet(), emptySet())
 
         fun start(enabled: Set<String>): Ps2PatchSet = Ps2PatchSet(null, enabled, enabled, emptySet())
+
+        /** The core's list arrived: the codes change when it renamed a saved name (normalised), so they go again. */
+        fun resendAfterList(before: Ps2PatchSet, after: Ps2PatchSet): Boolean = before.codes() != after.codes()
     }
 }
