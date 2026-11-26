@@ -2,7 +2,8 @@ package com.nxredux.mobile.shortcuts
 
 /**
  * A button or a combo, as Android key codes. [modifier] is MENU ([KeyCodes.BUTTON_MODE]) held while [keyCode] is
- * pressed, or null for a single button. SELECT and START are never a shortcut's key, alone or with MENU ([GAME_KEYS]).
+ * pressed, or null for a single button. SELECT and START are never a shortcut's key, alone or with MENU ([GAME_KEYS]); a
+ * d-pad direction is one only with MENU ([DIRECTIONS]).
  */
 data class ShortcutBinding(val modifier: Int?, val keyCode: Int) {
     /** `"110+103"` or `"103"`. */
@@ -18,10 +19,16 @@ data class ShortcutBinding(val modifier: Int?, val keyCode: Int) {
         /** What press-to-bind says for a [GAME_KEYS] key. */
         const val GAME_KEYS_NOTE = "SELECT and START stay the game's"
 
+        /** The d-pad: bound alone, a direction would be gone from the game, so only MENU + a direction binds. */
+        val DIRECTIONS = setOf(KeyCodes.DPAD_UP, KeyCodes.DPAD_DOWN, KeyCodes.DPAD_LEFT, KeyCodes.DPAD_RIGHT)
+
+        /** What press-to-bind says for a [DIRECTIONS] key pressed alone. */
+        const val DIRECTIONS_NOTE = "Hold MENU with the D-pad"
+
         /**
          * Null for blank or garbage, a combo held with anything but [MODIFIERS] included (nothing could press it), or a
-         * [GAME_KEYS] key: a SELECT combo or a SELECT / START binding saved before these rules reads as absent, so the
-         * action inherits.
+         * [GAME_KEYS] key, or a [DIRECTIONS] key alone: a SELECT combo or a SELECT / START / lone direction binding saved
+         * before these rules reads as absent, so the action inherits.
          */
         fun decode(s: String): ShortcutBinding? {
             val parts = s.trim().split('+')
@@ -29,6 +36,7 @@ data class ShortcutBinding(val modifier: Int?, val keyCode: Int) {
             val codes = parts.map { it.trim().toIntOrNull() ?: return null }
             if (codes.size == 2 && codes[0] !in MODIFIERS) return null
             if (codes.last() in GAME_KEYS) return null
+            if (codes.size == 1 && codes[0] in DIRECTIONS) return null
             return if (codes.size == 2) ShortcutBinding(codes[0], codes[1]) else ShortcutBinding(null, codes[0])
         }
     }

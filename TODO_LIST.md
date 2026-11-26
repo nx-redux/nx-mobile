@@ -1,5 +1,10 @@
 # TODO list
 
+## MENU + D-pad shortcuts
+
+- [ ] Docs: `docs/mobile/controls-settings.md` Binding a button: MENU + a direction binds, a direction alone doesn't ("Hold MENU with the D-pad").
+- [ ] From review, not seen on a device: hold Right in game, open the menu, let go there, close it, then MENU+Right fires the first time; a pad that sends the d-pad as keys and the hat together keeps a fired direction out of the game.
+
 ## PSP ad hoc over the USB cable
 
 To fix (both reproduce with `tools/device-tests/psp_cable.py`, checks `late` and `replug`):

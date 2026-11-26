@@ -312,6 +312,7 @@ internal class InGameMenuController(
         dual.syncPanelClock()
         menuState.value = model.state
         input.menuAxes.reset()
+        input.menuHat.reset()
         input.stickRouter.onMenuToggled()
         host.refreshSlots()
         input.releaseAllGameInput()

@@ -15,6 +15,7 @@ import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.PadOptions
 import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.options.NdsScreen
+import com.nxredux.mobile.shortcuts.HatKeys
 import com.nxredux.mobile.shortcuts.ShortcutAction
 import com.nxredux.mobile.ui.nx.AxisDirections
 import com.nxredux.mobile.ui.nx.DpadHat
@@ -201,6 +202,14 @@ internal class GameInputRouter(private val host: GameInputHost) {
                 .also { padLayouts[event.deviceId] = it }
 
     val menuAxes = AxisDirections { host.menuRouter.onEvent(it) }   // the hat / left stick as held menu directions
+    val menuHat = HatKeys()   // the hat as d-pad keys for the Shortcuts page's press to bind
+    private val hatShortcuts = HatShortcuts { verdict, code -> shortcut(verdict, code) }
+
+    /** P1's (port 0's) hat through the shortcuts, as its d-pad keys; read [HatShortcuts.x] / [HatShortcuts.y] after. */
+    private fun hatShortcut(event: MotionEvent) {
+        val keys = host.shortcutKeys ?: return
+        hatShortcuts.update(event.getAxisValue(MotionEvent.AXIS_HAT_X), event.getAxisValue(MotionEvent.AXIS_HAT_Y), keys)
+    }
 
     /** The on-screen stick: the game's left analog while playing, held menu directions while the menu is open. */
     val stickRouter = VirtualStickRouter(
@@ -481,8 +490,9 @@ internal class GameInputRouter(private val host: GameInputHost) {
      * ones reach the core as its d-pad. This replaces the d-pad keys Android would synthesise from the event.
      */
     private fun routeNdsHat(view: GLRetroView, event: MotionEvent) {
-        val x = ndsHotkeys.joystickDirection(event.getAxisValue(MotionEvent.AXIS_HAT_X), event.getAxisValue(MotionEvent.AXIS_X))
-        val y = ndsHotkeys.joystickDirection(event.getAxisValue(MotionEvent.AXIS_HAT_Y), event.getAxisValue(MotionEvent.AXIS_Y))
+        hatShortcut(event)
+        val x = ndsHotkeys.joystickDirection(hatShortcuts.x(event.getAxisValue(MotionEvent.AXIS_HAT_X)), event.getAxisValue(MotionEvent.AXIS_X))
+        val y = ndsHotkeys.joystickDirection(hatShortcuts.y(event.getAxisValue(MotionEvent.AXIS_HAT_Y)), event.getAxisValue(MotionEvent.AXIS_Y))
         routeHat(view, ndsHatX, ndsHatY, x, y, n3ds = false)
         ndsHatX = x
         ndsHatY = y
@@ -596,8 +606,9 @@ internal class GameInputRouter(private val host: GameInputHost) {
 
     /** Hardware hat edges as direction presses through the 3DS hotkeys; the forwarded ones reach the core as its d-pad. */
     private fun routeN3dsHat(view: GLRetroView, event: MotionEvent) {
-        val x = n3dsHotkeys.joystickDirection(event.getAxisValue(MotionEvent.AXIS_HAT_X))
-        val y = n3dsHotkeys.joystickDirection(event.getAxisValue(MotionEvent.AXIS_HAT_Y))
+        hatShortcut(event)
+        val x = n3dsHotkeys.joystickDirection(hatShortcuts.x(event.getAxisValue(MotionEvent.AXIS_HAT_X)))
+        val y = n3dsHotkeys.joystickDirection(hatShortcuts.y(event.getAxisValue(MotionEvent.AXIS_HAT_Y)))
         routeHat(view, n3dsHatX, n3dsHatY, x, y, n3ds = true)
         n3dsHatX = x
         n3dsHatY = y
@@ -719,6 +730,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
      */
     private fun releaseShortcuts() {
         host.shortcutKeys?.releaseAll()
+        hatShortcuts.releaseAll()
         inputs[0].triggers.untakeAll()   // a bound L2/R2's pull ends with it: its analog must not stay at rest
         host.releaseShortcutHolds()
     }
@@ -751,8 +763,16 @@ internal class GameInputRouter(private val host: GameInputHost) {
             .forEach { view.sendKeyEvent(KeyEvent.ACTION_UP, it, port) }
     }
 
-    /** Drives the open menu from a hardware hat / left-stick (vertical = item, horizontal = slot). */
+    /**
+     * Drives the open menu from a hardware hat / left-stick (vertical = item, horizontal = slot). The hat's directions go
+     * to press to bind first, as d-pad keys ([GameInputHost.menuCaptureKey]): one it takes never moves the menu.
+     */
     private fun routeMenuMotion(event: MotionEvent) {
+        var taken = false
+        menuHat.update(event.getAxisValue(MotionEvent.AXIS_HAT_X), event.getAxisValue(MotionEvent.AXIS_HAT_Y)) { code, down ->
+            if (host.menuCaptureKey(code, down, repeat = false)) taken = true
+        }
+        if (taken) return
         menuAxes.update(
             event.getAxisValue(MotionEvent.AXIS_HAT_X), event.getAxisValue(MotionEvent.AXIS_HAT_Y),
             event.getAxisValue(MotionEvent.AXIS_X), event.getAxisValue(MotionEvent.AXIS_Y),
@@ -860,8 +880,13 @@ internal class GameInputRouter(private val host: GameInputHost) {
             } else {
                 routeTriggerAxes(event, port)   // a digital L2/R2 from a pad that reports its triggers only as axes
             }
-            val hatX = event.getAxisValue(MotionEvent.AXIS_HAT_X)
-            val hatY = event.getAxisValue(MotionEvent.AXIS_HAT_Y)
+            var hatX = event.getAxisValue(MotionEvent.AXIS_HAT_X)
+            var hatY = event.getAxisValue(MotionEvent.AXIS_HAT_Y)
+            if (port == 0) {   // shortcuts are P1's, as on the keys
+                hatShortcut(event)
+                hatX = hatShortcuts.x(hatX)
+                hatY = hatShortcuts.y(hatY)
+            }
             val sx = event.getAxisValue(MotionEvent.AXIS_X)
             val sy = event.getAxisValue(MotionEvent.AXIS_Y)
             if (coreHasStick) {
