@@ -503,8 +503,9 @@ object SkinChoice {
     const val WIIU_STACK_ASPECT = 16f / 18f
 
     /**
-     * The Wii U's one screen frame (its stack glass) on the roomy sideways shell on a foldable (the unfolded Fold) cut to
-     * the screens' [aspect], so there are no bars round them; elsewhere the frame is the 3DS's, the screens centred in it.
+     * The Wii U's one screen frame (its stack glass) on the roomy sideways shell on a half-folded foldable cut to the
+     * screens' [aspect], so there are no bars round them; elsewhere (flat, as a tablet) the frame is the 3DS's, the
+     * screens centred in it.
      */
     private fun SkinPlacement.wiiuStackTo(aspect: Float): SkinPlacement {
         val frame = spec.frame ?: return this
@@ -559,7 +560,7 @@ object SkinChoice {
     ): SkinPlacement? {
         if (windowW <= 0 || windowH <= 0 || densityDpi <= 0) return null
         val v = variant ?: if (ds) SkinVariant.DS else SkinVariant.SINGLE
-        val own = placeAs(pack, windowW, windowH, densityDpi, tablet, ds, picture, hingeY, topInset, foldable, v)?.let { if (foldable) it.wiiuStackTo(stackAspect) else it }
+        val own = placeAs(pack, windowW, windowH, densityDpi, tablet, ds, picture, hingeY, topInset, foldable, v)?.let { if (foldable && hingeY != null) it.wiiuStackTo(stackAspect) else it }
         // a console's own set the pack lacks for this screen (an older pack, or a player's partly made one): the shared
         // one-screen set, decided per screen, so a missing landscape layout never leaves the game without a skin
         if (own != null || v in NO_SHARED_FALLBACK) return own

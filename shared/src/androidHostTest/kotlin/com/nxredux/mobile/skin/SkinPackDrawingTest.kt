@@ -46,7 +46,7 @@ class SkinPackDrawingTest {
             kotlin.test.assertEquals(f(old("DPAD"), "r") * LOWER_PAD, pad.spec.r, 1f, "$file $name the d-pad at 85%")
             kotlin.test.assertEquals(f(old("STICK"), "r"), stick.spec.r, 1f, "$file $name the stick as it was")
             // (the Dreamcast's toward the screen as the user placed it: theDreamcastDpadIsTuckedUnderTheStick)
-            val across = if (v == SkinVariant.DC && name != "tablet_land") 42f / 156f * f(old("DPAD"), "r") else 0f   // (a tablet's centred)
+            val across = if (v == SkinVariant.DC && name !in TALL_LAND) 42f / 156f * f(old("DPAD"), "r") else 0f   // (a tablet's centred)
             kotlin.test.assertEquals(f(old("DPAD"), "x") + across, pad.x, 1.5f, "$file $name about its middle")
         }
     }
@@ -161,7 +161,8 @@ class SkinPackDrawingTest {
     @Test
     fun theDreamcastDpadIsTuckedUnderTheStick() {
         // (a tablet sideways: the PSP's gap, centred, tabletLandscapePadsAreThePspsGapApart)
-        for (name in listOf("inner", "inner_half", "inner_land", "ultra", "ultra_half", "ultra_land_half", "tablet")) {
+        // (the Fold flat sideways: the tablet's, tabletLandscapePadsAreThePspsGapApart)
+        for (name in listOf("inner", "inner_half", "ultra", "ultra_half", "ultra_land_half", "tablet")) {
             val d = GOLDEN_DEVICES.first { it.name == name }
             val p = assertNotNull(placeFor(pack, SkinVariant.DC, d), name)
             fun c(id: String) = p.controls.first { it.spec.id == id && it.spec.alt == null }
@@ -302,7 +303,8 @@ class SkinPackDrawingTest {
     // the caps' row) half what they were (73 and 42 px), both rows level.
     @Test
     fun theNew3dsOnTheFoldSidewaysHasASmallerCStickAndHalfTheGaps() {
-        for (name in listOf("inner_land", "inner_land_half")) {
+        // (flat, the tablet's)
+        for (name in listOf("inner_land_half")) {
             val d = GOLDEN_DEVICES.first { it.name == name }
             val p = assertNotNull(placeFor(pack, SkinVariant.N3DS, d), name)
             fun c(id: String) = p.controls.first { it.spec.id == id && it.spec.alt == null }
@@ -448,3 +450,6 @@ internal val FLAT_INNER = setOf("inner")
 
 /** The golden devices that are a book foldable's flat upright inner screen: the Fold, the Ultra. */
 internal val FLAT_UPRIGHT_INNER = setOf("inner", "ultra")
+
+/** The golden devices that take the tablet sideways's boxes: the tablet, the Fold's flat inner screen sideways. */
+internal val TALL_LAND = setOf("tablet_land", "inner_land")

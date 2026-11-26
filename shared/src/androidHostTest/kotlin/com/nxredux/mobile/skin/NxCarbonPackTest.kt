@@ -46,7 +46,7 @@ class NxCarbonPackTest {
     // the lower one centred under the upper; a lower pad on each side level.
     @Test
     fun tabletLandscapePadsAreThePspsGapApart() {
-        val d = GOLDEN_DEVICES.first { it.name == "tablet_land" }
+        val d = GOLDEN_DEVICES.first { it.name in TALL_LAND }
         fun pads(p: SkinPlacement, left: Boolean) = p.controls.filter { it.spec.id in setOf("STICK", "DPAD", "CSTICK") && it.spec.alt == null && it.spec.r > 60f * p.k &&
             (it.x < d.w / 2f) == left }.sortedBy { it.y }
         val psp = assertNotNull(placeFor(pack, SkinVariant.PSP, d)).let { pads(it, true) }
@@ -591,7 +591,7 @@ class NxCarbonPackTest {
                 val ring = 206f * p.k
                 val upper = (c("DPAD").y - ring) - (c("L").y + c("L").spec.hh)
                 val lower = (c("STICK").y - ring * c("STICK").spec.r / (170f * p.k)) - (c("DPAD").y + ring)
-                if (name != "tablet_land" && name !in FLAT_INNER) assertEquals(upper, lower, 2f * p.k, "$name one gap")   // (a tablet's: the PSP's gap, tabletLandscapePadsAreThePspsGapApart; flat inner: the GameCube's)
+                if (name !in TALL_LAND && name !in FLAT_INNER) assertEquals(upper, lower, 2f * p.k, "$name one gap")   // (a tablet's: the PSP's gap, tabletLandscapePadsAreThePspsGapApart; flat inner: the GameCube's)
             } else assertTrue(c("STICK").spec.r > c("DPAD").spec.r, "$name the swapped stick full size")
         }
     }
@@ -819,7 +819,8 @@ class NxCarbonPackTest {
             if (p.columns() && name == "tablet_land") stacked(c("MENU"), c("HOME"), "$name MENU over HOME")
             else { assertEquals(c("MENU").y, c("HOME").y, 1f, "$name HOME beside MENU"); assertTrue(c("HOME").x > c("MENU").x, "$name HOME right of MENU") }
             val small = p.spec.family == SkinFamily.STACKED || (p.spec.family == SkinFamily.FLEX && !p.spec.id.contains("fold"))
-            assertEquals(if (small) listOf("−", "+") else listOf("SELECT", "START"), listOf(c("SELECT").spec.label, c("START").spec.label), name)
+            // (the Fold flat sideways: by the shoulders, icons only)
+            if (name != "inner_land") assertEquals(if (small) listOf("−", "+") else listOf("SELECT", "START"), listOf(c("SELECT").spec.label, c("START").spec.label), name)
             if (name in roomy) {   // the original controller's order: the d-pad and the face on top, both full sticks under them
                 assertTrue(c("DPAD").y < c("STICK").y, "$name d-pad above the stick")
                 assertEquals(c("DPAD").y, c("Y").y, 1f, "$name the face level with the d-pad")
@@ -829,7 +830,7 @@ class NxCarbonPackTest {
                 val ring = 206f * p.k   // the d-pad's and the face's ring (outer), the sticks' at their scale
                 val upper = (c("DPAD").y - ring) - (c("L").y + c("L").spec.hh)   // the placed sizes are the window's
                 val lower = (c("STICK").y - ring * c("STICK").spec.r / (170f * p.k)) - (c("DPAD").y + ring)
-                if (name != "tablet_land" && name !in FLAT_INNER) assertEquals(upper, lower, 2f * p.k, "$name L to the d-pad, the d-pad to the stick: one gap")   // (a tablet's: the PSP's gap, tabletLandscapePadsAreThePspsGapApart; flat inner: the GameCube's)
+                if (name !in TALL_LAND && name !in FLAT_INNER) assertEquals(upper, lower, 2f * p.k, "$name L to the d-pad, the d-pad to the stick: one gap")   // (a tablet's: the PSP's gap, tabletLandscapePadsAreThePspsGapApart; flat inner: the GameCube's)
             }
             // the stick smaller only where it shows with the d-pad; swapped with it, full size
             if (name in roomy) assertTrue(c("STICK").spec.r < c("DPAD").spec.r, "$name sticks scaled down")
@@ -1027,6 +1028,7 @@ class NxCarbonPackTest {
                 val name = "$v $win ${p.spec.id}"
                 val rows = listOf(listOf(c("MIC"), c("MENU")), listOf(c("SELECT"), c("START")))
                 // (a tablet's: each pair upright, the menu's SELECT START)
+                if (ww == 2448 && wh == 1848) continue   // (the Fold flat sideways: foldInnerSidewaysPutsTheSmallCapsByTheShouldersAndSplitsMenu)
                 val upright = ww * 160f / dpi > 1200f
                 for (r in rows) for ((a, b) in r.zipWithNext()) {
                     if (upright) { assertEquals(a.x, b.x, 1f, "$name ${b.spec.id} in the column"); assertTrue(b.y > a.y, "$name ${b.spec.id} in order") }
@@ -1068,7 +1070,8 @@ class NxCarbonPackTest {
     // The New 3DS's tall landscape (the unfolded Fold, a tablet): the regular 3DS's places, its C-stick under the face.
     @Test
     fun new3dsTallLandscapeTakesTheRegularPlacesWithTheCStickUnderTheFace() {
-        for ((w, h, dpi) in listOf(Triple(2448, 1848, 420), Triple(2304, 1440, 280))) {
+        // (the Fold flat sideways: the New 3DS's L / R short for SELECT / START, foldInnerSidewaysPutsTheSmallCapsByTheShouldersAndSplitsMenu)
+        for ((w, h, dpi) in listOf(Triple(2304, 1440, 280))) {
             fun at(v: SkinVariant) = assertNotNull(SkinChoice.place(pack, w, h, dpi, dpi == 280, true, null, null, foldable = dpi == 420, variant = v), "$v $w")
             val np = at(SkinVariant.N3DS)
             val n = np.controls.associateBy { it.spec.id }; val r = at(SkinVariant.N3DS_REGULAR).controls.associateBy { it.spec.id }
@@ -1361,6 +1364,31 @@ class NxCarbonPackTest {
             kotlin.math.abs(w.dst.y + w.dst.height / 2f - my) < 2f }, "SELECT and START in a well")
     }
 
+    @Test
+    fun foldInnerSidewaysPutsTheSmallCapsByTheShouldersAndSplitsMenu() {
+        // The Fold flat sideways: the Wii's and the Wii U's − / + and the 3DS's SELECT / START on the shoulders' inner side,
+        // level with them; MENU alone on the left at the bottom, its word beside it; across from it on the right (level)
+        // the Wii's HOME (over MOTION), the 3DS's MIC, the GameCube's and the N64's START
+        val (w, h, dpi) = Triple(2448, 1848, 420)
+        fun at(v: SkinVariant) = assertNotNull(SkinChoice.place(pack, w, h, dpi, true, v in setOf(SkinVariant.N3DS, SkinVariant.N3DS_REGULAR), 640f to 480f, null, foldable = true, variant = v), "$v")
+        for ((v, ids) in listOf(SkinVariant.WII_CLASSIC to listOf("SELECT", "START", "L2", "R2"), SkinVariant.WII_NUNCHUK to listOf("L", "R", "Y", "X"),
+            SkinVariant.WII_SIDEWAYS to listOf("SELECT", "START", "Y", "R2"), SkinVariant.N3DS to listOf("SELECT", "START", "L2", "R2"),
+            SkinVariant.N3DS_REGULAR to listOf("SELECT", "START", "L", "R"), SkinVariant.WIIU to listOf("SELECT", "START", "L2", "R2"))) {
+            val p = at(v); fun c(id: String) = p.controls.first { it.spec.id == id }
+            val (minus, plus, sl, sr) = ids
+            assertEquals(c(sl).y, c(minus).y, 1f, "$v ${minus} level with $sl"); assertTrue(c(minus).x > c(sl).x && c(minus).x < w / 2f, "$v $minus inside $sl")
+            assertEquals(c(sr).y, c(plus).y, 1f, "$v ${plus} level with $sr"); assertTrue(c(plus).x < c(sr).x && c(plus).x > w / 2f, "$v $plus inside $sr")
+            if (v == SkinVariant.WIIU) continue
+            val right = if (v in setOf(SkinVariant.N3DS, SkinVariant.N3DS_REGULAR)) "MIC" else "HOME"
+            assertTrue(c("MENU").x < w / 2f && c("MENU").spec.labelDx < 0f, "$v MENU left, its word beside it")
+            assertTrue(c(right).x > w / 2f && c(right).spec.labelDx > 0f, "$v $right right"); assertEquals(c("MENU").y, c(right).y, 1f, "$v $right level with MENU")
+        }
+        for (v in listOf(SkinVariant.GC, SkinVariant.N64)) {
+            val p = at(v); fun c(id: String) = p.controls.first { it.spec.id == id }
+            assertTrue(c("MENU").x < w / 2f && c("START").x > w / 2f, "$v MENU left, START right"); assertEquals(c("MENU").y, c("START").y, 1f, "$v level")
+        }
+    }
+
     // The GameCube's tall landscape: on a tablet START over MENU on the right, the pair in a well; on the unfolded Fold
     // (the C-stick as big as the d-pad, no room under it for both) START alone on the right, MENU level with it on the left.
     @Test
@@ -1370,12 +1398,7 @@ class NxCarbonPackTest {
             fun c(id: String) = p.controls.first { it.spec.id == id }
             val menu = c("MENU"); val start = c("START")
             assertTrue(start.x > w / 2f, "$w START right")
-            if (dpi == 420) {
-                assertTrue(menu.x < w / 2f, "$w MENU left")
-                assertEquals(start.y, menu.y, 1f, "$w MENU level with START")
-                assertEquals(c("DPAD").spec.r, c("CSTICK").spec.r * 156f / 170f, 1f, "$w the C-stick at the d-pad's size")
-                continue
-            }
+            if (dpi == 420) continue   // (the Fold flat sideways: foldInnerSidewaysPutsTheSmallCapsByTheShouldersAndSplitsMenu)
             assertTrue(menu.x > w / 2f, "$w MENU right")
             stacked(start, menu, "$w START over MENU (the PSP's order)")
             val my = (menu.y + start.y) / 2f
@@ -1588,9 +1611,11 @@ class NxCarbonPackTest {
             if (name == "cover") row("STICK_SWAP", "MIC", "MENU")
             if (tall) {   // each side's caps in a row under its pad: MIC MENU; SELECT START (a tablet's: upright pairs)
                 if (name == "tablet_land") for ((a, b) in listOf("MIC" to "MENU", "SELECT" to "START")) { assertEquals(c(a).x, c(b).x, 1f, "$name $b under $a"); assertTrue(c(b).y > c(a).y, "$name $b under $a") }
-                else { row("MIC", "MENU"); row("SELECT", "START") }
-                assertTrue(c("MIC").y - c("DPAD").y > (c("MIC").spec.r + c("DPAD").spec.r) * p.k, "$name MIC clear of the d-pad")
-                assertTrue(c("SELECT").y - c("CSTICK").y > c("SELECT").spec.r + c("CSTICK").spec.r * 1.25f, "$name SELECT clear of the C-stick")
+                else if (name != "inner_land") { row("MIC", "MENU"); row("SELECT", "START") }   // (the Fold flat sideways: foldInnerSidewaysPutsTheSmallCapsByTheShouldersAndSplitsMenu)
+                if (name != "inner_land") {
+                    assertTrue(c("MIC").y - c("DPAD").y > (c("MIC").spec.r + c("DPAD").spec.r) * p.k, "$name MIC clear of the d-pad")
+                    assertTrue(c("SELECT").y - c("CSTICK").y > c("SELECT").spec.r + c("CSTICK").spec.r * 1.25f, "$name SELECT clear of the C-stick")
+                }
             }
             if (name == "phone_land") {   // the switch cap on the left
                 assertTrue(c("STICK_SWAP").x < d.first / 2f, "$name switch left")
