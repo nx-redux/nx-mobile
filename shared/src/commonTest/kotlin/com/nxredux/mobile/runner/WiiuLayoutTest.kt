@@ -205,6 +205,12 @@ class WiiuLayoutTest {
         assertEquals(glass.y + glass.height, pad.dst.y + pad.dst.height, 0.01f)
         assertEquals(glass.x + glass.width / 2f, pad.dst.x + pad.dst.width / 2f, 0.01f)
         assertTrue(pad.dst.width < tv.dst.width && pad.dst.width >= tv.dst.width / 2f)
+        assertEquals(WiiuLayout.TV_SRC, tv.src); assertFalse(tv.touch)
+        assertEquals(WiiuLayout.PAD_SRC, pad.src); assertTrue(pad.touch)
+        // swapped: the GamePad in the full-width slot, the TV under it
+        val (big, small) = assertNotNull(WiiuLayout.skinRegions(glass, null, null, NdsSettings(big = NdsScreen.BOTTOM)))
+        assertEquals(WiiuLayout.PAD_SRC, big.src); assertTrue(big.touch); assertEquals(tv.dst, big.dst)
+        assertEquals(WiiuLayout.TV_SRC, small.src); assertFalse(small.touch); assertEquals(pad.dst, small.dst)
         val short = PxRect(0f, 0f, 1160f, 800f)
         val (tv2, pad2) = assertNotNull(WiiuLayout.skinRegions(short, null, null, NdsSettings(big = NdsScreen.TOP)))
         assertEquals(tv2.dst.width, pad2.dst.width, 0.01f)

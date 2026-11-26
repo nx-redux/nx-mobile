@@ -155,18 +155,19 @@ class SkinWiiuTest {
     }
 
     /**
-     * Elsewhere the GamePad's one screen is the 3DS's: sideways the 3DS's glass; a phone upright its top and
-     * sides, as far over ZL / ZR as the 3DS's bottom screen is over L / R; the Fold cover's frame from the 3DS's top
-     * screen's top and sides down to the box gap over L / R.
+     * Elsewhere the GamePad's one screen frame is the 3DS's: sideways the 3DS's frame; a phone upright its top and
+     * sides, its edge as far over ZL / ZR as the 3DS's is over L / R; the Fold cover's from the 3DS's top screen's top
+     * and sides down to the box gap over L / R.
      */
     private fun assertStackAsThe3ds(pack: SkinPackManifest, d: DeviceClass, p: SkinPlacement, g: PxRect, label: String) {
         val n = assertNotNull(SkinChoice.place(pack, d.w, d.h, d.dpi, d.tablet, ds = true, hingeY = d.hingeY, foldable = d.foldable, variant = SkinVariant.N3DS), label)
         val ng = assertNotNull(n.glass(GlassScreen.STACK) ?: n.glass(GlassScreen.TOP), label).rect
         for ((a, b) in listOf(ng.x to g.x, ng.y to g.y, ng.width to g.width)) assertEquals(a, b, 1f, "$label glass $g, the 3DS's $ng")
         fun top(pl: SkinPlacement, id: String) = pl.controls.first { it.spec.id == id }.let { it.y - it.spec.hh }
+        val wf = assertNotNull(frames(p).first, label); val nf = assertNotNull(frames(n).first, label)
         when (p.spec.family) {
-            SkinFamily.GRIP -> assertEquals(ng.height, g.height, 1f, "$label glass height")
-            SkinFamily.STACKED -> assertEquals(top(n, "L") - (ng.y + ng.height), top(p, "L2") - (g.y + g.height), 1f, "$label gap over ZL")
+            SkinFamily.GRIP -> for ((a, b) in listOf(nf.x to wf.x, nf.y to wf.y, nf.width to wf.width, nf.height to wf.height)) assertEquals(a, b, 1f, "$label frame $wf, the 3DS's $nf")
+            SkinFamily.STACKED -> assertEquals(top(n, "L") - (nf.y + nf.height), top(p, "L2") - (wf.y + wf.height), 1f, "$label frame edge over ZL")
             else -> {
                 val l = p.controls.first { it.spec.id == "L" }
                 val shoulder = p.pieces.filter { it.piece >= 0 && it.dst.width < 300f && l.x in it.dst.x..(it.dst.x + it.dst.width) && l.y in it.dst.y..(it.dst.y + it.dst.height) }
@@ -201,7 +202,8 @@ class SkinWiiuTest {
     /**
      * The GamePad is the New 3DS's layout on every window: the d-pad and left stick, the face, L / R and ZL / ZR where the
      * 3DS twin has them, at its sizes; but a phone upright, whose ZL / ZR stand over L / R, giving − + the L / R row's
-     * middle, and the Fold cover, whose ZL / ZR sit beside L / R on their inner side (its one screen frame over them).
+     * middle, and the Fold cover, whose ZL / ZR sit beside L / R on their inner side, the four lower (its one screen
+     * frame taller over them).
      */
     @Test
     fun the_pads_sit_where_the_new_3ds_has_them() {
@@ -213,13 +215,15 @@ class SkinWiiuTest {
                 val n3ds = assertNotNull(SkinChoice.place(pack, d.w, d.h, d.dpi, d.tablet, ds = true, hingeY = d.hingeY, foldable = d.foldable, variant = SkinVariant.N3DS), label)
                 fun at(pl: SkinPlacement, cid: String) = pl.controls.first { it.spec.id == cid }
                 val stacked = p.spec.family == SkinFamily.STACKED; val large = p.spec.family == SkinFamily.LARGE
-                for (cid in listOf("DPAD", "STICK", "X", "Y", "A", "B", "L", "R") + (if (stacked || large) emptyList() else listOf("L2", "R2"))) {
+                for (cid in listOf("DPAD", "STICK", "X", "Y", "A", "B") + (if (large) emptyList() else listOf("L", "R")) + (if (stacked || large) emptyList() else listOf("L2", "R2"))) {
                     val w = at(p, cid); val n = at(n3ds, cid)
                     assertEquals(n.x, w.x, 1f, "$label $cid x"); assertEquals(n.y, w.y, 1f, "$label $cid y")
                     for ((a, b) in listOf(n.spec.r to w.spec.r, n.spec.hw to w.spec.hw, n.spec.hh to w.spec.hh)) assertEquals(a, b, 0.5f, "$label $cid size")
                 }
-                if (large) for ((z, s, sg) in listOf(Triple("L2", "L", 1f), Triple("R2", "R", -1f))) {   // beside L / R on their inner side
-                    val zc = at(p, z); val sc = at(p, s)
+                if (large) for ((z, s, sg) in listOf(Triple("L2", "L", 1f), Triple("R2", "R", -1f))) {   // beside L / R on their inner side, lower
+                    val zc = at(p, z); val sc = at(p, s); val nc = at(n3ds, s)
+                    assertEquals(nc.x, sc.x, 1f, "$label $s x"); assertTrue(sc.y > nc.y, "$label $s ${sc.y} not under the 3DS's ${nc.y}")
+                    for ((a, b) in listOf(nc.spec.hw to sc.spec.hw, nc.spec.hh to sc.spec.hh)) assertEquals(a, b, 0.5f, "$label $s size")
                     assertEquals(sc.y, zc.y, 1f, "$label $z level with $s")
                     assertTrue((zc.x - sc.x) * sg >= zc.spec.hw + sc.spec.hw, "$label $z ${zc.x} not inside $s ${sc.x}")
                 }
@@ -289,8 +293,8 @@ class SkinWiiuTest {
     }
 
     /**
-     * On a regular phone sideways the player's layout goes in the one glass, the 3DS's size, centred in it, as big
-     * as fits (Large the GamePad beside the TV, Side by side the two abreast, Stacked the one over the other, one screen
+     * On a regular phone sideways the player's layout goes in the one glass, its frame the 3DS's, centred in it, as
+     * big as fits (Large the GamePad beside the TV, Side by side the two abreast, Stacked the one over the other, one screen
      * alone).
      */
     @Test
@@ -303,8 +307,8 @@ class SkinWiiuTest {
                 stackAspect = WiiuLayout.skinAspect(layout)), label)
             val g = assertNotNull(p.glass(GlassScreen.STACK), label).rect
             val n = assertNotNull(SkinChoice.place(pack, d.w, d.h, d.dpi, d.tablet, ds = true, foldable = d.foldable, variant = SkinVariant.N3DS), label)
-            val ng = assertNotNull(n.glass(GlassScreen.STACK), label).rect
-            for ((a, b) in listOf(ng.x to g.x, ng.y to g.y, ng.width to g.width, ng.height to g.height)) assertEquals(a, b, 1f, "$label glass $g, the 3DS's $ng")
+            val wf = assertNotNull(frames(p).first, label); val nf = assertNotNull(frames(n).first, label)
+            for ((a, b) in listOf(nf.x to wf.x, nf.y to wf.y, nf.width to wf.width, nf.height to wf.height)) assertEquals(a, b, 1f, "$label frame $wf, the 3DS's $nf")
             val u = assertNotNull(union(assertNotNull(WiiuLayout.skinRegions(g, null, null, NdsSettings(), layout), label).filter { !it.inset }.map { it.dst }), label)
             assertTrue(u.x >= g.x - 0.5f && u.y >= g.y - 0.5f && u.x + u.width <= g.x + g.width + 0.5f && u.y + u.height <= g.y + g.height + 0.5f, "$label $u outside $g")
             assertTrue(kotlin.math.abs(u.width - g.width) <= 4f || kotlin.math.abs(u.height - g.height) <= 4f, "$label $u not as big as fits $g")

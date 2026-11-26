@@ -536,11 +536,10 @@ object SkinChoice {
         for (family in families) {
             widest(tuned, pack, family, v, fold = false) { spec ->
                 if (spec.frame != null && spec.boxes.isNotEmpty()) SkinBoxes.place(spec, windowW, windowH, k, densityDpi, hingeY) { s, r ->
-                    // (a stack glass holds both screens: not cut to the top one's shape)
-                    SkinSolver.placePieces(s, windowW.toFloat(), windowH.toFloat(), k, picture, topInset.toFloat(), topScreen = top.takeIf { s.frame?.glass?.screen != GlassScreen.STACK }, row = row,
+                    SkinSolver.placePieces(s, windowW.toFloat(), windowH.toFloat(), k, picture, topInset.toFloat(), topScreen = top, row = row,
                         roomLeft = r.left, roomRight = r.right, roomBottom = r.bottom)
                 }
-                else if (spec.frame != null) SkinSolver.placePieces(spec, windowW.toFloat(), windowH.toFloat(), k, picture, topInset.toFloat(), topScreen = top.takeIf { spec.frame.glass.screen != GlassScreen.STACK }, row = row)
+                else if (spec.frame != null) SkinSolver.placePieces(spec, windowW.toFloat(), windowH.toFloat(), k, picture, topInset.toFloat(), topScreen = top, row = row)
                 else SkinSolver.place(spec, windowW.toFloat(), windowH.toFloat(), k, picture)
             }?.let { return it }
         }
