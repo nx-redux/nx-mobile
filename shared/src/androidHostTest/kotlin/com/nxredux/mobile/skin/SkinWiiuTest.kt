@@ -41,7 +41,8 @@ class SkinWiiuTest {
                 assertEquals(WiiuLayout.TV_SRC, tv.src, label)
                 assertTrue(pad.touch, label)
                 assertTrue(p.controls.none { it.spec.id == "MIC" || it.spec.id == "SAVE" || it.spec.id == "LOAD" }, label)
-                assertTrue(p.controls.any { it.spec.id == "HOME" } && p.controls.any { it.spec.id == "CSTICK" }, label)
+                // no HOME cap: the GamePad's HOME does what MENU does
+                assertTrue(p.controls.none { it.spec.id == "HOME" } && p.controls.any { it.spec.id == "CSTICK" }, label)
             }
         }
     }
@@ -275,7 +276,7 @@ class SkinWiiuTest {
                     }
                     for (x in cs) assertTrue(x.x >= 0f && x.x <= d.w && x.y >= 0f && x.y <= d.h, "$label ${x.spec.id} off the window")
                 }
-                for (id in listOf("CSTICK", "L3", "R3", "HOME", "SELECT", "START")) for (g in p.glasses) {
+                for (id in listOf("CSTICK", "L3", "R3", "SELECT", "START")) for (g in p.glasses) {
                     val pc = c.getValue(id); val r = g.rect
                     val nx = pc.x.coerceIn(r.x, r.x + r.width); val ny = pc.y.coerceIn(r.y, r.y + r.height)
                     assertTrue(kotlin.math.hypot(pc.x - nx, pc.y - ny) >= reach(pc) - 1f, "$label $id's reach on the ${g.screen} glass")
@@ -286,7 +287,7 @@ class SkinWiiuTest {
 
     /**
      * The Fold cover: upright L3 beside ZL and R3 beside ZR on their inner side (L ZL L3 … R3 ZR R), sideways L3 over L
-     * and R3 over R; the caps' rows the 3DS's (HOME on MIC's spot).
+     * and R3 over R; the caps' rows the 3DS's with no MIC, closed up round the 3DS row's middle, one 3DS step apart.
      */
     @Test
     fun the_fold_covers_stick_presses_sit_by_the_shoulders() {
@@ -305,9 +306,16 @@ class SkinWiiuTest {
                     assertEquals(c(p, sh).x, c(p, s3).x, 1f, "$label $s3 over $sh")
                     assertTrue(c(p, s3).y < c(p, sh).y, "$label $s3 not over $sh")
                 }
-                val row = if (name == "cover") listOf("STICK_SWAP", "MENU", "SWAP") else listOf("STICK_SWAP", "MENU", "SWAP", "SELECT", "START")
-                for (cid in row) { assertEquals(c(n, cid).x, c(p, cid).x, 1f, "$label $cid x"); assertEquals(c(n, cid).y, c(p, cid).y, 1f, "$label $cid y") }
-                assertEquals(c(n, "MIC").x, c(p, "HOME").x, 1f, "$label HOME x"); assertEquals(c(n, "MIC").y, c(p, "HOME").y, 1f, "$label HOME y")
+                // the 3DS's row with MIC (its caps in order), the GamePad's the same less MIC
+                val rows = if (name == "cover") listOf(listOf("STICK_SWAP", "MIC", "MENU", "SWAP")) else listOf(listOf("STICK_SWAP", "MIC", "MENU"), listOf("SWAP", "SELECT", "START"))
+                for (row in rows) {
+                    val xs = row.map { c(n, it).x }; val step = xs[1] - xs[0]; val mid = (xs.first() + xs.last()) / 2f
+                    val mine = row - "MIC"
+                    mine.forEachIndexed { i, cid ->
+                        assertEquals(mid + (i - (mine.size - 1) / 2f) * step, c(p, cid).x, 1f, "$label $cid x")
+                        assertEquals(c(n, cid).y, c(p, cid).y, 1f, "$label $cid y")
+                    }
+                }
             }
         }
     }
