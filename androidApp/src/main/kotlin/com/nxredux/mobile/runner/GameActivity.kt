@@ -802,12 +802,18 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                         game?.let { NxLog.i(TAG_LOG, "3DS Download Play: ${it.name}'s own settings for the child") }
                         game?.let { N3dsDownloadPlayHandoff.liveOptions(CoreConfig.parse(it.readText()).values) }
                     }.orEmpty()
-                    if (live.isNotEmpty()) withContext(Dispatchers.Main) {
-                        retroView?.let { view ->
-                            view.queueEvent { runCatching { view.updateVariables(*live.map { (k, v) -> Variable(k, v) }.toTypedArray()) } }
+                    val ack = { runCatching { File(azahar, N3dsDownloadPlayHandoff.ACK_FILE).apply { parentFile?.mkdirs() }.writeText("ok") } }
+                    // The ack lets the client restart into the child: only once the options are with the core, which
+                    // reads them at its next frame's start, before the restart that frame can run.
+                    val queued = live.isNotEmpty() && withContext(Dispatchers.Main) {
+                        val view = retroView ?: return@withContext false
+                        view.queueEvent {
+                            runCatching { view.updateVariables(*live.map { (k, v) -> Variable(k, v) }.toTypedArray()) }
+                            ack()
                         }
+                        true
                     }
-                    runCatching { File(azahar, N3dsDownloadPlayHandoff.ACK_FILE).apply { parentFile?.mkdirs() }.writeText("ok") }
+                    if (!queued) ack()
                     downloadPlayChildStarted = true
                 }
                 delay(250)
