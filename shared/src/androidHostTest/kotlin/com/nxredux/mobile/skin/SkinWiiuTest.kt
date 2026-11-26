@@ -157,7 +157,7 @@ class SkinWiiuTest {
 
     /**
      * Elsewhere the GamePad's one screen frame is the 3DS's: sideways the 3DS's frame; a phone upright its top and
-     * sides, its edge as far over ZL / ZR as the 3DS's is over L / R; the Fold cover's from the 3DS's top screen's top
+     * sides, its edge as far over the L3 / R3 pills as the 3DS's is over L / R; the Fold cover's from the 3DS's top screen's top
      * and sides down to the box gap over L / R.
      */
     private fun assertStackAsThe3ds(pack: SkinPackManifest, d: DeviceClass, p: SkinPlacement, g: PxRect, label: String) {
@@ -168,7 +168,7 @@ class SkinWiiuTest {
         val wf = assertNotNull(frames(p).first, label); val nf = assertNotNull(frames(n).first, label)
         when (p.spec.family) {
             SkinFamily.GRIP -> for ((a, b) in listOf(nf.x to wf.x, nf.y to wf.y, nf.width to wf.width, nf.height to wf.height)) assertEquals(a, b, 1f, "$label frame $wf, the 3DS's $nf")
-            SkinFamily.STACKED -> assertEquals(top(n, "L") - (nf.y + nf.height), top(p, "L2") - (wf.y + wf.height), 1f, "$label frame edge over ZL")
+            SkinFamily.STACKED -> assertEquals(top(n, "L") - (nf.y + nf.height), top(p, "L3") - (wf.y + wf.height), 1f, "$label frame edge over L3")
             else -> {
                 val l = p.controls.first { it.spec.id == "L" }
                 val shoulder = p.pieces.filter { it.piece >= 0 && it.dst.width < 300f && l.x in it.dst.x..(it.dst.x + it.dst.width) && l.y in it.dst.y..(it.dst.y + it.dst.height) }
@@ -202,8 +202,8 @@ class SkinWiiuTest {
 
     /**
      * The GamePad is the New 3DS's layout on every window: the d-pad and left stick, the face, L / R and ZL / ZR where the
-     * 3DS twin has them, at its sizes; but a phone upright, whose ZL / ZR stand over L / R, giving − + the L / R row's
-     * middle, and the Fold cover, whose ZL / ZR sit beside L / R on their inner side, the four lower (its one screen
+     * 3DS twin has them, at its sizes; but a phone upright, whose L3 / R3 pills stand over L / R and ZL / ZR sit in the
+     * L / R row, and the Fold cover, whose ZL / ZR sit beside L / R on their inner side, the four lower (its one screen
      * frame taller over them).
      */
     @Test
@@ -228,10 +228,14 @@ class SkinWiiuTest {
                     assertEquals(sc.y, zc.y, 1f, "$label $z level with $s")
                     assertTrue((zc.x - sc.x) * sg >= zc.spec.hw + sc.spec.hw, "$label $z ${zc.x} not inside $s ${sc.x}")
                 }
-                if (stacked) for ((z, s) in listOf("L2" to "L", "R2" to "R")) {
-                    val zc = at(p, z); val sc = at(p, s)
-                    assertEquals(sc.x, zc.x, 1f, "$label $z over $s")
-                    assertTrue(zc.y + zc.spec.hh <= sc.y - sc.spec.hh, "$label $z ${zc.y} not over $s ${sc.y}")
+                if (stacked) for ((p3, s, z) in listOf(Triple("L3", "L", "L2"), Triple("R3", "R", "R2"))) {   // L3 / R3 pills over L / R, ZL / ZR in their row
+                    val pc = at(p, p3); val sc = at(p, s); val zc = at(p, z)
+                    assertEquals(sc.x, pc.x, 1f, "$label $p3 over $s")
+                    assertTrue(pc.y + pc.spec.hh <= sc.y - sc.spec.hh, "$label $p3 ${pc.y} not over $s ${sc.y}")
+                    assertPill(pc, sc, label)
+                    assertEquals(sc.y, zc.y, 1f, "$label $z in the L / R row")
+                    val (l, r) = at(p, "L").x to at(p, "R").x
+                    assertTrue(zc.x > l && zc.x < r, "$label $z ${zc.x} not between L and R")
                 }
             }
         }
@@ -287,7 +291,7 @@ class SkinWiiuTest {
 
     /**
      * The Fold cover: upright L3 beside ZL and R3 beside ZR on their inner side (L ZL L3 … R3 ZR R), sideways L3 over L
-     * and R3 over R; the caps' rows the 3DS's with no MIC, closed up round the 3DS row's middle, one 3DS step apart.
+     * and R3 over R, shoulder pills as L / R are; the caps' rows the 3DS's with no MIC, closed up round the 3DS row's middle, one 3DS step apart.
      */
     @Test
     fun the_fold_covers_stick_presses_sit_by_the_shoulders() {
@@ -305,6 +309,7 @@ class SkinWiiuTest {
                 } else for ((s3, sh) in listOf("L3" to "L", "R3" to "R")) {
                     assertEquals(c(p, sh).x, c(p, s3).x, 1f, "$label $s3 over $sh")
                     assertTrue(c(p, s3).y < c(p, sh).y, "$label $s3 not over $sh")
+                    assertPill(c(p, s3), c(p, sh), label)
                 }
                 // the 3DS's row with MIC (its caps in order), the GamePad's the same less MIC
                 val rows = if (name == "cover") listOf(listOf("STICK_SWAP", "MIC", "MENU", "SWAP")) else listOf(listOf("STICK_SWAP", "MIC", "MENU"), listOf("SWAP", "SELECT", "START"))
@@ -318,6 +323,13 @@ class SkinWiiuTest {
                 }
             }
         }
+    }
+
+    /** [pill] (L3 / R3) the shoulder [shoulder] (L / R) is: a rect of its touch size, its own word on it. */
+    private fun assertPill(pill: PlacedControl, shoulder: PlacedControl, label: String) {
+        assertEquals(ControlShape.RECT, pill.spec.shape, "$label ${pill.spec.id} shape")
+        assertEquals(shoulder.spec.hw, pill.spec.hw, 0.5f, "$label ${pill.spec.id} hw"); assertEquals(shoulder.spec.hh, pill.spec.hh, 0.5f, "$label ${pill.spec.id} hh")
+        assertEquals(pill.spec.id, pill.spec.mark, "$label ${pill.spec.id} word")
     }
 
     /** Windows whose right stick's box has no room for 85% of the left stick without moving the 3DS's pads. */
