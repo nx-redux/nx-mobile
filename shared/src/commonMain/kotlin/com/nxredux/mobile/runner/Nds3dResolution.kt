@@ -82,6 +82,9 @@ enum class Res3dConsole(
      */
     val launchOnly: Boolean get() = this == CEMU
 
+    /** The scale a [launchOnly] console's core holds after a launch that had no window to size it: its locked Native default. */
+    val unsizedLaunchValue: Int? get() = if (launchOnly) 1 else null
+
     /** Performance draws at native size: no Scale row (the PS2 runs slowly above it; PCSX-ReARMed has only 1x and 2x). */
     val nativePerformance: Boolean get() = this == PS2 || this == PCSX
 

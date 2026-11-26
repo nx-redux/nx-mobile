@@ -124,6 +124,11 @@ internal class Res3dController(private val host: Res3dHost, private val renderer
         val max = listOfNotNull(console.displayMaxOf(shape.widthPx to shape.heightPx, shape.screenClass), second).maxOrNull()
         if (max == null) {
             if (console == Res3dConsole.N3DS) CoreRegistry.forId(console.coreId)?.defaultOptions?.get(console.coreKey)?.toIntOrNull()?.let(renderer::startN3dsFactor)
+            // Held as if sent, so the first layout does not change a launch-only scale mid-game.
+            console.unsizedLaunchValue?.let {
+                sender.offer(it, sizeChange = false, SystemClock.uptimeMillis())
+                this.value = it
+            }
             return emptyMap()
         }
         val value = Nds3dResolution.valueFor(host.frontendValues, null, max, console, shaded = host.shaderOn)

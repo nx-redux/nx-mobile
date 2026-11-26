@@ -310,6 +310,11 @@ class Nds3dResolutionTest {
         assertEquals(2, Nds3dResolution.liveValue(null, quality, 2, 2, cemu))
         assertTrue(cemu.launchOnly)
         for (other in Res3dConsole.entries - cemu) assertTrue(!other.launchOnly, other.name)
+        // a launch with no window size sent nothing: the core's native default holds, as if sent
+        assertEquals(1, cemu.unsizedLaunchValue)
+        assertEquals("native", cemu.coreValue(1))
+        assertEquals(1, Nds3dResolution.liveValue(cemu.unsizedLaunchValue, quality, 2, 2, cemu))
+        for (other in Res3dConsole.entries - cemu) assertEquals(null, other.unsizedLaunchValue, other.name)
         assertEquals(3, Nds3dResolution.liveValue(1, mapOf(Res3dConsole.DOLPHIN.modeKey to Nds3dMode.QUALITY.value), 3, 3, Res3dConsole.DOLPHIN))
         assertEquals(2, Nds3dResolution.liveValue(1, emptyMap(), 2, 2, Res3dConsole.PSP))
     }
