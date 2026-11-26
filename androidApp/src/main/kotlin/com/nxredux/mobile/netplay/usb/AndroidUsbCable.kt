@@ -94,9 +94,10 @@ class AndroidUsbCable(context: Context) : UsbCable {
     @Synchronized override fun start() = begin(LINK_WAIT_MS)
 
     /**
-     * A game's own start (its DS wireless came on with something on the USB port): only when no link runs and Android's
-     * VPN consent is already given, and waiting [UsbSearch.AUTO_WAIT_MS] for the other end. The token to [stopIf] it
-     * with, or null when nothing was started (a link that already runs is used as it is, and left to its starter).
+     * A game's own start (a phone on the USB port as its DS or 3DS wireless came on, or as a PSP game started): only
+     * when no link runs and Android's VPN consent is already given, and waiting [UsbSearch.AUTO_WAIT_MS] for the other
+     * end. The token to [stopIf] it with, or null when nothing was started (a link that already runs is used as it is,
+     * and left to its starter).
      */
     @Synchronized fun startAuto(): Long? {
         val s = _state.value
@@ -125,7 +126,10 @@ class AndroidUsbCable(context: Context) : UsbCable {
     /** A game asked about the cable: the one that started it is still there. */
     fun autoSeen() { autoSeenMs = SystemClock.elapsedRealtime() }
 
-    /** What the USB port shows of another phone, before any link. */
+    /**
+     * What the USB port shows of another phone, before any link and while linked to one (the other phone stays in sight
+     * on both sides): a PSP game reads a phone gone from the port while the cable still says Up as a pull.
+     */
     fun peer(): UsbPeer {
         val usb = usb ?: return UsbPeer.NONE
         if (!available) return UsbPeer.NONE

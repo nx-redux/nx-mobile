@@ -483,6 +483,11 @@ interface AppSettings {
         get() = true
         set(@Suppress("UNUSED_PARAMETER") value) {}
 
+    /** Console tags whose "running on the built-in BIOS" notice was shown, so it comes once per console. Defaulted, like [debugLog]. */
+    var hleBiosNoticeShown: Set<String>
+        get() = emptySet()
+        set(@Suppress("UNUSED_PARAMETER") value) {}
+
     /**
      * Settings → Emulation → A resumes (default on): A on a game with a save state continues from it. Off: A starts it
      * fresh, and its menu's Resume continues instead. Defaulted, like [debugLog].

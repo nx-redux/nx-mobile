@@ -1,5 +1,7 @@
 package com.nxredux.mobile.netplay
 
+import com.nxredux.mobile.netplay.usb.UsbHello
+
 /**
  * The core options a link session gives its core before load, as the handheld sets them: nx-redux
  * `gblink.c` (gambatte's link mode, port and the host's address as 12 digits) and `gbalink_mode.c` (gpSP's
@@ -98,16 +100,15 @@ object NetplayLinkOptions {
 
     /**
      * The options a PSP launch sends for its ad hoc network. Linked, in a sheet session ([sessionOptions], [forSession]'s,
-     * whatever [localWireless] says) or outside one with Local Wireless on and both Wi-Fi addresses known (the runner
-     * needs them to find the others and to tell its own traffic apart): WLAN on ([pspNetwork] with [macSeed]'s
-     * [pspMac]), the link's variables, and [broadcast] and [self] when both are known. Otherwise only WLAN off: WLAN on
-     * without the link variables would never find the others.
+     * whatever [localWireless] says) or outside one with Local Wireless on: WLAN on ([pspNetwork] with [macSeed]'s
+     * [pspMac]), the link's variables, and the Wi-Fi [broadcast] and [self] addresses that are known (the runner serves
+     * and follows on the Wi-Fi only with its own address, and the cable needs none). A session's own addresses (the
+     * cable's) win over the Wi-Fi ones. Otherwise only WLAN off: WLAN on without the link variables would never find the others.
      */
     fun forPsp(sessionOptions: Map<String, String>?, localWireless: Boolean, self: String?, broadcast: String?, macSeed: Int): Map<String, String> {
-        val addresses = if (self != null && broadcast != null) mapOf(PSP_BROADCAST to broadcast, PSP_SELF to self) else emptyMap()
         val link = when {
-            sessionOptions != null -> sessionOptions + addresses
-            localWireless && addresses.isNotEmpty() -> pspLink(N3DS_AUTO, null, broadcast, self)
+            sessionOptions != null -> pspLink(N3DS_AUTO, null, broadcast, self) + sessionOptions
+            localWireless -> pspLink(N3DS_AUTO, null, broadcast, self)
             else -> return mapOf("ppsspp_enable_wlan" to "disabled")
         }
         return pspNetwork(pspMac(macSeed)) + link
@@ -115,12 +116,27 @@ object NetplayLinkOptions {
 
     /**
      * The variables a PSP sheet session's Disconnect sends: the automatic route, as a launch outside a session would run
-     * ([forPsp]), when [localWireless] is on and both Wi-Fi addresses are known, so the game finds the others again once
-     * it leaves and re-enters ad hoc; otherwise the link off for the rest of the launch. A join's host address is not
-     * sent: the automatic route reads none.
+     * ([forPsp]), when [localWireless] is on, so the game finds the others again once it leaves and re-enters ad hoc
+     * (over the cable when there is no Wi-Fi address); otherwise the link off for the rest of the launch. A join's host
+     * address is not sent: the automatic route reads none. A session [overUsb] ran on the cable's addresses, which the
+     * runner keeps unless an update replaces them, and on the automatic route it would take them for Wi-Fi ones: each
+     * Wi-Fi address not known goes as empty, which the runner reads as none.
      */
-    fun pspSessionLeft(localWireless: Boolean, self: String?, broadcast: String?): Map<String, String> =
-        if (localWireless && self != null && broadcast != null) pspLink(N3DS_AUTO, null, broadcast, self) else mapOf(PSP_MODE to N3DS_OFF)
+    fun pspSessionLeft(localWireless: Boolean, self: String?, broadcast: String?, overUsb: Boolean = false): Map<String, String> =
+        if (!localWireless) mapOf(PSP_MODE to N3DS_OFF)
+        else if (overUsb) pspLink(N3DS_AUTO, null, broadcast ?: "", self ?: "")
+        else pspLink(N3DS_AUTO, null, broadcast, self)
+
+    /**
+     * What a linked PSP game's runner is given when the Wi-Fi's address becomes [self] with [broadcast]: both, as
+     * variables, when both are known and differ from what it was [given] last (null: none yet, as for a launch without
+     * Wi-Fi). Nothing while a sheet session runs over the USB cable ([onCable]): its addresses are the cable's, and an
+     * update would replace them with addresses the other end has no route to.
+     */
+    fun pspWifiUpdate(onCable: Boolean, given: Pair<String, String>?, self: String?, broadcast: String?): Map<String, String> {
+        if (onCable || self == null || broadcast == null || given == (self to broadcast)) return emptyMap()
+        return mapOf(PSP_SELF to self, PSP_BROADCAST to broadcast)
+    }
 
     /**
      * The variables a DS ([NetplayLinkKind.NDSLINK]) or 3DS ([NetplayLinkKind.N3DSLINK]) sheet session's Disconnect sends:
@@ -320,8 +336,18 @@ object NetplayLinkOptions {
             putSessionRoom(NDS_ROOM, session, roomName)
             ndsMac?.let { put(NDS_MAC_MODE, it) }
         }
-        NetplayLinkKind.PSPLINK ->
-            if (session.role == NetplayRole.HOST) pspLink(N3DS_HOST, null, null, null) else pspLink(N3DS_JOIN, session.peerIp, null, null)
+        NetplayLinkKind.PSPLINK -> {
+            val host = session.role == NetplayRole.HOST
+            // Over the cable the peer is the other end, so this end is the other cable address; a peer that is neither is
+            // not guessed at.
+            val self = if (!session.overUsb) null else when (session.peerIp) {
+                UsbHello.HOST_IP -> UsbHello.DEVICE_IP
+                UsbHello.DEVICE_IP -> UsbHello.HOST_IP
+                else -> null
+            }
+            val broadcast = if (self != null) UsbHello.BROADCAST_IP else null
+            if (host) pspLink(N3DS_HOST, null, broadcast, self) else pspLink(N3DS_JOIN, session.peerIp, broadcast, self)
+        }
         null -> emptyMap()
     }
 }

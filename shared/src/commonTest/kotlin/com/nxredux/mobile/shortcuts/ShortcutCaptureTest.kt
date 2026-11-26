@@ -60,6 +60,15 @@ class ShortcutCaptureTest {
         )
     }
 
+    // Bound alone, a direction would be gone from the game: only MENU + a direction binds.
+    @Test fun aDirectionBindsOnlyWithMenu() {
+        val up = KeyCodes.DPAD_UP
+        assertEquals(CaptureResult.Refused(ShortcutBinding(null, up), "Hold MENU with the D-pad"), started().onKey(up, true))
+        val c = started()
+        c.onKey(menu, true)
+        assertEquals(CaptureResult.Bound(ShortcutBinding(menu, up)), c.onKey(up, true))
+    }
+
     @Test fun bAndBackCancel() {
         assertEquals(CaptureResult.Cancelled, started().onKey(KeyCodes.BUTTON_B, true))
         assertEquals(CaptureResult.Cancelled, started().onKey(KeyCodes.BACK, true))

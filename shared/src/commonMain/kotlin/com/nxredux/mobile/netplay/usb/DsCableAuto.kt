@@ -9,16 +9,21 @@ enum class UsbAutoLink { IDLE, LINKING, UP, REFUSED }
 data class UsbAutoStatus(val peer: UsbPeer, val link: UsbAutoLink)
 
 /**
- * A DS game on the automatic route with a phone on its USB port: when the cable is started for it, and what the room
- * search is told ([Cable], the native ndl_cable). Two phones on a cable meet over it; any more meet on the Wi-Fi.
+ * A DS, 3DS or PSP game on the automatic route with a phone on its USB port: when the cable is started for it, and what
+ * the link is told ([Cable], the native ndl_cable). Two phones on a cable meet over it; any more meet on the Wi-Fi.
  *
- * The search is told of a phone on the port before the game's wireless comes on, so the first search already waits for
- * the cable; the cable itself starts with the wireless. Only a phone in sight counts: something that merely hosts this
- * phone may be a computer, and the phone that sees the other switches it into sight.
+ * The link is told of a phone on the port before the game's wireless comes on, so the first search already waits for
+ * the cable; for DS and 3DS the cable itself starts with the wireless. Only a phone in sight counts: something that
+ * merely hosts this phone may be a computer, and the phone that sees the other switches it into sight.
+ *
+ * [withGame] ([NetplayCores.cableWithGame], PSP): the cable starts from the game's start with a phone in sight, and is
+ * up only while a phone is on the port. A PSP device is grouped on the network its first login finds, and a second
+ * player entering the lobby later would find the first one grouped on the Wi-Fi unless the cable was up before either
+ * entered. DS and 3DS rooms relay across both networks, so they need neither.
  *
  * Pure: the host asks the cable's owner for [UsbAutoStatus] every second or so and feeds [step].
  */
-class DsCableAuto {
+class DsCableAuto(private val withGame: Boolean = false) {
     enum class Cable(val code: Int) { NONE(0), COMING(1), UP(2) }
 
     /** [start]: start the cable now (the host asks Android's consent first, and tells [refuse] when it is not given). */
@@ -34,13 +39,18 @@ class DsCableAuto {
     /** [wirelessOn]: the game's wireless is on (looking for a room, or in one). */
     fun step(status: UsbAutoStatus, wirelessOn: Boolean, nowMs: Long): Step {
         when (status.link) {
-            UsbAutoLink.UP -> { active = true; return Step(Cable.UP, false) }
+            UsbAutoLink.UP -> {
+                active = true
+                // A pulled cable reads as up while the cable rides out what may be a brief drop (up to half a minute):
+                // a PSP session moved to the Wi-Fi at once loses one relogin, one left on a dead cable the whole wait.
+                if (!withGame || status.peer == UsbPeer.SEEN) return Step(Cable.UP, false)
+            }
             UsbAutoLink.REFUSED -> { refused = true; active = false }
             UsbAutoLink.LINKING -> active = true
             UsbAutoLink.IDLE -> if (active) { active = false; nextStartMs = nowMs + RETRY_MS }
         }
         val seen = status.peer == UsbPeer.SEEN && !refused
-        val start = seen && wirelessOn && status.link == UsbAutoLink.IDLE && nowMs >= nextStartMs
+        val start = seen && (wirelessOn || withGame) && status.link == UsbAutoLink.IDLE && nowMs >= nextStartMs
         if (start) nextStartMs = nowMs + RETRY_MS
         return Step(if (seen) Cable.COMING else Cable.NONE, start)
     }

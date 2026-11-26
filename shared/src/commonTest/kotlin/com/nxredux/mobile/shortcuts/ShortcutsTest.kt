@@ -44,6 +44,8 @@ class ShortcutsTest {
         assertNull(ShortcutBinding.decode("110+109"))
         assertNull(ShortcutBinding.decode("108"))
         assertNull(ShortcutBinding.decode("109"))
+        assertNull(ShortcutBinding.decode("19"))   // a direction alone
+        assertEquals(ShortcutBinding(110, 19), ShortcutBinding.decode("110+19"))
         assertEquals(ShortcutBinding(KeyCodes.BUTTON_MODE, 96), ShortcutBinding.decode("110+96"))
         assertNull(ShortcutBinding.decode("103+96"))
         assertNull(ShortcutBinding.decode("0+96"))

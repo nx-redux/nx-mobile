@@ -1,5 +1,18 @@
 # TODO list
 
+## PSP ad hoc over the USB cable
+
+To fix (both reproduce with `tools/device-tests/psp_cable.py`, checks `late` and `replug`):
+
+- [ ] A cable plugged into a running Wi-Fi lobby drops the lobby: as the cable starts the link logs `left`, `serve off`, `log in again`, though a running session should be kept. Looks like Android's USB dialog pausing the game; not traced in code.
+- [ ] A pull and a re-plug within about 10 s: the host-side phone reports `cable up` 2 s after the plug on a cable that is not linked yet, moves onto it and serves alone, then goes back to the Wi-Fi about 20 s later. For PSP count only a peer in link shape as up (`AndroidUsbCable.peer()`).
+
+Still owed:
+
+- [ ] Quit crash seen once on the Fold: SIGSEGV in PPSSPP's `DrawEngineGLES` constructor under `retro_unload_game`, a quit before the game finished booting behind a USB dialog.
+- [ ] After a pull, both phones re-enter the lobby and meet over the Wi-Fi (not run: the phones were on different subnets).
+- [ ] From review, not seen on a device: the Wi-Fi lost mid-game is never told to the runner (`LaunchPipeline` `onLost` only clears `pspWifi`; `pspWifiUpdate` sends nothing for no address), so with a cable coming the election may serve alone on the old Wi-Fi address after the hold.
+
 ## Review round 3: device checks owed
 
 - [ ] RA: revoke/sign out mid-game, unlock, sign in, sync → the unlock arrives; quit right after an unlock → no toast during the quit.
@@ -222,6 +235,14 @@ Automated: `tools/device-tests/netplay_pads.py` (Fold host, Nova client, then AY
 - [x] PS1: PCSX ReARMed drifted (its dynarec compiles on a second thread, so interrupts landed at other instructions per device); sessions now force `pcsx_rearmed_drc_thread` off. PCSX ReARMed and SwanStation, SF EX Plus Alpha: no drift.
 - [x] N64 (Mario Kart 64): in step. Every RAM difference is in the framebuffer area (0x310000-0x38FFFF, drawn by each GPU); the rest of RDRAM matched at every check for 48 s, so the RAM hash can't pass for N64.
 - [ ] Phone ↔ Brick (no `pad=` yet): still starts, both on the old fixed pad, no desync.
+
+## Dreamcast: HLE BIOS when dc_boot.bin is missing
+- [ ] No `dc_boot.bin`: a disc boots on the HLE BIOS, the notice shows on the first launch only.
+- [ ] With `dc_boot.bin` back: the real BIOS boots, no notice.
+- [ ] Save for game / Save for console during an HLE launch, then add the BIOS and relaunch: the real BIOS boots.
+- [ ] An auto state made on HLE resumes with the BIOS present (and the reverse).
+- [ ] Netplay with no BIOS on one phone: the session starts, both sides on HLE, no drift.
+- [ ] Docs: the BIOS page says the Dreamcast BIOS is recommended, not required.
 
 ## Merged features: checks owed
 

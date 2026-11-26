@@ -265,6 +265,10 @@ class AndroidAppSettings(context: Context) : AppSettings {
         get() = prefs.getStringSet(KEY_KIDS_APPS, null)?.toSet() ?: emptySet()
         set(value) = prefs.edit { putStringSet(KEY_KIDS_APPS, value.toSet()) }
 
+    override var hleBiosNoticeShown: Set<String>
+        get() = prefs.getStringSet(KEY_HLE_BIOS_NOTICE_SHOWN, null)?.toSet() ?: emptySet()
+        set(value) = prefs.edit { putStringSet(KEY_HLE_BIOS_NOTICE_SHOWN, value.toSet()) }
+
     override var kidsUnlockUntil: Long
         get() = prefs.getLong(KEY_KIDS_UNLOCK_UNTIL, 0L)
         set(value) = prefs.edit { putLong(KEY_KIDS_UNLOCK_UNTIL, value) }
@@ -416,6 +420,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
         private const val KEY_KIDS_ENABLED = "kids_enabled"
         private const val KEY_KIDS_SCHEDULE = "kids_schedule"
         private const val KEY_KIDS_APPS = "kids_apps"
+        private const val KEY_HLE_BIOS_NOTICE_SHOWN = "hle_bios_notice_shown"
         private const val KEY_KIDS_UNLOCK_UNTIL = "kids_unlock_until"
         private const val KEY_KIDS_FLAG_HOME = "kids_flag_home"
         private const val KEY_KIDS_ON_WHEN_HOME = "kids_on_when_home"

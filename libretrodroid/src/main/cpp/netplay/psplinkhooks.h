@@ -24,9 +24,10 @@
 struct Variable;
 struct nx_psp_link_interface;
 
-// The runner's side of PSP ad hoc over Wi-Fi (nx_psp_link.h): a finder thread that runs the election (psl_finder.h)
-// on its own UDP socket and tells the core which device runs the ad hoc server. The core's link reaches the app through
-// dslink's core-room path, so presence, leave and rejoin work as for a 3DS room.
+// The runner's side of PSP ad hoc over Wi-Fi or the phone-to-phone cable (nx_psp_link.h): a finder thread that runs
+// the election (psl_finder.h) on its own UDP socket and tells the core which device runs the ad hoc server, and on
+// which network; the core's sockets are routed to that network. The core's link reaches the app through dslink's
+// core-room path, so presence, leave, rejoin and the cable's state work as for a 3DS room.
 //
 // setCore may come from any thread (the core's), but never from inside one of the core's functions the runner calls.
 // configure and forgetCore run on the core's emulation thread, as dslink's do. setNetwork may run on any thread.

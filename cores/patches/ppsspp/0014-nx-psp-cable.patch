@@ -1,0 +1,215 @@
+# license: modifies PPSSPP (https://github.com/hrydgard/ppsspp), GPL-2.0-or-later (LICENSE.TXT); this patch is distributed under the same license.
+# PSP ad hoc over nx-mobile's phone-to-phone USB cable as well as the Wi-Fi (on top of 0012): the runner decides which
+# network the link is on and routes every socket the core hands it there. The game's PDP sockets and PTP listen
+# sockets outlive a group, so when the runner asks for a new login (as it does on every move between networks) and
+# after each login they are routed again onto the link's network; a socket left on the old one would send where the
+# new peers are not. While a phone is on the port and its cable is coming up, the runner holds its answer for the
+# server up to NX_PSP_LINK_SERVER_WAIT_MAX_MS (nx_psp_link.h); a game's Scan / Create / Connect / Join waits for the
+# login that long, and for the connect after it, since a request that returns BUSY is a failure to some games
+# (Tekken 6 calls Connect on entering its lobby). Leaving ad hoc tells the runner before the login thread is joined, so
+# a held login gives up at once rather than stall the game. Without a frontend that answers the call, the core behaves
+# as upstream.
+diff --git a/Core/HLE/NxPspLink.cpp b/Core/HLE/NxPspLink.cpp
+index 04287d2..2f4c90e 100644
+--- a/Core/HLE/NxPspLink.cpp
++++ b/Core/HLE/NxPspLink.cpp
+@@ -304,6 +304,7 @@ bool InAdhoc() {
+ 
+ void RouteSocket(int fd) {
+ 	if (enabled && iface.route_socket) {
++		// The frontend chooses the network (the Wi-Fi or the cable) from where the link is; the argument is unused.
+ 		iface.route_socket(fd, 0);
+ 	}
+ }
+diff --git a/Core/HLE/NxPspLink.h b/Core/HLE/NxPspLink.h
+index 5387ad1..b5b85e4 100644
+--- a/Core/HLE/NxPspLink.h
++++ b/Core/HLE/NxPspLink.h
+@@ -34,8 +34,10 @@ void Register(EnvironmentCallback environment);
+ // Before the PSP shuts down. Also stops a server the frontend started.
+ void Unregister();
+ 
+-// The server to log in to and this device's address on its network, both network order. Blocks up to about
+-// 1.5 s while the frontend listens for one, so only from the login thread. False: none this time.
++// The server to log in to and this device's address on its network (the Wi-Fi's or the cable's), both network order.
++// Blocks up to about 1.5 s while the frontend listens for one, up to NX_PSP_LINK_SERVER_WAIT_MAX_MS (nx_psp_link.h)
++// while it waits for a phone-to-phone cable that is coming, so only from the login thread; Active(false) ends that
++// wait. False: none this time.
+ bool Server(uint32_t *ip, uint32_t *self);
+ // The game reached Scan / Create / Connect / Join, is in a group, or left ad hoc. What the frontend is told also
+ // carries whether this device's server has another user (ServerUsers); only changes reach it.
+@@ -43,6 +45,7 @@ void Active(bool active, bool grouped);
+ // The poll's view of the group, reported while the game is in ad hoc.
+ void Grouped(bool grouped);
+ bool InAdhoc();
++// Every ad hoc socket, once made: the frontend puts it on the network the link is on.
+ void RouteSocket(int fd);
+ // The address last given by Server(); 0 before.
+ uint32_t SelfIp();
+diff --git a/Core/HLE/proAdhoc.cpp b/Core/HLE/proAdhoc.cpp
+index 962c8a5..ff7b3db 100644
+--- a/Core/HLE/proAdhoc.cpp
++++ b/Core/HLE/proAdhoc.cpp
+@@ -1528,6 +1528,28 @@ static void StartAdhocctlLogin() {
+ 	adhocServerResolved = true;
+ }
+ 
++// The link routes each socket onto its network when the socket is made. The game's PDP sockets and PTP listen sockets
++// outlive a group, so after the link moves to the other network (the Wi-Fi or the phone-to-phone cable) they are routed
++// again: a socket left on the old network sends its packets there, where the new peers aren't. Connected PTP sockets are
++// left alone; their peer was on the old network, and the game drops them with the group. The table is only changed on
++// this, the CPU thread.
++static void RouteAdhocSocketsForLink() {
++	if (!NxPspLink::Enabled() || serverHasRelay) {
++		return;
++	}
++	for (int i = 0; i < MAX_SOCKET; i++) {
++		const AdhocSocket *sock = adhocSockets[i];
++		if (sock == NULL) {
++			continue;
++		}
++		if (sock->type == SOCK_PDP) {
++			NxPspLink::RouteSocket(sock->data.pdp.id);
++		} else if (sock->type == SOCK_PTP && sock->data.ptp.state == ADHOC_PTP_STATE_LISTEN) {
++			NxPspLink::RouteSocket(sock->data.ptp.id);
++		}
++	}
++}
++
+ static void FinishAdhocctlLogin() {
+ 	adhocctlLoginThread.join();
+ 	adhocctlLoginRunning = false;
+@@ -1575,6 +1597,9 @@ static void FinishAdhocctlLogin() {
+ 
+ 	g_adhocServerConnected = true;
+ 	INFO_LOG(Log::sceNet, "FriendFinder: Network [RE]Initialized");
++	// Sockets the game made before this login went where the link was then, which may not be where this server is
++	// (the cable can come up before the first login, with nothing to log in again from).
++	RouteAdhocSocketsForLink();
+ 	if (!adhocctlLoggedIn) {
+ 		// The first login after sceNetAdhocctlInit. A request the game made meanwhile is waiting for it,
+ 		// and still busy.
+@@ -1659,6 +1684,8 @@ void friendFinderPoll() {
+ 		}
+ 		// The group was on the old server.
+ 		NetAdhocctl_ServerLost();
++		// The new server can be on the other network.
++		RouteAdhocSocketsForLink();
+ 		// A game that has only inited stays off the network until its own Scan, Create, Connect or Join.
+ 		if (NxPspLink::InAdhoc() && !NxPspLink::Parked()) {
+ 			isAdhocctlNeedLogin = true;
+diff --git a/Core/HLE/sceNetAdhoc.cpp b/Core/HLE/sceNetAdhoc.cpp
+index 040bcf2..4909ad5 100644
+--- a/Core/HLE/sceNetAdhoc.cpp
++++ b/Core/HLE/sceNetAdhoc.cpp
+@@ -64,6 +64,7 @@
+ #include "Core/HLE/KernelWaitHelpers.h"
+ #include "Core/HLE/NetAdhocCommon.h"
+ #include "Core/HLE/NxPspLink.h"
++#include "libretro/nx_psp_link.h"
+ 
+ #include "ext/aemu_postoffice/client/postoffice_client.h"
+ #include "ext/aemu_postoffice/adhocctl/client/adhocctl.h"
+@@ -133,6 +134,12 @@ static int PspEventDelayUs(u32 flags) {
+ // The request goes out to the server then, and the call returns once it's sent.
+ static const int ADHOCCTL_REQUEST_US = 30;
+ 
++// With the nx-mobile link a request waits for the login it set off as long as that login can take: Server()'s longest
++// wait, the connect to the server (which aemu_postoffice gives up after 5 s), and a second for the poll to collect it.
++// Cut short, the request would return BUSY, which some games take as a failure (Tekken 6 entering its lobby throws the
++// player out); a login that fails tells the waiting game itself (FinishAdhocctlLogin).
++static const u64 LINK_REQUEST_TIMEOUT_US = (NX_PSP_LINK_SERVER_WAIT_MAX_MS + 5000 + 1000) * 1000ULL;
++
+ static int RemainingEventDelayUs(u32 flags) {
+ 	s64 left = (s64)(adhocctlRequestTimeUs + PspEventDelayUs(flags)) - (s64)CoreTiming::GetGlobalTimeUs();
+ 	return left > 0 ? (int)left : 0;
+@@ -673,7 +680,8 @@ static void __AdhocctlNotify(u64 userdata, int cyclesLate) {
+ 		if (call_status == ADHOCCTL_CALL_WOULDBLOCK) {
+ 			bool retry = true;
+ 			u64 now = CoreTiming::GetGlobalTimeUs();
+-			if (now - adhocctlStartTime > static_cast<u64>(adhocDefaultTimeout) + 500) {
++			const u64 timeout = NxPspLink::Enabled() ? LINK_REQUEST_TIMEOUT_US : static_cast<u64>(adhocDefaultTimeout);
++			if (now - adhocctlStartTime > timeout + 500) {
+ 				retry = false;
+ 			}
+ 
+@@ -1703,11 +1711,12 @@ void __NetAdhocDoState(PointerWrap &p) {
+ 			StartFriendFinder();
+ 		} else {
+ 			if (!netAdhocctlInited && cur_netAdhocctlInited) {
+-				// The thread sets adhocctlState on its way out, so keep the loaded one.
++				// The thread sets adhocctlState on its way out, so keep the loaded one. The frontend is told first: a
++				// login held in Server() for a cable then gives up, and the join below doesn't wait for it.
+ 				const int loadedState = adhocctlState;
++				NxPspLink::Active(false, false);
+ 				StopFriendFinder();
+ 				adhocctlState = loadedState;
+-				NxPspLink::Active(false, false);
+ 			}
+ 			isAdhocctlNeedLogin = false;
+ 		}
+@@ -3162,11 +3171,12 @@ int NetAdhocctl_Term() {
+ 				NetAdhocctl_Disconnect();
+ 		}
+ 
+-		// Stop the adhocctl client
++		// Stop the adhocctl client. The frontend is told first: a login held in Server() for a cable that is coming
++		// then gives up, and the join in friendFinderStop() doesn't stall the game for the rest of that wait.
++		NxPspLink::Active(false, false);
+ 		friendFinderRunning = false;
+ 		friendFinderStop();
+ 		adhocctlInServerGroup = false;
+-		NxPspLink::Active(false, false);
+ 
+ 		// TODO: May need to block current thread to make sure all Adhocctl callbacks have been fully executed before terminating Adhoc PSPThread (ie. threadAdhocID).
+ 
+diff --git a/libretro/nx_psp_link.h b/libretro/nx_psp_link.h
+index c395060..f72e528 100644
+--- a/libretro/nx_psp_link.h
++++ b/libretro/nx_psp_link.h
+@@ -1,14 +1,19 @@
+ #pragma once
+-// nx-mobile private libretro environment call: PSP ad hoc over Wi-Fi. The core hands the frontend its ad hoc link, so
+-// the frontend can follow it and leave it as it does Azahar's room (nx_3ds_link.h), and tells the core which device runs
+-// the ad hoc server: the frontend runs the finder and the election (psl_finder.h), the core runs the server and the
+-// client. *data is a nx_psp_link_interface* whose frontend half the frontend fills in, or NULL when the link is gone and
+-// the calls must not be made again. Only the nx-mobile runner answers it; only nx-mobile's patched PPSSPP sends it (its
+-// copy must stay byte for byte the same). The calls may come from any thread unless noted.
++// nx-mobile private libretro environment call: PSP ad hoc over Wi-Fi or the phone-to-phone cable. The core hands the
++// frontend its ad hoc link, so the frontend can follow it and leave it as it does Azahar's room (nx_3ds_link.h), and
++// tells the core which device runs the ad hoc server: the frontend runs the finder and the election (psl_finder.h),
++// the core runs the server and the client. *data is a nx_psp_link_interface* whose frontend half the frontend fills
++// in, or NULL when the link is gone and the calls must not be made again. Only the nx-mobile runner answers it; only
++// nx-mobile's patched PPSSPP sends it (its copy must stay byte for byte the same). The calls may come from any thread
++// unless noted.
+ #include <stdint.h>
+ 
+ #define NX_ENVIRONMENT_SET_PSP_LINK (0x20000 /* RETRO_ENVIRONMENT_PRIVATE */ | 0x4e5b)
+ 
++/* The longest server() blocks, in ms: while the election waits for a cable that is coming, through that wait and a
++ * listen window after it. The core sizes the wait of a game's request on it. */
++#define NX_PSP_LINK_SERVER_WAIT_MAX_MS 9000
++
+ struct nx_psp_link_interface {
+     /* The core's, set before the call. Any thread. */
+     int  (*presence)(void);   /* NX_3DS_LINK_OUT / SEEKING / ROOM numbering (nx_3ds_link.h) */
+@@ -17,12 +22,17 @@ struct nx_psp_link_interface {
+     void (*serve)(int on);    /* start or stop the built-in ad hoc server; returns once it listens or has stopped */
+     void (*relogin)(void);    /* the server changed or is gone: drop its connection, tell the game if it was in a group */
+     /* The frontend's, filled in while it answers the call. */
+-    int  (*server)(uint32_t* ip, uint32_t* self);  /* blocks up to PSL_LISTEN_MS + 500; 1: *ip is the server, *self this
+-                                                      device's address on the routed network (network order); 0: none */
++    /* Blocks up to 1.5 s (PSL_LISTEN_MS + 500), up to NX_PSP_LINK_SERVER_WAIT_MAX_MS while the election waits for a
++     * cable that is coming, and gives up once active has been told 0.
++     * 1: *ip is the server, *self this device's address on the network the server is on (the Wi-Fi's or the cable's;
++     * network order); 0: none. */
++    int  (*server)(uint32_t* ip, uint32_t* self);
+     /* active: the game reached Scan/Create/Connect/Join, 0 once it left ad hoc. grouped: the game is in a group, or
+      * this device's server has a user other than this device, so the server must not stop; it can stay 1 with active
+      * 0 while others play on the server of a game that left ad hoc. Only changes are told, from any thread. */
+     void (*active)(int active, int grouped);
++    /* Every socket of the link's, once made: the frontend routes it onto the network the link is on (the one of the
++     * server server() last answered, or is about to), so the second argument is ignored. Any thread. */
+     void (*route_socket)(int fd, int cable);
+ };
+ /* *data NULL: the core's link is gone; make no further calls. */

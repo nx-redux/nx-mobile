@@ -1,15 +1,36 @@
 package com.nxredux.mobile.runner
 
+/** A core option that makes the core run its built-in (HLE) BIOS when the real one is absent. */
+data class HleFallback(val optionKey: String, val optionValue: String)
+
 /**
  * One required BIOS: any file of [anyOf] in the system dir meets it. [forExtensions] empty = every game of the tag.
  * [anySuffix] set: any present name ending with it (case-insensitive) meets it, for a core that scans its BIOS folder
- * and accepts whatever dump the user brings (ARMSX2: any ".bin").
+ * and accepts whatever dump the user brings (ARMSX2: any ".bin"). [hle] set: the core can boot without it, so a
+ * missing file is no refusal outside netplay.
  */
-data class BiosNeed(val anyOf: List<String>, val forExtensions: Set<String> = emptySet(), val anySuffix: String? = null)
+data class BiosNeed(
+    val anyOf: List<String>,
+    val forExtensions: Set<String> = emptySet(),
+    val anySuffix: String? = null,
+    val hle: HleFallback? = null,
+) {
+    init {
+        require(anyOf.isNotEmpty() || anySuffix != null) { "a BIOS need names a file or a suffix" }
+    }
+}
+
+/** What a launch does about its BIOS needs: go ahead, go ahead on the core's HLE BIOS with [options] set, or stop. */
+sealed interface BiosPlan {
+    data object Ok : BiosPlan
+    data class Refuse(val message: String) : BiosPlan
+    data class Hle(val options: Map<String, String>, val notice: String) : BiosPlan
+}
 
 /**
  * The pre-launch BIOS check, chosen over the cores' own errors (silent or a log line for most). Only required BIOS is
- * listed ([CoreRegistry.requiredBios]); optional BIOS never blocks a launch.
+ * listed ([CoreRegistry.requiredBios]); optional BIOS never blocks a launch, and a required one refuses unless its need
+ * has an HLE fallback ([plan]).
  */
 object BiosCheck {
     /** The needs a game with extension [ext] has that no name in [present] meets. Names compare case-sensitively, as the cores do on Linux. */
@@ -19,14 +40,46 @@ object BiosCheck {
             need.anySuffix?.let { suffix -> present.none { it.endsWith(suffix, ignoreCase = true) } } != false }
     }
 
+    /**
+     * The plan for launching [tag]: the first unmet need decides. Without an HLE fallback it refuses; with one the core
+     * boots on its built-in BIOS. On a [netplay] launch the session's handshake picks HLE or the real BIOS for both
+     * sides, so the fallback only supplies the notice and forces no core option.
+     */
+    fun plan(tag: String, needs: List<BiosNeed>, ext: String, present: Set<String>, netplay: Boolean): BiosPlan {
+        val need = missing(needs, ext, present).firstOrNull() ?: return BiosPlan.Ok
+        val hle = need.hle ?: return BiosPlan.Refuse(message(tag, need))
+        val options = if (netplay) emptyMap() else mapOf(hle.optionKey to hle.optionValue)
+        return BiosPlan.Hle(options, hleNotice(tag, need))
+    }
+
+    /** "Running without a Dreamcast BIOS: some games may not work. Put dc_boot.bin in Bios/DC/." */
+    fun hleNotice(tag: String, need: BiosNeed): String =
+        "Running without a ${consoleName(tag)} BIOS: some games may not work. Put ${biosWording(need)} in Bios/${biosFolder(tag)}/."
+
+    /** The notice to show for [plan] on [tag], or null when it is no HLE launch or [shown] (console tags) already had it. */
+    fun noticeDue(plan: BiosPlan, tag: String, shown: Set<String>): String? =
+        (plan as? BiosPlan.Hle)?.notice?.takeIf { noticeKey(tag) !in shown }
+
+    /** The entry of the shown-notices set for [tag]: its console tag, so one console's notice shows once. */
+    fun noticeKey(tag: String): String = biosFolder(tag)
+
+    private fun biosFolder(tag: String): String = CoreRegistry.consoleTag(tag.trim().uppercase())
+
+    private fun biosWording(need: BiosNeed): String = need.anyOf.firstOrNull() ?: "a ${need.anySuffix} file"
+
+    private fun consoleName(tag: String): String {
+        val t = tag.trim().uppercase()
+        return CoreRegistry.consoleOf(t)?.displayName ?: t
+    }
+
     /** "Sega CD needs a BIOS: put bios_CD_U.bin (or bios_CD_E.bin, bios_CD_J.bin) in Bios/SEGACD/" for the launched [tag]. */
     fun message(tag: String, need: BiosNeed): String {
         val t = tag.trim().uppercase()
-        val console = CoreRegistry.consoleOf(t)?.displayName ?: t
-        if (need.anySuffix != null) return "$console needs a BIOS: put a ${need.anySuffix} file in Bios/${CoreRegistry.consoleTag(t)}/"
+        val console = consoleName(t)
+        if (need.anySuffix != null) return "$console needs a BIOS: put a ${need.anySuffix} file in Bios/${biosFolder(t)}/"
         val rest = need.anyOf.drop(1)
-        val names = if (rest.isEmpty()) need.anyOf.first() else "${need.anyOf.first()} (or ${rest.joinToString(", ")})"
-        return "$console needs a BIOS: put $names in Bios/${CoreRegistry.consoleTag(t)}/"
+        val names = if (rest.isEmpty()) biosWording(need) else "${need.anyOf.first()} (or ${rest.joinToString(", ")})"
+        return "$console needs a BIOS: put $names in Bios/${biosFolder(t)}/"
     }
 }
 
