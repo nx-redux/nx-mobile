@@ -110,9 +110,9 @@ class CoreRegistryTest {
         assertEquals("libmupen64plus_next_gles3_libretro_android.so", CoreRegistry.forTag("N64")!!.libraryFileName)
         assertTrue(CoreRegistry.forTag("PSP")!!.biosFiles.contains("PPSSPP/"))
     }
-    @Test fun cores_read_file_descriptors_except_prboom() {
+    @Test fun cores_read_file_descriptors_except_prboom_and_yabasanshiro() {
         for (core in CoreRegistry.all) {
-            val real = core.id == "prboom"
+            val real = core.id in setOf("prboom", "yabasanshiro")
             assertEquals(if (real) LoadMode.REAL_PATH else LoadMode.FILE_DESCRIPTOR, core.loadMode, core.id)
             assertTrue(core.extensions.isNotEmpty(), core.id)
             assertTrue(core.extensions.all { it == it.lowercase() && !it.startsWith(".") }, core.id)

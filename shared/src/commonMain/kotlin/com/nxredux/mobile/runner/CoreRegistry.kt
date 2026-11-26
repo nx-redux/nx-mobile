@@ -432,6 +432,8 @@ object CoreRegistry {
     private val yabasanshiro = CoreDescriptor(
         "yabasanshiro", "libyabasanshiro_libretro_android.so", setOf("cue", "chd", "ccd", "iso", "m3u"),
         biosFiles = listOf("saturn_bios.bin", "sega_101.bin", "mpr-17933.bin"),
+        // Its disc reader opens the sheet and its tracks with fopen, never the frontend's VFS, so it needs real paths.
+        loadMode = LoadMode.REAL_PATH,
         defaultOptions = mapOf(
             "yabasanshiro_sh2coretype" to "dynarec",
             "yabasanshiro_addon_cart" to "4M_extended_ram",
