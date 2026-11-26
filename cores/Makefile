@@ -408,6 +408,8 @@ flycast_FLAGS = -DLIBRETRO=ON -DUSE_GLES=ON -DUSE_OPENMP=OFF -DCMAKE_OSX_ARCHITE
 # database's '+'-joined codes reached CheatAddARCode whole, which read a wrong value and only the first pair.
 # patches/yabasanshiro/0007: the HLE BIOS reports the console's 32 KB backup RAM in the 64 KB layout, not 2 KB (games that
 # need more than 30 blocks refused to save).
+# patches/yabasanshiro/0008: save states no longer go through tmpfile(), which returns NULL in an Android app (the state
+# aborted the app): a temporary file in the system folder instead; a state that cannot be made fails cleanly.
 yabasanshiro_REPO = https://github.com/libretro/yabause
 yabasanshiro_HASH = c6de72c08dda71b74648e9e055598cec1a974a11
 yabasanshiro_BUILD_PATH = yabause/src/libretro
