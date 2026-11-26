@@ -21,7 +21,8 @@ Converted from SVG to Android vector drawables (paths unchanged, filled white):
   created and shared by Google and used according to terms described in the Creative Commons 3.0 Attribution License.
   Android is a trademark of Google LLC.
 - 3DS logo: Nintendo 3DS logo (user-supplied). Nintendo 3DS is a trademark of Nintendo.
-- Wii U logo: Wii U logo (user-supplied). Wii U is a trademark of Nintendo.
+- Wii U logo: Wii U logo (`tools/console-logos/src/wiiu.svg`, user-supplied), which came with black fills, recoloured white,
+  and its viewBox trimmed to the logo. Wii U is a trademark of Nintendo.
 
 ## Tab row icons (`nav_icon_*.xml`)
 
