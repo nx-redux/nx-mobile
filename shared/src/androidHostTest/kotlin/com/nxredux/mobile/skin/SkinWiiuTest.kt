@@ -148,9 +148,10 @@ class SkinWiiuTest {
                     assertTrue(c.x - c.spec.hw >= under.x - 1f && c.x + c.spec.hw <= under.x + under.width + 1f, "$label ${c.spec.id} not across $under")
                 }
                 val top = assertNotNull(p.glass(GlassScreen.TOP) ?: p.glass(GlassScreen.STACK), label).rect
-                p.glass(GlassScreen.TOUCH)?.rect?.let { assertEquals(16f / 9f, aspect(it), 0.01f, "$label GamePad glass ${it}") }
+                // (a tablet upright: the GamePad's glass taller, down to the shoulders, the_tablets_gamepad_frame_comes_down_to_the_shoulders)
+                if (d.name != "tablet") p.glass(GlassScreen.TOUCH)?.rect?.let { assertEquals(16f / 9f, aspect(it), 0.01f, "$label GamePad glass ${it}") }
                 p.glass(GlassScreen.STACK)?.rect?.let { g ->
-                    if (p.spec.id.endsWith("_tall")) {   // the roomy sideways shells: cut to the TV over the GamePad
+                    if (p.spec.id.endsWith("_tall") && d.foldable) {   // the unfolded Fold sideways: cut to the TV over the GamePad
                         assertEquals(g.height * 16f / 18f, g.width, 1f, "$label stack glass $g")
                         assertFills(g, assertNotNull(WiiuLayout.skinRegions(g, null, null, NdsSettings()), label).map { it.dst }, label)
                     } else assertStackAsThe3ds(pack, d, p, g, label)
@@ -363,6 +364,47 @@ class SkinWiiuTest {
                 val gap = kotlin.math.hypot(a.x - s.x, a.y - s.y) - 1.25f * s.spec.r - a.spec.r
                 assertTrue(gap <= 140f * p.k, "$label $cap ${gap}px off $stick's reach")
             }
+        }
+    }
+
+    /**
+     * A tablet upright: the GamePad's frame down to the box gap over the shoulder buttons (room to spare there), its
+     * glass taller and the GamePad centred in it, the strip under it, the row under the frame; pads and shoulders put.
+     */
+    @Test
+    fun the_tablets_gamepad_frame_comes_down_to_the_shoulders() {
+        val d = GOLDEN_DEVICES.single { it.name == "tablet" }
+        for (id in packs) {
+            val pack = skinPack(id)
+            val label = "$id tablet"
+            val p = assertNotNull(place(pack, d), label)
+            val (_, touch) = frames(p)
+            val tf = assertNotNull(touch, label)
+            val shoulders = p.controls.filter { it.spec.id in setOf("L", "R", "L2", "R2") }
+            val tops = p.pieces.filter { pc -> pc.piece >= 0 && pc.dst.width < 300f && shoulders.any { c -> c.x in pc.dst.x..(pc.dst.x + pc.dst.width) && c.y in pc.dst.y..(pc.dst.y + pc.dst.height) } }
+            assertEquals(tops.minOf { it.dst.y } - SkinBoxes.GAP_DP * d.dpi / 160f, tf.y + tf.height, 1f, "$label frame over the shoulders")
+            val g = assertNotNull(p.glass(GlassScreen.TOUCH), label).rect
+            val (_, pad) = assertNotNull(WiiuLayout.skinRegions(null, p.glass(GlassScreen.TOP)?.rect, g, NdsSettings()), label).map { it.dst }
+            assertEquals(16f / 9f, aspect(pad), 0.01f, label); assertEquals(g.y + g.height / 2f, pad.y + pad.height / 2f, 1f, "$label GamePad centred")
+            for (cid in listOf("MENU", "SELECT", "START")) assertTrue(p.controls.first { it.spec.id == cid }.y > tf.y + tf.height, "$label $cid under the frame")
+        }
+    }
+
+    /** A tablet sideways: the 3DS's frame, the TV across its width at the top, the GamePad centred in the height left. */
+    @Test
+    fun the_tablet_sideways_has_the_3ds_frame_and_the_tv_across() {
+        val d = GOLDEN_DEVICES.single { it.name == "tablet_land" }
+        for (id in packs) {
+            val pack = skinPack(id)
+            val p = assertNotNull(place(pack, d), id)
+            val n = assertNotNull(SkinChoice.place(pack, d.w, d.h, d.dpi, d.tablet, ds = true, foldable = d.foldable, variant = SkinVariant.N3DS), id)
+            val wf = assertNotNull(frames(p).first, id); val nf = assertNotNull(frames(n).first, id)
+            assertEquals(nf.width, wf.width, 1f, "$id frame width")
+            val g = assertNotNull(p.glass(GlassScreen.STACK), id).rect
+            val (tv, pad) = assertNotNull(WiiuLayout.skinRegions(g, null, null, NdsSettings()), id).map { it.dst }
+            assertEquals(g.width, tv.width, 1f, "$id TV width"); assertEquals(16f / 9f, aspect(tv), 0.01f, "$id TV")
+            assertEquals(16f / 9f, aspect(pad), 0.01f, "$id GamePad"); assertEquals(g.x + g.width / 2f, pad.x + pad.width / 2f, 1f, "$id GamePad centred")
+            assertEquals(tv.y + tv.height, pad.y, 1f, "$id GamePad under the TV"); assertEquals(g.y + g.height, pad.y + pad.height, 1f, "$id GamePad to the foot")
         }
     }
 
