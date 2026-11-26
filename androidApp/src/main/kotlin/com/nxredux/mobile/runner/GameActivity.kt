@@ -748,21 +748,25 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private var downloadPlayHostGone: Job? = null
 
     /**
-     * A Download Play child with no host left can only show its communication error: once the room has stayed empty a
-     * few seconds (a host restarting its wireless comes back within that), the session ends as a quit.
+     * A Download Play child with no host left can only show its communication error, so the session ends as a quit:
+     * when the core says the host left the room (other guests may stay), or once the room has stayed empty a few
+     * seconds (a host restarting its wireless comes back within that). Not after the player's own Disconnect, nor
+     * while the app is in the background, which leaves the room too.
      */
     private fun followDownloadPlayHost(others: Int) {
         if (!downloadPlayChildStarted || quitting) return
         if (others > 0) { downloadPlayHostGone?.cancel(); downloadPlayHostGone = null; return }
         if (downloadPlayHostGone?.isActive == true) return
-        downloadPlayHostGone = lifecycleScope.launch {
-            delay(DOWNLOAD_PLAY_HOST_GONE_MS)
-            if (quitting) return@launch
-            NxLog.i(TAG_LOG, "3DS Download Play: the host left, quitting")
-            dual.pictureToast("The host left")
-            delay(1500)
-            quitWithAutoState(chosen = false, autoState = false)
-        }
+        downloadPlayHostGone = lifecycleScope.launch { endDownloadPlaySession(DOWNLOAD_PLAY_HOST_GONE_MS) }
+    }
+
+    private suspend fun endDownloadPlaySession(afterMs: Long) {
+        delay(afterMs)
+        if (quitting || !localWirelessShownOn() || !lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return
+        NxLog.i(TAG_LOG, "3DS Download Play: the host left, quitting")
+        dual.pictureToast("The host left")
+        delay(1500)
+        if (!quitting) quitWithAutoState(chosen = false, autoState = false)
     }
 
     /** The menu open in a room counts toward the cap; anything else stops the count. */
@@ -792,7 +796,16 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val pick = File(azahar, N3dsDownloadPlayHandoff.PICK_FILE)
         lifecycleScope.launch(Dispatchers.IO) {
             pick.delete()   // a stale one from a session that ended mid-hand-off
+            var hostLeft = -1
             while (isActive) {
+                if (downloadPlayChildStarted) {
+                    val now = LibretroNetplay.dsHostLeft()
+                    if (hostLeft in 0 until now) withContext(Dispatchers.Main) {
+                        downloadPlayHostGone?.cancel()
+                        downloadPlayHostGone = lifecycleScope.launch { endDownloadPlaySession(0) }
+                    }
+                    hostLeft = now
+                }
                 if (pick.isFile) {
                     val child = runCatching { pick.readText() }.getOrDefault("")
                     pick.delete()
@@ -807,6 +820,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     // reads them at its next frame's start, before the restart that frame can run.
                     val queued = live.isNotEmpty() && withContext(Dispatchers.Main) {
                         val view = retroView ?: return@withContext false
+                        // The full game's values, for this session only: a save keeps the row's own.
+                        graphicsForcedOptions = graphicsForcedOptions + live.keys
                         view.queueEvent {
                             runCatching { view.updateVariables(*live.map { (k, v) -> Variable(k, v) }.toTypedArray()) }
                             ack()
