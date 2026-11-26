@@ -2566,7 +2566,7 @@ index 3a31142a0..e65961a0c 100644
      }
      if (upright_screen) {
 diff --git a/src/core/hle/service/am/am.cpp b/src/core/hle/service/am/am.cpp
-index 602582161..e7ff28e12 100644
+index 602582161..72a0b5324 100644
 --- a/src/core/hle/service/am/am.cpp
 +++ b/src/core/hle/service/am/am.cpp
 @@ -116,8 +116,11 @@ public:
@@ -2583,19 +2583,22 @@ index 602582161..e7ff28e12 100644
          // A console unique crypto file is used to store the decrypted NCCH file. This is done
          // to prevent Azahar being used as a tool to download easy shareable decrypted contents
          // from the eshop.
-@@ -452,6 +455,11 @@ void CIAFile::AuthorizeDecryptionFromHLE() {
+@@ -452,6 +455,14 @@ void CIAFile::AuthorizeDecryptionFromHLE() {
      decryption_authorized = true;
  }
  
 +void CIAFile::AuthorizeDlpChildInstall() {
 +    decryption_authorized = true;
 +    dlp_child = true;
++    if (!HW::UniqueData::HasConsoleCryptoKey()) {
++        HW::UniqueData::EnsureDlpChildKey();
++    }
 +}
 +
  CIAFile::CIAFile(Core::System& system_, Service::FS::MediaType media_type, bool from_cdn_)
      : system(system_), from_cdn(from_cdn_), decryption_authorized(false), media_type(media_type),
        decryption_state(std::make_unique<DecryptionState>()) {
-@@ -656,7 +664,7 @@ ResultVal<std::size_t> CIAFile::WriteContentData(u64 offset, std::size_t length,
+@@ -656,7 +667,7 @@ ResultVal<std::size_t> CIAFile::WriteContentData(u64 offset, std::size_t length,
                  }
                  current_content_index = static_cast<u16>(i);
                  current_content_file =
@@ -2604,7 +2607,7 @@ index 602582161..e7ff28e12 100644
                  current_content_file->decryption_authorized = decryption_authorized;
  
                  current_content_install_result.type = InstallResult::Type::APP;
-@@ -909,7 +917,7 @@ ResultVal<std::size_t> CIAFile::WriteContentDataIndexed(u16 content_index, u64 o
+@@ -909,7 +920,7 @@ ResultVal<std::size_t> CIAFile::WriteContentDataIndexed(u16 content_index, u64 o
  
          current_content_index = content_index;
          current_content_file = std::make_unique<NCCHCryptoFile>(content_file_paths[content_index],
@@ -2948,7 +2951,7 @@ index 000000000..ce2badfda
 +
 +} // namespace Service::NWM
 diff --git a/src/core/hw/unique_data.cpp b/src/core/hw/unique_data.cpp
-index 810650529..cb17f4e42 100644
+index 810650529..faf9c216d 100644
 --- a/src/core/hw/unique_data.cpp
 +++ b/src/core/hw/unique_data.cpp
 @@ -2,6 +2,7 @@
@@ -2959,13 +2962,22 @@ index 810650529..cb17f4e42 100644
  #include <cryptopp/sha.h>
  #include "common/common_paths.h"
  #include "common/file_derived.h"
-@@ -284,8 +285,40 @@ void InvalidateSecureData() {
+@@ -9,6 +10,7 @@
+ #include "core/file_sys/archive_systemsavedata.h"
+ #include "core/file_sys/certificate.h"
+ #include "core/file_sys/otp.h"
++#include "core/hle/service/fs/archive.h"
+ #include "core/hw/aes/key.h"
+ #include "core/hw/ecc.h"
+ #include "core/hw/rsa/rsa.h"
+@@ -284,8 +286,50 @@ void InvalidateSecureData() {
      movable.Invalidate();
  }
  
 +/// A random secret made once for this device (sysdata/nx_dlp_child.key): the key of Download Play
-+/// children installed without console unique data.
-+static bool GetDlpChildKeyIV(std::vector<u8>& out_key, std::vector<u8>& out_iv) {
++/// children installed without console unique data. Made only before a child is installed
++/// ([EnsureDlpChildKey]); a read without one finds no key rather than making a new one.
++static bool GetDlpChildKeyIV(std::vector<u8>& out_key, std::vector<u8>& out_iv, bool create) {
 +    const std::string path =
 +        FileUtil::GetUserPath(FileUtil::UserPath::SysDataDir) + "nx_dlp_child.key";
 +    std::array<u8, 32> secret{};
@@ -2974,7 +2986,16 @@ index 810650529..cb17f4e42 100644
 +        FileUtil::IOFile in(path, "rb");
 +        have = in.IsOpen() && in.ReadBytes(secret.data(), secret.size()) == secret.size();
 +    }
++    if (!have && !create) {
++        return false;
++    }
 +    if (!have) {
++        // Children kept under a key that is gone can never be read again: removed, so their next
++        // session downloads them afresh rather than booting what will not open. Done before the
++        // install that asked for the key has written anything.
++        FileUtil::DeleteDirRecursively(fmt::format("{}{}/title/00040001/",
++                                                   FileUtil::GetUserPath(FileUtil::UserPath::NANDDir),
++                                                   SYSTEM_ID));
 +        CryptoPP::AutoSeededRandomPool rng;
 +        rng.GenerateBlock(secret.data(), secret.size());
 +        FileUtil::CreateFullPath(path);
@@ -2995,15 +3016,20 @@ index 810650529..cb17f4e42 100644
  static bool GetUniqueCryptoFileKeyIV(std::vector<u8>& out_key, std::vector<u8>& out_iv,
                                       UniqueCryptoFileID id) {
 +    if (id == UniqueCryptoFileID::DLPChild) {
-+        return GetDlpChildKeyIV(out_key, out_iv);
++        return GetDlpChildKeyIV(out_key, out_iv, false);
 +    }
  
      LoadOTP();
  
-@@ -313,6 +346,11 @@ static bool GetUniqueCryptoFileKeyIV(std::vector<u8>& out_key, std::vector<u8>&
+@@ -313,6 +357,16 @@ static bool GetUniqueCryptoFileKeyIV(std::vector<u8>& out_key, std::vector<u8>&
      return true;
  }
  
++bool EnsureDlpChildKey() {
++    std::vector<u8> key, iv;
++    return GetDlpChildKeyIV(key, iv, true);
++}
++
 +bool HasConsoleCryptoKey() {
 +    LoadOTP();
 +    return ct_cert.IsValid() && otp.Valid();
@@ -3013,10 +3039,10 @@ index 810650529..cb17f4e42 100644
  
      std::vector<u8> key(0x10);
 diff --git a/src/core/hw/unique_data.h b/src/core/hw/unique_data.h
-index cbb1db510..a4804277b 100644
+index cbb1db510..053c24591 100644
 --- a/src/core/hw/unique_data.h
 +++ b/src/core/hw/unique_data.h
-@@ -163,8 +163,14 @@ MovableSedFull& GetMovableSed();
+@@ -163,8 +163,17 @@ MovableSedFull& GetMovableSed();
  
  enum class UniqueCryptoFileID {
      NCCH = 0,
@@ -3027,6 +3053,9 @@ index cbb1db510..a4804277b 100644
  
 +/// Whether the console unique key for NCCH crypto files is available (OTP and CT certificate set up).
 +bool HasConsoleCryptoKey();
++/// Makes this device's Download Play child key if it has none (clearing children kept under a lost
++/// one); call before a child's install writes anything. False when it could not be stored.
++bool EnsureDlpChildKey();
 +
  void InvalidateSecureData();
  
