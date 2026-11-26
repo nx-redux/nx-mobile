@@ -329,6 +329,23 @@ object SkinChoice {
         )
     }
 
+    /**
+     * The row under the touch screen's frame (the centred pieces and controls below it) up to [gap] under the frame, where
+     * it is lower. As it is with no row, or one already as near.
+     */
+    private fun SkinPlacement.rowUnderTouch(gap: Float): SkinPlacement {
+        val gi = spec.pieces.indexOfFirst { it.glass?.screen == GlassScreen.TOUCH }
+        val bottom = pieces.filter { it.piece == gi && gi >= 0 }.maxOfOrNull { it.dst.y + it.dst.height } ?: return this
+        fun row(p: SkinPiece) = p.piece >= 0 && p.piece != gi && spec.pieces[p.piece].let { it.glass == null && it.anchor == PieceAnchor.CENTRE } && p.dst.y >= bottom - 0.5f
+        val top = pieces.filter(::row).minOfOrNull { it.dst.y } ?: return this
+        val up = top - (bottom + gap)
+        if (up < 0.5f) return this
+        return copy(
+            pieces = pieces.map { if (row(it)) it.copy(dst = it.dst.copy(y = it.dst.y - up)) else it },
+            controls = controls.map { c -> if (c.spec.anchor == PieceAnchor.CENTRE && c.y > bottom) c.copy(y = c.y - up) else c },
+        )
+    }
+
     /** Window px each side of the touch screen's glass past its 4:3 picture (its height the limit); 0 without one. */
     private fun SkinPlacement.touchSpare(): Float =
         glass(GlassScreen.TOUCH)?.rect?.let { (it.width - it.height * 4f / 3f) / 2f } ?: 0f
@@ -365,13 +382,14 @@ object SkinChoice {
     const val WIIU_STACK_ASPECT = 16f / 18f
 
     /**
-     * The Wii U's one screen frame (its stack glass) cut to the screens' [aspect] (no bars round them), centred in the
-     * room it filled, its border as drawn. As it is for any other layout.
+     * The Wii U's one screen frame (its stack glass) on the roomy sideways shells (the unfolded Fold, a tablet) cut to
+     * the screens' [aspect] (no bars round them), centred in the room it filled, its border as drawn. As it is for any
+     * other layout: elsewhere the frame is the 3DS's, filling its room, the screens centred in it.
      */
     private fun SkinPlacement.wiiuStackTo(aspect: Float): SkinPlacement {
         val frame = spec.frame ?: return this
         val g = glass(GlassScreen.STACK) ?: return this
-        if (spec.variant != SkinVariant.WIIU || aspect <= 0f) return this
+        if (spec.variant != SkinVariant.WIIU || aspect <= 0f || !spec.id.endsWith("_tall")) return this
         val fg = frame.glass
         val bl = fg.x * k; val bt = fg.y * k; val br = (frame.w - fg.x - fg.w) * k; val bb = (frame.h - fg.y - fg.h) * k
         val w = minOf(g.rect.width, g.rect.height * aspect); val h = w / aspect
@@ -467,6 +485,10 @@ object SkinChoice {
                 fun fold(hinge: Float? = hingeY) = foldPieces(spec, windowW, windowH, s, picture, topInset, hinge, densityDpi, top, bottomMargin = shellMargin(pack),
                     bottomGlass = flatEnd, row = rowSpacing(densityDpi, s), centreControls = v !in N3DS_BOARD)
                 val placed = fold() ?: return@widest null
+                // the GamePad's boxes, sideways and flat: the bottom half as half-folded at the window's middle, as the 3DS's
+                if (v == SkinVariant.WIIU && landscape && hingeY == null && spec.boxes.isNotEmpty()) return@widest fold(windowH / 2f)?.let { placed.bottomOf(it) } ?: placed
+                // upright, its row under the GamePad's frame (which hugs its picture), as the 3DS's row follows its touch frame up
+                if (v == SkinVariant.WIIU && !landscape && spec.boxes.isNotEmpty()) return@widest placed.rowUnderTouch(SkinBoxes.GAP_DP * dp)
                 if (v !in N3DS_VARIANTS || spec.boxes.isEmpty()) return@widest placed
                 // the 3DS's touch screen, its 4:3 picture in a frame between the boxes: sideways (the room beside it) the frame
                 // cut to the picture's height and widened to the boxes, bars beside the picture; upright cut to the picture
@@ -514,10 +536,11 @@ object SkinChoice {
         for (family in families) {
             widest(tuned, pack, family, v, fold = false) { spec ->
                 if (spec.frame != null && spec.boxes.isNotEmpty()) SkinBoxes.place(spec, windowW, windowH, k, densityDpi, hingeY) { s, r ->
-                    SkinSolver.placePieces(s, windowW.toFloat(), windowH.toFloat(), k, picture, topInset.toFloat(), topScreen = top, row = row,
+                    // (a stack glass holds both screens: not cut to the top one's shape)
+                    SkinSolver.placePieces(s, windowW.toFloat(), windowH.toFloat(), k, picture, topInset.toFloat(), topScreen = top.takeIf { s.frame?.glass?.screen != GlassScreen.STACK }, row = row,
                         roomLeft = r.left, roomRight = r.right, roomBottom = r.bottom)
                 }
-                else if (spec.frame != null) SkinSolver.placePieces(spec, windowW.toFloat(), windowH.toFloat(), k, picture, topInset.toFloat(), topScreen = top, row = row)
+                else if (spec.frame != null) SkinSolver.placePieces(spec, windowW.toFloat(), windowH.toFloat(), k, picture, topInset.toFloat(), topScreen = top.takeIf { spec.frame.glass.screen != GlassScreen.STACK }, row = row)
                 else SkinSolver.place(spec, windowW.toFloat(), windowH.toFloat(), k, picture)
             }?.let { return it }
         }

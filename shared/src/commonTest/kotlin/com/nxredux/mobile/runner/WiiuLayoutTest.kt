@@ -196,6 +196,20 @@ class WiiuLayoutTest {
         }
     }
 
+    @Test fun a_wider_stack_glass_has_the_tv_across_its_top_and_the_gamepad_centred_under_it() {
+        // the Fold cover's one frame; and one too short to keep the GamePad half the TV's size: halved again
+        val glass = PxRect(44f, 48f, 1160f, 1044f)
+        val (tv, pad) = assertNotNull(WiiuLayout.skinRegions(glass, null, null, NdsSettings(big = NdsScreen.TOP)))
+        assert16by9(tv); assert16by9(pad)
+        assertEquals(PxRect(44f, 48f, 1160f, 1160f * 9f / 16f), tv.dst)
+        assertEquals(glass.y + glass.height, pad.dst.y + pad.dst.height, 0.01f)
+        assertEquals(glass.x + glass.width / 2f, pad.dst.x + pad.dst.width / 2f, 0.01f)
+        assertTrue(pad.dst.width < tv.dst.width && pad.dst.width >= tv.dst.width / 2f)
+        val short = PxRect(0f, 0f, 1160f, 800f)
+        val (tv2, pad2) = assertNotNull(WiiuLayout.skinRegions(short, null, null, NdsSettings(big = NdsScreen.TOP)))
+        assertEquals(tv2.dst.width, pad2.dst.width, 0.01f)
+    }
+
     @Test fun a_skins_top_and_touch_glasses_hold_the_tv_and_the_gamepad() {
         val top = PxRect(24f, 60f, 1800f, 1012f)
         val touch = PxRect(300f, 1200f, 1300f, 700f)   // wider than 16:9: the GamePad centred in it

@@ -72,6 +72,6 @@ class SkinPictureAspectTest {
                 seen++
             }
         }
-        assertEquals(7 * 9, seen)
+        assertEquals(7 * 10, seen)   // the GamePad's ten layouts in each pack
     }
 }

@@ -16,7 +16,7 @@ class NxCarbonPackTest {
     /** The 3DS's twins of the DS layouts (stacked, large and its wide, flex and its wide, the fold board, both landscapes), the fold board and the tall landscape with both sticks shown. */
     private val N3DS_LAYOUTS = 16   // the New 3DS twins and the regular 3DS twins, 8 each
     private val GRIP_COLUMNS = 21   // each landscape shell's twin with the small caps in a column (the Fold cover)
-    private val WIIU_LAYOUTS = 9   // the GamePad's, with no column twin
+    private val WIIU_LAYOUTS = 10   // the GamePad's, its column twin too
     /** How far (picture px) the frame's touch slots keep below the screen, so a press on one never lands on the picture. */
     private val SLOT_SCREEN_GAP = 12f
 
