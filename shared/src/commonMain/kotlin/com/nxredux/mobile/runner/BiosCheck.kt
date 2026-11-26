@@ -7,13 +7,15 @@ data class HleFallback(val optionKey: String, val optionValue: String)
  * One required BIOS: any file of [anyOf] in the system dir meets it. [forExtensions] empty = every game of the tag.
  * [anySuffix] set: any present name ending with it (case-insensitive) meets it, for a core that scans its BIOS folder
  * and accepts whatever dump the user brings (ARMSX2: any ".bin"). [hle] set: the core can boot without it, so a
- * missing file is no refusal outside netplay.
+ * missing file is no refusal outside netplay. [anyRegion]: the core boots on any region's dump under any of [anyOf], so
+ * each name is judged against every listed dump of the console, not only the one listed under that name.
  */
 data class BiosNeed(
     val anyOf: List<String>,
     val forExtensions: Set<String> = emptySet(),
     val anySuffix: String? = null,
     val hle: HleFallback? = null,
+    val anyRegion: Boolean = false,
 ) {
     init {
         require(anyOf.isNotEmpty() || anySuffix != null) { "a BIOS need names a file or a suffix" }
