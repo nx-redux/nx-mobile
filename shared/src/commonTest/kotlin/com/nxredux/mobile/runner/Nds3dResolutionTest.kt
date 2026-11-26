@@ -6,6 +6,7 @@ import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.NdsScreen
 import com.nxredux.mobile.options.NdsSettings
 import com.nxredux.mobile.options.PxRect
+import com.nxredux.mobile.options.resolutionRows
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -285,13 +286,13 @@ class Nds3dResolutionTest {
 
     @Test fun wiiURowsHaveNoMaxScaleAndSayAboveNativeCanBreakGraphics() {
         val cemu = Res3dConsole.CEMU
-        val rows = com.nxredux.mobile.options.resolutionRows(cemu, displayMax = 3)
+        val rows = resolutionRows(cemu, displayMax = 3)
         assertEquals(listOf(cemu.modeKey, cemu.scaleKey), rows.map { it.key })
         assertTrue("Auto draws at Native" in rows[0].info, rows[0].info)
-        assertTrue("break" in rows[0].info, rows[0].info)
+        assertTrue("Quality and Performance can draw above it, which breaks some games' graphics" in rows[0].info, rows[0].info)
         assertEquals(
             listOf(Res3dConsole.DOLPHIN.modeKey, Res3dConsole.DOLPHIN.maxScaleKey, Res3dConsole.DOLPHIN.scaleKey),
-            com.nxredux.mobile.options.resolutionRows(Res3dConsole.DOLPHIN, displayMax = 3).map { it.key },
+            resolutionRows(Res3dConsole.DOLPHIN, displayMax = 3).map { it.key },
         )
     }
 }
