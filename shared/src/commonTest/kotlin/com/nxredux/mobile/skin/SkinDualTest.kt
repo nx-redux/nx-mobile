@@ -29,6 +29,14 @@ class SkinDualTest {
     }
 
     @Test
+    fun wiiuSkinWithDualScreenOffAndSplit() {
+        assertTrue(SkinDual.skinAllowed(DualMode.OFF, ds = false, n3ds = false, wiiu = true))
+        assertTrue(SkinDual.skinAllowed(DualMode.SPLIT, ds = false, n3ds = false, wiiu = true))   // one screen in the landscape skin
+        assertTrue(SkinDual.skinAllowed(DualMode.PANEL, ds = false, n3ds = false, wiiu = true))
+        assertFalse(SkinDual.skinAllowed(DualMode.PANEL_UP, ds = false, n3ds = false, wiiu = true))
+    }
+
+    @Test
     fun screenInFitsAnyAspect() {
         assertEquals(PxRect(50f, 0f, 500f, 300f), SkinDual.screenIn(PxRect(0f, 0f, 600f, 300f), 5f / 3f))
         assertEquals(SkinDual.dsScreenIn(PxRect(0f, 0f, 600f, 300f)), SkinDual.screenIn(PxRect(0f, 0f, 600f, 300f), 4f / 3f))

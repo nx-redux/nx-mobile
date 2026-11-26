@@ -1,0 +1,100 @@
+# licence: modifies Cemu's libretro port (https://github.com/WizzardSK/cemu-libretro), MPL-2.0 (LICENSE.txt); this patch
+# is distributed under the same licence.
+The software keyboard told to the frontend: as it opens, a private environment call (NX_ENVIRONMENT_SET_TEXT_INPUT)
+gives what it holds, the account's name (Start's answer) and how many characters it takes; as it closes, the same call
+with open false. A frontend that answers true shows a text box of its own and types the answer through the keyboard
+callback, so the keyboard's instructions and its typed-text echo are left out. Any other frontend sees the core as before.
+
+--- a/src/Cafe/OS/libs/swkbd/swkbd.cpp
++++ b/src/Cafe/OS/libs/swkbd/swkbd.cpp
+@@ -564,6 +564,19 @@
+ 	return std::wstring(swkbdInternalState->formStringBuffer, swkbdInternalState->formStringLength);
+ }
+ 
++// The characters the open keyboard takes, as swkbd_keyInput limits them; 0 when none is open
++uint32 swkbd_getMaxLength()
++{
++	if (swkbdInternalState == NULL || !swkbdInternalState->isActive)
++		return 0;
++	if (swkbdInternalState->keyboardOnlyMode)
++	{
++		const sint32 size = swkbdInternalState->keyboardArg.receiverArg.stringBufSize;
++		return size > 1 ? (uint32)(size - 1) : 0;
++	}
++	return (uint32)swkbdInternalState->maxTextLength;
++}
++
+ bool swkbd_hasKeyboardInputHook()
+ {
+ 	return swkbdInternalState != NULL && swkbdInternalState->isActive;
+--- a/src/Cafe/OS/libs/swkbd/swkbd.h
++++ b/src/Cafe/OS/libs/swkbd/swkbd.h
+@@ -4,6 +4,7 @@
+ bool swkbd_hasKeyboardInputHook();
+ void swkbd_keyInput(uint32 keyCode);
+ std::wstring swkbd_getInputText();
++uint32 swkbd_getMaxLength();
+ 
+ namespace swkbd
+ {
+--- a/src/libretro/CemuLibretro.cpp
++++ b/src/libretro/CemuLibretro.cpp
+@@ -6770,6 +6770,20 @@
+ // types the account's Mii name first if nothing has been typed.
+ static std::atomic_bool s_swkbd_text_changed{false};
+ 
++// nx-mobile's frontend shows a text box of its own for the keyboard and types
++// the answer through the keyboard callback, so a player without a keyboard
++// can still type. Only that frontend answers this private call.
++#define NX_ENVIRONMENT_SET_TEXT_INPUT (0x20000 /* RETRO_ENVIRONMENT_PRIVATE */ | 0x4e5c)
++struct nx_text_input
++{
++	bool open;
++	const char* text;      // UTF-8, what the keyboard holds as it opens
++	const char* name;      // UTF-8, the answer when nothing is typed (as Start)
++	unsigned max_length;   // UTF-16 units the keyboard takes; 0 when not known
++};
++// The frontend's box is up for the keyboard open now: no instructions, no echo
++static bool s_swkbd_frontend_box = false;
++
+ // A key for the software keyboard, when the name entry has not taken it
+ static void libretro_software_keyboard_key(bool down, unsigned keycode, uint32_t character)
+ {
+@@ -6797,15 +6811,26 @@
+ 
+ 	if (!active)
+ 	{
++		if (s_was_active && s_swkbd_frontend_box && environ_cb)
++		{
++			nx_text_input closed{};
++			environ_cb(NX_ENVIRONMENT_SET_TEXT_INPUT, &closed);
++		}
+ 		s_was_active = false;
++		s_swkbd_frontend_box = false;
+ 		return;
+ 	}
+ 	if (!s_was_active)
+ 	{
+ 		s_was_active = true;
+ 		s_swkbd_text_changed = false;
+-		libretro_show_message(RETRO_LOG_INFO, 6000,
+-			"Software keyboard: type with the keyboard (Game Focus on), Enter accepts. Start on the pad accepts, with the account's name if nothing is typed.");
++		const std::string text = boost::nowide::narrow(swkbd_getInputText());
++		const std::string name = boost::nowide::narrow(Account::GetAccount(GetConfig().account.m_persistent_id).GetMiiName());
++		nx_text_input open{true, text.c_str(), name.c_str(), swkbd_getMaxLength()};
++		s_swkbd_frontend_box = environ_cb && environ_cb(NX_ENVIRONMENT_SET_TEXT_INPUT, &open);
++		if (!s_swkbd_frontend_box)
++			libretro_show_message(RETRO_LOG_INFO, 6000,
++				"Software keyboard: type with the keyboard (Game Focus on), Enter accepts. Start on the pad accepts, with the account's name if nothing is typed.");
+ 	}
+ 	if (start_pressed)
+ 	{
+@@ -6818,7 +6843,7 @@
+ 		swkbd_keyInput(13);
+ 		s_swkbd_text_changed = true;
+ 	}
+-	if (s_swkbd_text_changed.exchange(false))
++	if (s_swkbd_text_changed.exchange(false) && !s_swkbd_frontend_box)
+ 		libretro_show_message(RETRO_LOG_INFO, 3000, "Keyboard: " + boost::nowide::narrow(swkbd_getInputText()) + "_");
+ }
+ 

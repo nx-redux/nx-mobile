@@ -39,6 +39,7 @@ import com.nxredux.mobile.runner.BiosImport
 import com.nxredux.mobile.runner.LaunchRecords
 import com.nxredux.mobile.runner.LiveGameStore
 import com.nxredux.mobile.runner.Posture
+import com.nxredux.mobile.shortcuts.HatKeys
 import com.nxredux.mobile.storage.AutoSlotGate
 import com.nxredux.mobile.storage.LibchdrSectors
 import com.nxredux.mobile.storage.LinkRomCaches
@@ -70,8 +71,7 @@ import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.netplay.AndroidNetplay
 import com.nxredux.mobile.netplay.NetplaySessionDir
 import com.nxredux.mobile.netplay.usb.UsbCables
-import com.nxredux.mobile.options.N3dsOptions
-import com.nxredux.mobile.options.NdsOptions
+import com.nxredux.mobile.runner.DualScreenConsole
 import com.nxredux.mobile.skinlayout.SkinLayoutActivity
 import com.nxredux.mobile.runner.AndroidEmulatorConfigStore
 import com.nxredux.mobile.runner.AndroidMicAccess
@@ -166,6 +166,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
 
     // The hardware hat and left stick as held directions, with matching Down/Up pairs for the router.
     private val axes = AxisDirections { pad(it) }
+    private val captureHat = HatKeys()   // the hat as d-pad keys for press to bind ([captureKey])
 
     // The top refresh rate while buttons (or, on Android 11-14, a finger) drive the menu; FrameRateBoost has the why.
     private val frameRateBoost by lazy { FrameRateBoost(this) }
@@ -419,12 +420,12 @@ class MainActivity : ComponentActivity(), FolderPicker {
         // Launcher mode (this instance is the home task's): games get their own task; otherwise they share this one.
         val runner = LibretroRunner(this) { asHome }
         // GameActivity takes the display; nothing stays behind the game. An app on the top screen stays there for a
-        // one-screen game (watch while playing); a DS/3DS game needs both screens, so the menu takes it back for good.
+        // one-screen game (watch while playing); a DS/3DS/Wii U game needs both screens, so the menu takes it back for good.
         runner.beforeLaunch = { session ->
             launching = true
             TopScreenTaken.consume(this)
             val tag = session.systemTag
-            val leave = TopScreenHost.heldDisplay.takeIf { TopScreenHost.active && !NdsOptions.appliesTo(tag) && !N3dsOptions.appliesTo(tag) }
+            val leave = TopScreenHost.heldDisplay.takeIf { TopScreenHost.active && !DualScreenConsole.appliesTo(tag) }
             if (leave != null || !TopScreenHost.reclaim(this)) syncMenuScreen()
             leave
         }
@@ -1040,6 +1041,15 @@ class MainActivity : ComponentActivity(), FolderPicker {
             event.source and InputDevice.SOURCE_JOYSTICK == InputDevice.SOURCE_JOYSTICK &&
             event.action == MotionEvent.ACTION_MOVE
         ) {
+            // Press to bind first: most pads send their d-pad only as the hat, so its directions go there as d-pad keys,
+            // and one it takes never moves the menu.
+            if (::state.isInitialized) {
+                var taken = false
+                captureHat.update(event.getAxisValue(MotionEvent.AXIS_HAT_X), event.getAxisValue(MotionEvent.AXIS_HAT_Y)) { code, down ->
+                    if (state.captureKey(code, down)) taken = true
+                }
+                if (taken) { onUserInteraction(); return true }
+            }
             // The hat, else the left stick (as the in-game menu reads them): held directions repeat like the d-pad's.
             // Behind a text box too (sign-in, Rename, New collection): it moves between the field and the buttons as
             // the d-pad does, and never types.

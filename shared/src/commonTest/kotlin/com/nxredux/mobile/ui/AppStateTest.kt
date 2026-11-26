@@ -1657,6 +1657,22 @@ class AppStateTest {
         assertNull(runner.launched.single().resumeSlot)
     }
 
+    // Wii U's core has no save states: a slot file left from before is never offered, so Continue is a plain launch.
+    @Test fun continue_on_a_no_state_core_is_a_plain_launch() = runTest {
+        val settings = MemorySettings(ContentRef("Home"))
+        val runner = RecordingRunner()
+        val zelda = "/Roms/Nintendo Wii U (WIIU)/Zelda.wua"
+        val src = FakeRomsSource(dirs = mapOf("Home" to listOf("Roms"), "Home/Roms" to listOf("Nintendo Wii U (WIIU)"), "Home/Roms/Nintendo Wii U (WIIU)" to listOf("Zelda.wua")))
+        val fake = FakeUserData(recents = listOf(Recent(zelda)), resumable = mapOf(("WIIU" to "Zelda.wua") to ResumeInfo(9, "file:///z.png")))
+        val state = state(settings, src = src, runner = runner, data = AutoSlotGate(fake) { settings.saveOnQuit })
+        state.load(); advanceUntilIdle()
+        val cont = assertIs<MainRow.Continue>(state.screen.value.homeRows[0])
+        assertFalse(cont.resume.canResume)
+        assertNull(continueFrame(cont))
+        state.onButton(NxButton.A); advanceUntilIdle()
+        assertNull(runner.launched.single().resumeSlot)
+    }
+
     @Test fun a_game_without_a_save_offers_no_play_from_start() = runTest {
         val state = ndsList(MemorySettings(ContentRef("Home")).apply { menuButtonHints = false }, RecordingRunner(), CoroutineScope(UnconfinedTestDispatcher(testScheduler)), save = false)
         state.onButton(NxButton.MENU)

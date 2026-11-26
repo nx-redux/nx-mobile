@@ -13,7 +13,7 @@ sealed interface CaptureResult {
  * combo; any other key pressed alone is that key; MENU pressed and released alone binds nothing (MENU
  * alone opens the in-game menu) and keeps waiting. B or Back alone cancels, so neither binds as a single button
  * (MENU+B still does). SELECT or START as the key, alone or with MENU, is refused ([ShortcutBinding.GAME_KEYS]: they
- * stay the game's), as is a result in [reserved] (a console's built-in hotkeys, [ConsoleHotkeys.always] by default).
+ * stay the game's), as is a d-pad direction alone ([ShortcutBinding.DIRECTIONS]: MENU + a direction binds) or a result in [reserved] (a console's built-in hotkeys, [ConsoleHotkeys.always] by default).
  *
  * Every key that went down since [start] is swallowed until its release, even after the capture ended ([takes]): MENU's
  * release after MENU+R1, or B's after a cancel, must not reach the menu as a press of its own.
@@ -57,6 +57,7 @@ class ShortcutCapture(private val reserved: List<ClaimedInput> = ConsoleHotkeys.
     private fun end(b: ShortcutBinding): CaptureResult {
         cancel()
         if (b.keyCode in ShortcutBinding.GAME_KEYS) return CaptureResult.Refused(b, ShortcutBinding.GAME_KEYS_NOTE)
+        if (b.modifier == null && b.keyCode in ShortcutBinding.DIRECTIONS) return CaptureResult.Refused(b, ShortcutBinding.DIRECTIONS_NOTE)
         return reserved.firstOrNull { it.binding == b }?.let { CaptureResult.Refused(b, it.note) } ?: CaptureResult.Bound(b)
     }
 

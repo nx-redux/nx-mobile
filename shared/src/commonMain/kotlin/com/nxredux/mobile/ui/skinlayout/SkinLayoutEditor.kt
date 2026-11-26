@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.WindowInsets
+import com.nxredux.mobile.skin.STRIP_SWAP
 import com.nxredux.mobile.skin.SkinPlacement
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.drawText
@@ -58,6 +59,7 @@ import androidx.compose.ui.unit.sp
 import com.nxredux.mobile.options.PxRect
 import com.nxredux.mobile.skin.SkinTweak
 import com.nxredux.mobile.skin.bare
+import com.nxredux.mobile.skin.stripDummies
 import com.nxredux.mobile.ui.nx.LocalNxColors
 import com.nxredux.mobile.ui.nx.LocalNxFont
 import com.nxredux.mobile.ui.nx.ModalKind
@@ -260,12 +262,15 @@ private fun ToolbarButton(label: String, enabled: Boolean = true, primary: Boole
     ) { Text(label, color = fg, fontFamily = LocalNxFont.current, fontSize = 13.sp) }
 }
 
-/** The strip's touch shortcut slots (TOUCH_1..4) as dummy buttons: each slot's touch area, its number written in it. */
+/**
+ * The strip's touch shortcut slots (TOUCH_1..4) as dummy buttons, as the game lays them out ([stripDummies]: the Wii U's
+ * SWAP in the middle): each slot's touch area, its number (or SWAP) written in it.
+ */
 @Composable
 private fun StripPlaceholders(placed: SkinPlacement, modifier: Modifier = Modifier) {
     val measurer = rememberTextMeasurer()
     val ink = LocalNxColors.current.main
-    val slots = remember(placed) { placed.controls.filter { it.spec.id.startsWith(STRIP_SLOT_PREFIX) } }
+    val slots = remember(placed) { placed.stripDummies() }
     if (slots.isEmpty()) return
     Canvas(modifier) {
         for (c in slots) {
@@ -276,7 +281,7 @@ private fun StripPlaceholders(placed: SkinPlacement, modifier: Modifier = Modifi
             // role: a dummy shortcut button's faint fill, its outline and its word, in the pill ink
             drawRoundRect(ink.copy(alpha = 0.15f), Offset(c.x - hw, c.y - hh), Size(hw * 2f, hh * 2f), corner)
             drawRoundRect(ink.copy(alpha = 0.4f), Offset(c.x - hw, c.y - hh), Size(hw * 2f, hh * 2f), corner, style = Stroke(1.dp.toPx()))   // role: its outline
-            val text = "Shortcut " + c.spec.id.removePrefix(STRIP_SLOT_PREFIX)
+            val text = if (c.spec.id == STRIP_SWAP) STRIP_SWAP else "Shortcut " + c.spec.id.removePrefix(STRIP_SLOT_PREFIX)
             // as large as fits the slot: about 0.6 of the size per letter across, 0.9 of the height up
             val px = minOf(hh * 0.9f, hw * 2f * 0.85f / (text.length * 0.6f))
             val m = measurer.measure(text, TextStyle(color = ink.copy(alpha = 0.7f),   // role: its word

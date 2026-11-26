@@ -56,10 +56,34 @@ public:
 
     static float callback_get_sensor_input(unsigned port, unsigned id);
 
-    /** A core's on-screen message (SET_MESSAGE / _EXT), queued for the app (the step drains it: takeCoreMessages). */
-    void pushCoreMessage(const char* msg);
+    /** A core's on-screen message (SET_MESSAGE / _EXT): its text, how long it asks for (0: no say) and whether it is a status or progress line. */
+    struct CoreMessage {
+        std::string text;
+        unsigned durationMs;
+        bool status;
+    };
+    /** Queues [msg] for the app (the step drains it: takeCoreMessages). */
+    void pushCoreMessage(const char* msg, unsigned durationMs, bool status);
     /** The messages queued since the last call, oldest first; at most CORE_MESSAGES_MAX are kept. */
-    std::vector<std::string> takeCoreMessages();
+    std::vector<CoreMessage> takeCoreMessages();
+
+    /** A core's text entry opened ([open]: with its [text], the empty answer's [name] and [maxLength]) or closed. */
+    struct TextInputEvent {
+        bool open;
+        std::string text;
+        std::string name;
+        unsigned maxLength;
+    };
+    /** The entry changes since the last call, oldest first (the step drains them). */
+    std::vector<TextInputEvent> takeTextInputEvents();
+
+    /**
+     * Keys for the core's keyboard callback, typed one a frame from the next (deliverKeyboardKey). Only into an open text
+     * entry: nothing without one or without a callback, and what is left goes when the entry closes.
+     */
+    void queueKeyboardKeys(const std::vector<std::pair<unsigned, uint32_t>>& keys);
+    /** Presses and releases the next queued key through the core's keyboard callback; on the core's thread, before a frame. */
+    void deliverKeyboardKey();
 
     static bool callback_set_rumble_state(
         unsigned port,
@@ -182,7 +206,12 @@ private:
     std::optional<struct retro_fastforwarding_override> fastForwardingOverride;
     static constexpr size_t CORE_MESSAGES_MAX = 16;
     std::mutex coreMessagesMutex;
-    std::vector<std::string> coreMessages;
+    std::vector<CoreMessage> coreMessages;
+    std::mutex textInputMutex;   // the events and the keys: the step drains one, the UI thread fills the other
+    std::vector<TextInputEvent> textInputEvents;
+    std::vector<std::pair<unsigned, uint32_t>> keyboardKeys;
+    retro_keyboard_event_t keyboardCallback = nullptr;
+    bool textInputOpen = false;
     bool preferVulkan = false;
     bool useVulkan = false;
     std::atomic<bool> loggedVulkanInterface { false };   // GET_HW_RENDER_INTERFACE logged this session

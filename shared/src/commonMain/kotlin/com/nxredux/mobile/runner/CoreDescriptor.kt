@@ -34,6 +34,11 @@ data class VulkanSwitch(
      * Not N64 or Wii, which run slower on Vulkan there (measured on the Tab S10 FE and Galaxy Z Flip 8).
      */
     val autoOnXclipse: Boolean = false,
+    /**
+     * The core has no OpenGL ES renderer (Cemu): no Graphics API row, a phone without Vulkan is refused before the core
+     * loads, and a Vulkan start failure ends the launch instead of relaunching on OpenGL ES or recording the core.
+     */
+    val vulkanOnly: Boolean = false,
 ) {
     /** Auto depends on the GPU: [autoIsVulkan][com.nxredux.mobile.options.GraphicsApiOptions.autoIsVulkan] needs its name. */
     val followsGpu: Boolean get() = autoOnMali || autoOnXclipse
@@ -104,6 +109,12 @@ data class CoreDescriptor(
      */
     val keepLoaded: Boolean = false,
     /**
+     * How long one frame may run, until the game's first frame has rendered, before the runner treats the core as hung
+     * and closes the game; null = the runner's default, which also applies from the first frame on. For a core whose
+     * game start is one long frame that grows with play (what a limit above a minute gives up: CoreWatchdog.LIMIT_MILLIS).
+     */
+    val hangLimitMillis: Long? = null,
+    /**
      * Options whose probed values describe the probe machine, not the core (melonDS DS's firmware and NAND paths, its
      * network interface): never shown or written outside a game ([com.nxredux.mobile.options.EmulatorSettings.page]).
      */
@@ -115,6 +126,11 @@ data class CoreDescriptor(
      * prboom, which don't support it, and Dolphin, whose states are too large to snapshot every frame on a phone.
      */
     val rewind: Boolean = true,
+    /**
+     * Whether the core can save and load states. False: no save-state slots, rows or shortcuts, and no resume point, so
+     * Quit only quits and Continue starts the game afresh.
+     */
+    val saveStates: Boolean = true,
     /** The core reads the libretro mic interface; the app shows the Mic toggle and offers the interface. */
     val microphone: Boolean = false,
     /**

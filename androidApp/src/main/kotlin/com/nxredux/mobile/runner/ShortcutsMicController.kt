@@ -59,6 +59,8 @@ internal class ShortcutsMicController(
     /** The core hears a mic ([CoreDescriptor.microphone]: DS, DSi, 3DS); false until the launch resolves the core. */
     var canMic = false
         private set
+    // The core saves states ([CoreDescriptor.saveStates]): without, no save-state shortcut, touch button or panel tile.
+    private var canSaveStates = true
     /**
      * The session's Mic toggle ([MicControl]), made at launch for a mic core only; null for every other core, so every
      * mic path (pad button, tile, binding, source) is inert. Off at every launch; [applyMic] pushes it everywhere.
@@ -97,8 +99,9 @@ internal class ShortcutsMicController(
      * on alone after it keeps them off, as it has no save states. DS / 3DS: the Mic toggle, off; netplay hides it (as the
      * speed shortcuts) until a link session's end.
      */
-    fun launch(microphone: Boolean, netplay: Boolean, tag: String, overrides: ShortcutOverrides) {
+    fun launch(microphone: Boolean, netplay: Boolean, tag: String, overrides: ShortcutOverrides, saveStates: Boolean) {
         canMic = microphone
+        canSaveStates = saveStates
         mic = if (canMic) MicControl(micAccess.usable).apply {
             setGranted(micAccess.granted())
             setAsked(host.settings.micAsked)
@@ -181,7 +184,7 @@ internal class ShortcutsMicController(
 
     /** The touch buttons the second-screen panel shows a tile for ([GamePanelModel.panelTouchActions]). */
     fun panelTouchActions(): List<ShortcutAction> =
-        GamePanelModel.panelTouchActions(effectiveShortcuts?.touch.orEmpty(), host.speed.rewindShown)
+        GamePanelModel.panelTouchActions(effectiveShortcuts?.touch.orEmpty(), host.speed.rewindShown, canSaveStates)
 
     /**
      * A panel tile's press or release, as the touch button's: not while the in-game menu is open (it took the shortcuts).
@@ -219,13 +222,13 @@ internal class ShortcutsMicController(
      */
     fun applyShortcuts(overrides: ShortcutOverrides) {
         shortcutOverrides = overrides
-        val effective = Shortcuts.effective(shortcutBase, overrides, shortcutClaimed, host.canRewind, canMic = canMic)
+        val effective = Shortcuts.effective(shortcutBase, overrides, shortcutClaimed, host.canRewind, canMic = canMic, canSaveStates = canSaveStates)
         effectiveShortcuts = effective
         shortcutKeys = ShortcutKeys(effective, shortcutClaimed, SystemClock::uptimeMillis)
         refreshTouchShortcuts()
     }
 
-    fun publishShortcuts(model: InGameMenuModel) = model.setShortcuts(shortcutBase, shortcutOverrides, shortcutClaimed, host.canRewind, canMic)
+    fun publishShortcuts(model: InGameMenuModel) = model.setShortcuts(shortcutBase, shortcutOverrides, shortcutClaimed, host.canRewind, canMic, canSaveStates)
 
     /**
      * The pad's fixed mic button ([PadMic]): the session's Mic toggle on DS / 3DS while the Mic tile shows it

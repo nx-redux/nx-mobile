@@ -73,7 +73,8 @@ internal class Res3dController(private val host: Res3dHost, private val renderer
         val console = console ?: return
         if (!canSend()) return
         val max = displayMax ?: return
-        val value = Nds3dResolution.valueFor(host.frontendValues, current, max, console, shaded = host.shaderOn)
+        // A launch-only console keeps the scale it launched with (Nds3dResolution.liveValue).
+        val value = Nds3dResolution.liveValue(this.value, host.frontendValues, current, max, console, shaded = host.shaderOn)
         sender.offer(value, sizeChange, SystemClock.uptimeMillis())?.let(::send)
         scheduleTick()
     }
@@ -119,10 +120,15 @@ internal class Res3dController(private val host: Res3dHost, private val renderer
         // With the whole picture on a second display, the first layout reads its scale there: the launch reads it too, so
         // no change follows right after a resume's load (Dolphin on OpenGL ES corrupts the game's memory on one).
         val second = host.secondPictureDisplay?.takeIf { console != Res3dConsole.DS && console != Res3dConsole.N3DS }
-            ?.let { console.displayMaxOf(it, shape.screenClass) }
+            ?.let { console.secondDisplayMaxOf(it, shape.screenClass) }
         val max = listOfNotNull(console.displayMaxOf(shape.widthPx to shape.heightPx, shape.screenClass), second).maxOrNull()
         if (max == null) {
             if (console == Res3dConsole.N3DS) CoreRegistry.forId(console.coreId)?.defaultOptions?.get(console.coreKey)?.toIntOrNull()?.let(renderer::startN3dsFactor)
+            // Held as if sent, so the first layout does not change a launch-only scale mid-game.
+            console.unsizedLaunchValue?.let {
+                sender.offer(it, sizeChange = false, SystemClock.uptimeMillis())
+                this.value = it
+            }
             return emptyMap()
         }
         val value = Nds3dResolution.valueFor(host.frontendValues, null, max, console, shaded = host.shaderOn)

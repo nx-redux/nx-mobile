@@ -81,6 +81,28 @@ class DsScreenRegionsTest {
         assertEquals(listOf(true, false), dsScreenRegions(stackTop, stackBottom, DsKind.DS, NdsScreen.TOP).map { it.shaded })
     }
 
+    @Test
+    fun wiiu_tv_in_the_top_glass_gamepad_in_the_touch_glass() {
+        val tvGlass = PxRect(24f, 60f, 1792f, 1008f)
+        val padGlass = PxRect(304f, 1236f, 1232f, 693f)
+        val (tv, pad) = dsScreenRegions(tvGlass, padGlass, DsKind.WIIU, NdsScreen.TOP)
+        assertEquals(NdsScreen.TOP, tv.screen)
+        assertEquals(WiiuLayout.TV_SRC, tv.src)
+        assertEquals(tvGlass, tv.dst)
+        assertFalse(tv.touch)
+        assertEquals(NdsScreen.BOTTOM, pad.screen)
+        assertEquals(WiiuLayout.PAD_SRC, pad.src)
+        assertEquals(padGlass, pad.dst)
+        assertTrue(pad.touch)
+        // SWAP: the GamePad in the top glass, still the touch screen
+        val (big, small) = dsScreenRegions(tvGlass, padGlass, DsKind.WIIU, NdsScreen.BOTTOM)
+        assertEquals(WiiuLayout.PAD_SRC, big.src)
+        assertEquals(tvGlass, big.dst)
+        assertTrue(big.touch)
+        assertEquals(WiiuLayout.TV_SRC, small.src)
+        assertFalse(small.touch)
+    }
+
     /** Where window point ([x], [y]) in [r]'s screen lands in the 400 x 480 3DS frame, as the fork maps a touch. */
     private fun frameAt(r: NdsRegion, x: Float, y: Float): Pair<Float, Float> {
         val u = (x - r.dst.x) / r.dst.width

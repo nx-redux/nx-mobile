@@ -244,6 +244,25 @@ Automated: `tools/device-tests/netplay_pads.py` (Fold host, Nova client, then AY
 - [ ] Netplay with no BIOS on one phone: the session starts, both sides on HLE, no drift.
 - [ ] Docs: the BIOS page says the Dreamcast BIOS is recommended, not required.
 
+## Wii U on Cemu
+
+Device checks owed:
+- [ ] Wind Waker HD name screen: the Keyboard box opens; touch typing + OK names the file; A sends the account's name; B then "Type" brings the box back; START still answers.
+- [ ] Fold: Performance 2x on Mario Kart 8 draws right; fold/unfold and a second display mid-game keep the launch scale.
+- [ ] Fold inner portrait and half-folded skin (round 13 layout); phone landscape with a skin starts Stacked.
+- [ ] In-game menu after SWAP hides the lower-glass screen (DS, 3DS, Wii U).
+- [ ] Core message toasts: no noisy core floods (a long shader compile, the FDS disk swap, Azahar wireless on a second display).
+- [ ] AYANEO (Mali, 2 GB): the RAM warning shows once; whether a light game starts.
+- [ ] Release build: the Cemu core from CI loads (no local jniLibs).
+
+Follow-ups:
+- [ ] Install a game's update and DLC separately (today the update must be inside the .wua).
+- [ ] Load Cemu's shader/pipeline cache without blocking the first frame (the start watchdog waits 120 s).
+- [ ] Refine the Wii U skin layouts per device, with DS/3DS SWAP moved into the touch strip (Save · SWAP · Load).
+- [ ] Bindable SWAP shortcut; the swapped-screen backdrop under the menu.
+- [ ] Docs: Wii U page (keys.txt in Bios/WIIU, .wua with updates inside, Vulkan-only, 4 GB RAM advice, Native by default) and release text.
+- [ ] Deferred simplifications: WiiuLayout pip/centred shared with NdsLayout; the strip's even-share maths in one place; one layout-tip getter.
+
 ## Merged features: checks owed
 
 Change art (#71):

@@ -14,7 +14,9 @@ import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.PadOptions
 import com.nxredux.mobile.options.N3dsOptions
+import com.nxredux.mobile.options.WiiuOptions
 import com.nxredux.mobile.options.NdsScreen
+import com.nxredux.mobile.shortcuts.HatKeys
 import com.nxredux.mobile.shortcuts.ShortcutAction
 import com.nxredux.mobile.ui.nx.AxisDirections
 import com.nxredux.mobile.ui.nx.DpadHat
@@ -93,6 +95,8 @@ internal interface GameInputHost : LifecycleOwner {
     fun screenClass(): ScreenClass
     /** A second display places the DS / 3DS screens: the layout cycle does nothing, silently. */
     fun layoutSetByDual(): Boolean
+    /** The DS / 3DS / Wii U pad skin will show ([PadLayoutController.dsSkinWanted]): the Wii U's cycle starts from its default. */
+    fun padSkinWanted(): Boolean
     /** The activity's own handling (super) of an event the router leaves to the system. */
     fun superGenericMotionEvent(event: MotionEvent?): Boolean
     fun superKeyDown(keyCode: Int, event: KeyEvent): Boolean
@@ -117,11 +121,12 @@ internal class GameInputRouter(private val host: GameInputHost) {
             MotionEvent.AXIS_LTRIGGER, MotionEvent.AXIS_RTRIGGER, MotionEvent.AXIS_BRAKE, MotionEvent.AXIS_GAS,
         )
         /**
-         * Cores that read the left stick as analog (N64, PSP, PS1 DualShock, PS2, Dreamcast, and Dolphin's GameCube stick
-         * and Wii Nunchuk and Classic sticks): a gamepad's stick is analog only there. melonDS DS has its own routing (the NDS
-         * branch of onGenericMotionEvent). Every other core, prboom included, gets the stick folded into the d-pad.
+         * Cores that read the left stick as analog (N64, PSP, PS1 DualShock, PS2, Dreamcast, Dolphin's GameCube stick
+         * and Wii Nunchuk and Classic sticks, and Cemu's GamePad sticks): a gamepad's stick is analog only there. melonDS DS
+         * has its own routing (the NDS branch of onGenericMotionEvent). Every other core, prboom included, gets the stick
+         * folded into the d-pad.
          */
-        private val STICK_CORES = setOf("mupen64plus_next", "ppsspp", "pcsx_rearmed", "swanstation", "flycast", "dolphin", "armsx2")
+        internal val STICK_CORES = setOf("mupen64plus_next", "ppsspp", "pcsx_rearmed", "swanstation", "flycast", "dolphin", "armsx2", "cemu")
     }
 
     private val n3dsSwapKey = N3dsSwapKey()
@@ -201,6 +206,14 @@ internal class GameInputRouter(private val host: GameInputHost) {
                 .also { padLayouts[event.deviceId] = it }
 
     val menuAxes = AxisDirections { host.menuRouter.onEvent(it) }   // the hat / left stick as held menu directions
+    val menuHat = HatKeys()   // the hat as d-pad keys for the Shortcuts page's press to bind
+    private val hatShortcuts = HatShortcuts { verdict, code -> shortcut(verdict, code) }
+
+    /** P1's (port 0's) hat through the shortcuts, as its d-pad keys; read [HatShortcuts.x] / [HatShortcuts.y] after. */
+    private fun hatShortcut(event: MotionEvent) {
+        val keys = host.shortcutKeys ?: return
+        hatShortcuts.update(event.getAxisValue(MotionEvent.AXIS_HAT_X), event.getAxisValue(MotionEvent.AXIS_HAT_Y), keys)
+    }
 
     /** The on-screen stick: the game's left analog while playing, held menu directions while the menu is open. */
     val stickRouter = VirtualStickRouter(
@@ -237,9 +250,10 @@ internal class GameInputRouter(private val host: GameInputHost) {
     fun setSkinLayouts(shown: Boolean, layouts: Boolean) {
         n3dsHotkeys.skinShown = shown; n3dsHotkeys.skinLayouts = shown && layouts
         ndsHotkeys.skinShown = shown; ndsHotkeys.skinLayouts = shown && layouts
+        wiiuHotkeys.skinShown = shown; wiiuHotkeys.skinLayouts = shown && layouts
     }
 
-    /** The skin lays the DS / 3DS screens out by the player's layout ([setSkinLayouts]). */
+    /** The skin lays the DS / 3DS / Wii U screens out by the player's layout ([setSkinLayouts]). */
     val skinLayouts: Boolean get() = n3dsHotkeys.skinLayouts
     private val ndsHat = DpadHat()               // hardware hat directions the core has been given (the forwarded ones)
     private var ndsHatX = 0
@@ -257,6 +271,13 @@ internal class GameInputRouter(private val host: GameInputHost) {
     val n3dsStylusOn = mutableStateOf(false)   // stylus mode
     val ndsStylusOn = mutableStateOf(false)    // the DS's, likewise
     private var n3dsTickJob: Job? = null        // ticks the hotkeys while they ask ([N3dsHotkeys.ticking])
+
+    /** The Wii U's SELECT chords on P1: the 3DS's hold-back, as SELECT is the GamePad's minus. */
+    private val wiiuHotkeys = N3dsHotkeys(wiiu = true)
+    private var wiiuHatX = 0
+    private var wiiuHatY = 0
+    private var wiiuTickJob: Job? = null
+    private val isWiiu: Boolean get() = WiiuOptions.appliesTo(host.gameTag)
 
     /**
      * The core reads a pad's left stick as an analog stick ([STICK_CORES]). Any other core gets the stick folded into the
@@ -367,6 +388,9 @@ internal class GameInputRouter(private val host: GameInputHost) {
         }
     }
 
+    /** The Wii U's SWAP: the other screen big (split: on the picture display), saved to the game's config as the DS's is. */
+    fun swapWiiuScreens() = setNdsKey(WiiuOptions.swapBigScreen(host.frontendValues))
+
     /**
      * A hotkey's layout change: applied now, shown as [label] (the new value's by default), and saved to the game's config.
      * A key locked in the .cfg is left alone.
@@ -382,11 +406,15 @@ internal class GameInputRouter(private val host: GameInputHost) {
     /** The notices' buttons, by toast id: what a tap on one does ([showNotice]). */
     private val noticeActions = HashMap<Long, () -> Unit>()
 
-    /** A notice over the picture for [ms] (a tip: [LayoutTip]), with a button [action] whose tap runs [onAction] and closes it. */
-    fun showNotice(text: String, ms: Long, action: String? = null, onAction: () -> Unit = {}) {
+    /**
+     * A notice over the picture for [ms] (a tip: [LayoutTip]), with a button [action] whose tap runs [onAction] and closes
+     * it; its id, for [onNoticeDismiss].
+     */
+    fun showNotice(text: String, ms: Long, action: String? = null, onAction: () -> Unit = {}): Long {
         val id = host.notifications.push(text, null, ms, SystemClock.elapsedRealtime(), action)
         if (action != null && id >= 0) noticeActions[id] = onAction
         host.publishNotifications()
+        return id
     }
 
     /** A notice's Close was tapped: it goes, its action not run. */
@@ -481,37 +509,41 @@ internal class GameInputRouter(private val host: GameInputHost) {
      * ones reach the core as its d-pad. This replaces the d-pad keys Android would synthesise from the event.
      */
     private fun routeNdsHat(view: GLRetroView, event: MotionEvent) {
-        val x = ndsHotkeys.joystickDirection(event.getAxisValue(MotionEvent.AXIS_HAT_X), event.getAxisValue(MotionEvent.AXIS_X))
-        val y = ndsHotkeys.joystickDirection(event.getAxisValue(MotionEvent.AXIS_HAT_Y), event.getAxisValue(MotionEvent.AXIS_Y))
-        routeHat(view, ndsHatX, ndsHatY, x, y, n3ds = false)
+        hatShortcut(event)
+        val x = ndsHotkeys.joystickDirection(hatShortcuts.x(event.getAxisValue(MotionEvent.AXIS_HAT_X)), event.getAxisValue(MotionEvent.AXIS_X))
+        val y = ndsHotkeys.joystickDirection(hatShortcuts.y(event.getAxisValue(MotionEvent.AXIS_HAT_Y)), event.getAxisValue(MotionEvent.AXIS_Y))
+        routeHat(view, ndsHatX, ndsHatY, x, y)
         ndsHatX = x
         ndsHatY = y
     }
 
     /**
-     * The hat's edges from ([oldX], [oldY]) to ([x], [y]) as direction presses and releases through the DS or the 3DS
-     * hotkeys ([n3ds]; true from them: forward it); the forwarded ones reach the core as its d-pad. No lambda: this runs
-     * for every joystick event.
+     * The hat's edges from ([oldX], [oldY]) to ([x], [y]) as direction presses and releases through the DS, 3DS or Wii U
+     * hotkeys ([routeHatButton]; true from them: forward it); the forwarded ones reach the core as its d-pad. No lambda:
+     * this runs for every joystick event.
      */
-    private fun routeHat(view: GLRetroView, oldX: Int, oldY: Int, x: Int, y: Int, n3ds: Boolean) {
+    private fun routeHat(view: GLRetroView, oldX: Int, oldY: Int, x: Int, y: Int) {
         // `or`, not `||`: both axes' edges are routed.
-        val changed = hatEdge(oldX, x, NxButton.LEFT, NxButton.RIGHT, n3ds) or hatEdge(oldY, y, NxButton.UP, NxButton.DOWN, n3ds)
+        val changed = hatEdge(oldX, x, NxButton.LEFT, NxButton.RIGHT) or hatEdge(oldY, y, NxButton.UP, NxButton.DOWN)
         if (changed) view.sendMotionEvent(GLRetroView.MOTION_SOURCE_DPAD, ndsHat.x.toFloat(), ndsHat.y.toFloat(), 0)
     }
 
     /** One hat axis' edge ([routeHat]); true when the d-pad the core gets changed. */
-    private fun hatEdge(old: Int, new: Int, negative: NxButton, positive: NxButton, n3ds: Boolean): Boolean {
+    private fun hatEdge(old: Int, new: Int, negative: NxButton, positive: NxButton): Boolean {
         if (old == new) return false
         var changed = false
         val released = when (old) { -1 -> negative; 1 -> positive; else -> null }
         val pressed = when (new) { -1 -> negative; 1 -> positive; else -> null }
-        if (released != null && routeHatButton(released, false, n3ds)) changed = ndsHat.release(released)
-        if (pressed != null && routeHatButton(pressed, true, n3ds)) changed = ndsHat.press(pressed) || changed
+        if (released != null && routeHatButton(released, false)) changed = ndsHat.release(released)
+        if (pressed != null && routeHatButton(pressed, true)) changed = ndsHat.press(pressed) || changed
         return changed
     }
 
-    private fun routeHatButton(button: NxButton, down: Boolean, n3ds: Boolean): Boolean =
-        if (n3ds) routeN3ds(button, down) else routeNds(button, down)
+    private fun routeHatButton(button: NxButton, down: Boolean): Boolean = when {
+        host.isN3ds -> routeN3ds(button, down)
+        isWiiu -> routeWiiu(button, down)
+        else -> routeNds(button, down)
+    }
 
     /** Picks the 3DS hotkeys' core values out of [values] (launch, a menu change, a restore); other keys are ignored. */
     fun n3dsCoreValues(values: Map<String, String>) {
@@ -563,6 +595,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
                 if (action.on) releaseStylusInputs()
                 showNdsLabel(if (action.on) "Stylus on" else "Stylus off")
             }
+            N3dsAction.SwapScreens -> Unit   // the 3DS swaps through Azahar's L3 key, never as an action
         }
     }
 
@@ -581,24 +614,57 @@ internal class GameInputRouter(private val host: GameInputHost) {
             n3dsSentRight = right
         }
         if (!n3dsHotkeys.ticking || n3dsTickJob?.isActive == true) return
-        n3dsTickJob = lifecycleScope.launch {
-            var last = SystemClock.elapsedRealtime()
-            while (n3dsHotkeys.ticking) {
-                delay(PEN_TICK_MS)
-                val now = SystemClock.elapsedRealtime()
-                if (!host.menuOpen) n3dsHotkeys.tick(now - last)
-                last = now
-                syncN3dsCursor()
-            }
-            n3dsTickJob = null
+        n3dsTickJob = tickWhileAsked(n3dsHotkeys, ::syncN3dsCursor)
+    }
+
+    /** Ticks [hotkeys] while they ask ([N3dsHotkeys.ticking]), with [sync] after each tick to send what they made. */
+    private fun tickWhileAsked(hotkeys: N3dsHotkeys, sync: () -> Unit): Job = lifecycleScope.launch {
+        var last = SystemClock.elapsedRealtime()
+        while (hotkeys.ticking) {
+            delay(PEN_TICK_MS)
+            val now = SystemClock.elapsedRealtime()
+            if (!host.menuOpen) hotkeys.tick(now - last)
+            last = now
+            sync()
         }
+    }
+
+    /**
+     * The Wii U's SELECT chords for one P1 button event ([wiiuHotkeys]); true when it goes on to the core as is. A held-back
+     * SELECT is sent here when it taps. A key repeat only asks whether its press did.
+     */
+    private fun routeWiiu(button: NxButton, down: Boolean, repeat: Boolean = false): Boolean {
+        if (repeat) return !wiiuHotkeys.consumes(button)
+        val decision = wiiuHotkeys.onButton(button, down)
+        when (val action = decision.action) {
+            is N3dsAction.CycleLayout -> if (!host.layoutSetByDual()) {
+                // from the layout drawn: under a shown pad skin that takes the landscape row, its default
+                val skinLandscape = WiiuOptions.skinTakesLandscape(WiiuOptions.lockedLayoutRows(host.padSkinWanted(), host.screenClass()))
+                setNdsKey(WiiuOptions.cycleLayout(host.frontendValues, host.isLandscape(), host.ndsControllerMode(), action.delta, skinLandscape))
+            }
+            N3dsAction.SwapScreens -> swapWiiuScreens()
+            is N3dsAction.Stylus, null -> Unit
+        }
+        syncWiiuKeys()
+        return decision.forward
+    }
+
+    /** Sends the game the SELECT taps the Wii U's hotkeys made, and keeps them ticking while they ask. */
+    private fun syncWiiuKeys() {
+        val select = PadKeymap.keyCodeFor(host.padMap.sends(NxButton.SELECT))
+        for (e in wiiuHotkeys.takeKeys()) {
+            if (e.key == N3dsKey.SELECT && select != null) host.retroView?.sendKeyEvent(if (e.down) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP, select)
+        }
+        if (!wiiuHotkeys.ticking || wiiuTickJob?.isActive == true) return
+        wiiuTickJob = tickWhileAsked(wiiuHotkeys, ::syncWiiuKeys)
     }
 
     /** Hardware hat edges as direction presses through the 3DS hotkeys; the forwarded ones reach the core as its d-pad. */
     private fun routeN3dsHat(view: GLRetroView, event: MotionEvent) {
-        val x = n3dsHotkeys.joystickDirection(event.getAxisValue(MotionEvent.AXIS_HAT_X))
-        val y = n3dsHotkeys.joystickDirection(event.getAxisValue(MotionEvent.AXIS_HAT_Y))
-        routeHat(view, n3dsHatX, n3dsHatY, x, y, n3ds = true)
+        hatShortcut(event)
+        val x = n3dsHotkeys.joystickDirection(hatShortcuts.x(event.getAxisValue(MotionEvent.AXIS_HAT_X)))
+        val y = n3dsHotkeys.joystickDirection(hatShortcuts.y(event.getAxisValue(MotionEvent.AXIS_HAT_Y)))
+        routeHat(view, n3dsHatX, n3dsHatY, x, y)
         n3dsHatX = x
         n3dsHatY = y
     }
@@ -678,6 +744,12 @@ internal class GameInputRouter(private val host: GameInputHost) {
         }
         n3dsTickJob?.cancel()
         n3dsTickJob = null
+        if (isWiiu) {
+            wiiuHotkeys.releaseAll()
+            syncWiiuKeys()
+        }
+        wiiuTickJob?.cancel()
+        wiiuTickJob = null
         releaseShortcuts()   // backgrounded: a Hold FF / Hold Rewind never hears its release
     }
 
@@ -711,6 +783,12 @@ internal class GameInputRouter(private val host: GameInputHost) {
             n3dsPadRight = CENTRED
             syncN3dsCursor()
         }
+        if (isWiiu) {
+            wiiuHotkeys.releaseAll()   // a tapping SELECT is let go; a held-back one is dropped
+            wiiuHatX = 0
+            wiiuHatY = 0
+            syncWiiuKeys()
+        }
     }
 
     /**
@@ -719,6 +797,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
      */
     private fun releaseShortcuts() {
         host.shortcutKeys?.releaseAll()
+        hatShortcuts.releaseAll()
         inputs[0].triggers.untakeAll()   // a bound L2/R2's pull ends with it: its analog must not stay at rest
         host.releaseShortcutHolds()
     }
@@ -751,8 +830,16 @@ internal class GameInputRouter(private val host: GameInputHost) {
             .forEach { view.sendKeyEvent(KeyEvent.ACTION_UP, it, port) }
     }
 
-    /** Drives the open menu from a hardware hat / left-stick (vertical = item, horizontal = slot). */
+    /**
+     * Drives the open menu from a hardware hat / left-stick (vertical = item, horizontal = slot). The hat's directions go
+     * to press to bind first, as d-pad keys ([GameInputHost.menuCaptureKey]): one it takes never moves the menu.
+     */
     private fun routeMenuMotion(event: MotionEvent) {
+        var taken = false
+        menuHat.update(event.getAxisValue(MotionEvent.AXIS_HAT_X), event.getAxisValue(MotionEvent.AXIS_HAT_Y)) { code, down ->
+            if (host.menuCaptureKey(code, down, repeat = false)) taken = true
+        }
+        if (taken) return
         menuAxes.update(
             event.getAxisValue(MotionEvent.AXIS_HAT_X), event.getAxisValue(MotionEvent.AXIS_HAT_Y),
             event.getAxisValue(MotionEvent.AXIS_X), event.getAxisValue(MotionEvent.AXIS_Y),
@@ -764,17 +851,25 @@ internal class GameInputRouter(private val host: GameInputHost) {
     fun onPad(event: PadEvent) {
         // The menus follow the letter the on-screen pad shows (Dreamcast draws "A" on NxButton.B); the game gets the raw button.
         host.rumbles.firstOrNull()?.useDevice(null)   // the on-screen pad: the phone in the player's hands takes the rumble
-        if (host.menuOpen) { host.menuRouter.onEvent(event.map(host.padProfile()::menuButton)); return }
+        if (host.menuOpen) {
+            host.menuRouter.onEvent(event.map { host.padProfile().menuButton(openMenuButton(it, isWiiu)) })
+            return
+        }
         val btn = event.button
         val down = event is PadEvent.Down
         // MENU opens the pause menu (not forwarded to the core).
         if (btn == NxButton.MENU) { if (down) host.toggleMenu(); return }
         // The Wii's HOME: a resume point first, then a tap of the core's Home ([GameInputHost.pressWiiHome]); the release is the tap's.
-        if (btn == NxButton.HOME) { if (down && host.isWii) host.pressWiiHome(); return }
+        // Cemu has no GamePad HOME: the Wii U's HOME opens the pause menu as MENU does.
+        if (btn == NxButton.HOME) {
+            if (down && host.isWii) host.pressWiiHome() else if (down && isWiiu) host.toggleMenu()
+            return
+        }
         // SELECT + START held together also opens it (the on-screen pad is P1, port 0).
         if (inputs.menuChord(0, btn, down)) { host.toggleMenu(); return }
         if (host.isNds && !routeNds(btn, down)) return   // L3, L2, R2, the SELECT chords and the stylus inputs stay out of the core
         if (host.isN3ds && !routeN3ds(btn, down)) return  // SELECT (held back for chords), its chords and the stylus inputs: routeN3ds sends what they become
+        if (isWiiu && !routeWiiu(btn, down)) return       // SELECT is held back so its chords can be told from a tap
         val view = host.retroView ?: return
         if (gcPad && (btn == NxButton.L2 || btn == NxButton.R2)) { gcTrigger(btn, down); return }
         if (btn.isDirection) {
@@ -860,17 +955,32 @@ internal class GameInputRouter(private val host: GameInputHost) {
             } else {
                 routeTriggerAxes(event, port)   // a digital L2/R2 from a pad that reports its triggers only as axes
             }
-            val hatX = event.getAxisValue(MotionEvent.AXIS_HAT_X)
-            val hatY = event.getAxisValue(MotionEvent.AXIS_HAT_Y)
+            var hatX = event.getAxisValue(MotionEvent.AXIS_HAT_X)
+            var hatY = event.getAxisValue(MotionEvent.AXIS_HAT_Y)
+            if (port == 0) {   // shortcuts are P1's, as on the keys
+                hatShortcut(event)
+                hatX = hatShortcuts.x(hatX)
+                hatY = hatShortcuts.y(hatY)
+            }
             val sx = event.getAxisValue(MotionEvent.AXIS_X)
             val sy = event.getAxisValue(MotionEvent.AXIS_Y)
-            if (coreHasStick) {
-                view.sendMotionEvent(GLRetroView.MOTION_SOURCE_DPAD, hatX, hatY, port)
-            } else {
+            if (!coreHasStick) {
                 // The runner's JOYPAD d-pad is the hat axes and keys only, and consuming the event drops the d-pad keys
                 // Android would make from the stick, so a digital core's stick is folded in here.
                 inp.stickDpadX = stickDpadStep(sx, inp.stickDpadX)
                 inp.stickDpadY = stickDpadStep(sy, inp.stickDpadY)
+            }
+            if (isWiiu && port == 0) {
+                // P1's hat edges through the SELECT chords; the forwarded ones reach the core as its d-pad. Cemu has
+                // the stick as analog (STICK_CORES), so no stick step is folded in and a tilt never makes a chord.
+                val x = hatOrStick(hatX, 0)
+                val y = hatOrStick(hatY, 0)
+                routeHat(view, wiiuHatX, wiiuHatY, x, y)
+                wiiuHatX = x
+                wiiuHatY = y
+            } else if (coreHasStick) {
+                view.sendMotionEvent(GLRetroView.MOTION_SOURCE_DPAD, hatX, hatY, port)
+            } else {
                 view.sendMotionEvent(GLRetroView.MOTION_SOURCE_DPAD, hatOrStick(hatX, inp.stickDpadX).toFloat(), hatOrStick(hatY, inp.stickDpadY).toFloat(), port)
             }
             view.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_LEFT, sx, sy, port)
@@ -1013,6 +1123,9 @@ internal class GameInputRouter(private val host: GameInputHost) {
         if (host.isN3ds) placed?.let { b ->
             if (!routeN3ds(b, down = true, repeat = !first)) return true
         }
+        if (isWiiu && port == 0) placed?.let { b ->
+            if (!routeWiiu(b, down = true, repeat = !first)) return true
+        }
         // As printed (or by position on positional consoles) through the console's pad map; N64 by name ([runnerKey]).
         runnerKey(event, keyCode, port)?.let { host.retroView?.sendKeyEvent(event.action, it, port) }
         return true
@@ -1047,6 +1160,9 @@ internal class GameInputRouter(private val host: GameInputHost) {
         }
         if (host.isN3ds) placed?.let { b ->
             if (!routeN3ds(b, down = false)) return true
+        }
+        if (isWiiu && port == 0) placed?.let { b ->
+            if (!routeWiiu(b, down = false)) return true
         }
         // As printed (or by position on positional consoles) through the console's pad map; N64 by name ([runnerKey]).
         runnerKey(event, keyCode, port)?.let { host.retroView?.sendKeyEvent(event.action, it, port) }
@@ -1085,6 +1201,10 @@ internal class N3dsSwapKey {
         return claimed
     }
 }
+
+/** What the open pause menu gets for an on-screen [button]: the Wii U's HOME opened it ([wiiu]), so it closes it as MENU. */
+internal fun openMenuButton(button: NxButton, wiiu: Boolean): NxButton =
+    if (wiiu && button == NxButton.HOME) NxButton.MENU else button
 
 /** Where a physical stick click goes ([thumbKeyRoute]). */
 internal enum class ThumbKeyRoute { WII_RECENTER, WII_HOME, N3DS_SWAP, CORE }

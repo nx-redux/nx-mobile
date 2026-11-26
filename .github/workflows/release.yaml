@@ -143,9 +143,15 @@ jobs:
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;$NDK_VERSION" "cmake;$CMAKE_VERSION" > /dev/null
-          # azahar, dolphin and armsx2 need CMake 3.25+: cores/Makefile pins <core>_CMAKE / <core>_NINJA to the SDK's 3.30.3.
-          if [ "${{ matrix.core }}" = "azahar" ] || [ "${{ matrix.core }}" = "dolphin" ] || [ "${{ matrix.core }}" = "armsx2" ]; then
-            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "cmake;3.30.3" > /dev/null
+          # azahar, dolphin, armsx2 and cemu build with the SDK's CMake 3.30.3 (cores/Makefile's <core>_CMAKE / <core>_NINJA).
+          case "${{ matrix.core }}" in
+            azahar|dolphin|armsx2|cemu)
+              "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "cmake;3.30.3" > /dev/null ;;
+          esac
+          # cemu's vcpkg ports configure with pkg-config and autotools; cores/Makefile builds them with the host triplet
+          # x64-linux here, and drops CC/CXX for vcpkg itself.
+          if [ "${{ matrix.core }}" = "cemu" ]; then
+            sudo apt-get update -q && sudo apt-get install -y -q pkg-config autoconf automake libtool > /dev/null
           fi
 
       - name: Build ${{ matrix.core }} core

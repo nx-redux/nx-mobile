@@ -26,6 +26,7 @@ internal val consoleLogosById: Map<String, DrawableResource> = mapOf(
     "fbn" to Res.drawable.menu_logo_fbn, "dc" to Res.drawable.menu_logo_dc, "3ds" to Res.drawable.menu_logo_3ds,
     "gc" to Res.drawable.menu_logo_gc, "wii" to Res.drawable.menu_logo_wii, "ps2" to Res.drawable.menu_logo_ps2,
     "saturn" to Res.drawable.menu_logo_saturn,
+    "wiiu" to Res.drawable.menu_logo_wiiu,
 )
 
 /**

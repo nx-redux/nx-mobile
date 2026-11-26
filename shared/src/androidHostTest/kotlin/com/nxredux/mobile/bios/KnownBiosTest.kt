@@ -39,8 +39,9 @@ class KnownBiosTest {
 
     @Test
     fun assetCoversEveryCoreBiosName() {
-        // prboom.wad ships inside the APK; PS2's need is "any .bin" (see assetHasPs2Dumps).
-        val bundled = setOf("prboom.wad")
+        // prboom.wad ships inside the APK; PS2's need is "any .bin" (see assetHasPs2Dumps); Cemu's keys.txt is the
+        // player's own list of disc keys, so no dump of it can be listed.
+        val bundled = setOf("prboom.wad", "keys.txt")
         val known = asset.entries.flatMap { listOf(it.name) + it.aliases }.mapTo(HashSet()) { it.lowercase() }
         val needed = CoreRegistry.biosFileNames + CoreRegistry.tags.flatMap { t -> CoreRegistry.requiredBios(t).flatMap { it.anyOf } }.map { it.lowercase() }
         val missing = needed.filter { it !in known && it !in bundled }.sorted()

@@ -13,6 +13,20 @@ class ShortcutsTest {
     private fun eff(base: ShortcutSet, o: ShortcutOverrides = ShortcutOverrides.NONE, tag: String = "GBA", rewind: Boolean = true, mic: Boolean = false) =
         Shortcuts.effective(base, o, ConsoleHotkeys.claimed(tag), rewind, mic)
 
+    // A core without save states: Save State / Load State neither fire from a button nor sit on a touch button.
+    @Test fun saveStateActionsGoWithoutSaveStates() {
+        val base = ShortcutSet(
+            mapOf(ShortcutAction.SAVE_STATE to r1, ShortcutAction.LOAD_STATE to l1, ShortcutAction.SAVE_AND_QUIT to ShortcutBinding(null, KeyCodes.BUTTON_R2)),
+            mapOf(TouchSlot.ONE to ShortcutAction.SAVE_STATE, TouchSlot.TWO to ShortcutAction.LOAD_STATE, TouchSlot.THREE to ShortcutAction.RESET),
+        )
+        val off = Shortcuts.effective(base, ShortcutOverrides.NONE, ConsoleHotkeys.claimed("GBA"), canRewind = true, canSaveStates = false)
+        assertEquals(setOf(ShortcutAction.SAVE_AND_QUIT), off.bindings.keys)
+        assertEquals(mapOf(TouchSlot.THREE to ShortcutAction.RESET), off.touch)
+        val on = eff(base)
+        assertEquals(setOf(ShortcutAction.SAVE_STATE, ShortcutAction.LOAD_STATE, ShortcutAction.SAVE_AND_QUIT), on.bindings.keys)
+        assertEquals(3, on.touch.size)
+    }
+
     @Test fun encodeDecodeRoundTrip() {
         for (b in listOf(ShortcutBinding(null, 103), ShortcutBinding(110, 103))) assertEquals(b, ShortcutBinding.decode(b.encode()))
         assertEquals("110+103", ShortcutBinding(110, 103).encode())
@@ -30,6 +44,8 @@ class ShortcutsTest {
         assertNull(ShortcutBinding.decode("110+109"))
         assertNull(ShortcutBinding.decode("108"))
         assertNull(ShortcutBinding.decode("109"))
+        assertNull(ShortcutBinding.decode("19"))   // a direction alone
+        assertEquals(ShortcutBinding(110, 19), ShortcutBinding.decode("110+19"))
         assertEquals(ShortcutBinding(KeyCodes.BUTTON_MODE, 96), ShortcutBinding.decode("110+96"))
         assertNull(ShortcutBinding.decode("103+96"))
         assertNull(ShortcutBinding.decode("0+96"))

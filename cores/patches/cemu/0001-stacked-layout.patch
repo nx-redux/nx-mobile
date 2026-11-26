@@ -1,0 +1,230 @@
+# licence: modifies Cemu's libretro port (https://github.com/WizzardSK/cemu-libretro), MPL-2.0 (LICENSE.txt); this patch
+# is distributed under the same licence.
+A Stacked screen layout: the TV picture on the top half and the GamePad picture on the bottom half, each the full width
+of the frame, so the output is twice as tall as one screen (1280x1440 at 720p) and its aspect 8:9. The app cuts the two
+halves into its own screens. Touch maps through the same viewport, so it lands on the bottom half.
+
+diff --git a/src/Cafe/HW/Latte/Core/LatteRenderTarget.cpp b/src/Cafe/HW/Latte/Core/LatteRenderTarget.cpp
+index b1518cb..6703b1d 100644
+--- a/src/Cafe/HW/Latte/Core/LatteRenderTarget.cpp
++++ b/src/Cafe/HW/Latte/Core/LatteRenderTarget.cpp
+@@ -1052,7 +1052,8 @@ void LatteRenderTarget_itHLECopyColorBufferToScanBuffer(MPTR colorBufferPtr, uin
+ 	const bool libretroComposite =
+ 		g_libretroScreenLayout == LibretroScreenLayout::SideBySide ||
+ 		g_libretroScreenLayout == LibretroScreenLayout::TopBottom ||
+-		g_libretroScreenLayout == LibretroScreenLayout::PictureInPicture;
++		g_libretroScreenLayout == LibretroScreenLayout::PictureInPicture ||
++		g_libretroScreenLayout == LibretroScreenLayout::Stacked;
+ 	// The GamePad-only layout has the same ordering problem, for a different
+ 	// reason: the mirror at the end of this function copies the TV image into
+ 	// the pad view for titles that never draw a DRC image of their own, and a
+diff --git a/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.cpp b/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.cpp
+index 8dd07d0..cbee7b2 100644
+--- a/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.cpp
++++ b/src/Cafe/HW/Latte/Renderer/Vulkan/VulkanRenderer.cpp
+@@ -1148,12 +1148,14 @@ void VulkanRenderer::UpdatePresentationImageColorSpace()
+ // is also where it goes back to from the GamePad Screen layout.
+ void VulkanRenderer::UpdatePresentationImageSize(uint32 width, uint32 height, bool padView)
+ {
+-	// The frontend was told it may get up to four times 1280x720
+-	constexpr uint32 maxWidth = 1280 * 4, maxHeight = 720 * 4;
++	// The frontend was told it may get up to four times 1280x720 (twice as
++	// tall with the Stacked layout, which holds two screens)
++	const uint32 maxWidth = 1280 * 4, maxHeight = LibretroDRC_OutputHeight(720 * 4);
+ 	if (m_presentImage == VK_NULL_HANDLE)
+ 		return;
+ 	if (!padView && !LatteTexture_graphicPackSetsResolution())
+ 		LibretroDRC_DefaultOutputSize(width, height);
++	height = LibretroDRC_OutputHeight(height);
+ 	if (width < 16 || height < 16 || width > maxWidth || height > maxHeight)
+ 		return;
+ 	if (width == m_presentWidth && height == m_presentHeight)
+diff --git a/src/libretro/CemuLibretro.cpp b/src/libretro/CemuLibretro.cpp
+index 4e6853a..667c356 100644
+--- a/src/libretro/CemuLibretro.cpp
++++ b/src/libretro/CemuLibretro.cpp
+@@ -881,6 +881,9 @@ static bool s_hw_render_initialized = false;
+ enum class SelectedGraphicsAPI { OpenGL, Vulkan };
+ static SelectedGraphicsAPI s_graphics_api = SelectedGraphicsAPI::OpenGL;
+ 
++// DRC layout state is shared with VulkanRenderer via LibretroDRC.h.
++#include "LibretroDRC.h"
++
+ // The size of the picture handed to the frontend. With Vulkan it follows the
+ // internal resolution option, so a title rendered at 1440p or 4K reaches the
+ // screen at that size rather than scaled down into 1280x720 (NNshi); it is
+@@ -919,7 +922,13 @@ static uint32_t libretro_out_height()
+ 	if (auto* vk = g_renderer && g_renderer->GetType() == RendererAPI::Vulkan ? VulkanRenderer::GetInstance() : nullptr; vk && vk->m_presentHeight)
+ 		return vk->m_presentHeight;
+ #endif
+-	return s_out_size_taken ? s_out_height : s_wanted_out_height;
++	return LibretroDRC_OutputHeight(s_out_size_taken ? s_out_height : s_wanted_out_height);
++}
++
++// Two 16:9 screens one over the other make an 8:9 frame.
++static float libretro_out_aspect()
++{
++	return g_libretroScreenLayout == LibretroScreenLayout::Stacked ? 8.0f / 9.0f : 16.0f / 9.0f;
+ }
+ 
+ // Tells the frontend when the output size changes, e.g. when a resolution
+@@ -953,7 +962,7 @@ static void libretro_report_out_size()
+ 	geometry.base_height = height;
+ 	geometry.max_width = s_max_out_width;
+ 	geometry.max_height = s_max_out_height;
+-	geometry.aspect_ratio = 16.0f / 9.0f;
++	geometry.aspect_ratio = libretro_out_aspect();
+ 	environ_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &geometry);
+ 	libretro_log(RETRO_LOG_INFO, "output is now %ux%u\n", width, height);
+ }
+@@ -991,8 +1000,6 @@ void libretro_gl_picture_size(int width, int height, bool padView)
+ }
+ #endif
+ 
+-// DRC layout state is shared with VulkanRenderer via LibretroDRC.h.
+-#include "LibretroDRC.h"
+ #include "LibretroGraphicPacks.h"
+ LibretroScreenLayout g_libretroScreenLayout = LibretroScreenLayout::Tv;
+ bool g_libretroDRCPositionSwapped = false;
+@@ -1396,6 +1403,7 @@ static LibretroScreenLayout libretro_parse_screen_layout(const char* v, Libretro
+ 	if (libretro_drc_iequals(v, "Side by Side")) return LibretroScreenLayout::SideBySide;
+ 	if (libretro_drc_iequals(v, "Top Bottom")) return LibretroScreenLayout::TopBottom;
+ 	if (libretro_drc_iequals(v, "Picture in Picture")) return LibretroScreenLayout::PictureInPicture;
++	if (libretro_drc_iequals(v, "Stacked")) return LibretroScreenLayout::Stacked;
+ 	return fallback;
+ }
+ 
+@@ -1408,6 +1416,7 @@ static const char* libretro_screen_layout_name(LibretroScreenLayout layout)
+ 	case LibretroScreenLayout::SideBySide: return "Side by Side";
+ 	case LibretroScreenLayout::TopBottom: return "Top Bottom";
+ 	case LibretroScreenLayout::PictureInPicture: return "Picture in Picture";
++	case LibretroScreenLayout::Stacked: return "Stacked";
+ 	}
+ 	return "Default Screen";
+ }
+@@ -1429,6 +1438,7 @@ bool LibretroDRC_ShouldRenderScreen(bool padView)
+ 	case LibretroScreenLayout::SideBySide:
+ 	case LibretroScreenLayout::TopBottom:
+ 	case LibretroScreenLayout::PictureInPicture:
++	case LibretroScreenLayout::Stacked:
+ 		return true;
+ 	}
+ 	return !padView;
+@@ -1445,6 +1455,11 @@ void LibretroDRC_DefaultOutputSize(uint32& width, uint32& height)
+ 	height = s_out_height;
+ }
+ 
++uint32 LibretroDRC_OutputHeight(uint32 screenHeight)
++{
++	return g_libretroScreenLayout == LibretroScreenLayout::Stacked ? screenHeight * 2 : screenHeight;
++}
++
+ void LibretroDRC_ComputeViewport(bool padView,
+ 	int dstWidth, int dstHeight,
+ 	int& outX, int& outY, int& outWidth, int& outHeight)
+@@ -1520,6 +1535,13 @@ void LibretroDRC_ComputeViewport(bool padView,
+ 			outY = dstHeight - outHeight - 10;
+ 		}
+ 		return;
++
++	case LibretroScreenLayout::Stacked:
++		outX = 0;
++		outY = isPrimary ? 0 : dstHeight / 2;
++		outWidth = dstWidth;
++		outHeight = isPrimary ? dstHeight / 2 : dstHeight - dstHeight / 2;
++		return;
+ 	}
+ }
+ 
+@@ -4232,11 +4254,14 @@ RETRO_API void retro_get_system_av_info(struct retro_system_av_info* info)
+ 				s_wanted_out_height = h;
+ 			}
+ 		}
++	// The layout too: the Stacked one doubles the height and changes the aspect.
++	if (!s_out_size_taken)
++		libretro_read_screen_layout_options();
+ 	info->geometry.base_width = s_reported_out_width = libretro_out_width();
+ 	info->geometry.base_height = s_reported_out_height = libretro_out_height();
+ 	info->geometry.max_width = std::max(s_max_out_width, info->geometry.base_width);
+ 	info->geometry.max_height = std::max(s_max_out_height, info->geometry.base_height);
+-	info->geometry.aspect_ratio = 16.0f / 9.0f;
++	info->geometry.aspect_ratio = libretro_out_aspect();
+ 	if (!s_game_loaded)
+ 		s_output_fps = libretro_wanted_fps();
+ 	info->timing.fps = s_output_fps;
+@@ -5835,7 +5860,7 @@ static void libretro_create_renderer()
+ 					s_out_height = s_wanted_out_height;
+ 					s_out_size_taken = true;
+ 				}
+-				vkRenderer->CreatePresentationImage(s_out_width, s_out_height);
++				vkRenderer->CreatePresentationImage(s_out_width, LibretroDRC_OutputHeight(s_out_height));
+ 
+ 				libretro_log(RETRO_LOG_INFO, "VulkanRenderer created with shared device\n");
+ 			}
+diff --git a/src/libretro/LibretroDRC.h b/src/libretro/LibretroDRC.h
+index cca4e68..6b23cdf 100644
+--- a/src/libretro/LibretroDRC.h
++++ b/src/libretro/LibretroDRC.h
+@@ -14,6 +14,7 @@ enum class LibretroScreenLayout
+ 	SideBySide,       // primary 80% + secondary 20%, side-by-side
+ 	TopBottom,        // primary 70% on top, secondary 30% on bottom
+ 	PictureInPicture, // primary fullscreen, secondary as small corner overlay
++	Stacked,          // primary on the top half, secondary on the bottom half, both the full width; twice as tall
+ };
+ 
+ extern LibretroScreenLayout g_libretroScreenLayout;
+@@ -39,6 +40,10 @@ bool LibretroDRC_OutputFollowsScreen(bool padView);
+ // which the TV picture is handed over at unless a resolution pack sets it.
+ void LibretroDRC_DefaultOutputSize(uint32& width, uint32& height);
+ 
++// The output height for a screen of screenHeight: twice it with the Stacked
++// layout, which puts two full-size screens one over the other.
++uint32 LibretroDRC_OutputHeight(uint32 screenHeight);
++
+ // The core's mouse cursor over the GamePad picture (RetroArch draws none).
+ // Where to draw it in an output image of width x height, top-left origin,
+ // and how many output pixels one cursor pixel takes; false while hidden or
+diff --git a/src/libretro/libretro_core_options.h b/src/libretro/libretro_core_options.h
+index c3bef57..1da8ce0 100644
+--- a/src/libretro/libretro_core_options.h
++++ b/src/libretro/libretro_core_options.h
+@@ -396,6 +396,7 @@ struct retro_core_option_v2_definition option_defs_us[] = {
+ 			{ "Side by Side", NULL },
+ 			{ "Top Bottom", NULL },
+ 			{ "Picture in Picture", NULL },
++			{ "Stacked", NULL },
+ 			{ NULL, NULL },
+ 		},
+ 		"Default Screen"
+@@ -413,6 +414,7 @@ struct retro_core_option_v2_definition option_defs_us[] = {
+ 			{ "Side by Side", NULL },
+ 			{ "Top Bottom", NULL },
+ 			{ "Picture in Picture", NULL },
++			{ "Stacked", NULL },
+ 			{ NULL, NULL },
+ 		},
+ 		"GamePad Screen"
+@@ -430,6 +432,7 @@ struct retro_core_option_v2_definition option_defs_us[] = {
+ 			{ "Side by Side", NULL },
+ 			{ "Top Bottom", NULL },
+ 			{ "Picture in Picture", NULL },
++			{ "Stacked", NULL },
+ 			{ NULL, NULL },
+ 		},
+ 		"Side by Side"
+@@ -447,6 +450,7 @@ struct retro_core_option_v2_definition option_defs_us[] = {
+ 			{ "Side by Side", NULL },
+ 			{ "Top Bottom", NULL },
+ 			{ "Picture in Picture", NULL },
++			{ "Stacked", NULL },
+ 			{ NULL, NULL },
+ 		},
+ 		"Top Bottom"
+@@ -464,6 +468,7 @@ struct retro_core_option_v2_definition option_defs_us[] = {
+ 			{ "Side by Side", NULL },
+ 			{ "Top Bottom", NULL },
+ 			{ "Picture in Picture", NULL },
++			{ "Stacked", NULL },
+ 			{ NULL, NULL },
+ 		},
+ 		"Picture in Picture"

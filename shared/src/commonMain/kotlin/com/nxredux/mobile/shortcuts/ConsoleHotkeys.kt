@@ -3,13 +3,14 @@ package com.nxredux.mobile.shortcuts
 import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.WiiOptions
+import com.nxredux.mobile.options.WiiuOptions
 
 /** An input the frontend already uses; [note] names it for the player ("L2 swaps the DS screens"). */
 data class ClaimedInput(val binding: ShortcutBinding, val note: String)
 
 /**
  * The inputs each console's built-in hotkeys claim; they win over user bindings. Restated in key codes from
- * `NdsHotkeys` (L3, L2, R2, SELECT + d-pad/L1/R1), `N3dsHotkeys` (SELECT + Left/Right/L1/R1, L3 swap) and androidApp's `WiiShortcuts`
+ * `NdsHotkeys` (L3, L2, R2, SELECT + d-pad/L1/R1), `N3dsHotkeys` (SELECT + Left/Right/L1/R1, L3 swap; the Wii U's SELECT + Left/Right/L1) and androidApp's `WiiShortcuts`
  * (L3 recentre, R3 Home), which work in NxButton or platform key terms `shared` can't share.
  */
 object ConsoleHotkeys {
@@ -46,6 +47,12 @@ object ConsoleHotkeys {
         single(KeyCodes.BUTTON_THUMBL, "L3 swaps screens"),
     )
 
+    private val wiiu = listOf(
+        chord(KeyCodes.DPAD_LEFT, "SELECT+Left cycles the Wii U layout"),
+        chord(KeyCodes.DPAD_RIGHT, "SELECT+Right cycles the Wii U layout"),
+        chord(KeyCodes.BUTTON_L1, "SELECT+L1 swaps the Wii U screens"),
+    )
+
     private val wii = listOf(
         single(KeyCodes.BUTTON_THUMBL, "L3 recentres motion"),
         single(KeyCodes.BUTTON_THUMBR, "R3 is HOME"),
@@ -55,6 +62,7 @@ object ConsoleHotkeys {
         NdsOptions.appliesTo(tag) -> nds
         N3dsOptions.appliesTo(tag) -> n3ds
         WiiOptions.appliesTo(tag) -> wii
+        WiiuOptions.appliesTo(tag) -> wiiu
         else -> emptyList()
     }
 }

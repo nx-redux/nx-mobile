@@ -22,6 +22,7 @@ object RaConsoles {
         "A2600" to ATARI_2600, "A5200" to ATARI_5200, "A7800" to ATARI_7800, "PKM" to POKEMON_MINI, "WSC" to WONDERSWAN,
         "32X" to SEGA_32X, "COLECO" to COLECOVISION, "FBN" to ARCADE, "DC" to DREAMCAST, "SATURN" to SATURN,
         "WII" to WII, "GC" to GAMECUBE,
+        // Wii U is deliberately unmapped: rcheevos has no hasher for its files.
     )
     /**
      * The tag of RetroAchievements console [consoleId]: the first tag that maps to it, or the tag whose discs it is (PC

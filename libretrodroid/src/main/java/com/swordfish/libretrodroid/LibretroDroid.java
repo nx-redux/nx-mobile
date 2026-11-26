@@ -76,6 +76,9 @@ public class LibretroDroid {
     public static native void reset();
 
     public static native void setRumbleEnabled(boolean enabled);
+
+    /** Queues keys for the core's keyboard callback (RETROK_ codes and the characters they type), typed one a frame. */
+    public static native void sendKeyboardKeys(int[] keycodes, int[] characters);
     /** The core asked to end (RETRO_ENVIRONMENT_SHUTDOWN) since the last call; cleared by this call. */
     public static native boolean takeShutdownRequest();
     /** getGameGeometry() changed (the core's SET_GEOMETRY size, SET_ROTATION) since the last call; cleared by this call. */
