@@ -275,6 +275,22 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             return true
         }
 
+        /** Debug builds only (the adb GAME_DISC hook): changes to disc [index], as the menu's Disc row does. Main thread. */
+        internal fun debugDisc(index: Int): Boolean {
+            if (!BuildConfig.DEBUG) return false
+            val game = debugGame?.get()?.takeIf { !it.isFinishing } ?: return false
+            game.handleMenuEffect(MenuEffect.ChangeDisc(index, toast = true))
+            return true
+        }
+
+        /** Debug builds only (the adb GAME_RESET hook): resets the game, as the menu's Reset does. Main thread. */
+        internal fun debugReset(): Boolean {
+            if (!BuildConfig.DEBUG) return false
+            val game = debugGame?.get()?.takeIf { !it.isFinishing } ?: return false
+            game.handleMenuEffect(MenuEffect.ResetGame)
+            return true
+        }
+
         // The runner's native session is process-wide: one game screen owns it at a time (main thread only). A screen
         // created while another is alive (a second launcher stacked over a stopped game) makes that one quit and waits for
         // its teardown, native destroy included, before it starts its own emulator.
