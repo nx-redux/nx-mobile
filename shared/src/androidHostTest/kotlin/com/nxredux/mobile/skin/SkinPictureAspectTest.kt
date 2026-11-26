@@ -63,7 +63,7 @@ class SkinPictureAspectTest {
             for (spec in skinPack(packId).layouts.filter { it.variant == SkinVariant.WIIU }) {
                 assertTrue(spec.id.endsWith("_wiiugp") || "_wiiugp_" in spec.id, spec.id)
                 val glasses = listOfNotNull(spec.frame?.glass) + spec.pieces.mapNotNull { it.glass }
-                for (g in glasses) {
+                for (g in glasses.takeUnless { spec.id.endsWith(TABLET_BOARD) }.orEmpty()) {   // (a tablet's: the PS1's frames, bars round the pictures)
                     val want = if (g.screen == GlassScreen.STACK) 16f / 18f else 16f / 9f
                     assertTrue(g.screen in setOf(GlassScreen.STACK, GlassScreen.TOP, GlassScreen.TOUCH), "$packId ${spec.id} ${g.screen}")
                     assertEquals(want, g.w.toFloat() / g.h, 0.01f, "$packId ${spec.id} ${g.screen}")

@@ -213,7 +213,8 @@ object SkinChoice {
      * the top screen's frame clear of it. Flat (a tablet too) the board is one slab ([SkinSeam]): the hinge's height goes
      * to the top screen, its frame down to [FRAME_GAP_DP] above the frame under it (the touch screen, the panel), the
      * same on every device. A DS / 3DS top screen's frame is no taller than its picture needs ([TOP_PAD_DP]); flat, the
-     * touch screen then moves up to [FRAME_GAP_DP] under it, the controls centred in the height under the frame.
+     * touch screen then moves up to [FRAME_GAP_DP] under it, the controls centred in the height under the frame. A
+     * tablet's board ([TABLET_BOARD]) keeps the main menu's frames instead, for every console.
      */
     private fun foldPieces(
         spec: SkinLayoutSpec, windowW: Int, windowH: Int, k: Float, picture: Pair<Float, Float>?, topInset: Int, hingeY: Float?, densityDpi: Int,
@@ -226,7 +227,7 @@ object SkinChoice {
         }
         val w = windowW.toFloat(); val h = windowH.toFloat()
         // a DS / 3DS top screen: its frame no taller than the screen across its width, plus a little ([TOP_PAD_DP])
-        val capPad = topScreen?.let { TOP_PAD_DP * densityDpi / 160f / k }
+        val capPad = topScreen?.takeUnless { spec.id.endsWith(TABLET_BOARD) }?.let { TOP_PAD_DP * densityDpi / 160f / k }
         val sideInset = SIDE_INSET_DP * densityDpi / 160f / k
         if (hingeY != null) return SkinSolver.placePieces(spec, w, h, k, picture, topInset.toFloat(), hingeY, topScreen, capPad = capPad, sideInset = sideInset, bottomMargin = bottomMargin, bottomGlass = bottomGlass, row = row, centreControls = centreControls, roomLeft = room?.left, roomRight = room?.right, roomBottom = room?.bottom)
         val middle = h / 2f
@@ -584,15 +585,16 @@ object SkinChoice {
                 if (v == SkinVariant.WIIU && landscape && hingeY == null && spec.boxes.isNotEmpty()) return@widest fold(windowH / 2f)?.let { placed.bottomOf(it) } ?: placed
                 // upright: the GamePad in the 3DS twin's bottom frame, its row right under it, as the 3DS's row follows its touch frame
                 if (v == SkinVariant.WIIU && !landscape && spec.boxes.isNotEmpty()) {
-                    val twin = pack.layouts.firstOrNull { it.id == spec.id.replace("_wiiugp", "_3ds") }.takeIf { !spec.id.endsWith("_fold_tab") }
+                    val twin = pack.layouts.firstOrNull { it.id == spec.id.replace("_wiiugp", "_3ds") }.takeIf { !spec.id.endsWith(TABLET_BOARD) }
                     val theirs = twin?.let { t -> foldPieces(t, windowW, windowH, s, picture, topInset, hingeY, densityDpi, N3DS_TOP, bottomMargin = shellMargin(pack),
                         bottomGlass = flatEnd, row = rowSpacing(densityDpi, s), centreControls = false)?.touchToItsPicture()?.touchToItsPictureHeight() }
-                    return@widest (theirs?.let { placed.touchAs(it) } ?: placed).rowUnderTouch(SkinBoxes.GAP_DP * dp, shoulders = spec.id.endsWith("_fold_tab"))
+                    return@widest (theirs?.let { placed.touchAs(it) } ?: placed).rowUnderTouch(SkinBoxes.GAP_DP * dp, shoulders = spec.id.endsWith(TABLET_BOARD))
                 }
                 if (v !in N3DS_VARIANTS || spec.boxes.isEmpty()) return@widest placed
                 // the 3DS's touch screen, its 4:3 picture in a frame between the boxes: sideways (the room beside it) the frame
                 // cut to the picture's height and widened to the boxes, bars beside the picture; upright cut to the picture
-                if (!landscape) return@widest placed.touchToItsPicture().touchToItsPictureHeight()
+                // (a tablet's: the menu's frame, the picture between bars)
+                if (!landscape) return@widest if (spec.id.endsWith(TABLET_BOARD)) placed else placed.touchToItsPicture().touchToItsPictureHeight()
                 fun wide(hinge: Float?) = fold(hinge)?.touchToItsPictureHeight()?.touchWideToTheBoxes(SkinBoxes.GAP_DP * dp)
                 val wide = wide(hingeY)
                 // flat: the bottom half as half-folded at the window's middle (the touch screen not grown up into the

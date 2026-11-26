@@ -150,7 +150,8 @@ class SkinWiiuTest {
                 val top = assertNotNull(p.glass(GlassScreen.TOP) ?: p.glass(GlassScreen.STACK), label).rect
                 // the GamePad's glass and picture 16:9 (the fold board upright: the 3DS's bottom glass, the GamePad letterboxed)
                 p.glass(GlassScreen.TOUCH)?.rect?.let { g ->
-                    if (d.name !in FOLD_UPRIGHT || d.name == "inner_half") assertEquals(16f / 9f, aspect(g), 0.01f, "$label GamePad glass $g")
+                    // (a tablet's: the PS1's panel, the GamePad between bars)
+                    if ((d.name !in FOLD_UPRIGHT || d.name == "inner_half") && d.name != "tablet") assertEquals(16f / 9f, aspect(g), 0.01f, "$label GamePad glass $g")
                     val (_, pad) = assertNotNull(WiiuLayout.skinRegions(null, p.glass(GlassScreen.TOP)?.rect, g, NdsSettings()), label).map { it.dst }
                     assertEquals(16f / 9f, aspect(pad), 0.01f, "$label GamePad picture $pad")
                 }
@@ -164,7 +165,8 @@ class SkinWiiuTest {
                     if (f == null || g == null) continue
                     val (l, t, r, b) = borders(f, g)
                     assertEquals(l, r, 1f, "$label left / right $l $r")
-                    if (strip) assertTrue(b > t, "$label no band for the strip: $t $b") else assertEquals(t, b, 1f, "$label top / bottom $t $b")
+                    // (a tablet's TV frame: the PS1's, as the other consoles')
+                    if (strip) assertTrue(b > t, "$label no band for the strip: $t $b") else if (d.name != "tablet") assertEquals(t, b, 1f, "$label top / bottom $t $b")
                 }
             }
         }
@@ -232,7 +234,7 @@ class SkinWiiuTest {
                 val n3ds = assertNotNull(SkinChoice.place(pack, d.w, d.h, d.dpi, d.tablet, ds = true, hingeY = d.hingeY, foldable = d.foldable, variant = SkinVariant.N3DS), label)
                 fun at(pl: SkinPlacement, cid: String) = pl.controls.first { it.spec.id == cid }
                 val stacked = p.spec.family == SkinFamily.STACKED; val large = p.spec.family == SkinFamily.LARGE
-                val swapped = d.name in FOLD_UPRIGHT   // (the face and the right stick swapped on the fold boards)
+                val swapped = d.name in FOLD_UPRIGHT || d.name == "tablet"   // (the face and the right stick swapped on the fold boards and the tablet)
                 for (cid in listOf("DPAD", "STICK") + (if (swapped) emptyList() else listOf("X", "Y", "A", "B")) + (if (large) emptyList() else listOf("L", "R")) + (if (stacked || large) emptyList() else listOf("L2", "R2"))) {
                     val w = at(p, cid); val n = at(n3ds, cid)
                     assertEquals(n.x, w.x, 1f, "$label $cid x"); assertEquals(n.y, w.y, 1f, "$label $cid y")
@@ -285,7 +287,8 @@ class SkinWiiuTest {
                     val n3ds = assertNotNull(SkinChoice.place(pack, d.w, d.h, d.dpi, d.tablet, ds = true, hingeY = d.hingeY, foldable = d.foldable, variant = SkinVariant.N3DS), label)
                     val r = c.getValue("CSTICK").spec.r
                     assertTrue(r > n3ds.controls.first { it.spec.id == "CSTICK" }.spec.r && r < want, "$label right stick r $r")
-                } else assertEquals(want, c.getValue("CSTICK").spec.r, 0.5f, "$label right stick r")
+                } else if (d.name == "tablet") assertEquals(c.getValue("STICK").spec.r, c.getValue("CSTICK").spec.r, 0.5f, "$label right stick as the left")   // (in the face's place)
+                else assertEquals(want, c.getValue("CSTICK").spec.r, 0.5f, "$label right stick r")
                 assertNoOverlaps(p, d.w, d.h, label)
                 for (id in listOf("CSTICK", "L3", "R3", "SELECT", "START")) for (g in p.glasses) {
                     val pc = c.getValue(id); val r = g.rect
@@ -338,9 +341,9 @@ class SkinWiiuTest {
         }
     }
 
-    /** A tablet upright: L3 and R3 by their sticks, on the screen's side, low. */
+    /** A tablet upright: L3 and R3 by their sticks, at their lower inner side, clear of the GamePad's frame. */
     @Test
-    fun the_fold_boards_stick_presses_sit_by_their_sticks() {
+    fun the_tablets_stick_presses_sit_by_their_sticks() {
         for (id in packs) for (d in GOLDEN_DEVICES.filter { it.name == "tablet" }) {
             val label = "$id ${d.name}"
             val p = assertNotNull(place(skinPack(id), d), label)
@@ -355,34 +358,30 @@ class SkinWiiuTest {
     }
 
     /**
-     * A tablet upright: the GamePad's frame down to the box gap over the shoulder buttons (room to spare there) and as
-     * wide as its 16:9 picture at that height, the GamePad filling its glass, the strip under it, the row under the
-     * frame; pads and shoulders put.
+     * A tablet upright: the TV and the GamePad in the PS1's frames (the menu's sizes, the GamePad's panel with the row
+     * under it), each picture 16:9 between bars; the right stick in the face's place, the face under it at 85%.
      */
     @Test
-    fun the_tablets_gamepad_frame_comes_down_to_the_shoulders() {
+    fun the_tablets_gamepad_is_in_the_ps1s_panel() {
         val d = GOLDEN_DEVICES.single { it.name == "tablet" }
         for (id in packs) {
             val pack = skinPack(id)
             val label = "$id tablet"
             val p = assertNotNull(place(pack, d), label)
-            val (_, touch) = frames(p)
-            val tf = assertNotNull(touch, label)
-            val shoulders = p.controls.filter { it.spec.id in setOf("L", "R", "L2", "R2") }
-            val tops = p.pieces.filter { pc -> pc.piece >= 0 && pc.dst.width < 300f && shoulders.any { c -> c.x in pc.dst.x..(pc.dst.x + pc.dst.width) && c.y in pc.dst.y..(pc.dst.y + pc.dst.height) } }
-            assertEquals(tops.minOf { it.dst.y } - SkinBoxes.GAP_DP * d.dpi / 160f, tf.y + tf.height, 1f, "$label frame over the shoulders")
-            val g = assertNotNull(p.glass(GlassScreen.TOUCH), label).rect
-            val (_, pad) = assertNotNull(WiiuLayout.skinRegions(null, p.glass(GlassScreen.TOP)?.rect, g, NdsSettings()), label).map { it.dst }
-            assertEquals(16f / 9f, aspect(pad), 0.01f, label); assertEquals(g.y + g.height / 2f, pad.y + pad.height / 2f, 1f, "$label GamePad centred")
-            for (cid in listOf("MENU", "SELECT", "START")) assertTrue(p.controls.first { it.spec.id == cid }.y > tf.y + tf.height, "$label $cid under the frame")
-            // the glass the GamePad's 16:9 at that height (no black either side), centred, no wider than the TV's frame
-            val (top, _) = frames(p)
-            assertEquals(g.height * 16f / 9f, g.width, 1f, "$label GamePad glass $g 16:9")
-            assertTrue(tf.width <= assertNotNull(top, label).width + 1f, "$label GamePad frame no wider than the TV's")
-            assertEquals(g.height, pad.height, 1f, "$label GamePad its glass's height"); assertEquals(g.width, pad.width, 1f, "$label GamePad its glass's width")
-            assertEquals(d.w / 2f, tf.x + tf.width / 2f, 1f, "$label GamePad frame centred")
-            val (l, t, r, b) = borders(tf, g)
-            assertEquals(l, r, 1f, "$label even sides")
+            val ps1 = assertNotNull(SkinChoice.place(pack, d.w, d.h, d.dpi, d.tablet, ds = false, picture = 320f to 240f, foldable = d.foldable, variant = SkinVariant.PS1), label)
+            val tv = assertNotNull(p.glass(GlassScreen.TOP), label).rect; val g = assertNotNull(p.glass(GlassScreen.TOUCH), label).rect
+            val pic = assertNotNull(ps1.glass(GlassScreen.PICTURE), label).rect; val panel = assertNotNull(ps1.glass(GlassScreen.PANEL), label).rect
+            for ((a, b) in listOf(pic to tv, panel to g)) for ((x, y) in listOf(a.x to b.x, a.y to b.y, a.width to b.width, a.height to b.height)) assertEquals(x, y, 1f, "$label $b as the PS1's $a")
+            val (tvPic, pad) = assertNotNull(WiiuLayout.skinRegions(null, tv, g, NdsSettings()), label).map { it.dst }
+            assertEquals(16f / 9f, aspect(pad), 0.01f, label); assertEquals(16f / 9f, aspect(tvPic), 0.01f, label)
+            val (_, tf) = frames(p)
+            for (cid in listOf("MENU", "SELECT", "START")) assertTrue(p.controls.first { it.spec.id == cid }.y > assertNotNull(tf, label).let { it.y + it.height }, "$label $cid under the frame")
+            val c = p.controls.associateBy { it.spec.id }
+            val face = listOf("X", "Y", "A", "B").map(c::getValue)
+            assertEquals(c.getValue("STICK").y, c.getValue("CSTICK").y, 1f, "$label right stick level with the left")
+            assertEquals(face.map { it.x }.average().toFloat(), c.getValue("CSTICK").x, 1f, "$label right stick over the face")
+            assertTrue(face.all { it.y - it.spec.r > c.getValue("CSTICK").y + c.getValue("CSTICK").spec.r }, "$label face under the right stick")
+            assertEquals(c.getValue("DPAD").y, face.map { it.y }.average().toFloat(), 1f, "$label face level with the d-pad")
             assertNoOverlaps(p, d.w, d.h, label)
         }
     }
