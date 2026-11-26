@@ -41,8 +41,8 @@ class SkinWiiuTest {
                 assertEquals(WiiuLayout.TV_SRC, tv.src, label)
                 assertTrue(pad.touch, label)
                 assertTrue(p.controls.none { it.spec.id == "MIC" || it.spec.id == "SAVE" || it.spec.id == "LOAD" }, label)
-                // no HOME cap: the GamePad's HOME does what MENU does
-                assertTrue(p.controls.none { it.spec.id == "HOME" } && p.controls.any { it.spec.id == "CSTICK" }, label)
+                // no HOME cap (the GamePad's HOME does what MENU does) nor SWAP (the strip's middle, the app's)
+                assertTrue(p.controls.none { it.spec.id == "HOME" || it.spec.id == "SWAP" } && p.controls.any { it.spec.id == "CSTICK" }, label)
             }
         }
     }
@@ -123,20 +123,30 @@ class SkinWiiuTest {
         frame.x + frame.width - glass.x - glass.width, frame.y + frame.height - glass.y - glass.height)
 
     /**
-     * No touch shortcut strip (the Wii U offers none); every screen's frame as thick under its glass as over it and as
-     * thick right as left; and each glass the pictures' own shape (the GamePad's 16:9, one stack glass the TV over the
-     * GamePad, 16:18), the pictures filling it: no black band round them.
+     * The touch shortcut strip under the GamePad's screen (its frame's, or its touch piece's): its four slots under that
+     * glass, inside its frame (SWAP goes in its middle, [arrangeStrip]); every screen's frame as thick right as left, and
+     * one with no strip as thick under its glass as over it; each GamePad glass 16:9, the roomy shells' one glass the TV
+     * over the GamePad (16:18), the pictures filling it.
      */
     @Test
-    fun the_frames_hug_their_glasses_with_no_shortcut_strip() {
+    fun the_gamepads_screen_has_the_touch_shortcut_strip_under_it() {
         for (id in packs) {
             val pack = skinPack(id)
             for (d in GOLDEN_DEVICES) {
                 val label = "$id ${d.name}"
                 val p = assertNotNull(place(pack, d), label)
-                assertTrue(p.controls.none { it.spec.id.startsWith("TOUCH_") }, "$label: a touch shortcut slot")
-                assertTrue(p.spec.frame?.strip == null && p.spec.pieces.none { it.strip != null }, "$label: a strip")
                 val (frame, touchFrame) = frames(p)
+                val ti = p.spec.pieces.indexOfFirst { it.glass?.screen == GlassScreen.TOUCH }
+                val stripped = (if (ti >= 0) p.spec.pieces[ti].strip else p.spec.frame?.strip)
+                assertNotNull(stripped, "$label: no strip under the GamePad's screen")
+                val slots = p.controls.filter { it.spec.id.startsWith("TOUCH_") }
+                assertEquals(4, slots.size, "$label slots")
+                val under = assertNotNull(p.glass(GlassScreen.TOUCH) ?: p.glass(GlassScreen.STACK), label).rect
+                val holder = assertNotNull(if (ti >= 0) touchFrame else frame, label)
+                for (c in slots) {
+                    assertTrue(c.y > under.y + under.height && c.y < holder.y + holder.height, "$label ${c.spec.id} at ${c.y} not under $under in $holder")
+                    assertTrue(c.x - c.spec.hw >= under.x - 1f && c.x + c.spec.hw <= under.x + under.width + 1f, "$label ${c.spec.id} not across $under")
+                }
                 val top = assertNotNull(p.glass(GlassScreen.TOP) ?: p.glass(GlassScreen.STACK), label).rect
                 p.glass(GlassScreen.TOUCH)?.rect?.let { assertEquals(16f / 9f, aspect(it), 0.01f, "$label GamePad glass ${it}") }
                 p.glass(GlassScreen.STACK)?.rect?.let { g ->
@@ -145,11 +155,11 @@ class SkinWiiuTest {
                         assertFills(g, assertNotNull(WiiuLayout.skinRegions(g, null, null, NdsSettings()), label).map { it.dst }, label)
                     } else assertStackAsThe3ds(pack, d, p, g, label)
                 }
-                for ((f, g) in listOf(frame to top, touchFrame to p.glass(GlassScreen.TOUCH)?.rect)) {
+                for ((f, g, strip) in listOf(Triple(frame, top, p.spec.frame?.strip != null), Triple(touchFrame, p.glass(GlassScreen.TOUCH)?.rect, ti >= 0))) {
                     if (f == null || g == null) continue
                     val (l, t, r, b) = borders(f, g)
                     assertEquals(l, r, 1f, "$label left / right $l $r")
-                    assertEquals(t, b, 1f, "$label top / bottom $t $b")
+                    if (strip) assertTrue(b > t, "$label no band for the strip: $t $b") else assertEquals(t, b, 1f, "$label top / bottom $t $b")
                 }
             }
         }
@@ -273,6 +283,7 @@ class SkinWiiuTest {
                     for (i in cs.indices) for (j in i + 1 until cs.size) {
                         val a = cs[i]; val b = cs[j]
                         if (a.spec.id in face && b.spec.id in face) continue
+                        if (a.spec.id.startsWith("TOUCH_") && b.spec.id.startsWith("TOUCH_")) continue   // (the strip's slots tile it)
                         val round = a.spec.shape != ControlShape.RECT && b.spec.shape != ControlShape.RECT
                         val ok = if (round) kotlin.math.hypot(a.x - b.x, a.y - b.y) >= reach(a) + reach(b) - 1f
                             else box(a).let { x -> box(b).let { y -> x[2] <= y[0] || y[2] <= x[0] || x[3] <= y[1] || y[3] <= x[1] } }
@@ -291,7 +302,8 @@ class SkinWiiuTest {
 
     /**
      * The Fold cover: upright L3 beside ZL and R3 beside ZR on their inner side (L ZL L3 … R3 ZR R), sideways L3 over L
-     * and R3 over R, shoulder pills as L / R are; the caps' rows the 3DS's with no MIC, closed up round the 3DS row's middle, one 3DS step apart.
+     * and R3 over R, shoulder pills as L / R are; the caps' rows the 3DS's with no MIC nor SWAP, closed up round the 3DS
+     * row's middle, one 3DS step apart.
      */
     @Test
     fun the_fold_covers_stick_presses_sit_by_the_shoulders() {
@@ -315,7 +327,7 @@ class SkinWiiuTest {
                 val rows = if (name == "cover") listOf(listOf("STICK_SWAP", "MIC", "MENU", "SWAP")) else listOf(listOf("STICK_SWAP", "MIC", "MENU"), listOf("SWAP", "SELECT", "START"))
                 for (row in rows) {
                     val xs = row.map { c(n, it).x }; val step = xs[1] - xs[0]; val mid = (xs.first() + xs.last()) / 2f
-                    val mine = row - "MIC"
+                    val mine = row - "MIC" - "SWAP"
                     mine.forEachIndexed { i, cid ->
                         assertEquals(mid + (i - (mine.size - 1) / 2f) * step, c(p, cid).x, 1f, "$label $cid x")
                         assertEquals(c(n, cid).y, c(p, cid).y, 1f, "$label $cid y")
@@ -363,7 +375,7 @@ class SkinWiiuTest {
             assertEquals(g.x + g.width / 2f, u.x + u.width / 2f, 2f, "$label centred across"); assertEquals(g.y + g.height / 2f, u.y + u.height / 2f, 2f, "$label centred down")
             val (frame, _) = frames(p)
             val (l, t, r, b) = borders(assertNotNull(frame, label), g)
-            assertEquals(l, r, 1f, "$label left / right"); assertEquals(t, b, 1f, "$label top / bottom")
+            assertEquals(l, r, 1f, "$label left / right"); assertTrue(b > t, "$label no band for the strip")
         }
     }
 }

@@ -383,8 +383,8 @@ object SkinChoice {
 
     /**
      * The Wii U's one screen frame (its stack glass) on the roomy sideways shells (the unfolded Fold, a tablet) cut to
-     * the screens' [aspect] (no bars round them), centred in the room it filled, its border as drawn. As it is for any
-     * other layout: elsewhere the frame is the 3DS's, filling its room, the screens centred in it.
+     * the screens' [aspect] (no bars round them), centred in the room it filled, its border and strip as drawn. As it
+     * is for any other layout: elsewhere the frame is the 3DS's, filling its room, the screens centred in it.
      */
     private fun SkinPlacement.wiiuStackTo(aspect: Float): SkinPlacement {
         val frame = spec.frame ?: return this
@@ -397,7 +397,12 @@ object SkinChoice {
         val slices = SkinSolver.frameSlices(frame, cut.x - bl, cut.y - bt, w + bl + br, h + bt + bb, k) { x, y, w_, h_ -> PxRect(x, y, w_, h_) }
         val first = pieces.indexOfFirst { it.piece == -1 && !it.strip }.coerceAtLeast(0)
         val rest = pieces.filterNot { it.piece == -1 && !it.strip }
-        return copy(pieces = rest.take(first) + slices + rest.drop(first), glasses = glasses.map { if (it === g) it.copy(rect = cut) else it })
+        // the frame's strip under the cut glass: its slots an even share of its width, as far over the frame's foot
+        val down = (cut.y + h) - (g.rect.y + g.rect.height)
+        val slots = controls.filter { c -> frame.strip?.labels?.any { it.id == c.spec.id } == true }
+        val share = w / slots.size.coerceAtLeast(1)
+        return copy(pieces = rest.take(first) + slices + rest.drop(first), glasses = glasses.map { if (it === g) it.copy(rect = cut) else it },
+            controls = controls.map { c -> slots.indexOf(c).let { i -> if (i < 0) c else c.copy(x = cut.x + share * (i + 0.5f), y = c.y + down, spec = c.spec.copy(hw = share / 2f)) } })
     }
 
     /** Sideways: window px between the menu's landscape shell's screen and the window's bottom (null upright). */
