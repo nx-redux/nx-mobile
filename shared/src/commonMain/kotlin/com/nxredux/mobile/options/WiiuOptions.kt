@@ -88,17 +88,20 @@ object WiiuOptions {
 
     private fun layout(value: String?): NdsLayoutChoice? = NdsLayoutChoice.entries.firstOrNull { it.value == value }
 
-    /** The layout drawn: the row in use's pick ([controllerMode]: the controller row in portrait), else [defaultLayout]. */
-    fun layoutShown(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean): NdsLayoutChoice {
+    /**
+     * The layout drawn: the row in use's pick ([controllerMode]: the controller row in portrait), else [defaultLayout]
+     * ([skinLandscape]: a shown pad skin takes the landscape row, [skinTakesLandscape]).
+     */
+    fun layoutShown(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, skinLandscape: Boolean = false): NdsLayoutChoice {
         val s = settings(values)
         val pick = if (landscape) s.landscape else if (controllerMode) s.controller else s.portrait
-        return pick ?: defaultLayout(landscape)
+        return pick ?: defaultLayout(landscape, skinLandscape)
     }
 
-    /** SELECT + Left (-1) / Right (+1): the row in use's next layout, from the one shown. */
-    fun cycleLayout(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, delta: Int): Pair<String, String> {
+    /** SELECT + Left (-1) / Right (+1): the row in use's next layout, from the one shown (the skin's default under it). */
+    fun cycleLayout(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, delta: Int, skinLandscape: Boolean = false): Pair<String, String> {
         val key = if (landscape) LAYOUT_LANDSCAPE else if (controllerMode) LAYOUT_PORTRAIT_CONTROLLER else LAYOUT_PORTRAIT
-        return key to NdsLayoutChoice.entries.stepFrom(layoutShown(values, landscape, controllerMode), delta).value
+        return key to NdsLayoutChoice.entries.stepFrom(layoutShown(values, landscape, controllerMode, skinLandscape), delta).value
     }
 
     /**

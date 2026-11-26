@@ -94,6 +94,8 @@ internal interface GameInputHost : LifecycleOwner {
     fun screenClass(): ScreenClass
     /** A second display places the DS / 3DS screens: the layout cycle does nothing, silently. */
     fun layoutSetByDual(): Boolean
+    /** The DS / 3DS / Wii U pad skin will show ([PadLayoutController.dsSkinWanted]): the Wii U's cycle starts from its default. */
+    fun padSkinWanted(): Boolean
     /** The activity's own handling (super) of an event the router leaves to the system. */
     fun superGenericMotionEvent(event: MotionEvent?): Boolean
     fun superKeyDown(keyCode: Int, event: KeyEvent): Boolean
@@ -622,7 +624,9 @@ internal class GameInputRouter(private val host: GameInputHost) {
         val decision = wiiuHotkeys.onButton(button, down)
         when (val action = decision.action) {
             is N3dsAction.CycleLayout -> if (!host.layoutSetByDual()) {
-                setNdsKey(WiiuOptions.cycleLayout(host.frontendValues, host.isLandscape(), host.ndsControllerMode(), action.delta))
+                // from the layout drawn: under a shown pad skin that takes the landscape row, its default
+                val skinLandscape = WiiuOptions.skinTakesLandscape(WiiuOptions.lockedLayoutRows(host.padSkinWanted(), host.screenClass()))
+                setNdsKey(WiiuOptions.cycleLayout(host.frontendValues, host.isLandscape(), host.ndsControllerMode(), action.delta, skinLandscape))
             }
             N3dsAction.SwapScreens -> swapWiiuScreens()
             is N3dsAction.Stylus, null -> Unit

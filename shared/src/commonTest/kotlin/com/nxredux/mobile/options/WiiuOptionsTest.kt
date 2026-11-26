@@ -5,6 +5,7 @@ import com.nxredux.mobile.options.WiiuOptions.LAYOUT_LANDSCAPE
 import com.nxredux.mobile.options.WiiuOptions.LAYOUT_PORTRAIT
 import com.nxredux.mobile.options.WiiuOptions.LAYOUT_PORTRAIT_CONTROLLER
 import com.nxredux.mobile.layout.ScreenClass
+import com.nxredux.mobile.settings.stepFrom
 import com.nxredux.mobile.runner.PadBandRule
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -160,6 +161,22 @@ class WiiuOptionsTest {
         for (locked in listOf(WiiuOptions.lockedLayoutRows(false, ScreenClass.REGULAR_PHONE), WiiuOptions.lockedLayoutRows(true, ScreenClass.STUBBY_PHONE),
             WiiuOptions.lockedLayoutRows(true, ScreenClass.WIDE_TABLET))) assertFalse(WiiuOptions.skinTakesLandscape(locked), "$locked")
         assertEquals(NdsLayoutChoice.LARGE.value, WiiuOptions.table.single { it.key == LAYOUT_LANDSCAPE }.default)
+    }
+
+    @Test fun the_layout_cycle_starts_from_the_layout_drawn() {
+        // unset, under a skin that takes the landscape row: from Stacked (as the row and the skin show), either way
+        val skin = WiiuOptions.skinTakesLandscape(WiiuOptions.lockedLayoutRows(true, ScreenClass.REGULAR_PHONE))
+        for (delta in listOf(1, -1)) {
+            assertEquals(LAYOUT_LANDSCAPE to NdsLayoutChoice.entries.stepFrom(NdsLayoutChoice.STACKED, delta).value,
+                WiiuOptions.cycleLayout(emptyMap(), landscape = true, controllerMode = false, delta = delta, skinLandscape = skin))
+            // no skin there (or one that does not take the row): from Large, as before
+            assertEquals(LAYOUT_LANDSCAPE to NdsLayoutChoice.entries.stepFrom(NdsLayoutChoice.LARGE, delta).value,
+                WiiuOptions.cycleLayout(emptyMap(), landscape = true, controllerMode = false, delta = delta))
+        }
+        // a pick is the start wherever
+        val picked = mapOf(LAYOUT_LANDSCAPE to NdsLayoutChoice.SINGLE.value)
+        assertEquals(LAYOUT_LANDSCAPE to NdsLayoutChoice.entries.stepFrom(NdsLayoutChoice.SINGLE, 1).value,
+            WiiuOptions.cycleLayout(picked, landscape = true, controllerMode = false, delta = 1, skinLandscape = skin))
     }
 
     @Test fun a_skin_locks_the_layout_rows_it_ignores() {
