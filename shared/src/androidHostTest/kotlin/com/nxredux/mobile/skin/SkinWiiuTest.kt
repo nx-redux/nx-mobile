@@ -148,8 +148,12 @@ class SkinWiiuTest {
                     assertTrue(c.x - c.spec.hw >= under.x - 1f && c.x + c.spec.hw <= under.x + under.width + 1f, "$label ${c.spec.id} not across $under")
                 }
                 val top = assertNotNull(p.glass(GlassScreen.TOP) ?: p.glass(GlassScreen.STACK), label).rect
-                // (a tablet upright: the GamePad's glass taller, down to the shoulders, the_tablets_gamepad_frame_comes_down_to_the_shoulders)
-                if (d.name != "tablet") p.glass(GlassScreen.TOUCH)?.rect?.let { assertEquals(16f / 9f, aspect(it), 0.01f, "$label GamePad glass ${it}") }
+                // the GamePad's picture 16:9, its glass too (a tablet upright's taller by design, down to the shoulders)
+                p.glass(GlassScreen.TOUCH)?.rect?.let { g ->
+                    if (d.name != "tablet") assertEquals(16f / 9f, aspect(g), 0.01f, "$label GamePad glass $g")
+                    val (_, pad) = assertNotNull(WiiuLayout.skinRegions(null, p.glass(GlassScreen.TOP)?.rect, g, NdsSettings()), label).map { it.dst }
+                    assertEquals(16f / 9f, aspect(pad), 0.01f, "$label GamePad picture $pad")
+                }
                 p.glass(GlassScreen.STACK)?.rect?.let { g ->
                     if (p.spec.id.endsWith("_tall") && d.foldable) {   // the unfolded Fold sideways: cut to the TV over the GamePad
                         assertEquals(g.height * 16f / 18f, g.width, 1f, "$label stack glass $g")
@@ -405,6 +409,40 @@ class SkinWiiuTest {
             assertEquals(g.width, tv.width, 1f, "$id TV width"); assertEquals(16f / 9f, aspect(tv), 0.01f, "$id TV")
             assertEquals(16f / 9f, aspect(pad), 0.01f, "$id GamePad"); assertEquals(g.x + g.width / 2f, pad.x + pad.width / 2f, 1f, "$id GamePad centred")
             assertEquals(tv.y + tv.height, pad.y, 1f, "$id GamePad under the TV"); assertEquals(g.y + g.height, pad.y + pad.height, 1f, "$id GamePad to the foot")
+        }
+    }
+
+    /**
+     * Windows with no golden twin that keep the shell's uncut glass (no fold): a 16:10 and a 3:2 phone sideways and a
+     * 4:3 tablet sideways. With no player's layout the GamePad is never under a third of the TV's height (else the two
+     * halved), and nothing overlaps.
+     */
+    @Test
+    fun wider_windows_keep_the_gamepad_a_third_of_the_tv_and_nothing_overlaps() {
+        val windows = listOf(Triple(2560 to 1600, 420, false), Triple(2400 to 1600, 420, false), Triple(2048 to 1536, 320, true))
+        for (id in packs) for ((wh, dpi, tablet) in windows) {
+            val (w, h) = wh; val label = "$id ${w}x$h"
+            val p = assertNotNull(SkinChoice.place(skinPack(id), w, h, dpi, tablet, ds = true, variant = SkinVariant.WIIU), label)
+            val (tv, pad) = assertNotNull(WiiuLayout.skinRegions(p.glass(GlassScreen.STACK)?.rect, p.glass(GlassScreen.TOP)?.rect, p.glass(GlassScreen.TOUCH)?.rect, NdsSettings()), label).map { it.dst }
+            assertTrue(pad.height >= tv.height / 3f - 0.5f, "$label GamePad $pad under a third of the TV $tv")
+            assertNoOverlaps(p, w, h, label)
+        }
+    }
+
+    private fun assertNoOverlaps(p: SkinPlacement, w: Int, h: Int, label: String) {
+        fun reach(pc: PlacedControl) = when (pc.spec.shape) { ControlShape.STICK -> pc.spec.r * 1.25f; ControlShape.RECT -> 0f; else -> pc.spec.r }
+        fun box(pc: PlacedControl): FloatArray { val r = reach(pc); val hw = if (r > 0f) r else pc.spec.hw; val hh = if (r > 0f) r else pc.spec.hh; return floatArrayOf(pc.x - hw, pc.y - hh, pc.x + hw, pc.y + hh) }
+        val face = setOf("A", "B", "X", "Y")
+        for (useStick in listOf(true, false)) {
+            val cs = p.forStick(useStick).controls
+            for (i in cs.indices) for (j in i + 1 until cs.size) {
+                val a = cs[i]; val b = cs[j]
+                if (a.spec.id in face && b.spec.id in face || a.spec.id.startsWith("TOUCH_") && b.spec.id.startsWith("TOUCH_")) continue
+                val ok = if (a.spec.shape != ControlShape.RECT && b.spec.shape != ControlShape.RECT) kotlin.math.hypot(a.x - b.x, a.y - b.y) >= reach(a) + reach(b) - 1f
+                    else box(a).let { x -> box(b).let { y -> x[2] <= y[0] || y[2] <= x[0] || x[3] <= y[1] || y[3] <= x[1] } }
+                assertTrue(ok, "$label ${a.spec.id} on ${b.spec.id}")
+            }
+            for (x in cs) assertTrue(x.x >= 0f && x.x <= w && x.y >= 0f && x.y <= h, "$label ${x.spec.id} off the window")
         }
     }
 
