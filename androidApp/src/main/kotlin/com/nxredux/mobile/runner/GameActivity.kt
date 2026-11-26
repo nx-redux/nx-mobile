@@ -1915,6 +1915,20 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
     }
 
+    private val coreToasts = CoreMessageToasts()
+    /** The core's status line on screen (its next one replaces it); -1: none. */
+    private var coreStatusToast = -1L
+
+    /** A core's on-screen message as the in-game toast, when [CoreMessageToasts] lets it through. */
+    fun showCoreMessage(m: GLRetroView.CoreMessage) {
+        val now = SystemClock.elapsedRealtime()
+        val t = coreToasts.take(gameCoreId, m.text, m.durationMs, m.status, now, menuOpen) ?: return
+        if (t.status && coreStatusToast >= 0) notifications.dismiss(coreStatusToast)
+        val id = notifications.push(t.text, null, t.durationMs, now)
+        if (t.status) coreStatusToast = id
+        publishNotifications()
+    }
+
     /** Publishes the queue and keeps a 250 ms expiry tick running while anything is shown. */
     override fun publishNotifications() {
         notificationState.value = notifications.toasts to notifications.pill
@@ -2378,6 +2392,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         override fun prepareAchievements(tag: String, romFileName: String, content: ContentRef, inner: File?) =
             game.prepareAchievements(tag, romFileName, content, inner)
         override fun onAchievementEvent(e: RaEvent) = game.onAchievementEvent(e)
+        override fun showCoreMessage(m: GLRetroView.CoreMessage) = game.showCoreMessage(m)
     }
 }
 

@@ -240,6 +240,8 @@ internal interface LaunchHost : GameScreenHost {
     suspend fun refreshDolphinCheats()
     fun prepareAchievements(tag: String, romFileName: String, content: ContentRef, inner: File?)
     fun onAchievementEvent(e: RaEvent)
+    /** A core's on-screen message, shown as the in-game toast when it is worth it ([CoreMessageToasts]). */
+    fun showCoreMessage(m: GLRetroView.CoreMessage)
 }
 
 /**
@@ -1298,8 +1300,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 b.attach(view)
                 b.deliverEvents { onAchievementEvent(it) }
             }
-            // The core's on-screen messages: the few worth showing (CoreMessages: the FDS disk side) as a toast on the picture.
-            lifecycleScope.launch { view.getCoreMessages().collect { m -> CoreMessages.toast(cfg.coreId, m)?.let(dual::pictureToast) } }
+            lifecycleScope.launch { view.getCoreMessages().collect(::showCoreMessage) }
             // The core loads the game on the GL thread once the view is added (SurfaceCreated follows): the waiting pads'
             // timeout counts from then, not through the load.
             lifecycleScope.launch {

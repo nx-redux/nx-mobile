@@ -56,10 +56,16 @@ public:
 
     static float callback_get_sensor_input(unsigned port, unsigned id);
 
-    /** A core's on-screen message (SET_MESSAGE / _EXT), queued for the app (the step drains it: takeCoreMessages). */
-    void pushCoreMessage(const char* msg);
+    /** A core's on-screen message (SET_MESSAGE / _EXT): its text, how long it asks for (0: no say) and whether it is a status line. */
+    struct CoreMessage {
+        std::string text;
+        unsigned durationMs;
+        bool status;
+    };
+    /** Queues [msg] for the app (the step drains it: takeCoreMessages). */
+    void pushCoreMessage(const char* msg, unsigned durationMs, bool status);
     /** The messages queued since the last call, oldest first; at most CORE_MESSAGES_MAX are kept. */
-    std::vector<std::string> takeCoreMessages();
+    std::vector<CoreMessage> takeCoreMessages();
 
     static bool callback_set_rumble_state(
         unsigned port,
@@ -182,7 +188,7 @@ private:
     std::optional<struct retro_fastforwarding_override> fastForwardingOverride;
     static constexpr size_t CORE_MESSAGES_MAX = 16;
     std::mutex coreMessagesMutex;
-    std::vector<std::string> coreMessages;
+    std::vector<CoreMessage> coreMessages;
     bool preferVulkan = false;
     bool useVulkan = false;
     std::atomic<bool> loggedVulkanInterface { false };   // GET_HW_RENDER_INTERFACE logged this session

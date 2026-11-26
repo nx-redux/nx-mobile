@@ -917,10 +917,10 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_step(
     auto coreMessages = Environment::getInstance().takeCoreMessages();
     static jmethodID sendCoreMessage = nullptr;
     if (!coreMessages.empty() &&
-        viewMethod(env, glRetroView, sendCoreMessage, "sendCoreMessage", "(Ljava/lang/String;)V") != nullptr) {
+        viewMethod(env, glRetroView, sendCoreMessage, "sendCoreMessage", "(Ljava/lang/String;IZ)V") != nullptr) {
         for (auto& m : coreMessages) {
-            jstring text = newSafeJString(env, m);   // a core's text: never straight to NewStringUTF
-            env->CallVoidMethod(glRetroView, sendCoreMessage, text);
+            jstring text = newSafeJString(env, m.text);   // a core's text: never straight to NewStringUTF
+            env->CallVoidMethod(glRetroView, sendCoreMessage, text, (jint) m.durationMs, (jboolean) m.status);
             dropJavaException(env);
             env->DeleteLocalRef(text);
         }

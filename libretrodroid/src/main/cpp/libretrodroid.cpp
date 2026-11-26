@@ -180,7 +180,7 @@ bool LibretroDroid::unserializeState(int8_t *data, size_t size) {
     if (core == nullptr || !gameLoaded) return false;
     // The others' games would see this one jump in time and drop it.
     if (dslink::inRoom()) {
-        Environment::getInstance().pushCoreMessage("Leave local multiplayer to load a state");
+        Environment::getInstance().pushCoreMessage("Leave local multiplayer to load a state", 0, false);
         return false;
     }
     // A core may run emulation (and GL) inside it (Azahar drains its async work with RunLoop): the paused view's context.

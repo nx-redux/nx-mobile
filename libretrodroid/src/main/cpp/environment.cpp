@@ -61,15 +61,15 @@ void Environment::initialize(
     savesDirectory = requiredSavesDirectory;
 }
 
-void Environment::pushCoreMessage(const char* msg) {
+void Environment::pushCoreMessage(const char* msg, unsigned durationMs, bool status) {
     std::lock_guard<std::mutex> lock(coreMessagesMutex);
     if (coreMessages.size() >= CORE_MESSAGES_MAX) coreMessages.erase(coreMessages.begin());
-    coreMessages.emplace_back(msg);
+    coreMessages.push_back(CoreMessage { msg, durationMs, status });
 }
 
-std::vector<std::string> Environment::takeCoreMessages() {
+std::vector<Environment::CoreMessage> Environment::takeCoreMessages() {
     std::lock_guard<std::mutex> lock(coreMessagesMutex);
-    std::vector<std::string> out;
+    std::vector<CoreMessage> out;
     out.swap(coreMessages);
     return out;
 }
@@ -679,7 +679,8 @@ bool Environment::handle_callback_environment(unsigned cmd, void *data) {
             auto message = static_cast<const struct retro_message*>(data);
             if (message && message->msg) {
                 LOGI("Core message: %s", message->msg);
-                pushCoreMessage(message->msg);
+                // Frames at the 60 fps the interface assumes.
+                pushCoreMessage(message->msg, message->frames * 1000u / 60u, false);
             }
             return true;
         }
@@ -688,7 +689,9 @@ bool Environment::handle_callback_environment(unsigned cmd, void *data) {
             auto message = static_cast<const struct retro_message_ext*>(data);
             if (message && message->msg) {
                 LOGI("Core message: %s", message->msg);
-                pushCoreMessage(message->msg);
+                // A log-only message is for the log, not the player.
+                if (message->target != RETRO_MESSAGE_TARGET_LOG)
+                    pushCoreMessage(message->msg, message->duration, message->type == RETRO_MESSAGE_TYPE_STATUS);
             }
             return true;
         }
