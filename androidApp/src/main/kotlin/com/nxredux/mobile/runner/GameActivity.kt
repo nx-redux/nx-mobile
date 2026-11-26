@@ -1408,6 +1408,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         dialog.setCanceledOnTouchOutside(false)
         dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
         coreTextBox = dialog
+        // The box takes key focus mid-press (a game opens its keyboard on A's press): the release would not reach the core.
+        input.releaseAllGameInput()
         dialog.show()
         field.requestFocus()
     }
