@@ -284,6 +284,34 @@ class SkinWiiuTest {
         }
     }
 
+    /**
+     * The Fold cover: upright L3 beside ZL and R3 beside ZR on their inner side (L ZL L3 … R3 ZR R), sideways L3 over L
+     * and R3 over R; the caps' rows the 3DS's (HOME on MIC's spot).
+     */
+    @Test
+    fun the_fold_covers_stick_presses_sit_by_the_shoulders() {
+        for (id in packs) {
+            val pack = skinPack(id)
+            for (name in listOf("cover", "cover_land")) {
+                val d = GOLDEN_DEVICES.single { it.name == name }
+                val label = "$id $name"
+                val p = assertNotNull(place(pack, d), label)
+                val n = assertNotNull(SkinChoice.place(pack, d.w, d.h, d.dpi, d.tablet, ds = true, foldable = d.foldable, variant = SkinVariant.N3DS), label)
+                fun c(pl: SkinPlacement, cid: String) = pl.controls.first { it.spec.id == cid }
+                if (name == "cover") for ((s3, z, sg) in listOf(Triple("L3", "L2", 1f), Triple("R3", "R2", -1f))) {
+                    assertEquals(c(p, z).y, c(p, s3).y, 1f, "$label $s3 level with $z")
+                    assertTrue((c(p, s3).x - c(p, z).x) * sg > 0f, "$label $s3 not inside $z")
+                } else for ((s3, sh) in listOf("L3" to "L", "R3" to "R")) {
+                    assertEquals(c(p, sh).x, c(p, s3).x, 1f, "$label $s3 over $sh")
+                    assertTrue(c(p, s3).y < c(p, sh).y, "$label $s3 not over $sh")
+                }
+                val row = if (name == "cover") listOf("STICK_SWAP", "MENU", "SWAP") else listOf("STICK_SWAP", "MENU", "SWAP", "SELECT", "START")
+                for (cid in row) { assertEquals(c(n, cid).x, c(p, cid).x, 1f, "$label $cid x"); assertEquals(c(n, cid).y, c(p, cid).y, 1f, "$label $cid y") }
+                assertEquals(c(n, "MIC").x, c(p, "HOME").x, 1f, "$label HOME x"); assertEquals(c(n, "MIC").y, c(p, "HOME").y, 1f, "$label HOME y")
+            }
+        }
+    }
+
     /** Windows whose right stick's box has no room for 85% of the left stick without moving the 3DS's pads. */
     private val SMALLER_RIGHT_STICK = setOf("phone", "phone_land", "cover_land", "flip_half")
 
