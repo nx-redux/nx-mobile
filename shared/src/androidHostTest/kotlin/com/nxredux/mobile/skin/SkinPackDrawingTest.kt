@@ -46,7 +46,7 @@ class SkinPackDrawingTest {
             kotlin.test.assertEquals(f(old("DPAD"), "r") * LOWER_PAD, pad.spec.r, 1f, "$file $name the d-pad at 85%")
             kotlin.test.assertEquals(f(old("STICK"), "r"), stick.spec.r, 1f, "$file $name the stick as it was")
             // (the Dreamcast's toward the screen as the user placed it: theDreamcastDpadIsTuckedUnderTheStick)
-            val across = if (v == SkinVariant.DC) 42f / 156f * f(old("DPAD"), "r") else 0f
+            val across = if (v == SkinVariant.DC && name != "tablet_land") 42f / 156f * f(old("DPAD"), "r") else 0f   // (a tablet's centred)
             kotlin.test.assertEquals(f(old("DPAD"), "x") + across, pad.x, 1.5f, "$file $name about its middle")
         }
     }
@@ -154,7 +154,8 @@ class SkinPackDrawingTest {
     // half-folded too.
     @Test
     fun theDreamcastDpadIsTuckedUnderTheStick() {
-        for (name in listOf("inner", "inner_half", "inner_land", "ultra", "ultra_half", "ultra_land_half", "tablet", "tablet_land")) {
+        // (a tablet sideways: the PSP's gap, centred, tabletLandscapePadsAreThePspsGapApart)
+        for (name in listOf("inner", "inner_half", "inner_land", "ultra", "ultra_half", "ultra_land_half", "tablet")) {
             val d = GOLDEN_DEVICES.first { it.name == name }
             val p = assertNotNull(placeFor(pack, SkinVariant.DC, d), name)
             fun c(id: String) = p.controls.first { it.spec.id == id && it.spec.alt == null }

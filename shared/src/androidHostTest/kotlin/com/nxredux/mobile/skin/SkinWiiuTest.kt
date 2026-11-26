@@ -234,7 +234,7 @@ class SkinWiiuTest {
                 val n3ds = assertNotNull(SkinChoice.place(pack, d.w, d.h, d.dpi, d.tablet, ds = true, hingeY = d.hingeY, foldable = d.foldable, variant = SkinVariant.N3DS), label)
                 fun at(pl: SkinPlacement, cid: String) = pl.controls.first { it.spec.id == cid }
                 val stacked = p.spec.family == SkinFamily.STACKED; val large = p.spec.family == SkinFamily.LARGE
-                val swapped = d.name in FOLD_UPRIGHT || d.name == "tablet"   // (the face and the right stick swapped on the fold boards and the tablet)
+                val swapped = d.name in FOLD_UPRIGHT || d.name == "tablet" || d.name == "tablet_land"   // (the face and the right stick swapped on the fold boards and the tablet)
                 for (cid in listOf("DPAD", "STICK") + (if (swapped) emptyList() else listOf("X", "Y", "A", "B")) + (if (large) emptyList() else listOf("L", "R")) + (if (stacked || large) emptyList() else listOf("L2", "R2"))) {
                     val w = at(p, cid); val n = at(n3ds, cid)
                     assertEquals(n.x, w.x, 1f, "$label $cid x"); assertEquals(n.y, w.y, 1f, "$label $cid y")
@@ -287,7 +287,7 @@ class SkinWiiuTest {
                     val n3ds = assertNotNull(SkinChoice.place(pack, d.w, d.h, d.dpi, d.tablet, ds = true, hingeY = d.hingeY, foldable = d.foldable, variant = SkinVariant.N3DS), label)
                     val r = c.getValue("CSTICK").spec.r
                     assertTrue(r > n3ds.controls.first { it.spec.id == "CSTICK" }.spec.r && r < want, "$label right stick r $r")
-                } else if (d.name == "tablet") assertEquals(c.getValue("STICK").spec.r, c.getValue("CSTICK").spec.r, 0.5f, "$label right stick as the left")   // (in the face's place)
+                } else if (d.name == "tablet" || d.name == "tablet_land") assertEquals(c.getValue("STICK").spec.r, c.getValue("CSTICK").spec.r, 0.5f, "$label right stick as the left")   // (in the face's place)
                 else assertEquals(want, c.getValue("CSTICK").spec.r, 0.5f, "$label right stick r")
                 assertNoOverlaps(p, d.w, d.h, label)
                 for (id in listOf("CSTICK", "L3", "R3", "SELECT", "START")) for (g in p.glasses) {
