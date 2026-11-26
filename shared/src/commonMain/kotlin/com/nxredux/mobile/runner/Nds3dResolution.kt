@@ -78,7 +78,7 @@ enum class Res3dConsole(
 
     /**
      * The scale is set at launch only: the game keeps it through any size change or row change until the next launch.
-     * Cemu reads its internal resolution at start (Restart in its options); a change mid-game broke Mario Kart 8.
+     * Cemu reads its internal resolution at start only (its Restart option); changing it mid-game breaks games.
      */
     val launchOnly: Boolean get() = this == CEMU
 

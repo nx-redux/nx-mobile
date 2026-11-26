@@ -1090,10 +1090,7 @@ internal class FrontendRenderer(
         return SkinDs(regions[0].dst, regions.getOrNull(1)?.dst ?: regions[0].dst, regions)
     }
 
-    /**
-     * The Wii U's TV and GamePad in the skin's glasses ([WiiuLayout.skinRegions]): on a regular phone's landscape the
-     * player's layout in its one glass, as without a skin, else the skin's own TV over GamePad. SWAP trades them.
-     */
+    /** The Wii U's TV and GamePad in the skin's glasses ([WiiuLayout.skinRegions], the layout by [WiiuOptions.skinLayout]). */
     private fun skinWiiuLayout(g: FloatArray): SkinDs? {
         if (!WiiuLayout.isWiiuFrame(g[0].roundToInt(), g[1].roundToInt())) return null
         val p = padLayout.skinPlacement() ?: return null

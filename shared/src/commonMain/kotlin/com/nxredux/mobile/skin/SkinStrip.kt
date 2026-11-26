@@ -4,12 +4,8 @@ package com.nxredux.mobile.skin
 const val STRIP_SWAP = "SWAP"
 
 /**
- * The touch shortcut strip's buttons over the span of its [slots] (TOUCH_1..4 as placed, an even share each, window
- * px). The [filled] slots (in slot order) an even share each of the whole span; with a [centre] button (the Wii U's
- * [STRIP_SWAP]) that one in the middle and the filled ones split evenly either side of it (the left one more where they
- * are odd, its share on the right left empty), so it stays centred: Save · SWAP · Load. Alone (or with one), the
- * strip is split in three all the same, so SWAP is one normal button in the middle, the rest of the strip untouched
- * (no stray press beside its word). Empty: no slots, or nothing to show.
+ * Touch strip buttons evenly across the span of [slots] (window px); with a [centre] button it sits in the middle and
+ * the [filled] ones split either side (Save · SWAP · Load). A lone centre button is one share of three.
  */
 fun arrangeStrip(slots: List<PlacedControl>, filled: List<PlacedControl>, centre: String? = null): List<PlacedControl> {
     if (slots.isEmpty()) return emptyList()
@@ -20,9 +16,8 @@ fun arrangeStrip(slots: List<PlacedControl>, filled: List<PlacedControl>, centre
         return c.copy(spec = c.spec.copy(hw = share / 2f), x = start + share * (i + 0.5f))
     }
     if (centre == null) return filled.mapIndexed { i, c -> at(i, filled.size, c) }
-    val left = (filled.size + 1) / 2   // (the left side has as many as the right, or one more)
-    val side = left
-    val n = maxOf(3, 2 * side + 1)   // (never wider than one share of three)
+    val left = (filled.size + 1) / 2
+    val n = maxOf(3, 2 * left + 1)
     val half = n / 2
     val first = slots.first()
     val mid = at(half, n, first.copy(spec = first.spec.copy(id = centre, label = null)))

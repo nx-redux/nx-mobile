@@ -926,7 +926,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     override fun pauseForMenu() {
         dsRoom.check()   // the menu opened on the watcher's last poll: a presence changed since reaches the open menu now
         syncKeepScreenOn()
-        syncMotionSensors()   // no motion while paused
+        syncMotionSensors()
         holdCore()   // the phone mic closes under the menu too
         syncDsMenuCap()
         lifecycleScope.launch(Dispatchers.IO) { saves.writeBatterySave(notify = true) }

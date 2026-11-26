@@ -331,9 +331,8 @@ object SkinChoice {
 
     /**
      * The row under the touch screen's frame (the centred pieces and controls below it) up to [gap] under the frame, where
-     * it is lower. With [shoulders] (the tablet upright's GamePad, room to spare), the frame first comes down to [gap] over
-     * the shoulder buttons' pieces (its glass taller; the strip and its band with the foot) and widens to the GamePad at
-     * that height ([touchAcross]), and the row goes under it. As it is with no row, or one already as near.
+     * it is lower. With [shoulders] (the tablet upright's GamePad: room to spare), the frame first grows down to [gap] over
+     * the shoulder buttons and widens to the GamePad at that height ([touchAcross]), so the GamePad has no black bars.
      */
     private fun SkinPlacement.rowUnderTouch(gap: Float, shoulders: Boolean = false): SkinPlacement {
         val gi = spec.pieces.indexOfFirst { it.glass?.screen == GlassScreen.TOUCH }
@@ -342,7 +341,6 @@ object SkinChoice {
         val bottom = frame.maxOf { it.dst.y + it.dst.height }
         fun row(p: SkinPiece) = p.piece >= 0 && p.piece != gi && spec.pieces[p.piece].let { it.glass == null && it.anchor == PieceAnchor.CENTRE } && p.dst.y >= bottom - 0.5f
         val rowIds = controls.filter { it.spec.anchor == PieceAnchor.CENTRE && it.y > bottom }.toSet()
-        // the frame down to the shoulders: what is at its foot moves, what spans it stretches, its top stays
         val shoulderTop = if (!shoulders) null else controls.filter { it.spec.id in SHOULDER_IDS }.flatMap { c ->
             pieces.filter { p -> p.piece >= 0 && p.piece != gi && p.dst.width < 300f && c.x in p.dst.x..(p.dst.x + p.dst.width) && c.y in p.dst.y..(p.dst.y + p.dst.height) }
         }.minOfOrNull { it.dst.y }
@@ -370,9 +368,8 @@ object SkinChoice {
 
     /**
      * The touch screen's frame (piece [gi]) widened about its middle to its 16:9 picture at the glass's height (no black
-     * either side), never past the top screen's frame nor nearer than [gap] to a control's touch area beside it: its
-     * edges out, its middle stretched, its glass wider and the strip's slots an even share of it; [moving]: the row going
-     * under it, not in the way. As it is with no room.
+     * either side), never past the top screen's frame nor nearer than [gap] to a control's touch area beside it; the
+     * controls in [moving] go under it, so they are not in the way.
      */
     private fun SkinPlacement.touchAcross(gi: Int, gap: Float, moving: Set<String>): SkinPlacement {
         val frame = pieces.filter { it.piece == gi && gi >= 0 && !it.strip }
@@ -389,7 +386,6 @@ object SkinChoice {
             if (c.x < (l0 + r0) / 2f) left = maxOf(left, c.x + hw + gap) else right = minOf(right, c.x - hw - gap)
         }
         val g = glass(GlassScreen.TOUCH) ?: return this
-        // no wider than its picture: the frame hugs the GamePad at the glass's height
         val d = minOf(l0 - left, right - r0, (g.rect.height * 16f / 9f - g.rect.width) / 2f)
         if (d < 0.5f) return this
         val gw = g.rect.width + 2f * d
@@ -408,9 +404,9 @@ object SkinChoice {
     }
 
     /**
-     * This placement with [twin]'s touch screen frame (the 3DS twin's bottom frame on the same window): its frame's pieces
-     * where [twin]'s are, its glass and its strip's slots; the GamePad letterboxed in it. As it is where the two frames
-     * are not cut the same, or the taller frame's strip would come down on a button (the Fold half-folded: the face).
+     * This placement with [twin]'s touch screen frame (the 3DS twin's bottom frame on the same window), the GamePad
+     * letterboxed in it. Not where the two frames are cut differently, or where the twin's taller strip would sit on a
+     * button (the Fold half-folded).
      */
     private fun SkinPlacement.touchAs(twin: SkinPlacement): SkinPlacement {
         val gi = spec.pieces.indexOfFirst { it.glass?.screen == GlassScreen.TOUCH }
@@ -420,7 +416,6 @@ object SkinChoice {
         if (mine.isEmpty() || mine.size != theirs.size || g == null || tg == null) return this
         val at = mine.zip(theirs).toMap()
         val slots = twin.controls.filter { it.spec.id.startsWith("TOUCH_") }.associateBy { it.spec.id }
-        // (where the taller frame's strip would come down on a button, the GamePad's own frame stays)
         val onAButton = slots.values.any { sl -> controls.any { c -> !c.spec.id.startsWith("TOUCH_") && c.spec.id in WIIU_PAD_IDS && run {
             val r = if (c.spec.shape == ControlShape.RECT) 0f else c.spec.r * (if (c.spec.shape == ControlShape.STICK) 1.25f else 1f)
             val hw = if (r > 0f) r else c.spec.hw; val hh = if (r > 0f) r else c.spec.hh
@@ -480,9 +475,7 @@ object SkinChoice {
 
     /**
      * The Wii U's one screen frame (its stack glass) on the roomy sideways shell on a foldable (the unfolded Fold) cut to
-     * the screens' [aspect] (no bars round them), centred in the room it filled, its border and strip as drawn. As it
-     * is for any other layout: elsewhere (a tablet sideways too) the frame is the 3DS's, filling its room, the screens
-     * centred in it.
+     * the screens' [aspect], so there are no bars round them; elsewhere the frame is the 3DS's, the screens centred in it.
      */
     private fun SkinPlacement.wiiuStackTo(aspect: Float): SkinPlacement {
         val frame = spec.frame ?: return this
@@ -495,7 +488,6 @@ object SkinChoice {
         val slices = SkinSolver.frameSlices(frame, cut.x - bl, cut.y - bt, w + bl + br, h + bt + bb, k) { x, y, w_, h_ -> PxRect(x, y, w_, h_) }
         val first = pieces.indexOfFirst { it.piece == -1 && !it.strip }.coerceAtLeast(0)
         val rest = pieces.filterNot { it.piece == -1 && !it.strip }
-        // the frame's strip under the cut glass: its slots an even share of its width, as far over the frame's foot
         val down = (cut.y + h) - (g.rect.y + g.rect.height)
         val slots = controls.filter { c -> frame.strip?.labels?.any { it.id == c.spec.id } == true }
         val share = w / slots.size.coerceAtLeast(1)
@@ -590,8 +582,7 @@ object SkinChoice {
                 val placed = fold() ?: return@widest null
                 // the GamePad's boxes, sideways and flat: the bottom half as half-folded at the window's middle, as the 3DS's
                 if (v == SkinVariant.WIIU && landscape && hingeY == null && spec.boxes.isNotEmpty()) return@widest fold(windowH / 2f)?.let { placed.bottomOf(it) } ?: placed
-                // upright, its row under the GamePad's frame (which hugs its picture), as the 3DS's row follows its touch frame up;
-                // the fold board's frame the 3DS's bottom frame itself, the GamePad letterboxed in it
+                // upright: the GamePad in the 3DS twin's bottom frame, its row right under it, as the 3DS's row follows its touch frame
                 if (v == SkinVariant.WIIU && !landscape && spec.boxes.isNotEmpty()) {
                     val twin = pack.layouts.firstOrNull { it.id == spec.id.replace("_wiiugp", "_3ds") }.takeIf { !spec.id.endsWith("_fold_tab") }
                     val theirs = twin?.let { t -> foldPieces(t, windowW, windowH, s, picture, topInset, hingeY, densityDpi, N3DS_TOP, bottomMargin = shellMargin(pack),

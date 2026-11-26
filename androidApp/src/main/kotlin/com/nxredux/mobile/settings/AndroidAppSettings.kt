@@ -96,7 +96,7 @@ class AndroidAppSettings(context: Context) : AppSettings {
     override var micAsked: Boolean by bool(KEY_MIC_ASKED, false)
     override var micButtonShown: Boolean by bool(KEY_MIC_BUTTON_SHOWN, false)
     override var layoutTipHidden: Boolean by bool(KEY_LAYOUT_TIP_HIDDEN, false)
-    // The tip was one flag shared with the DS: a 3DS player who dismissed it keeps it dismissed until the 3DS flag is written.
+    // Falls back to the DS flag (which the 3DS shared before it had its own) until this one is written.
     override var layoutTipHidden3ds: Boolean
         get() = prefs.booleanOrFallback(KEY_LAYOUT_TIP_HIDDEN_3DS, KEY_LAYOUT_TIP_HIDDEN)
         set(value) = prefs.edit { putBoolean(KEY_LAYOUT_TIP_HIDDEN_3DS, value) }

@@ -56,14 +56,9 @@ object WiiuLayout {
     }
 
     /**
-     * The screens in a pad skin's glasses (the big one, [NdsSettings.big], first). Its one [stack] glass: [layout] in it
-     * where the player's layout applies ([com.nxredux.mobile.options.WiiuOptions.skinLayout]: a regular phone's wide
-     * landscape glass; Stacked there the TV across its width, the GamePad centred in the height left under it), else
-     * the TV over the GamePad, each 16:9 (never the DS's 4:3 halves): halved, the pair 16:18 and
-     * centred, where the glass is within a tenth of that shape or narrower, or too short to keep the GamePad [PAD_FLOOR]
-     * of the TV's height under it; else the TV across the glass's top and the GamePad centred in the height under it,
-     * black either side of it (the Fold cover's one frame, a tablet sideways). Else the TV in its [top] glass and the GamePad in
-     * its [touch] glass, each 16:9 and centred. Null when the skin has neither, or the glass has no room.
+     * The screens in a pad skin's glasses, the big one first. One [stack] glass: the player's [layout] in it on a regular
+     * phone ([com.nxredux.mobile.options.WiiuOptions.skinLayout]), else the TV across the top with the GamePad under it
+     * when the glass is wide enough, else the 16:18 pair centred. Two glasses: each screen 16:9 in its own. Null without room.
      */
     fun skinRegions(
         stack: PxRect?, top: PxRect?, touch: PxRect?, settings: NdsSettings, layout: NdsLayoutChoice? = null, insetMarginPx: Float = 0f,
@@ -87,9 +82,8 @@ object WiiuLayout {
     }
 
     /**
-     * The shape [layout]'s screens fill in a pad skin's one glass, so the skin's frame is cut to them: Stacked the TV over
-     * the GamePad, Side by side the two abreast, Large the GamePad at half size beside the TV (a regular phone sideways,
-     * where the player's layout applies), the others one screen.
+     * The shape [layout]'s screens fill in a pad skin's one glass ([com.nxredux.mobile.options.WiiuOptions.skinLayout]),
+     * so the skin's frame is cut to them.
      */
     fun skinAspect(layout: NdsLayoutChoice): Float = when (layout) {
         NdsLayoutChoice.STACKED -> FRAME_ASPECT
