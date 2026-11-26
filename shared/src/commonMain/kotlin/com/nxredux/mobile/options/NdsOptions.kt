@@ -391,7 +391,7 @@ fun resolutionRows(console: Res3dConsole, displayMax: Int?, cap: Int = console.d
         ),
         // Performance at native size: no scale to pick.
         if (console.nativePerformance) null else FrontendOption(
-            console.scaleKey, "Scale", perfScales, Nds3dResolution.DEFAULT_PERFORMANCE_SCALE.toString(),
+            console.scaleKey, "Scale", perfScales, console.defaultScale.toString(),
             "The fixed resolution Performance draws $drawn at, as a multiple of the $screen screen.",
             visual = false, valueLabels = perfScales.map { "${it}x" }, shownWhen = console.modeKey to setOf(Nds3dMode.PERFORMANCE.value),
         ),

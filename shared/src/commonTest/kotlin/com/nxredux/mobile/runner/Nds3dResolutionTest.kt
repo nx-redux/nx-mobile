@@ -319,4 +319,31 @@ class Nds3dResolutionTest {
         assertTrue("next time the game starts" in info, info)
         assertTrue("next time the game starts" !in resolutionRows(Res3dConsole.DOLPHIN, displayMax = 3)[0].info)
     }
+
+    @Test fun wiiUPerformanceOffersEveryScaleTheDisplayReachesFromNative() {
+        val cemu = Res3dConsole.CEMU
+        fun perf(displayMax: Int) = resolutionRows(cemu, displayMax).first { it.key == cemu.scaleKey }.values
+        assertEquals(listOf("1", "2"), perf(cemu.displayMaxOf(2448 to 1848, null)!!))      // the Fold's inner screen
+        assertEquals(listOf("1"), perf(cemu.displayMaxOf(1080 to 2400, null)!!))           // a phone
+        assertEquals(listOf("1"), perf(cemu.displayMaxOf(1280 to 960, null)!!))            // the Nova
+        assertEquals(listOf("1", "2"), perf(cemu.secondDisplayMaxOf(1920 to 1080, null)!!)) // a 1080p second display, the TV on it
+        assertEquals(listOf("1", "2", "3"), perf(cemu.secondDisplayMaxOf(3840 to 2160, null)!!))
+        // Native unless picked; the pick holds up to the display's reach
+        assertEquals("1", resolutionRows(cemu, 2).first { it.key == cemu.scaleKey }.default)
+        val performance = mapOf(cemu.modeKey to Nds3dMode.PERFORMANCE.value)
+        assertEquals(1, Nds3dResolution.valueFor(performance, 2, 2, cemu))
+        assertEquals(2, Nds3dResolution.valueFor(performance + (cemu.scaleKey to "2"), 1, 2, cemu))
+        assertEquals(2, Nds3dResolution.valueFor(performance + (cemu.scaleKey to "3"), 1, 2, cemu))
+    }
+
+    @Test fun theOtherConsolesPerformanceCeilingsAndSecondDisplaysAreUnchanged() {
+        assertEquals(2, Nds3dResolution.performanceCeiling(4, Res3dConsole.DOLPHIN))
+        assertEquals(2, Nds3dResolution.performanceCeiling(3, Res3dConsole.PSP))
+        assertEquals(1, Nds3dResolution.performanceCeiling(4, Res3dConsole.PS2))
+        assertEquals(2, Nds3dResolution.performanceCeiling(2, Res3dConsole.CEMU))
+        for (c in Res3dConsole.entries - Res3dConsole.CEMU) {
+            assertEquals(c.displayMaxOf(1920 to 1080, ScreenClass.REGULAR_PHONE), c.secondDisplayMaxOf(1920 to 1080, ScreenClass.REGULAR_PHONE), c.name)
+            assertEquals(Nds3dResolution.DEFAULT_PERFORMANCE_SCALE, c.defaultScale, c.name)
+        }
+    }
 }

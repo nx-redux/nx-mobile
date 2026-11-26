@@ -85,6 +85,15 @@ enum class Res3dConsole(
     /** Performance draws at native size: no Scale row (the PS2 runs slowly above it; PCSX-ReARMed has only 1x and 2x). */
     val nativePerformance: Boolean get() = this == PS2 || this == PCSX
 
+    /**
+     * Performance's Scale is the player's pick of every scale the display reaches, from Native (Auto never goes above
+     * Native here, so it is the only way up), not capped at half of it.
+     */
+    val fullPerformance: Boolean get() = this == CEMU
+
+    /** The Scale an unset game's Performance draws at: Native where above it can break games ([autoNative]). */
+    val defaultScale: Int get() = if (this == CEMU) 1 else Nds3dResolution.DEFAULT_PERFORMANCE_SCALE
+
     /** The three stored rows. */
     val keys: Set<String> get() = setOf(modeKey, maxScaleKey, scaleKey)
 
@@ -118,6 +127,15 @@ enum class Res3dConsole(
         DC -> window?.let { DcResolution.displayMax(it.first, it.second) }
         N64 -> window?.let { N64Resolution.displayMax(it.first, it.second) }
         CEMU -> window?.let { CemuResolution.displayMax(it.first, it.second) }
+    }
+
+    /**
+     * [displayMaxOf] for a second display that the whole picture goes to. The Wii U's TV goes there alone, so its reach
+     * is a 1280 x 720 picture's, not the Stacked frame's.
+     */
+    fun secondDisplayMaxOf(window: Pair<Int, Int>?, screen: ScreenClass?): Int? = when (this) {
+        CEMU -> window?.let { CemuResolution.tvDisplayMax(it.first, it.second) }
+        else -> displayMaxOf(window, screen)
     }
 
     /**
@@ -193,9 +211,12 @@ object Nds3dResolution {
         return displayMax(window.first.toFloat(), window.second.toFloat(), screen)
     }
 
-    /** Performance never goes above half the [displayMax], rounded up (the PS2: native, 1x). */
-    fun performanceCeiling(displayMax: Int, console: Res3dConsole = Res3dConsole.DS): Int =
-        if (console.nativePerformance) 1 else ceil(displayMax / 2.0).toInt().coerceIn(1, console.coreMax)
+    /** Performance never goes above half the [displayMax], rounded up (the PS2: native, 1x; the Wii U: all of it). */
+    fun performanceCeiling(displayMax: Int, console: Res3dConsole = Res3dConsole.DS): Int = when {
+        console.nativePerformance -> 1
+        console.fullPerformance -> displayMax.coerceIn(1, console.coreMax)
+        else -> ceil(displayMax / 2.0).toInt().coerceIn(1, console.coreMax)
+    }
 
     /**
      * The scale to send for [mode]: [current] is the shown scale (null: no screens placed yet, so [displayMax] stands in),
@@ -232,7 +253,7 @@ object Nds3dResolution {
     ): Int = value(
         mode = Nds3dMode.parse(values[console.modeKey]),
         maxScale = values[console.maxScaleKey]?.toIntOrNull() ?: console.defaultCap,
-        scale = values[console.scaleKey]?.toIntOrNull() ?: DEFAULT_PERFORMANCE_SCALE,
+        scale = values[console.scaleKey]?.toIntOrNull() ?: console.defaultScale,
         current = current,
         displayMax = displayMax,
         console = console,
@@ -506,6 +527,11 @@ object CemuResolution {
     private const val MAX = 3
 
     private val scales = WholeScale(NATIVE_W, NATIVE_H, MAX)
+    /** The TV screen alone: what a second display showing only it is measured by. */
+    private val tv = WholeScale(NATIVE_W, NATIVE_H / 2, MAX)
+
+    /** The scale the TV picture alone reaches fitted in a [w] x [h] px window, either way up (1 to 3). */
+    fun tvDisplayMax(w: Int, h: Int): Int = tv.displayMax(w, h)
 
     /** The scale the picture reaches fitted in a [w] x [h] px window, either way up, rounded up (1 to 3). */
     fun displayMax(w: Int, h: Int): Int = scales.displayMax(w, h)
