@@ -429,7 +429,8 @@ yabasanshiro_SUBMODULES = ':(exclude)yabause/src/retro_arena/nanogui-sdl/ext/eig
 # the GL path requests a GLES 3.2 context. Android builds define HAVE_LIBRETRO_VFS and USING_GLES. patches/azahar.patch:
 # RenderToWindow waits for the render worker to submit a frame before presenting it, so the frontend's Vulkan bridge
 # never copies an unfinished frame; the Large screen layout puts its small screen top-right (upstream: bottom-right).
-# It also starts Azahar's multiplayer room for local wireless between devices and names the console after the player
+# It also starts Azahar's multiplayer room for local wireless between devices (on the Wi-Fi, the phone-to-phone cable
+# and the phone's own hotspot) and names the console after the player
 # (README, Azahar).
 # patches/azahar/0001: the Vulkan upload buffer is sized from the device's RAM (64 MiB on 2 GB) instead of a fixed 512 MiB the
 # driver keeps resident. patches/azahar/0002: save states stream through ZSTD both ways, never whole and uncompressed in memory.

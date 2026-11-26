@@ -1,4 +1,5 @@
 #pragma once
+#include <stdint.h>
 // nx-mobile private libretro environment call: the core hands the frontend its local wireless room, so the frontend can
 // follow it and leave it without waiting for a frame. *data is a nx_3ds_link_interface* the frontend fills in
 // (route_socket), or NULL when the room is gone and the calls must not be made again. Only the nx-mobile runner answers it; only nx-mobile's patched Azahar sends
@@ -22,4 +23,7 @@ struct nx_3ds_link_interface {
     // (cable != 0) or back on the Wi-Fi.
     void (*route_socket)(int fd, int cable);
     int (*others)(void);     // other devices in the room, 0 in none; null: the core does not say
+    // The phone's own networks (its hotspot): broadcast addresses and masks, host order, up to 4. Null: the core does not
+    // look there.
+    void (*set_local)(const uint32_t* broadcasts, const uint32_t* masks, int n);
 };
