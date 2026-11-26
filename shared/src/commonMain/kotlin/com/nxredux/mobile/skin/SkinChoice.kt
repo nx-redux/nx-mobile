@@ -332,8 +332,8 @@ object SkinChoice {
     /**
      * The row under the touch screen's frame (the centred pieces and controls below it) up to [gap] under the frame, where
      * it is lower. With [shoulders] (the tablet upright's GamePad, room to spare), the frame first comes down to [gap] over
-     * the shoulder buttons' pieces (its glass taller, the GamePad centred in it; the strip and its band with the foot) and
-     * the row with it. As it is with no row, or one already as near.
+     * the shoulder buttons' pieces (its glass taller; the strip and its band with the foot) and widens across the room
+     * beside it ([touchAcross]), and the row goes under it. As it is with no row, or one already as near.
      */
     private fun SkinPlacement.rowUnderTouch(gap: Float, shoulders: Boolean = false): SkinPlacement {
         val gi = spec.pieces.indexOfFirst { it.glass?.screen == GlassScreen.TOUCH }
@@ -358,12 +358,51 @@ object SkinChoice {
             glasses = glasses.map { if (it === g) it.copy(rect = it.rect.copy(height = it.rect.height + down)) else it },
             controls = controls.map { c -> if (c.spec.id.startsWith("TOUCH_")) c.copy(y = c.y + down) else c },
         )
-        val rowTop = pieces.filter(::row).minOfOrNull { it.dst.y } ?: return stretched
+        val widened = if (shoulders) stretched.touchAcross(gi, gap, rowIds.map { it.spec.id }.toSet()) else stretched
+        val rowTop = pieces.filter(::row).minOfOrNull { it.dst.y } ?: return widened
         val up = rowTop - (bottom + down + gap)
-        if (up < 0.5f && down == 0f) return stretched
-        return stretched.copy(
-            pieces = stretched.pieces.mapIndexed { i, p -> if (row(pieces[i])) p.copy(dst = p.dst.copy(y = p.dst.y - up)) else p },
-            controls = stretched.controls.mapIndexed { i, c -> if (controls[i] in rowIds) c.copy(y = c.y - up) else c },
+        if (up < 0.5f && down == 0f) return widened
+        return widened.copy(
+            pieces = widened.pieces.mapIndexed { i, p -> if (row(pieces[i])) p.copy(dst = p.dst.copy(y = p.dst.y - up)) else p },
+            controls = widened.controls.mapIndexed { i, c -> if (controls[i] in rowIds) c.copy(y = c.y - up) else c },
+        )
+    }
+
+    /**
+     * The touch screen's frame (piece [gi]) widened about its middle as far as the top screen's frame reaches across, the
+     * same each side, to [gap] from any control's touch area beside it: its edges out, its middle stretched, its glass
+     * wider and the strip's slots an even share of it (the GamePad then fills the taller glass's height); [moving]: the
+     * row going under it, not in the way. As it is with no room.
+     */
+    private fun SkinPlacement.touchAcross(gi: Int, gap: Float, moving: Set<String>): SkinPlacement {
+        val frame = pieces.filter { it.piece == gi && gi >= 0 && !it.strip }
+        val top = pieces.filter { it.piece == -1 && !it.strip && it.fill < 0f }
+        if (frame.isEmpty() || top.isEmpty()) return this
+        val l0 = frame.minOf { it.dst.x }; val r0 = frame.maxOf { it.dst.x + it.dst.width }
+        val y0 = frame.minOf { it.dst.y }; val y1 = frame.maxOf { it.dst.y + it.dst.height }
+        var left = top.minOf { it.dst.x }; var right = top.maxOf { it.dst.x + it.dst.width }
+        for (c in controls) {
+            if (c.spec.id.startsWith("TOUCH_") || c.spec.id in moving) continue
+            val r = if (c.spec.shape == ControlShape.RECT) 0f else c.spec.r * (if (c.spec.shape == ControlShape.STICK) 1.25f else 1f)
+            val hw = if (r > 0f) r else c.spec.hw; val hh = if (r > 0f) r else c.spec.hh
+            if (c.y + hh <= y0 || c.y - hh >= y1) continue
+            if (c.x < (l0 + r0) / 2f) left = maxOf(left, c.x + hw + gap) else right = minOf(right, c.x - hw - gap)
+        }
+        val d = minOf(l0 - left, right - r0)
+        if (d < 0.5f) return this
+        val g = glass(GlassScreen.TOUCH) ?: return this
+        val gw = g.rect.width + 2f * d
+        val slots = controls.filter { it.spec.id.startsWith("TOUCH_") }
+        val share = gw / slots.size.coerceAtLeast(1)
+        return copy(
+            pieces = pieces.map { p -> when {
+                p.piece != gi || p.strip -> p
+                kotlin.math.abs(p.dst.x - l0) < 0.5f -> p.copy(dst = p.dst.copy(x = p.dst.x - d))
+                kotlin.math.abs(p.dst.x + p.dst.width - r0) < 0.5f -> p.copy(dst = p.dst.copy(x = p.dst.x + d))
+                else -> p.copy(dst = p.dst.copy(x = p.dst.x - d, width = p.dst.width + 2f * d))
+            } },
+            glasses = glasses.map { if (it === g) it.copy(rect = it.rect.copy(x = it.rect.x - d, width = gw)) else it },
+            controls = controls.map { c -> slots.indexOf(c).let { i -> if (i < 0) c else c.copy(x = g.rect.x - d + share * (i + 0.5f), spec = c.spec.copy(hw = share / 2f)) } },
         )
     }
 

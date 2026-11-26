@@ -372,8 +372,9 @@ class SkinWiiuTest {
     }
 
     /**
-     * A tablet upright: the GamePad's frame down to the box gap over the shoulder buttons (room to spare there), its
-     * glass taller and the GamePad centred in it, the strip under it, the row under the frame; pads and shoulders put.
+     * A tablet upright: the GamePad's frame down to the box gap over the shoulder buttons (room to spare there) and as
+     * wide as the TV's, its glass bigger and the GamePad filling its height, the strip under it, the row under the frame;
+     * pads and shoulders put.
      */
     @Test
     fun the_tablets_gamepad_frame_comes_down_to_the_shoulders() {
@@ -391,6 +392,14 @@ class SkinWiiuTest {
             val (_, pad) = assertNotNull(WiiuLayout.skinRegions(null, p.glass(GlassScreen.TOP)?.rect, g, NdsSettings()), label).map { it.dst }
             assertEquals(16f / 9f, aspect(pad), 0.01f, label); assertEquals(g.y + g.height / 2f, pad.y + pad.height / 2f, 1f, "$label GamePad centred")
             for (cid in listOf("MENU", "SELECT", "START")) assertTrue(p.controls.first { it.spec.id == cid }.y > tf.y + tf.height, "$label $cid under the frame")
+            // across as the TV's frame reaches (nothing beside it now the shoulders are under it), the GamePad its height
+            val (top, _) = frames(p)
+            assertEquals(assertNotNull(top, label).width, tf.width, 1f, "$label GamePad frame as wide as the TV's")
+            assertEquals(g.height, pad.height, 1f, "$label GamePad its glass's height")
+            assertEquals(g.x + g.width / 2f, pad.x + pad.width / 2f, 1f, "$label GamePad centred across")
+            val (l, t, r, b) = borders(tf, g)
+            assertEquals(l, r, 1f, "$label even sides")
+            assertNoOverlaps(p, d.w, d.h, label)
         }
     }
 
