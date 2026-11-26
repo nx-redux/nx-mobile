@@ -707,7 +707,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             val sessionPad = np?.segaPad?.takeIf { PadMap.isSegaPadTag(tag) }
             if (np != null && PadMap.isSegaPadTag(tag)) frontendValues = frontendValues + (PadOptions.SEGA_PAD to (sessionPad ?: SegaPadType.AUTO))
             canRewind = descriptor?.rewind == true
-            canSaveStates = descriptor?.saveStates != false
+            // The DS menu has none either: a state would hold the game it downloaded, which a relaunch cannot fetch again.
+            canSaveStates = descriptor?.saveStates != false && !DsMenu.isMenu(content.value)
             speed.setSession(netplay = np != null)   // first: the touch buttons [ShortcutsMicController.launch] builds follow the session
             shortcuts.launch(microphone = descriptor?.microphone == true, netplay = np != null, tag, Shortcuts.fromConfig(resolved.values), saveStates = canSaveStates)
             val netplayPad = if (np != null) NetplayPads.forSession(tag, descriptor?.id, sessionPad) else null
@@ -890,8 +891,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             }
             // minarch names saves after the unpacked file when Use extracted file name is on (ma_game.c): known only now.
             paths = paths.withInner(inner?.let { unpackedEntry })
-            // netplay, a core without save states, or the DS menu (a state would hold the game it downloaded): no save states, no auto-resume
-            saves.open(if (cfg.np == null && !cfg.dsMenu && canSaveStates) SaveStates(dataRoot, paths) else null)
+            // netplay, or a launch without save states: no save states, no auto-resume
+            saves.open(if (cfg.np == null && canSaveStates) SaveStates(dataRoot, paths) else null)
             if (!settings.saveOnQuit) saves.unlinkAuto()
             saves.refreshSlots()   // warm for the first menu open
             cfg.np?.let { gameNetplay.prepareSaves(it, cfg.tag, cfg.romFileName, dataRoot, paths) }
