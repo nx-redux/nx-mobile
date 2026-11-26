@@ -32,12 +32,19 @@ class ArchiveEntriesTest {
         assertEquals(ArchiveEntries.Pick.Many(listOf("a.gba", "b.gba")), ArchiveEntries.pick(listOf("a.gba", "b.gba"), gba))
         assertEquals(ArchiveEntries.Pick.Many(listOf("a.gba", "b.gba", "readme.txt")), ArchiveEntries.pick(listOf("a.gba", "b.gba", "readme.txt"), gba))
         assertEquals(ArchiveEntries.Pick.Many(listOf("readme.txt", "notes.nfo")), ArchiveEntries.pick(listOf("readme.txt", "notes.nfo"), gba))
-        // Two ROM-extension entries: a disc sheet is still refused.
-        val disc = ArchiveEntries.pick(listOf("Game.cue", "Game.bin"), setOf("cue", "bin", "gba"))
-        assertEquals(ArchiveEntries.Pick.Many(listOf("Game.cue", "Game.bin")), disc)
-        assertEquals(2, (disc as ArchiveEntries.Pick.Many).count)
+        assertEquals(2, (ArchiveEntries.pick(listOf("a.gba", "b.gba"), gba) as ArchiveEntries.Pick.Many).count)
         // Names are base names, junk is left out.
         assertEquals(ArchiveEntries.Pick.Many(listOf("a.gba", "b.gba")), ArchiveEntries.pick(listOf("d/", "d/a.gba", ".DS_Store", "d/b.gba"), gba))
+    }
+
+    @Test fun a_disc_sheet_with_its_tracks_is_refused_whether_or_not_the_core_runs_the_tracks() {
+        val sheet = ArchiveEntries.Pick.Sheet("Game.cue")
+        assertEquals(sheet, ArchiveEntries.pick(listOf("Game.cue", "Game (Track 1).bin", "Game (Track 2).bin"), setOf("cue", "chd", "iso")))
+        assertEquals(sheet, ArchiveEntries.pick(listOf("Game.cue", "Game.bin"), setOf("cue", "bin")))
+        assertEquals(ArchiveEntries.Pick.Sheet("disc.gdi"), ArchiveEntries.pick(listOf("d/disc.gdi", "d/track01.bin", "d/track02.raw"), setOf("gdi", "chd")))
+        // A disc image that is one file still plays from a zip, a readme beside it or not.
+        assertEquals(ArchiveEntries.Pick.Single("Game.chd"), ArchiveEntries.pick(listOf("Game.chd", "readme.txt"), setOf("cue", "chd")))
+        assertEquals(ArchiveEntries.Pick.Single("Game.cue"), ArchiveEntries.pick(listOf("Game.cue"), setOf("cue")))
     }
 
     @Test fun an_unpacked_rom_keeps_its_own_name_unless_the_core_names_saves_after_the_content() {
