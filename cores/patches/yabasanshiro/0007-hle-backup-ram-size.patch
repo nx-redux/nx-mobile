@@ -1,0 +1,18 @@
+# license: modifies YabaSanshiro (https://github.com/libretro/yabause), GPL-2.0 (LICENSE); this patch is distributed under the same license.
+# The HLE BIOS reported the console's backup RAM as 2 KB (30 free blocks) when the core keeps it in its 64 KB layout, so
+# games that need more refused to save (Daytona USA asks for 39 blocks). It reports the console's 32 KB, 512 blocks of 64
+# bytes, as the real BIOS does; the 8 MB extended layout is unchanged.
+diff --git a/yabause/src/bios.c b/yabause/src/bios.c
+index 4b919cd..e446ffd 100644
+--- a/yabause/src/bios.c
++++ b/yabause/src/bios.c
+@@ -468,7 +468,8 @@ static u32 GetDeviceStats(u32 device, u32 *size, u32 *addr, u32 *blocksize)
+         }
+         else {
+           *addr      = 0x00180000;
+-          *size      = 0x800;
++          // The console's 32 KB: 512 blocks of 64 bytes, on the odd bytes of the 64 KB area
++          *size      = 0x8000;
+           *blocksize = 0x40;
+         }
+         return 0;
