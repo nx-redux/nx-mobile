@@ -950,7 +950,7 @@ class NxCarbonPackTest {
     fun new3dsLandscapeRowsSitWithTheDsOnes() {
         fun at(v: SkinVariant) = assertNotNull(SkinChoice.place(pack, 2400, 1080, 420, false, true, null, null, variant = v), "$v")
         val n = at(SkinVariant.N3DS); val r = at(SkinVariant.N3DS_REGULAR)
-        for (id in listOf("MIC", "MENU", "SELECT", "START", "SWAP")) {
+        for (id in listOf("MIC", "MENU", "SELECT", "START")) {   // (SWAP: in the strip)
             assertEquals(r.controls.first { it.spec.id == id }.y, n.controls.first { it.spec.id == id }.y, 0.5f, id)
         }
     }
@@ -1129,7 +1129,8 @@ class NxCarbonPackTest {
                 // the stick on the others' d-pad (the main menu's)
                 val st = pn.controls.first { it.spec.id == "STICK" }; val dp = pg.controls.first { it.spec.id == "DPAD" }
                 assertEquals(dp.x, st.x, 1f, "$win the stick on the d-pad"); assertEquals(dp.y, st.y, 1f, "$win the stick on the d-pad")
-                assertEquals(st.x, pn.controls.first { it.spec.id == "MENU" }.x, 1f, "$win MENU under the stick's middle")
+                // (a phone's: the row against the screen's side instead, as every console's there)
+                if (win.h * 160f / win.dpi >= 430f) assertEquals(st.x, pn.controls.first { it.spec.id == "MENU" }.x, 1f, "$win MENU under the stick's middle")
             }
             assertEquals(gba.keys, n64.keys, "$win the same screens")
             for ((k, g) in gba) {
@@ -1810,7 +1811,9 @@ class NxCarbonPackTest {
                 // in the bottom row the pair round the menu's MENU; where the menu has MENU beside the d-pad (sideways, the
                 // fold board) MENU on the 6-button's MODE spot (the menu's SELECT) by START, under the face
                 val row = kotlin.math.abs(m.y - st.y) < 1f && kotlin.math.abs((m.x + st.x) / 2f - mm.x) < 1f
-                assertTrue(row || (at(m, menu.getValue("SELECT")) && at(st, menu.getValue("START"))), "${d.name} MENU ${m.x},${m.y} START ${st.x},${st.y}")
+                // (a phone sideways: MENU alone on the left, START alone on the right, level, as the PICO-8's)
+                val split = kotlin.math.abs(m.y - st.y) < 1f && m.x < d.w / 2f && st.x > d.w / 2f
+                assertTrue(row || split || (at(m, menu.getValue("SELECT")) && at(st, menu.getValue("START"))), "${d.name} MENU ${m.x},${m.y} START ${st.x},${st.y}")
             }
             val single = assertNotNull(placeFor(pack, SkinVariant.SINGLE, d), "${d.name} single").glasses.first().rect
             val g = md.glasses.first().rect
@@ -2047,7 +2050,9 @@ class NxCarbonPackTest {
             assertTrue(gaps[0] <= 32f * dpi / 160f + 1f && gaps[1] <= 16f * dpi / 160f + 1f, "$name gaps $gaps")
             assertEquals(rp.lRing.minOf { it.dst.x } + 16f * dpi / 160f, rp.l.minOf { it.dst.x }, 1f, "$name L")
             assertEquals(16f * dpi / 160f, rp.lRing.minOf { it.dst.y } - rp.l.maxOf { it.dst.y + it.dst.height }, 1f, "$name L over the d-pad")
-            assertEquals(2f * gaps[1], rp.col.minOf { it.dst.x } - fr.maxOf { it.dst.x + it.dst.width }, 1f, "$name START / SELECT from the screen")
+            // (16 dp, the boxes' inner gap, on a phone's sizes; else twice that)
+            val phone = h * 160f / dpi < 430f
+            assertEquals(if (phone) gaps[1] else 2f * gaps[1], rp.col.minOf { it.dst.x } - fr.maxOf { it.dst.x + it.dst.width }, 1f, "$name START / SELECT from the screen")
             assertEquals(16f * dpi / 160f, rp.col.minOf { it.dst.y } - rp.rRing.maxOf { it.dst.y + it.dst.height }, 1f, "$name START / SELECT under the face buttons")
             assertTrue(c.values.all { it.x < g.x || it.x > g.x + g.width }, "$name glass $g")
             assertTrue(g.y >= 72f * p.k && g.y + g.height <= h - 72f * p.k, "$name glass $g")
