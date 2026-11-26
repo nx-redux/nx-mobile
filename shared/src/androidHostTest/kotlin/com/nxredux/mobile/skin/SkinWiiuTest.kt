@@ -303,7 +303,7 @@ class SkinWiiuTest {
                     val n3ds = assertNotNull(SkinChoice.place(pack, d.w, d.h, d.dpi, d.tablet, ds = true, hingeY = d.hingeY, foldable = d.foldable, variant = SkinVariant.N3DS), label)
                     val r = c.getValue("CSTICK").spec.r
                     assertTrue(r > n3ds.controls.first { it.spec.id == "CSTICK" }.spec.r && r < want, "$label right stick r $r")
-                } else if (d.name in setOf("tablet", "tablet_land", "cover_land", "inner")) assertEquals(c.getValue("STICK").spec.r, c.getValue("CSTICK").spec.r, 0.5f, "$label right stick as the left")   // (in the face's place)
+                } else if (d.name in setOf("tablet", "tablet_land", "cover_land") + FLAT_UPRIGHT) assertEquals(c.getValue("STICK").spec.r, c.getValue("CSTICK").spec.r, 0.5f, "$label right stick as the left")   // (in the face's place)
                 else assertEquals(want, c.getValue("CSTICK").spec.r, 0.5f, "$label right stick r")
                 assertNoOverlaps(p, d.w, d.h, label)
                 for (id in listOf("CSTICK", "L3", "R3", "SELECT", "START")) for (g in p.glasses) {
@@ -493,7 +493,7 @@ class SkinWiiuTest {
             assertEquals(nc.getValue("CSTICK").x, fx, 1f, "$label face where the 3DS's right stick is"); assertEquals(nc.getValue("CSTICK").y, fy, 1f, "$label face where the 3DS's right stick is")
             assertEquals(c.getValue("STICK").y, c.getValue("CSTICK").y, 1f, "$label sticks level"); assertEquals(c.getValue("DPAD").y, fy, 1f, "$label face level with the d-pad")
             val l3 = c.getValue("L3"); val r3 = c.getValue("R3"); val dp = c.getValue("DPAD")
-            if (d.name == "inner") {   // the Fold flat: under the sticks, at their outer side, level
+            if (d.name in FLAT_UPRIGHT) {   // flat: under the sticks, at their outer side, level
                 val st = c.getValue("STICK"); val cs = c.getValue("CSTICK")
                 assertTrue(l3.x < st.x && l3.y > st.y && l3.y < dp.y, "$label L3 ${l3.x},${l3.y} not under the stick's outer side")
                 assertTrue(r3.x > cs.x && r3.y > cs.y && r3.y < fy, "$label R3 ${r3.x},${r3.y} not under the right stick's outer side")

@@ -614,7 +614,7 @@ object SkinChoice {
                 if (v == SkinVariant.WIIU && !landscape && spec.boxes.isNotEmpty()) {
                     val twin = pack.layouts.firstOrNull { it.id == spec.id.replace("_wiiugp", "_3ds") }.takeIf { !spec.id.endsWith(TABLET_BOARD) }
                     val theirs = twin?.let { t -> foldPieces(t, windowW, windowH, s, picture, topInset, hingeY, densityDpi, N3DS_TOP, bottomMargin = shellMargin(pack),
-                        bottomGlass = flatEnd, row = rowSpacing(densityDpi, s), centreControls = false)?.touchToItsPicture()?.let { if (hingeY == null) it else it.touchToItsPictureHeight() } }
+                        bottomGlass = flatEnd, row = rowSpacing(densityDpi, s), centreControls = false)?.let { if (hingeY == null) it else it.touchToItsPicture().touchToItsPictureHeight() } }
                     val under = (theirs?.let { placed.touchAs(it) } ?: placed).rowUnderTouch(SkinBoxes.GAP_DP * dp, shoulders = spec.id.endsWith(TABLET_BOARD))
                     // flat: up under the TV's shorter frame, the 3DS's gap between the glasses (the menu's)
                     return@widest if (hingeY == null && theirs != null) under.touchUpToGap(theirs) else under
@@ -624,9 +624,9 @@ object SkinChoice {
                 // cut to the picture's height and widened to the boxes, bars beside the picture; upright cut to the picture
                 // (a tablet's: the menu's frame, the picture between bars)
                 if (!landscape && spec.id.endsWith(TABLET_BOARD)) return@widest placed
-                // flat upright: the frame as tall as the row under it leaves room for (near the menu's), the picture
-                // between bars, as the tablet's; half-folded cut to the picture
-                if (!landscape && hingeY == null) return@widest placed.touchToItsPicture()
+                // flat upright: the menu's frame width, as tall as the row under it leaves room for (near the menu's), the
+                // picture between bars, as the tablet's; half-folded cut to the picture
+                if (!landscape && hingeY == null) return@widest placed
                 if (!landscape) return@widest placed.touchToItsPicture().touchToItsPictureHeight()
                 fun wide(hinge: Float?) = fold(hinge)?.touchToItsPictureHeight()?.touchWideToTheBoxes(SkinBoxes.GAP_DP * dp)
                 val wide = wide(hingeY)
