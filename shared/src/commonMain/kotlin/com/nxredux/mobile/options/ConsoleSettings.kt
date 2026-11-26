@@ -13,12 +13,13 @@ import com.nxredux.mobile.runner.Res3dConsole
  */
 object ConsoleSettings {
     /**
-     * [tag]'s rows; [screen] (null: unknown) shapes the DS and 3DS layout rows (the Wii U's are the same everywhere), [displayMax] (null: unknown) the DS and 3DS
+     * [tag]'s rows; [screen] (null: unknown) shapes the DS and 3DS layout rows (the Wii U's by [wiiuSkinLandscape]), [displayMax] (null: unknown) the DS and 3DS
      * 3D Resolution scales, [biosFiles] (the ".bin" names in the PS2 BIOS folder) the PS2 BIOS row's choices, [gpuDrivers] (null: the feature is unavailable, no row) the GPU driver row's choices.
      * [autoVulkan]: Graphics API's Auto is Vulkan for this console on this phone ([GraphicsApiOptions.autoIsVulkan]).
      * [mali]: the phone's GPU is a Mali, which the Graphics API row's info speaks to ([GraphicsApiOptions.rowFor]).
+     * [wiiuSkinLandscape]: a shown pad skin takes the Wii U's landscape row ([WiiuOptions.skinTakesLandscape]), its default then the skin's.
      */
-    fun tableFor(tag: String, screen: ScreenClass? = null, displayMax: Int? = null, biosFiles: List<String> = emptyList(), gpuDrivers: List<GpuDriver>? = null, autoVulkan: Boolean = false, mali: Boolean = false): List<FrontendOption> = when {
+    fun tableFor(tag: String, screen: ScreenClass? = null, displayMax: Int? = null, biosFiles: List<String> = emptyList(), gpuDrivers: List<GpuDriver>? = null, autoVulkan: Boolean = false, mali: Boolean = false, wiiuSkinLandscape: Boolean = false): List<FrontendOption> = when {
         NdsOptions.appliesTo(tag) -> NdsOptions.tableFor(screen, displayMax = displayMax) + NdsOptions.shaderScreensRow + NdsOptions.localWirelessRow
         N3dsOptions.appliesTo(tag) -> N3dsOptions.layoutRowsFor(screen) + N3dsOptions.resolutionRows(displayMax) + NdsOptions.shaderScreensRow + N3dsOptions.newControlsRow + N3dsOptions.localWirelessRow
         PspOptions.appliesTo(tag) -> PspOptions.resolutionRows(displayMax) + PspOptions.localWirelessRow
@@ -27,7 +28,7 @@ object ConsoleSettings {
         Ps1Options.appliesTo(tag) -> Ps1Options.resolutionRows(tag, displayMax)
         DcOptions.appliesTo(tag) -> DcOptions.resolutionRows(displayMax)
         N64Options.appliesTo(tag) -> N64Options.resolutionRows(displayMax)
-        WiiuOptions.appliesTo(tag) -> WiiuOptions.table + WiiuOptions.motionRow + resolutionRows(Res3dConsole.CEMU, displayMax)
+        WiiuOptions.appliesTo(tag) -> WiiuOptions.tableFor(wiiuSkinLandscape) + WiiuOptions.motionRow + resolutionRows(Res3dConsole.CEMU, displayMax)
         Ps2Options.appliesTo(tag) -> Ps2Options.rowsFor(biosFiles) + Ps2Options.resolutionRows(displayMax)
         else -> emptyList()
     } + graphicsRows(tag, gpuDrivers, autoVulkan, mali) + BottomScreenOptions.row + PadOptions.tableFor(tag) + SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.rowsFor(tag)

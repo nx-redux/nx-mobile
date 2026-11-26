@@ -23,8 +23,15 @@ object WiiuOptions {
 
     fun appliesTo(tag: String): Boolean = tag.trim().uppercase() == "WIIU"
 
-    /** Before a pick: the TV big over a small GamePad in landscape, the two stacked full width in portrait. */
-    fun defaultLayout(landscape: Boolean): NdsLayoutChoice = if (landscape) NdsLayoutChoice.LARGE else NdsLayoutChoice.STACKED
+    /**
+     * Before a pick: the TV big over a small GamePad in landscape, the two stacked full width in portrait; in landscape
+     * where a shown pad skin takes the row ([skinLandscape]: a regular phone), [SKIN_LANDSCAPE_DEFAULT].
+     */
+    fun defaultLayout(landscape: Boolean, skinLandscape: Boolean = false): NdsLayoutChoice =
+        if (!landscape) NdsLayoutChoice.STACKED else if (skinLandscape) SKIN_LANDSCAPE_DEFAULT else NdsLayoutChoice.LARGE
+
+    /** Whether a shown pad skin takes the landscape row, from the rows it locks ([lockedLayoutRows]): portrait only. */
+    fun skinTakesLandscape(locked: Set<String>): Boolean = LAYOUT_PORTRAIT in locked && LAYOUT_LANDSCAPE !in locked
 
     private const val LAYOUT_INFO = "Large screen: the big one, the other at half its size\nunder it, or beside it where that leaves the big one bigger.\n" +
         "Stacked: one above the other, the same size.\nSingle screen: the big one only.\n" +
@@ -38,14 +45,17 @@ object WiiuOptions {
         valueLabels = NdsLayoutChoice.entries.map { it.label }, brief = brief,
     )
 
-    val table: List<FrontendOption> = listOf(
+    val table: List<FrontendOption> = tableFor(skinLandscape = false)
+
+    /** The rows, the landscape row's default [defaultLayout] for [skinLandscape]. */
+    fun tableFor(skinLandscape: Boolean): List<FrontendOption> = listOf(
         layoutRow(LAYOUT_PORTRAIT, "Layout (portrait)", defaultLayout(false), "How the TV and the GamePad share a portrait screen.\n$LAYOUT_INFO"),
         layoutRow(
             LAYOUT_PORTRAIT_CONTROLLER, "Layout (portrait, controller)", defaultLayout(false),
             "The portrait layout while a controller that is not a clip-on\n(Pocket Taco, FlipPad) is connected and the pad is hidden.\n$LAYOUT_INFO",
             brief = "Used while a controller (not a clip-on) hides the pad",
         ),
-        layoutRow(LAYOUT_LANDSCAPE, "Layout (landscape)", defaultLayout(true), "How the TV and the GamePad share a landscape screen.\n$LAYOUT_INFO"),
+        layoutRow(LAYOUT_LANDSCAPE, "Layout (landscape)", defaultLayout(true, skinLandscape), "How the TV and the GamePad share a landscape screen.\n$LAYOUT_INFO"),
         FrontendOption(
             BIG_SCREEN, "Big Screen", NdsScreen.entries.map { it.value }, NdsScreen.TOP.value,
             "The screen shown big in large screen, single screen and picture\nin picture, and first in stacked and side by side.\n" +
@@ -98,7 +108,7 @@ object WiiuOptions {
      */
     fun skinLayout(values: Map<String, String>, landscape: Boolean, controllerMode: Boolean, screen: ScreenClass): NdsLayoutChoice? =
         if (!landscape || screen.isFoldShaped || screen.isTablet) null
-        else settings(values).landscape ?: SKIN_LANDSCAPE_DEFAULT
+        else settings(values).landscape ?: defaultLayout(true, skinLandscape = true)
 
     /** Before a pick, the skin's sideways glass (the 3DS's size): the TV across its width, the GamePad under it. */
     val SKIN_LANDSCAPE_DEFAULT = NdsLayoutChoice.STACKED

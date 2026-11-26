@@ -1780,7 +1780,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      * This console's own rows, locked ones and the ones read only at launch ([FrontendOption.atLaunch]: set in
      * Game Settings / Emulator Settings) left out, and Bottom screen while no second display is [secondConnected].
      */
-    private fun consoleRows() = ConsoleSettings.tableFor(frontendTag, screen, displayMax3d).filter {
+    private fun consoleRows() = ConsoleSettings.tableFor(frontendTag, screen, displayMax3d, wiiuSkinLandscape = WiiuOptions.skinTakesLandscape(layoutLocked)).filter {
         it.key !in frontendLocked && !it.atLaunch && (secondConnected || it.key != BottomScreenOptions.KEY)
     }.shownFor(frontend).let { rows ->
         val view = ndsView
