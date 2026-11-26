@@ -138,6 +138,13 @@ JNIEXPORT jint JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_dsOthers
     return dslink::others();   // short locks; never throws
 }
 
+JNIEXPORT jint JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_dsHostLeft(
+    JNIEnv* env,
+    jclass obj
+) {
+    return dslink::hostLeft();
+}
+
 JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_dsInRoom(
     JNIEnv* env,
     jclass obj

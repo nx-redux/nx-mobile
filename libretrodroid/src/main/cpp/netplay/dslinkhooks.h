@@ -54,6 +54,7 @@ namespace libretrodroid::dslink {
     bool inRoom();
     int presence();             // ndl_presence: 0 out, 1 seeking a room, 2 in a room
     int others();               // other devices in the room, 0 in none; -1: the core's room does not say
+    int hostLeft();             // the core's count of hosts lost to them leaving the room; 0 without one
     void leaveNow();            // leave without the radio-off linger, and stay out until rejoin
     void rejoin();              // undoes leaveNow: a session's room again, or the automatic route's search
 }

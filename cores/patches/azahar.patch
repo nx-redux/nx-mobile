@@ -1100,10 +1100,10 @@ index 000000000..e160fc70f
 +#endif
 diff --git a/src/citra_libretro/nx_3ds_link.h b/src/citra_libretro/nx_3ds_link.h
 new file mode 100644
-index 000000000..a03e529fc
+index 000000000..17b0203b8
 --- /dev/null
 +++ b/src/citra_libretro/nx_3ds_link.h
-@@ -0,0 +1,43 @@
+@@ -0,0 +1,45 @@
 +// Copyright Citra Emulator Project / Azahar Emulator Project
 +// Licensed under GPLv2 or any later version
 +// Refer to the license.txt file included.
@@ -1146,6 +1146,8 @@ index 000000000..a03e529fc
 +    /// broadcast address and mask, host order, up to 4. Rooms are looked for there too, and a
 +    /// socket that talks there leaves the Wi-Fi.
 +    void (*set_local)(const uint32_t* broadcasts, const uint32_t* masks, int n);
++    /// How many times the network this console joined lost its host to the host leaving the room.
++    int (*host_left)(void);
 +};
 diff --git a/src/citra_libretro/player_mii.cpp b/src/citra_libretro/player_mii.cpp
 new file mode 100644
@@ -1313,10 +1315,10 @@ index 000000000..0e6cf758c
 +} // namespace LibRetro
 diff --git a/src/citra_libretro/room_link.cpp b/src/citra_libretro/room_link.cpp
 new file mode 100644
-index 000000000..990d2b76e
+index 000000000..4a9e972c0
 --- /dev/null
 +++ b/src/citra_libretro/room_link.cpp
-@@ -0,0 +1,879 @@
+@@ -0,0 +1,883 @@
 +// Copyright Citra Emulator Project / Azahar Emulator Project
 +// Licensed under GPLv2 or any later version
 +// Refer to the license.txt file included.
@@ -2011,7 +2013,11 @@ index 000000000..990d2b76e
 +    return count > 1 ? count - 1 : 0;
 +}
 +
-+nx_3ds_link_interface link_interface{Presence, LeaveNow, Rejoin, SetCable, nullptr, Others, SetLocal};
++int HostLeft() {
++    return Service::NWM::host_left_count.load();
++}
++
++nx_3ds_link_interface link_interface{Presence, LeaveNow, Rejoin, SetCable, nullptr, Others, SetLocal, HostLeft};
 +
 +void OnSocket(int fd, bool server, const std::string& address) {
 +    if (server) {
@@ -2738,7 +2744,7 @@ index 003b3fd85..b8b7ee4e6 100644
  };
  
 diff --git a/src/core/hle/service/nwm/nwm_uds.cpp b/src/core/hle/service/nwm/nwm_uds.cpp
-index e602bd37c..a40d19230 100644
+index e602bd37c..8c4346e94 100644
 --- a/src/core/hle/service/nwm/nwm_uds.cpp
 +++ b/src/core/hle/service/nwm/nwm_uds.cpp
 @@ -22,6 +22,7 @@
@@ -2749,11 +2755,11 @@ index e602bd37c..a40d19230 100644
  #include "core/hle/service/nwm/uds_beacon.h"
  #include "core/hle/service/nwm/uds_connection.h"
  #include "core/hle/service/nwm/uds_data.h"
-@@ -538,6 +539,69 @@ void NWM_UDS::HandleDeauthenticationFrame(const Network::WifiPacket& packet) {
+@@ -538,6 +539,72 @@ void NWM_UDS::HandleDeauthenticationFrame(const Network::WifiPacket& packet) {
      SignalEventAsync(connection_status_event);
  }
  
-+void NWM_UDS::OnPeerGone(const Network::MacAddress& address) {
++void NWM_UDS::OnPeerGone(const Network::MacAddress& address, bool left_room) {
 +    if (!initialized) {
 +        return;
 +    }
@@ -2774,6 +2780,9 @@ index e602bd37c..a40d19230 100644
 +        return;
 +    }
 +    LOG_INFO(Service_NWM, "The network's host left the room: disconnected");
++    if (left_room) {
++        host_left_count++;
++    }
 +    const u16_le node_id = connection_status.network_node_id;
 +    connection_status = {};
 +    connection_status.status = NetworkStatus::NotConnected;
@@ -2802,7 +2811,7 @@ index e602bd37c..a40d19230 100644
 +    std::scoped_lock lock{room_peers_mutex};
 +    for (const auto& peer : room_peers) {
 +        if (std::find(peers.begin(), peers.end(), peer) == peers.end()) {
-+            OnPeerGone(peer);
++            OnPeerGone(peer, true);
 +        }
 +    }
 +    room_peers = std::move(peers);
@@ -2819,7 +2828,7 @@ index e602bd37c..a40d19230 100644
  void NWM_UDS::HandleDataFrame(const Network::WifiPacket& packet) {
      switch (GetFrameEtherType(packet.data)) {
      case EtherType::EAPoL:
-@@ -598,6 +662,8 @@ boost::optional<Network::MacAddress> NWM_UDS::GetNodeMacAddress(u16 dest_node_id
+@@ -598,6 +665,8 @@ boost::optional<Network::MacAddress> NWM_UDS::GetNodeMacAddress(u16 dest_node_id
  
  void NWM_UDS::ShutdownHLE() {
      initialized = false;
@@ -2828,7 +2837,7 @@ index e602bd37c..a40d19230 100644
  
      for (auto& bind_node : channel_data) {
          SignalEventAsync(bind_node.second.event);
-@@ -698,6 +764,8 @@ ResultVal<std::shared_ptr<Kernel::Event>> NWM_UDS::Initialize(
+@@ -698,6 +767,8 @@ ResultVal<std::shared_ptr<Kernel::Event>> NWM_UDS::Initialize(
  
      current_node = node;
      initialized = true;
@@ -2837,7 +2846,7 @@ index e602bd37c..a40d19230 100644
  
      recv_buffer_memory = std::move(sharedmem);
      ASSERT_MSG(recv_buffer_memory->GetSize() == sharedmem_size, "Invalid shared memory size.");
-@@ -939,6 +1007,8 @@ void NWM_UDS::Unbind(Kernel::HLERequestContext& ctx) {
+@@ -939,6 +1010,8 @@ void NWM_UDS::Unbind(Kernel::HLERequestContext& ctx) {
  Result NWM_UDS::BeginHostingNetwork(std::span<const u8> network_info_buffer,
                                      std::vector<u8> passphrase) {
      // TODO(Subv): Store the passphrase and verify it when attempting a connection.
@@ -2846,7 +2855,7 @@ index e602bd37c..a40d19230 100644
  
      {
          std::scoped_lock lock(connection_status_mutex);
-@@ -1648,8 +1718,9 @@ Network::MacAddress NWM_UDS::GetMacAddress() {
+@@ -1648,8 +1721,9 @@ Network::MacAddress NWM_UDS::GetMacAddress() {
          room_member && room_member->IsConnected()) {
          mac = room_member->GetMacAddress();
          if (mac != CFG::GetConsoleMacAddress(system)) {
@@ -2858,7 +2867,7 @@ index e602bd37c..a40d19230 100644
          }
      } else {
          // if we are not connected to the room, we can
-@@ -1734,14 +1805,34 @@ NWM_UDS::NWM_UDS(Core::System& system) : ServiceFramework("nwm::UDS"), system(sy
+@@ -1734,14 +1808,34 @@ NWM_UDS::NWM_UDS(Core::System& system) : ServiceFramework("nwm::UDS"), system(sy
      if (auto room_member = Network::GetRoomMember().lock()) {
          wifi_packet_received = room_member->BindOnWifiPacketReceived(
              [this](const Network::WifiPacket& packet) { OnWifiPacketReceived(packet); });
@@ -2895,7 +2904,7 @@ index e602bd37c..a40d19230 100644
      system.CoreTiming().UnscheduleEvent(beacon_broadcast_event, 0);
  }
 diff --git a/src/core/hle/service/nwm/nwm_uds.h b/src/core/hle/service/nwm/nwm_uds.h
-index 694919c39..1958920e1 100644
+index 694919c39..d72ecb645 100644
 --- a/src/core/hle/service/nwm/nwm_uds.h
 +++ b/src/core/hle/service/nwm/nwm_uds.h
 @@ -560,6 +560,14 @@ private:
@@ -2908,7 +2917,7 @@ index 694919c39..1958920e1 100644
 +    void OnRoomLost();
 +    /// A console left the room without a deauthentication: the game is told now, not at its own
 +    /// time-out. The host's network loses that node; a client whose host is gone loses the network.
-+    void OnPeerGone(const Network::MacAddress& address);
++    void OnPeerGone(const Network::MacAddress& address, bool left_room = false);
 +
      void HandleDataFrame(const Network::WifiPacket& packet);
  
@@ -2928,16 +2937,17 @@ index 694919c39..1958920e1 100644
      // network thread.
 diff --git a/src/core/hle/service/nwm/uds_wireless_hook.h b/src/core/hle/service/nwm/uds_wireless_hook.h
 new file mode 100644
-index 000000000..ce2badfda
+index 000000000..6f3743288
 --- /dev/null
 +++ b/src/core/hle/service/nwm/uds_wireless_hook.h
-@@ -0,0 +1,18 @@
+@@ -0,0 +1,23 @@
 +// Copyright Citra Emulator Project / Azahar Emulator Project
 +// Licensed under GPLv2 or any later version
 +// Refer to the license.txt file included.
 +
 +#pragma once
 +
++#include <atomic>
 +#include <functional>
 +
 +namespace Service::NWM {
@@ -2948,6 +2958,10 @@ index 000000000..ce2badfda
 +/// Called on the emulation thread at each change, for a frontend that brings its multiplayer
 +/// room up only while a game uses local wireless. Empty: nobody listens.
 +inline std::function<void(WirelessState)> wireless_hook;
++
++/// How many times the network this console had joined lost its host because the host left the
++/// room (not because this console left it): a Download Play child has nothing to play without it.
++inline std::atomic<int> host_left_count{0};
 +
 +} // namespace Service::NWM
 diff --git a/src/core/hw/unique_data.cpp b/src/core/hw/unique_data.cpp

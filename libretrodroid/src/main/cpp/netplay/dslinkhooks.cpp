@@ -566,6 +566,11 @@ int others() {
     return count > 1 ? count - 1 : 0;
 }
 
+int hostLeft() {
+    std::lock_guard<std::mutex> guard(coreRoomMutex);
+    return hasCoreRoom && coreRoom.host_left != nullptr ? coreRoom.host_left() : 0;
+}
+
 void leaveNow() {
     if (coreRoomLeave()) return;
     std::lock_guard<std::mutex> guard(linkMutex);
