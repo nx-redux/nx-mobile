@@ -130,7 +130,9 @@ class SkinPackDrawingTest {
             val p = assertNotNull(placeFor(pack, SkinVariant.DS, d), name)
             if (!p.spec.tree.parts.any { it.isHinge }) continue
             fun c(id: String) = p.controls.first { it.spec.id == id }
-            for (id in listOf("MENU", "SELECT", "START")) kotlin.test.assertEquals(c("MIC").y, c(id).y, 1f, "$name $id level with MIC")
+            // (the Fold flat: MIC over MENU, SELECT over START, the menu's columns)
+            if (name == "inner") { kotlin.test.assertEquals(c("MIC").y, c("SELECT").y, 1f, "$name SELECT level with MIC"); kotlin.test.assertEquals(c("MENU").y, c("START").y, 1f, "$name START level with MENU") }
+            else for (id in listOf("MENU", "SELECT", "START")) kotlin.test.assertEquals(c("MIC").y, c(id).y, 1f, "$name $id level with MIC")
             // the face buttons where the main menu has them (the baseline), on the boards the menu shares
             SkinChoice.placeMenu(pack, d.w, d.h, d.dpi, foldable = true, tablet = true, hingeY = d.hingeY)?.takeIf { it.spec.tree.parts.any { t -> t.isHinge } }?.let { m ->
                 val mx = m.controls.first { it.spec.id == "X" }
@@ -138,10 +140,13 @@ class SkinPackDrawingTest {
             }
             val touch = assertNotNull(p.glasses.firstOrNull { it.screen == GlassScreen.TOUCH }, name).rect
             assertTrue(c("MENU").x < touch.x && c("SELECT").x > touch.x + touch.width, "$name MIC, MENU left of the touch screen; SELECT right")
-            assertTrue(c("MIC").x < c("MENU").x && c("SELECT").x < c("START").x, "$name in order")
-            kotlin.test.assertEquals(d.w - c("MENU").x, c("SELECT").x, 1f, "$name SELECT across from MENU")
+            if (name == "inner") kotlin.test.assertEquals(d.w - c("MIC").x, c("SELECT").x, 1f, "$name SELECT across from MIC")
+            else {
+                assertTrue(c("MIC").x < c("MENU").x && c("SELECT").x < c("START").x, "$name in order")
+                kotlin.test.assertEquals(d.w - c("MENU").x, c("SELECT").x, 1f, "$name SELECT across from MENU")
+            }
             for ((a, b) in listOf("MIC" to "MENU", "SELECT" to "START"))
-                assertTrue(c(b).x - c(a).x >= c(a).spec.r + c(b).spec.r - 1f, "$name $a $b clear")
+                assertTrue(kotlin.math.hypot(c(b).x - c(a).x, c(b).y - c(a).y) >= c(a).spec.r + c(b).spec.r - 1f, "$name $a $b clear")
             val menu = assertNotNull(SkinChoice.placeMenu(pack, d.w, d.h, d.dpi, foldable = true, tablet = true, hingeY = d.hingeY), "$name menu")
             fun foot(q: SkinPlacement) = q.pieces.filter { it.piece >= 0 && q.spec.pieces[it.piece].glass != null && it.dst.y + it.dst.height > d.h / 2f }.maxOfOrNull { it.dst.y + it.dst.height }
             // (where the menu is on the fold board too: sideways and flat it is the landscape shell; sideways half-folded
@@ -163,9 +168,12 @@ class SkinPackDrawingTest {
             fun ring(x: Float, y: Float) = p.pieces.filter { !it.knob }.map { it.dst }
                 .filter { kotlin.math.abs(it.x + it.width / 2f - x) < 3f && kotlin.math.abs(it.y + it.height / 2f - y) < 3f }.maxBy { it.width }
             val gap = ring(c("DPAD").x, c("DPAD").y).y - ring(c("STICK").x, c("STICK").y).let { it.y + it.height }
-            kotlin.test.assertEquals(1f, gap, 2f, "$name the d-pad's ring just under the stick's")
             val menu = assertNotNull(placeFor(pack, null, d), "$name menu").controls.associateBy { it.spec.id }
-            kotlin.test.assertEquals(42f / 156f * menu.getValue("DPAD").spec.r, c("DPAD").x - c("STICK").x, 2f, "$name the d-pad toward the screen")
+            // (flat inner: the GameCube's, theFlatInnerScreensLowerPadsAreTheGamecubes)
+            if (name !in FLAT_INNER) {
+                kotlin.test.assertEquals(1f, gap, 2f, "$name the d-pad's ring just under the stick's")
+                kotlin.test.assertEquals(42f / 156f * menu.getValue("DPAD").spec.r, c("DPAD").x - c("STICK").x, 2f, "$name the d-pad toward the screen")
+            }
             kotlin.test.assertEquals(menu.getValue("DPAD").y, c("STICK").y, 1f, "$name the stick on the menu's d-pad")
             kotlin.test.assertEquals(menu.getValue("A").y, c("A").y, 1f, "$name the face buttons on the menu's")
         }
@@ -193,12 +201,12 @@ class SkinPackDrawingTest {
         }
     }
 
-    // The 3DS on the Fold's inner screen upright: the d-pad up into the room under the stick (half the gap it had) and
+    // The 3DS on the Fold's inner screen half-folded: the d-pad up into the room under the stick (half the gap it had) and
     // across to the caps' row, where the user's own tweak put it on the Fold (5 px from the row, 25 px over half the gap);
     // the New 3DS's C-stick the same under the face, from the row's other end.
     @Test
     fun the3dsOnTheFoldUprightHasItsDpadUpAndIn() {
-        for (v in listOf(SkinVariant.N3DS, SkinVariant.N3DS_REGULAR)) for (name in listOf("inner", "inner_half")) {
+        for (v in listOf(SkinVariant.N3DS, SkinVariant.N3DS_REGULAR)) for (name in listOf("inner_half")) {
             val d = GOLDEN_DEVICES.first { it.name == name }
             val p = assertNotNull(placeFor(pack, v, d), "$v $name")
             val dp = d.dpi / 160f
@@ -219,6 +227,56 @@ class SkinPackDrawingTest {
                 val apart = kotlin.math.hypot(cs.x + cs.width / 2f - (face.x + face.width / 2f), cs.y + cs.height / 2f - (face.y + face.height / 2f)) - (cs.width + face.width) / 2f
                 assertTrue(cs.y > face.y && apart > 0f, "$v $name C-stick under the face: $apart")
             }
+        }
+    }
+
+    // The Fold's flat upright inner screen: every block with two large controls (a stick, a d-pad; the face and a stick
+    // on the right) has its lower one where the GameCube has it, straight under the upper (the face's middle), as far down.
+    @Test
+    fun theFlatInnerScreensLowerPadsAreTheGamecubes() {
+        val big = setOf("DPAD", "STICK", "CSTICK")
+        for (name in listOf("inner")) {
+            val d = GOLDEN_DEVICES.first { it.name == name }
+            fun pads(p: SkinPlacement, left: Boolean) = p.controls.filter { it.spec.id in big && it.spec.alt == null && it.spec.r > 100f * p.k && (it.x < d.w / 2f) == left }.sortedBy { it.y }
+            fun faceMid(p: SkinPlacement) = p.controls.filter { it.spec.id in setOf("X", "Y", "A", "B") && it.spec.shape == ControlShape.CIRCLE }.takeIf { it.size == 4 }?.let { f -> f.map { it.x }.average().toFloat() to f.map { it.y }.average().toFloat() }
+            val gc = assertNotNull(placeFor(pack, SkinVariant.GC, d), name)
+            val (gs, gd) = pads(gc, true)
+            val drop = gd.y - gs.y
+            for (v in listOf(SkinVariant.DC, SkinVariant.N3DS, SkinVariant.N3DS_REGULAR, SkinVariant.N64, SkinVariant.WII_CLASSIC, SkinVariant.WII_NUNCHUK, SkinVariant.PS1, SkinVariant.PSP, SkinVariant.A5200)) {
+                val p = assertNotNull(placeFor(pack, v, d), "$name $v")
+                val left = pads(p, true)
+                kotlin.test.assertEquals(2, left.size, "$name $v two large on the left")
+                kotlin.test.assertEquals(left[0].x, left[1].x, 1f, "$name $v lower pad under the upper")
+                kotlin.test.assertEquals(drop, left[1].y - left[0].y, 1f, "$name $v lower pad as far down as the GameCube's")
+                pads(p, false).singleOrNull()?.let { r ->
+                    val (fx, fy) = assertNotNull(faceMid(p), "$name $v face")
+                    kotlin.test.assertEquals(fx, r.x, 1f, "$name $v right stick under the face"); kotlin.test.assertEquals(drop, r.y - fy, 1f, "$name $v right stick as far down")
+                }
+            }
+        }
+    }
+
+    // The 3DS on the Fold's inner screen upright and flat: the lower d-pad straight under the stick (the GameCube's), the New 3DS's
+    // right stick across from it, level; the touch frame as tall as the row under it leaves room for (within 32 dp of the
+    // menu's touch frame), the picture between bars.
+    @Test
+    fun the3dsOnTheFoldFlatHasItsLowerPadsUnderItsUpperOnes() {
+        val d = GOLDEN_DEVICES.first { it.name == "inner" }
+        val dc = assertNotNull(placeFor(pack, SkinVariant.DC, d))
+        fun at(p: SkinPlacement, id: String) = p.controls.first { it.spec.id == id && it.spec.alt == null }
+        fun frameFoot(p: SkinPlacement, screen: GlassScreen) = p.pieces.filter { it.piece >= 0 && p.spec.pieces[it.piece].glass?.screen == screen && !it.strip }.maxOf { it.dst.y + it.dst.height }
+        for (v in listOf(SkinVariant.N3DS, SkinVariant.N3DS_REGULAR)) {
+            val p = assertNotNull(placeFor(pack, v, d), "$v")
+            kotlin.test.assertEquals(at(p, "STICK").x, at(p, "DPAD").x, 1f, "$v d-pad under the stick")
+            if (v == SkinVariant.N3DS) {
+                kotlin.test.assertEquals(d.w - at(p, "DPAD").x, at(p, "CSTICK").x, 1f, "$v right stick across from the d-pad")
+                kotlin.test.assertEquals(at(p, "DPAD").y, at(p, "CSTICK").y, 1f, "$v lower pads level")
+            }
+            fun frameH(pl: SkinPlacement, screen: GlassScreen) = pl.pieces.filter { it.piece >= 0 && pl.spec.pieces[it.piece].glass?.screen == screen && !it.strip }.let { f -> f.maxOf { it.dst.y + it.dst.height } - f.minOf { it.dst.y } }
+            val menuH = frameH(assertNotNull(placeFor(pack, null, d)), GlassScreen.TOUCH)
+            assertTrue(frameH(p, GlassScreen.TOUCH) in menuH - 32f * d.dpi / 160f..menuH, "$v frame ${frameH(p, GlassScreen.TOUCH)} near the menu's $menuH")
+            val foot = frameFoot(p, GlassScreen.TOUCH)
+            for (id in listOf("MIC", "MENU", "SELECT", "START")) assertTrue(at(p, id).y > foot, "$v $id under the frame")
         }
     }
 
@@ -377,3 +435,6 @@ class SkinPackDrawingTest {
         return row.minOf { it.dst.x } to row.maxOf { it.dst.x + it.dst.width }
     }
 }
+
+/** The golden devices that are a foldable's flat upright inner screen. */
+internal val FLAT_INNER = setOf("inner")

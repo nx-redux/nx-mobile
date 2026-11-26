@@ -88,8 +88,10 @@ class SkinSeamTest {
             // half-folded it stays below the hinge
             if (hinge == null) assertTrue(touch.y - (top.y + top.height) in 42f..242f, "$top over $touch")
             else assertTrue(touch.y > hinge, "$touch")
-            // the frame no taller than its 4:3 picture (no bars over and under the game), the row under it up with it
-            assertEquals(touch.width * 3f / 4f, touch.height, 1f, "$hinge touch $touch")
+            // half-folded the frame no taller than its 4:3 picture (no bars over and under the game), the row under it up
+            // with it; flat as tall as the row under it leaves room for, the picture between bars (as the tablet's)
+            if (hinge == null) assertTrue(touch.height > touch.width * 3f / 4f, "touch $touch")
+            else assertEquals(touch.width * 3f / 4f, touch.height, 1f, "$hinge touch $touch")
             val menu = p.controls.single { it.spec.id == "MENU" }
             assertTrue(menu.y > touch.y + touch.height && menu.y - (touch.y + touch.height) < 200f, "$hinge row under the frame: $touch $menu")
         }
@@ -398,8 +400,8 @@ class SkinSeamTest {
             val ring = if (fold) {
                 // the d-pad under the stick; MENU under START on the right, right of the bottom screen
                 val st = ringOf("STICK"); val pad = ringOf("DPAD")
-                // (the d-pad as the user placed it: 16 dp toward the screen, its ring just under the stick's)
-                assertEquals(16f * dp, (pad.x + pad.width / 2f) - (st.x + st.width / 2f), 2f, "${w}x$h d-pad toward the screen")
+                // (flat, the d-pad straight under the stick, as the GameCube's)
+                assertEquals(0f, (pad.x + pad.width / 2f) - (st.x + st.width / 2f), 2f, "${w}x$h d-pad under the stick")
                 assertTrue(pad.y - (st.y + st.height) >= 0f, "${w}x$h d-pad under the stick")
                 // (the stick centred under the fold, the d-pad under it: no nearer the bottom than the least gap)
                 assertTrue(pad.y + pad.height <= h - 4f * dp + 2f, "${w}x$h d-pad's end")

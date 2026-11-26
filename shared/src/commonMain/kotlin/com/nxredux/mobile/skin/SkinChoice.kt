@@ -428,6 +428,32 @@ object SkinChoice {
         )
     }
 
+    /**
+     * The touch screen's frame grown up (its bottom, strip and row kept) to [twin]'s gap between its top and touch
+     * glasses under this one's top glass. As it is where that gap is already as small.
+     */
+    private fun SkinPlacement.touchUpToGap(twin: SkinPlacement): SkinPlacement {
+        val top = glass(GlassScreen.TOP) ?: return this
+        val g = glass(GlassScreen.TOUCH) ?: return this
+        val tt = twin.glass(GlassScreen.TOP) ?: return this
+        val tg = twin.glass(GlassScreen.TOUCH) ?: return this
+        val grow = g.rect.y - (top.rect.y + top.rect.height + (tg.rect.y - (tt.rect.y + tt.rect.height)))
+        if (grow < 0.5f) return this
+        val gi = spec.pieces.indexOfFirst { it.glass?.screen == GlassScreen.TOUCH }
+        val frame = pieces.filter { it.piece == gi && !it.strip }
+        if (frame.isEmpty()) return this
+        val ft = frame.minOf { it.dst.y }; val fb = frame.maxOf { it.dst.y + it.dst.height }
+        return copy(
+            pieces = pieces.map { p -> when {
+                p.piece != gi || p.strip -> p
+                kotlin.math.abs(p.dst.y - ft) < 0.5f -> p.copy(dst = p.dst.copy(y = p.dst.y - grow))
+                kotlin.math.abs(p.dst.y + p.dst.height - fb) < 0.5f -> p
+                else -> p.copy(dst = p.dst.copy(y = p.dst.y - grow, height = p.dst.height + grow))
+            } },
+            glasses = glasses.map { if (it === g) it.copy(rect = it.rect.copy(y = it.rect.y - grow, height = it.rect.height + grow)) else it },
+        )
+    }
+
     /** The sets the shared one-screen set never stands in for: itself, and those with a stick or two screens. */
     private val NO_SHARED_FALLBACK = setOf(
         SkinVariant.DS, SkinVariant.SINGLE, SkinVariant.DC, SkinVariant.N3DS, SkinVariant.N3DS_REGULAR, SkinVariant.GC,
@@ -583,18 +609,25 @@ object SkinChoice {
                 val placed = fold() ?: return@widest null
                 // the GamePad's boxes, sideways and flat: the bottom half as half-folded at the window's middle, as the 3DS's
                 if (v == SkinVariant.WIIU && landscape && hingeY == null && spec.boxes.isNotEmpty()) return@widest fold(windowH / 2f)?.let { placed.bottomOf(it) } ?: placed
-                // upright: the GamePad in the 3DS twin's bottom frame, its row right under it, as the 3DS's row follows its touch frame
+                // upright: the GamePad in the 3DS twin's bottom frame (flat, as tall as the row under it leaves room for), its row
+                // right under it, as the 3DS's row follows its touch frame
                 if (v == SkinVariant.WIIU && !landscape && spec.boxes.isNotEmpty()) {
                     val twin = pack.layouts.firstOrNull { it.id == spec.id.replace("_wiiugp", "_3ds") }.takeIf { !spec.id.endsWith(TABLET_BOARD) }
                     val theirs = twin?.let { t -> foldPieces(t, windowW, windowH, s, picture, topInset, hingeY, densityDpi, N3DS_TOP, bottomMargin = shellMargin(pack),
-                        bottomGlass = flatEnd, row = rowSpacing(densityDpi, s), centreControls = false)?.touchToItsPicture()?.touchToItsPictureHeight() }
-                    return@widest (theirs?.let { placed.touchAs(it) } ?: placed).rowUnderTouch(SkinBoxes.GAP_DP * dp, shoulders = spec.id.endsWith(TABLET_BOARD))
+                        bottomGlass = flatEnd, row = rowSpacing(densityDpi, s), centreControls = false)?.touchToItsPicture()?.let { if (hingeY == null) it else it.touchToItsPictureHeight() } }
+                    val under = (theirs?.let { placed.touchAs(it) } ?: placed).rowUnderTouch(SkinBoxes.GAP_DP * dp, shoulders = spec.id.endsWith(TABLET_BOARD))
+                    // flat: up under the TV's shorter frame, the 3DS's gap between the glasses (the menu's)
+                    return@widest if (hingeY == null && theirs != null) under.touchUpToGap(theirs) else under
                 }
                 if (v !in N3DS_VARIANTS || spec.boxes.isEmpty()) return@widest placed
                 // the 3DS's touch screen, its 4:3 picture in a frame between the boxes: sideways (the room beside it) the frame
                 // cut to the picture's height and widened to the boxes, bars beside the picture; upright cut to the picture
                 // (a tablet's: the menu's frame, the picture between bars)
-                if (!landscape) return@widest if (spec.id.endsWith(TABLET_BOARD)) placed else placed.touchToItsPicture().touchToItsPictureHeight()
+                if (!landscape && spec.id.endsWith(TABLET_BOARD)) return@widest placed
+                // flat upright: the frame as tall as the row under it leaves room for (near the menu's), the picture
+                // between bars, as the tablet's; half-folded cut to the picture
+                if (!landscape && hingeY == null) return@widest placed.touchToItsPicture()
+                if (!landscape) return@widest placed.touchToItsPicture().touchToItsPictureHeight()
                 fun wide(hinge: Float?) = fold(hinge)?.touchToItsPictureHeight()?.touchWideToTheBoxes(SkinBoxes.GAP_DP * dp)
                 val wide = wide(hingeY)
                 // flat: the bottom half as half-folded at the window's middle (the touch screen not grown up into the

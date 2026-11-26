@@ -12473,6 +12473,16 @@
        "h": 938,
        "pieces": [
         {
+         "sx": 283,
+         "sy": 418,
+         "w": 144,
+         "h": 270,
+         "x": 188,
+         "y": 608,
+         "anchor": "right",
+         "group": "MENU+MIC"
+        },
+        {
          "sx": 1254,
          "sy": 0,
          "w": 416,
@@ -12493,33 +12503,12 @@
          "group": "L"
         },
         {
-         "sx": 0,
+         "sx": 2018,
          "sy": 860,
-         "w": 72,
-         "h": 144,
-         "x": 74,
-         "y": 608,
-         "anchor": "centre",
-         "group": "MENU+MIC"
-        },
-        {
-         "sx": 71,
-         "sy": 860,
-         "w": 2,
-         "h": 144,
-         "x": 146,
-         "y": 608,
-         "anchor": "centre",
-         "group": "MENU+MIC",
-         "scaleX": 70.0
-        },
-        {
-         "sx": 618,
-         "sy": 860,
-         "w": 72,
-         "h": 144,
-         "x": 286,
-         "y": 608,
+         "w": 100,
+         "h": 100,
+         "x": 210,
+         "y": 631,
          "anchor": "centre",
          "group": "MENU+MIC"
         },
@@ -12528,18 +12517,8 @@
          "sy": 860,
          "w": 100,
          "h": 100,
-         "x": 236,
-         "y": 630,
-         "anchor": "centre",
-         "group": "MENU+MIC"
-        },
-        {
-         "sx": 2018,
-         "sy": 860,
-         "w": 100,
-         "h": 100,
-         "x": 96,
-         "y": 630,
+         "x": 210,
+         "y": 757,
          "anchor": "centre",
          "group": "MENU+MIC"
         }
@@ -12569,38 +12548,38 @@
         {
          "id": "MENU",
          "shape": "circle",
-         "x": 286.0,
-         "y": 680.0,
+         "x": 260.0,
+         "y": 807.0,
          "r": 58.0,
          "capR": 39.0,
          "anchor": "centre",
          "label": "MENU",
-         "labelDy": 64.5,
          "labelH": 17.0,
          "markSx": 162,
          "markSy": 701,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0
+         "markDy": 0.0,
+         "labelDx": -68.0
         },
         {
          "id": "MIC",
          "shape": "circle",
-         "x": 146.0,
-         "y": 680.0,
+         "x": 260.0,
+         "y": 681.0,
          "r": 58.0,
          "capR": 40.0,
          "anchor": "centre",
          "label": "MIC",
-         "labelDy": 64.5,
          "labelH": 17.0,
          "markSx": 1556,
          "markSy": 418,
          "markSw": 103,
          "markSh": 160,
          "markH": 33.0,
-         "markDy": 0.5
+         "markDy": 0.5,
+         "labelDx": -68.0
         }
        ],
        "when": {
@@ -13132,6 +13111,16 @@
        "h": 938,
        "pieces": [
         {
+         "sx": 283,
+         "sy": 418,
+         "w": 144,
+         "h": 270,
+         "x": 26,
+         "y": 608,
+         "anchor": "right",
+         "group": "SELECT+START"
+        },
+        {
          "sx": 0,
          "sy": 0,
          "w": 416,
@@ -13152,55 +13141,24 @@
          "group": "R"
         },
         {
-         "sx": 0,
+         "sx": 2120,
          "sy": 860,
-         "w": 72,
-         "h": 144,
-         "x": 0,
-         "y": 608,
-         "group": "SELECT+START+SWAP",
-         "anchor": "centre"
-        },
-        {
-         "sx": 71,
-         "sy": 860,
-         "w": 2,
-         "h": 144,
-         "x": 72,
-         "y": 608,
-         "group": "SELECT+START+SWAP",
-         "scaleX": 70.0,
-         "anchor": "centre"
-        },
-        {
-         "sx": 618,
-         "sy": 860,
-         "w": 72,
-         "h": 144,
-         "x": 212,
-         "y": 608,
-         "group": "SELECT+START+SWAP",
-         "anchor": "centre"
+         "w": 92,
+         "h": 92,
+         "x": 52,
+         "y": 635,
+         "anchor": "centre",
+         "group": "SELECT+START"
         },
         {
          "sx": 2120,
          "sy": 860,
          "w": 92,
          "h": 92,
-         "x": 166,
-         "y": 634,
+         "x": 52,
+         "y": 761,
          "anchor": "centre",
-         "group": "SELECT+START+SWAP"
-        },
-        {
-         "sx": 2120,
-         "sy": 860,
-         "w": 92,
-         "h": 92,
-         "x": 26,
-         "y": 634,
-         "anchor": "centre",
-         "group": "SELECT+START+SWAP"
+         "group": "SELECT+START"
         }
        ],
        "controls": [
@@ -13267,38 +13225,38 @@
         {
          "id": "START",
          "shape": "circle",
-         "x": 212.0,
-         "y": 680.0,
+         "x": 98.0,
+         "y": 807.0,
          "r": 58.0,
          "capR": 40.0,
          "anchor": "centre",
          "label": "START",
-         "labelDy": 64.5,
          "labelH": 17.0,
          "markSx": 2649,
          "markSy": 418,
          "markSw": 137,
          "markSh": 160,
          "markH": 30.0,
-         "markDy": 0.0
+         "markDy": 0.0,
+         "labelDx": 68.0
         },
         {
          "id": "SELECT",
          "shape": "circle",
-         "x": 72.0,
-         "y": 680.0,
+         "x": 98.0,
+         "y": 681.0,
          "r": 58.0,
          "capR": 40.0,
          "anchor": "centre",
          "label": "SELECT",
-         "labelDy": 64.5,
          "labelH": 17.0,
          "markSx": 2487,
          "markSy": 418,
          "markSw": 160,
          "markSh": 160,
          "markH": 28.0,
-         "markDy": 0.0
+         "markDy": 0.0,
+         "labelDx": 68.0
         }
        ],
        "when": {
@@ -89202,8 +89160,8 @@
          "sy": 0,
          "w": 416,
          "h": 416,
-         "x": 23,
-         "y": 611,
+         "x": -19,
+         "y": 622,
          "anchor": "left",
          "scale": 0.85,
          "group": "DPAD"
@@ -89244,8 +89202,8 @@
         {
          "id": "DPAD",
          "shape": "dpad",
-         "x": 200.0,
-         "y": 787.5,
+         "x": 158.0,
+         "y": 798.8,
          "r": 132.6,
          "arm": 45.9,
          "anchor": "left"
@@ -91154,8 +91112,8 @@
          "sy": 0,
          "w": 416,
          "h": 416,
-         "x": 58,
-         "y": 574,
+         "x": 8,
+         "y": 605,
          "anchor": "left",
          "group": "DPAD",
          "level": "middle",
@@ -91200,8 +91158,8 @@
         {
          "id": "DPAD",
          "shape": "dpad",
-         "x": 208.24,
-         "y": 723.76,
+         "x": 158.0,
+         "y": 754.8,
          "r": 112.32,
          "arm": 54.0,
          "anchor": "left"
@@ -97876,7 +97834,7 @@
          "w": 416,
          "h": 416,
          "x": -19,
-         "y": 713,
+         "y": 680,
          "anchor": "left",
          "scale": 0.85,
          "group": "STICK"
@@ -97887,7 +97845,7 @@
          "w": 284,
          "h": 284,
          "x": 37,
-         "y": 769,
+         "y": 736,
          "anchor": "left",
          "scale": 0.85,
          "knob": true,
@@ -97930,7 +97888,7 @@
          "id": "STICK",
          "shape": "stick",
          "x": 158.0,
-         "y": 888.3,
+         "y": 855.35,
          "r": 144.5,
          "anchor": "left",
          "travel": 63.75,
@@ -98423,7 +98381,7 @@
          "w": 416,
          "h": 416,
          "x": 23,
-         "y": 713,
+         "y": 680,
          "anchor": "right",
          "scale": 0.85,
          "group": "CSTICK"
@@ -98434,7 +98392,7 @@
          "w": 284,
          "h": 284,
          "x": 79,
-         "y": 769,
+         "y": 736,
          "anchor": "right",
          "scale": 0.85,
          "knob": true,
@@ -98519,7 +98477,7 @@
          "id": "CSTICK",
          "shape": "stick",
          "x": 200.0,
-         "y": 888.3,
+         "y": 855.35,
          "r": 144.5,
          "anchor": "right",
          "travel": 63.75,
@@ -106433,7 +106391,7 @@
          "w": 416,
          "h": 416,
          "x": -8,
-         "y": 713,
+         "y": 683,
          "anchor": "left",
          "scale": 0.8000001,
          "group": "STICK"
@@ -106444,7 +106402,7 @@
          "w": 284,
          "h": 284,
          "x": 44,
-         "y": 765,
+         "y": 735,
          "anchor": "left",
          "scale": 0.8,
          "knob": true,
@@ -106466,7 +106424,7 @@
          "w": 100,
          "h": 100,
          "x": 279,
-         "y": 912,
+         "y": 882,
          "anchor": "left",
          "group": "L3"
         }
@@ -106497,7 +106455,7 @@
          "id": "STICK",
          "shape": "stick",
          "x": 158.0,
-         "y": 878.8,
+         "y": 848.8,
          "r": 136.0,
          "anchor": "left",
          "travel": 48.0,
@@ -106519,7 +106477,7 @@
          "id": "L3",
          "shape": "circle",
          "x": 329.0,
-         "y": 962.0,
+         "y": 932.0,
          "r": 58.0,
          "capR": 39.0,
          "anchor": "left",
@@ -107092,7 +107050,7 @@
          "w": 416,
          "h": 416,
          "x": 34,
-         "y": 713,
+         "y": 683,
          "anchor": "right",
          "scale": 0.8000001,
          "group": "CSTICK"
@@ -107103,7 +107061,7 @@
          "w": 284,
          "h": 284,
          "x": 86,
-         "y": 765,
+         "y": 735,
          "anchor": "right",
          "scale": 0.8,
          "knob": true,
@@ -107116,7 +107074,7 @@
          "w": 100,
          "h": 100,
          "x": -21,
-         "y": 912,
+         "y": 882,
          "anchor": "right",
          "group": "R3"
         }
@@ -107210,7 +107168,7 @@
          "id": "CSTICK",
          "shape": "stick",
          "x": 200.0,
-         "y": 878.8,
+         "y": 848.8,
          "r": 136.0,
          "anchor": "right",
          "travel": 60.0,
@@ -107220,7 +107178,7 @@
          "id": "R3",
          "shape": "circle",
          "x": 29.0,
-         "y": 962.0,
+         "y": 932.0,
          "r": 58.0,
          "capR": 39.0,
          "anchor": "right",
@@ -108700,7 +108658,7 @@
          "w": 416,
          "h": 416,
          "x": -19,
-         "y": 591,
+         "y": 578,
          "anchor": "left",
          "scale": 0.85,
          "group": "STICK"
@@ -108711,11 +108669,21 @@
          "w": 284,
          "h": 284,
          "x": 37,
-         "y": 647,
+         "y": 634,
          "anchor": "left",
          "scale": 0.85,
          "knob": true,
          "group": "STICK"
+        },
+        {
+         "sx": 2120,
+         "sy": 860,
+         "w": 92,
+         "h": 92,
+         "x": 218,
+         "y": 8,
+         "anchor": "left",
+         "group": "SELECT"
         }
        ],
        "controls": [
@@ -108744,11 +108712,29 @@
          "id": "STICK",
          "shape": "stick",
          "x": 158.0,
-         "y": 767.4,
+         "y": 754.8,
          "r": 144.5,
          "anchor": "left",
          "travel": 51.0,
          "knobTravel": 25.5
+        },
+        {
+         "id": "SELECT",
+         "shape": "circle",
+         "x": 264.0,
+         "y": 54.0,
+         "r": 58.0,
+         "capR": 40.0,
+         "anchor": "left",
+         "label": "SELECT",
+         "labelH": 17.0,
+         "markSx": 2487,
+         "markSy": 418,
+         "markSw": 160,
+         "markSh": 160,
+         "markH": 28.0,
+         "markDy": -0.4,
+         "labelDy": 64.5
         }
        ],
        "when": {
@@ -109488,24 +109474,14 @@
          "group": "R"
         },
         {
-         "sx": 1382,
-         "sy": 701,
-         "w": 410,
-         "h": 144,
-         "x": -5,
-         "y": 695,
-         "anchor": "right",
-         "group": "MENU+SELECT+START"
-        },
-        {
          "sx": 2120,
          "sy": 860,
          "w": 92,
          "h": 92,
-         "x": 14,
-         "y": 721,
+         "x": 48,
+         "y": 8,
          "anchor": "right",
-         "group": "MENU+SELECT+START"
+         "group": "START"
         },
         {
          "sx": 2018,
@@ -109515,17 +109491,7 @@
          "x": 150,
          "y": 717,
          "anchor": "right",
-         "group": "MENU+SELECT+START"
-        },
-        {
-         "sx": 2120,
-         "sy": 860,
-         "w": 92,
-         "h": 92,
-         "x": 294,
-         "y": 721,
-         "anchor": "right",
-         "group": "MENU+SELECT+START"
+         "group": "MENU"
         }
        ],
        "controls": [
@@ -109602,24 +109568,6 @@
          "markDy": -2.0
         },
         {
-         "id": "SELECT",
-         "shape": "circle",
-         "x": 60.0,
-         "y": 767.4,
-         "r": 58.0,
-         "capR": 40.0,
-         "anchor": "right",
-         "label": "SELECT",
-         "labelDy": 64.5,
-         "labelH": 17.0,
-         "markSx": 2487,
-         "markSy": 418,
-         "markSw": 160,
-         "markSh": 160,
-         "markH": 28.0,
-         "markDy": -0.4
-        },
-        {
          "id": "MENU",
          "shape": "circle",
          "x": 200.0,
@@ -109628,32 +109576,32 @@
          "capR": 39.0,
          "anchor": "right",
          "label": "MENU",
-         "labelDy": 64.5,
          "labelH": 17.0,
          "markSx": 162,
          "markSy": 701,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": -0.4
+         "markDy": -0.4,
+         "labelDy": 64.5
         },
         {
          "id": "START",
          "shape": "circle",
-         "x": 340.0,
-         "y": 767.4,
+         "x": 94.0,
+         "y": 54.0,
          "r": 58.0,
          "capR": 40.0,
          "anchor": "right",
          "label": "START",
-         "labelDy": 64.5,
          "labelH": 17.0,
          "markSx": 2649,
          "markSy": 418,
          "markSw": 137,
          "markSh": 160,
          "markH": 30.0,
-         "markDy": -0.4
+         "markDy": -0.4,
+         "labelDy": 64.5
         }
        ],
        "when": {
@@ -127083,57 +127031,23 @@
          "anchor": "left"
         },
         {
-         "group": "SELECT+MENU+START",
-         "sx": 1794,
-         "sy": 701,
-         "w": 410,
-         "h": 144,
-         "x": 0,
-         "y": 574,
-         "scale": 0.8732,
-         "anchor": "left"
-        },
-        {
-         "group": "SELECT+MENU+START",
+         "group": "SELECT",
          "sx": 2120,
          "sy": 860,
          "w": 92,
          "h": 92,
-         "x": 17,
-         "y": 597,
-         "scale": 0.8732,
+         "x": 158,
+         "y": 8,
          "anchor": "left"
         },
         {
-         "group": "SELECT+MENU+START",
+         "group": "MENU",
          "sx": 2018,
          "sy": 860,
          "w": 100,
          "h": 100,
-         "x": 135,
-         "y": 593,
-         "scale": 0.8732,
-         "anchor": "left"
-        },
-        {
-         "group": "SELECT+MENU+START",
-         "sx": 2120,
-         "sy": 860,
-         "w": 92,
-         "h": 92,
-         "x": 261,
-         "y": 597,
-         "scale": 0.8732,
-         "anchor": "left"
-        },
-        {
-         "sx": 1522,
-         "sy": 860,
-         "w": 110,
-         "h": 108,
-         "x": 173,
-         "y": 0,
-         "group": "B",
+         "x": 232,
+         "y": 694,
          "anchor": "left"
         }
        ],
@@ -127162,68 +127076,38 @@
         {
          "id": "SELECT",
          "shape": "circle",
-         "x": 56.756,
-         "y": 636.868,
-         "r": 50.644,
-         "capR": 34.054,
+         "x": 204.0,
+         "y": 54.0,
+         "r": 58.0,
+         "capR": 39.0,
          "label": "SELECT",
-         "labelDy": 56.32,
          "labelH": 17.0,
          "anchor": "left",
          "markSx": 2487,
          "markSy": 418,
          "markSw": 160,
          "markSh": 160,
-         "markH": 24.45,
-         "markDy": 0.3
+         "markH": 28.0,
+         "markDy": 0.3,
+         "labelDy": 64.5
         },
         {
          "id": "MENU",
          "shape": "circle",
-         "x": 179.0,
-         "y": 636.868,
-         "r": 50.644,
-         "capR": 34.054,
+         "x": 282.0,
+         "y": 744.0,
+         "r": 58.0,
+         "capR": 39.0,
          "label": "MENU",
          "labelH": 17.0,
-         "labelDy": 56.32,
          "anchor": "left",
          "markSx": 162,
          "markSy": 701,
          "markSw": 160,
          "markSh": 154,
-         "markH": 28.58,
-         "markDy": -0.21
-        },
-        {
-         "id": "START",
-         "shape": "circle",
-         "x": 301.244,
-         "y": 636.868,
-         "r": 50.644,
-         "capR": 34.054,
-         "label": "START",
-         "labelDy": 56.32,
-         "labelH": 17.0,
-         "anchor": "left",
-         "markSx": 2649,
-         "markSy": 418,
-         "markSw": 137,
-         "markSh": 160,
-         "markH": 26.2,
-         "markDy": 0.3
-        },
-        {
-         "id": "B",
-         "shape": "rect",
-         "x": 228.0,
-         "y": 54.0,
-         "hw": 45.0,
-         "hh": 42.0,
-         "anchor": "left",
-         "mark": "B",
-         "markH": 32.0,
-         "markDy": -2.0
+         "markH": 32.73,
+         "markDy": -0.21,
+         "labelDx": -68.0
         }
        ],
        "when": {
@@ -127863,13 +127747,43 @@
          "anchor": "right"
         },
         {
-         "sx": 1522,
+         "sx": 2556,
+         "sy": 0,
+         "w": 304,
+         "h": 304,
+         "x": 48,
+         "y": 582,
+         "anchor": "right",
+         "group": "A+B"
+        },
+        {
+         "sx": 1270,
          "sy": 860,
-         "w": 110,
-         "h": 108,
-         "x": 75,
-         "y": 0,
-         "group": "A",
+         "w": 124,
+         "h": 124,
+         "x": 78,
+         "y": 732,
+         "anchor": "right",
+         "group": "A+B"
+        },
+        {
+         "sx": 1396,
+         "sy": 860,
+         "w": 124,
+         "h": 124,
+         "x": 198,
+         "y": 612,
+         "anchor": "right",
+         "group": "A+B"
+        },
+        {
+         "group": "START",
+         "sx": 2120,
+         "sy": 860,
+         "w": 92,
+         "h": 92,
+         "x": 108,
+         "y": 8,
          "anchor": "right"
         }
        ],
@@ -127896,16 +127810,46 @@
          "markDy": -2.0
         },
         {
+         "id": "B",
+         "shape": "circle",
+         "x": 139.9,
+         "y": 794.1,
+         "r": 80.0,
+         "capR": 60.0,
+         "anchor": "right",
+         "mark": "B",
+         "markH": 32.0,
+         "markDy": -1.5
+        },
+        {
          "id": "A",
-         "shape": "rect",
-         "x": 130.0,
-         "y": 54.0,
-         "hw": 45.0,
-         "hh": 42.0,
+         "shape": "circle",
+         "x": 260.1,
+         "y": 673.9,
+         "r": 80.0,
+         "capR": 60.0,
          "anchor": "right",
          "mark": "A",
          "markH": 32.0,
-         "markDy": -2.0
+         "markDy": -1.5
+        },
+        {
+         "id": "START",
+         "shape": "circle",
+         "x": 154.0,
+         "y": 54.0,
+         "r": 58.0,
+         "capR": 39.0,
+         "label": "START",
+         "labelH": 17.0,
+         "anchor": "right",
+         "markSx": 2649,
+         "markSy": 418,
+         "markSw": 137,
+         "markSh": 160,
+         "markH": 30.0,
+         "markDy": 0.3,
+         "labelDy": 64.5
         }
        ],
        "when": {
@@ -128968,57 +128912,23 @@
          "group": "DPAD"
         },
         {
-         "group": "SELECT+MENU+START",
-         "sx": 1794,
-         "sy": 701,
-         "w": 410,
-         "h": 144,
-         "x": 0,
-         "y": 574,
-         "scale": 0.8732,
-         "anchor": "left"
-        },
-        {
-         "group": "SELECT+MENU+START",
+         "group": "SELECT",
          "sx": 2120,
          "sy": 860,
          "w": 92,
          "h": 92,
-         "x": 17,
-         "y": 597,
-         "scale": 0.8732,
+         "x": 158,
+         "y": 8,
          "anchor": "left"
         },
         {
-         "group": "SELECT+MENU+START",
+         "group": "MENU",
          "sx": 2018,
          "sy": 860,
          "w": 100,
          "h": 100,
-         "x": 135,
-         "y": 593,
-         "scale": 0.8732,
-         "anchor": "left"
-        },
-        {
-         "group": "SELECT+MENU+START",
-         "sx": 2120,
-         "sy": 860,
-         "w": 92,
-         "h": 92,
-         "x": 261,
-         "y": 597,
-         "scale": 0.8732,
-         "anchor": "left"
-        },
-        {
-         "sx": 1522,
-         "sy": 860,
-         "w": 110,
-         "h": 108,
-         "x": 173,
-         "y": 0,
-         "group": "B",
+         "x": 232,
+         "y": 694,
          "anchor": "left"
         }
        ],
@@ -129035,68 +128945,38 @@
         {
          "id": "SELECT",
          "shape": "circle",
-         "x": 56.756,
-         "y": 636.868,
-         "r": 50.644,
-         "capR": 34.054,
+         "x": 204.0,
+         "y": 54.0,
+         "r": 58.0,
+         "capR": 39.0,
          "label": "ROTATE",
-         "labelDy": 56.32,
          "labelH": 17.0,
          "anchor": "left",
          "markSx": 2487,
          "markSy": 418,
          "markSw": 160,
          "markSh": 160,
-         "markH": 24.45,
-         "markDy": 0.3
+         "markH": 28.0,
+         "markDy": 0.3,
+         "labelDy": 64.5
         },
         {
          "id": "MENU",
          "shape": "circle",
-         "x": 179.0,
-         "y": 636.868,
-         "r": 50.644,
-         "capR": 34.054,
+         "x": 282.0,
+         "y": 744.0,
+         "r": 58.0,
+         "capR": 39.0,
          "label": "MENU",
          "labelH": 17.0,
-         "labelDy": 56.32,
          "anchor": "left",
          "markSx": 162,
          "markSy": 701,
          "markSw": 160,
          "markSh": 154,
-         "markH": 28.58,
-         "markDy": -0.21
-        },
-        {
-         "id": "START",
-         "shape": "circle",
-         "x": 301.244,
-         "y": 636.868,
-         "r": 50.644,
-         "capR": 34.054,
-         "label": "START",
-         "labelDy": 56.32,
-         "labelH": 17.0,
-         "anchor": "left",
-         "markSx": 2649,
-         "markSy": 418,
-         "markSw": 137,
-         "markSh": 160,
-         "markH": 26.2,
-         "markDy": 0.3
-        },
-        {
-         "id": "B",
-         "shape": "rect",
-         "x": 228.0,
-         "y": 54.0,
-         "hw": 45.0,
-         "hh": 42.0,
-         "anchor": "left",
-         "mark": "B",
-         "markH": 32.0,
-         "markDy": -2.0
+         "markH": 32.73,
+         "markDy": -0.21,
+         "labelDx": -68.0
         }
        ],
        "when": {
@@ -129616,13 +129496,43 @@
          "anchor": "right"
         },
         {
-         "sx": 1522,
+         "sx": 2556,
+         "sy": 0,
+         "w": 304,
+         "h": 304,
+         "x": 48,
+         "y": 582,
+         "anchor": "right",
+         "group": "A+B"
+        },
+        {
+         "sx": 1270,
          "sy": 860,
-         "w": 110,
-         "h": 108,
-         "x": 75,
-         "y": 0,
-         "group": "A",
+         "w": 124,
+         "h": 124,
+         "x": 78,
+         "y": 732,
+         "anchor": "right",
+         "group": "A+B"
+        },
+        {
+         "sx": 1396,
+         "sy": 860,
+         "w": 124,
+         "h": 124,
+         "x": 198,
+         "y": 612,
+         "anchor": "right",
+         "group": "A+B"
+        },
+        {
+         "group": "START",
+         "sx": 2120,
+         "sy": 860,
+         "w": 92,
+         "h": 92,
+         "x": 108,
+         "y": 8,
          "anchor": "right"
         }
        ],
@@ -129637,16 +129547,46 @@
          "anchor": "right"
         },
         {
+         "id": "B",
+         "shape": "circle",
+         "x": 139.9,
+         "y": 794.1,
+         "r": 80.0,
+         "capR": 60.0,
+         "anchor": "right",
+         "mark": "B",
+         "markH": 32.0,
+         "markDy": -1.5
+        },
+        {
          "id": "A",
-         "shape": "rect",
-         "x": 130.0,
-         "y": 54.0,
-         "hw": 45.0,
-         "hh": 42.0,
+         "shape": "circle",
+         "x": 260.1,
+         "y": 673.9,
+         "r": 80.0,
+         "capR": 60.0,
          "anchor": "right",
          "mark": "A",
          "markH": 32.0,
-         "markDy": -2.0
+         "markDy": -1.5
+        },
+        {
+         "id": "START",
+         "shape": "circle",
+         "x": 154.0,
+         "y": 54.0,
+         "r": 58.0,
+         "capR": 39.0,
+         "label": "START",
+         "labelH": 17.0,
+         "anchor": "right",
+         "markSx": 2649,
+         "markSy": 418,
+         "markSw": 137,
+         "markSh": 160,
+         "markH": 30.0,
+         "markDy": 0.3,
+         "labelDy": 64.5
         }
        ],
        "when": {
@@ -150208,8 +150148,8 @@
          "sy": 0,
          "w": 416,
          "h": 416,
-         "x": 177,
-         "y": 701,
+         "x": -20,
+         "y": 730,
          "anchor": "left",
          "scale": 0.85,
          "group": "DPAD"
@@ -150260,8 +150200,8 @@
         {
          "id": "DPAD",
          "shape": "dpad",
-         "x": 354.6,
-         "y": 877.52783,
+         "x": 158.0,
+         "y": 906.8,
          "r": 132.6,
          "arm": 45.9,
          "anchor": "left"
@@ -151114,8 +151054,8 @@
          "sy": 0,
          "w": 416,
          "h": 416,
-         "x": -173,
-         "y": 701,
+         "x": 23,
+         "y": 730,
          "anchor": "right",
          "scale": 0.85,
          "group": "CSTICK"
@@ -151125,8 +151065,8 @@
          "sy": 0,
          "w": 284,
          "h": 284,
-         "x": -117,
-         "y": 757,
+         "x": 79,
+         "y": 786,
          "anchor": "right",
          "scale": 0.85,
          "knob": true,
@@ -151210,8 +151150,8 @@
         {
          "id": "CSTICK",
          "shape": "stick",
-         "x": 3.8000488,
-         "y": 877.52783,
+         "x": 200.0,
+         "y": 906.8,
          "r": 144.5,
          "anchor": "right",
          "travel": 51.0,
@@ -153454,8 +153394,8 @@
          "sy": 0,
          "w": 416,
          "h": 416,
-         "x": 177,
-         "y": 701,
+         "x": -20,
+         "y": 730,
          "anchor": "left",
          "scale": 0.85,
          "group": "DPAD"
@@ -153496,8 +153436,8 @@
         {
          "id": "DPAD",
          "shape": "dpad",
-         "x": 354.6,
-         "y": 877.52783,
+         "x": 158.0,
+         "y": 906.8,
          "r": 132.6,
          "arm": 45.9,
          "anchor": "left"
@@ -156646,8 +156586,8 @@
          "sy": 0,
          "w": 416,
          "h": 416,
-         "x": 177,
-         "y": 701,
+         "x": -20,
+         "y": 730,
          "anchor": "left",
          "scale": 0.85,
          "group": "DPAD"
@@ -156698,8 +156638,8 @@
          "sy": 860,
          "w": 100,
          "h": 100,
-         "x": 61,
-         "y": 916,
+         "x": -46,
+         "y": 689,
          "anchor": "centre",
          "group": "L3"
         }
@@ -156708,8 +156648,8 @@
         {
          "id": "DPAD",
          "shape": "dpad",
-         "x": 354.6,
-         "y": 877.52783,
+         "x": 158.0,
+         "y": 906.8,
          "r": 132.6,
          "arm": 45.9,
          "anchor": "left"
@@ -156751,8 +156691,8 @@
         {
          "id": "L3",
          "shape": "circle",
-         "x": 110.51,
-         "y": 966.37,
+         "x": 4.0,
+         "y": 739.644,
          "r": 58.0,
          "capR": 39.0,
          "anchor": "centre",
@@ -157669,10 +157609,11 @@
          "sy": 0,
          "w": 416,
          "h": 416,
-         "x": -204,
-         "y": 670,
+         "x": 23,
+         "y": 730,
          "anchor": "right",
-         "group": "A+B+X+Y"
+         "group": "A+B+X+Y",
+         "scale": 0.85
         },
         {
          "sx": 1796,
@@ -157695,87 +157636,83 @@
          "group": "R2"
         },
         {
+         "sx": 2018,
+         "sy": 860,
+         "w": 100,
+         "h": 100,
+         "x": 304,
+         "y": 689,
+         "anchor": "centre",
+         "group": "R3"
+        },
+        {
          "sx": 418,
          "sy": 0,
          "w": 416,
          "h": 416,
-         "x": 23,
-         "y": 333,
-         "anchor": "right",
-         "scale": 0.85,
-         "group": "CSTICK"
+         "x": -8,
+         "y": 302,
+         "anchor": "left"
         },
         {
          "sx": 2862,
          "sy": 0,
          "w": 284,
          "h": 284,
-         "x": 79,
-         "y": 389,
-         "anchor": "right",
-         "scale": 0.85,
+         "x": 58,
+         "y": 368,
+         "anchor": "left",
          "knob": true,
-         "knobOf": "CSTICK",
-         "group": "CSTICK"
-        },
-        {
-         "sx": 2018,
-         "sy": 860,
-         "w": 100,
-         "h": 100,
-         "x": 197,
-         "y": 916,
-         "anchor": "centre",
-         "group": "R3"
+         "knobOf": "CSTICK"
         }
        ],
        "controls": [
         {
          "id": "X",
          "shape": "circle",
-         "x": 3.8,
-         "y": 755.53,
-         "r": 72.0,
-         "capR": 54.0,
+         "x": 200.0,
+         "y": 803.1,
+         "r": 61.2,
+         "capR": 45.9,
          "anchor": "right",
          "mark": "X",
-         "markH": 33.0,
+         "markH": 28.05,
          "markDy": -1.03
         },
         {
          "id": "Y",
          "shape": "circle",
-         "x": -100.2,
-         "y": 877.53,
-         "r": 72.0,
-         "capR": 54.0,
+         "x": 111.6,
+         "y": 906.8,
+         "r": 61.2,
+         "capR": 45.9,
          "anchor": "right",
          "mark": "Y",
-         "markH": 33.0,
+         "markH": 28.05,
          "markDy": -1.03
         },
         {
          "id": "A",
          "shape": "circle",
-         "x": 107.8,
-         "y": 877.53,
-         "r": 72.0,
-         "capR": 54.0,
+         "x": 288.4,
+         "y": 906.8,
+         "r": 61.2,
+         "capR": 45.9,
          "anchor": "right",
          "mark": "A",
-         "markH": 33.0,
+         "markH": 28.05,
          "markDy": -1.03
         },
         {
          "id": "B",
          "shape": "circle",
-         "x": 3.8,
-         "y": 999.53,
-         "r": 72.0,
-         "capR": 54.0,
+         "x": 200.0,
+         "y": 1010.5,
+         "r": 61.2,
+         "capR": 45.9,
          "anchor": "right",
          "mark": "B",
-         "markH": 33.0,
+         "markH": 28.05,
          "markDy": -1.03
         },
         {
@@ -157807,16 +157744,16 @@
          "shape": "stick",
          "x": 200.0,
          "y": 510.0,
-         "r": 144.5,
+         "r": 170.0,
          "anchor": "right",
-         "travel": 51.0,
-         "knobTravel": 25.5
+         "travel": 60.0,
+         "knobTravel": 30.0
         },
         {
          "id": "R3",
          "shape": "circle",
-         "x": 247.49,
-         "y": 966.37,
+         "x": 354.0,
+         "y": 739.644,
          "r": 58.0,
          "capR": 39.0,
          "anchor": "centre",
