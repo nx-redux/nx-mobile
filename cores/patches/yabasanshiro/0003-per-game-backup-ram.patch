@@ -112,19 +112,18 @@ index 691e55e..19aa4f9 100644
  
     struct retro_input_descriptor desc[] = {
        { 0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_LEFT,  "D-Pad Left" },
-@@ -1547,6 +1604,11 @@ bool retro_load_game_special(unsigned game_type, const struct retro_game_info *i
+@@ -1547,6 +1604,10 @@ bool retro_load_game_special(unsigned game_type, const struct retro_game_info *i
  
  void retro_unload_game(void)
  {
-+   bup_sync();
-+   /* A save still unwritten gets a last try. */
-+   if (bup_failing && BupRam)
++   /* A change not yet written, or a save whose write failed, gets one last try. */
++   if (BupRam && bup_tracking && (bup_failing || memcmp(BupRam, bup_written, BUP_SIZE) != 0))
 +      bup_write();
 +   bup_tracking = false;
     if (!renderer_running)
        VIDCore->Init();
     YabauseDeInit();
-@@ -1640,6 +1702,8 @@ void retro_run(void)
+@@ -1640,6 +1701,8 @@ void retro_run(void)
     if(PERCore)
        PERCore->HandleEvents();
  
