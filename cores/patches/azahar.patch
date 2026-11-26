@@ -1300,10 +1300,10 @@ index 000000000..0e6cf758c
 +} // namespace LibRetro
 diff --git a/src/citra_libretro/room_link.cpp b/src/citra_libretro/room_link.cpp
 new file mode 100644
-index 000000000..6da28e348
+index 000000000..990d2b76e
 --- /dev/null
 +++ b/src/citra_libretro/room_link.cpp
-@@ -0,0 +1,871 @@
+@@ -0,0 +1,879 @@
 +// Copyright Citra Emulator Project / Azahar Emulator Project
 +// Licensed under GPLv2 or any later version
 +// Refer to the license.txt file included.
@@ -1566,7 +1566,10 @@ index 000000000..6da28e348
 +        std::this_thread::sleep_for(std::chrono::milliseconds(50));
 +    if (member.IsConnected())
 +        LOG_INFO(Frontend, "3DS link: in the room at {}:{} ({})", ip, port,
-+                 ip == "127.0.0.1" ? "its own" : OnCable(ip) ? "over the cable" : "over the Wi-Fi");
++                 ip == "127.0.0.1"  ? "its own"
++                 : OnCable(ip)      ? "over the cable"
++                 : OffWifi(ip)      ? "over this phone's hotspot"
++                                    : "over the Wi-Fi");
 +    return member.IsConnected();
 +}
 +
@@ -1646,7 +1649,12 @@ index 000000000..6da28e348
 +        std::array<pollfd, 2> fds{{{fd, POLLIN, 0}, {local_fd, POLLIN, 0}}};
 +        if (poll(fds.data(), local_fd >= 0 ? 2 : 1, static_cast<int>(left.count()) + 1) <= 0)
 +            continue;
-+        const int ready = (fds[0].revents & POLLIN) ? fd : local_fd;
++        const int ready = (fds[0].revents & POLLIN) ? fd : (fds[1].revents & POLLIN) ? local_fd : -1;
++        if (ready < 0) {
++            // An error with nothing to read (the network went away): wait out the search instead.
++            Sleep(static_cast<int>(left.count()));
++            break;
++        }
 +        std::array<u8, 32> answer{};
 +        sockaddr_in from{};
 +        socklen_t from_size = sizeof(from);
