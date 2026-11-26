@@ -19,7 +19,6 @@ class SaturnResolutionTest {
     }
 
     @Test fun coreValueIsTheCoresMode() {
-        // No 3x: down to 2x, never above what the display reaches.
         assertEquals(listOf("original", "2x", "2x", "4x"), (1..4).map { saturn.coreValue(it) })
     }
 
@@ -27,6 +26,14 @@ class SaturnResolutionTest {
         assertEquals(4, SaturnResolution.displayMax(1280, 960))
         assertEquals(1, SaturnResolution.displayMax(320, 224))
         assertEquals(4, SaturnResolution.displayMax(2400, 1080))
+        // Width measured against the 4:3 picture (about 299 px a scale), not 320.
+        assertEquals(4, SaturnResolution.displayMax(960, 2000))
+    }
+
+    @Test fun aShownScaleOfThreeGoesUpForQualityAndDownOtherwise() {
+        assertEquals(4, Nds3dResolution.value(Nds3dMode.QUALITY, maxScale = 4, scale = 1, current = 3, displayMax = 4, console = saturn))
+        assertEquals(2, Nds3dResolution.value(Nds3dMode.AUTO, maxScale = 4, scale = 1, current = 3, displayMax = 4, console = saturn))
+        assertEquals(2, Nds3dResolution.value(Nds3dMode.AUTO, maxScale = 4, scale = 1, current = 3, displayMax = 3, console = saturn))
     }
 
     @Test fun rowsOfferOnlyTheScalesTheCoreHas() {

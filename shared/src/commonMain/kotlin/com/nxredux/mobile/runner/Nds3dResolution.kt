@@ -66,7 +66,7 @@ enum class Res3dConsole(
     /** Saturn on YabaSanshiro: draws the whole picture at 1x, 2x or 4x of the game's own size (patches apply it mid-game). */
     SATURN("yabasanshiro", "yabasanshiro_resolution_mode", 4, 2, "nx_saturn_3d_resolution", "nx_saturn_3d_max_scale", "nx_saturn_3d_scale");
 
-    /** The core draws its whole picture at the scale (PS1, PS2, PSP, Dolphin, Dreamcast), not only the 3D: the rows say "the game". */
+    /** The core draws its whole picture at the scale, not only the 3D: the rows say "the game". */
     val wholePicture: Boolean get() = this == PS1 || this == PCSX || this == PS2 || this == PSP || this == DOLPHIN || this == DC || this == N64 || this == SATURN
 
     /** Performance draws at native size: no Scale row (the PS2 runs slowly above it; PCSX-ReARMed has only 1x and 2x). */
@@ -112,8 +112,8 @@ enum class Res3dConsole(
 
     /**
      * The core option's value for scale [n]: ARMSX2 reads "2x", PPSSPP, Flycast and GLideN64 the size ("960x544", "1280x960"),
-     * PCSX-ReARMed whether Enhanced Resolution is on, YabaSanshiro its mode (no 3x: down to 2x, never above what the display
-     * reaches), the others a bare number.
+     * PCSX-ReARMed whether Enhanced Resolution is on, YabaSanshiro its mode (a 3 that slips past [value] goes down to 2x),
+     * the others a bare number.
      */
     fun coreValue(n: Int): String = when (this) {
         PS2 -> "${n}x"
@@ -201,8 +201,11 @@ object Nds3dResolution {
             Nds3dMode.AUTO -> if (shaded) 1 else minOf(current ?: displayMax, maxScale, displayMax)
             Nds3dMode.QUALITY -> min(current ?: displayMax, displayMax)
             Nds3dMode.PERFORMANCE -> min(scale, performanceCeiling(displayMax, console))
-        }
-        return v.coerceIn(1, console.coreMax)
+        }.coerceIn(1, console.coreMax)
+        // A core without every scale: Quality goes up to the next one so the picture is never drawn below its shown size,
+        // Auto and Performance down, as they hold back for speed.
+        val steps = console.scaleSteps ?: return v
+        return if (mode == Nds3dMode.QUALITY) steps.firstOrNull { it >= v } ?: steps.last() else steps.last { it <= v }
     }
 
     /**
@@ -527,14 +530,17 @@ object DcResolution {
         shownScalesBy(mainHeightPx, secondHeightPx, ::currentScale)
 }
 
-/** Saturn on YabaSanshiro: the common 320 x 224 game picture at 1x, 2x or 4x (hi-res modes are twice as wide and the core handles that itself). */
+/**
+ * Saturn on YabaSanshiro: the common 224-line game picture, shown 4:3, at 1x, 2x or 4x. The core multiplies the game's own
+ * size, so a hi-res game (704 x 480) draws twice as many pixels per side as its shown scale suggests.
+ */
 object SaturnResolution {
-    const val NATIVE_W = 320
     const val NATIVE_H = 224
 
+    private const val SHOWN_W = NATIVE_H * 4 / 3
     private const val MAX = 4
 
-    private val scales = WholeScale(NATIVE_W, NATIVE_H, MAX)
+    private val scales = WholeScale(SHOWN_W, NATIVE_H, MAX)
 
     /** The scale the picture reaches fitted in a [w] x [h] px window, either way up, rounded up (1 to 4). */
     fun displayMax(w: Int, h: Int): Int = scales.displayMax(w, h)
