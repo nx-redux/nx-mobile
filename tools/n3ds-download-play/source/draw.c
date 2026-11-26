@@ -1,86 +1,136 @@
+#include <string.h>
+
 #include "draw.h"
 
-Canvas canvasOf(gfxScreen_t screen) {
-    Canvas c = {gfxGetFramebuffer(screen, GFX_LEFT, NULL, NULL), screen == GFX_TOP ? 400 : 320, 240};
-    return c;
+#define ICON_SLOTS 8
+
+static C3D_RenderTarget *top, *bottom;
+static C3D_Tex atlas;
+static C3D_Tex icon_tex[ICON_SLOTS];
+static const u16* icon_src[ICON_SLOTS];
+
+// Where (x, y) of a w-wide texture lands in the GPU's tiled layout: 8x8 tiles, Morton order inside each.
+static inline u32 tiled(u32 x, u32 y, u32 w) {
+    return (((y >> 3) * (w >> 3) + (x >> 3)) << 6) |
+           ((x & 1) | ((y & 1) << 1) | ((x & 2) << 1) | ((y & 2) << 2) | ((x & 4) << 2) | ((y & 4) << 3));
 }
 
-static inline u8* at(Canvas c, int x, int y) { return c.px + ((x * 240) + (239 - y)) * 3; }
+void drawInit(void) {
+    gfxInitDefault();
+    C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);
+    C2D_Init(C2D_DEFAULT_MAX_OBJECTS * 4);
+    C2D_Prepare();
+    top = C2D_CreateScreenTarget(GFX_TOP, GFX_LEFT);
+    bottom = C2D_CreateScreenTarget(GFX_BOTTOM, GFX_LEFT);
 
-static inline void blend(Canvas c, int x, int y, Rgb col, int a) {
-    if (x < 0 || x >= c.w || y < 0 || y >= c.h || a <= 0) return;
-    u8* p = at(c, x, y);
-    if (a >= 255) { p[0] = col.b; p[1] = col.g; p[2] = col.r; return; }
-    p[0] = (u8)((col.b * a + p[0] * (255 - a)) / 255);
-    p[1] = (u8)((col.g * a + p[1] * (255 - a)) / 255);
-    p[2] = (u8)((col.r * a + p[2] * (255 - a)) / 255);
-}
-
-void clear(Canvas c, Rgb color) { rect(c, 0, 0, c.w, c.h, color); }
-
-void rect(Canvas c, int x, int y, int w, int h, Rgb color) {
-    for (int i = x < 0 ? 0 : x; i < x + w && i < c.w; i++)
-        for (int j = y < 0 ? 0 : y; j < y + h && j < c.h; j++) {
-            u8* p = at(c, i, j);
-            p[0] = color.b; p[1] = color.g; p[2] = color.r;
-        }
-}
-
-void roundRect(Canvas c, int x, int y, int w, int h, int r, Rgb color) {
-    for (int j = 0; j < h; j++)
-        for (int i = 0; i < w; i++) {
-            // Distance from the nearest corner centre, for pixels in a corner square.
-            int cx = i < r ? r : i >= w - r ? w - r - 1 : i;
-            int cy = j < r ? r : j >= h - r ? h - r - 1 : j;
-            int a = 255;
-            if (cx != i || cy != j) {
-                float dx = i + 0.5f - (cx + 0.5f), dy = j + 0.5f - (cy + 0.5f);
-                float d = dx * dx + dy * dy, rr = (float)r;
-                if (d >= (rr + 0.5f) * (rr + 0.5f)) continue;
-                if (d > (rr - 0.5f) * (rr - 0.5f)) {
-                    // Coverage of the edge pixel, roughly linear across the last pixel.
-                    float dist = __builtin_sqrtf(d);
-                    a = (int)((rr + 0.5f - dist) * 255.0f);
-                }
-            }
-            blend(c, x + i, y + j, color, a);
-        }
-}
-
-int textWidth(const Font* f, const char* s) {
-    int w = 0;
-    for (; *s; s++) {
-        unsigned ch = (unsigned char)*s;
-        if (ch < 32 || ch > 126) ch = '?';
-        w += f->glyphs[ch - 32].advance;
+    // The atlas as white with the glyphs' alpha (RGBA8, as every renderer reads it alike).
+    C3D_TexInit(&atlas, font_atlas_w, font_atlas_h, GPU_RGBA8);
+    C3D_TexSetFilter(&atlas, GPU_LINEAR, GPU_LINEAR);
+    u32* px = (u32*)atlas.data;
+    for (u32 y = 0; y < font_atlas_h; y++)
+        for (u32 x = 0; x < font_atlas_w; x++)
+            px[tiled(x, y, font_atlas_w)] = 0xFFFFFF00u | font_atlas[y * font_atlas_w + x]; // RGBA
+    C3D_TexFlush(&atlas);
+    for (int i = 0; i < ICON_SLOTS; i++) {
+        C3D_TexInit(&icon_tex[i], 64, 64, GPU_RGB565);
+        C3D_TexSetFilter(&icon_tex[i], GPU_LINEAR, GPU_LINEAR);
     }
-    return w;
 }
 
-int text(Canvas c, const Font* f, int x, int y, const char* s, Rgb color) {
-    int pen = x;
+void drawExit(void) {
+    for (int i = 0; i < ICON_SLOTS; i++) C3D_TexDelete(&icon_tex[i]);
+    C3D_TexDelete(&atlas);
+    C2D_Fini();
+    C3D_Fini();
+    gfxExit();
+}
+
+static Color clear_color;
+
+void frameBegin(Color background) {
+    clear_color = background;
+    C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+    C2D_TargetClear(top, background);
+    C2D_TargetClear(bottom, background);
+}
+
+void onTop(void) { C2D_SceneBegin(top); }
+void onBottom(void) { C2D_SceneBegin(bottom); }
+void frameEnd(void) { C3D_FrameEnd(0); }
+
+void rect(float x, float y, float w, float h, Color c) { C2D_DrawRectSolid(x, y, 0, w, h, c); }
+
+void roundRect(float x, float y, float w, float h, float r, Color c) {
+    if (r * 2 > h) r = h / 2;
+    if (r * 2 > w) r = w / 2;
+    C2D_DrawRectSolid(x + r, y, 0, w - 2 * r, h, c);
+    C2D_DrawRectSolid(x, y + r, 0, r, h - 2 * r, c);
+    C2D_DrawRectSolid(x + w - r, y + r, 0, r, h - 2 * r, c);
+    // The corners from the atlas's disc: smooth at any scale the emulator renders at.
+    Tex3DS_SubTexture sub = {disc_d, disc_d, (float)disc_x / font_atlas_w, 1.0f - (float)disc_y / font_atlas_h,
+                             (float)(disc_x + disc_d) / font_atlas_w, 1.0f - (float)(disc_y + disc_d) / font_atlas_h};
+    C2D_Image img = {&atlas, &sub};
+    C2D_ImageTint tint;
+    C2D_PlainImageTint(&tint, c, 1.0f);
+    float s = 2 * r / disc_d;
+    C2D_DrawImageAt(img, x, y, 0, &tint, s, s);
+    C2D_DrawImageAt(img, x + w - 2 * r, y, 0, &tint, s, s);
+    C2D_DrawImageAt(img, x, y + h - 2 * r, 0, &tint, s, s);
+    C2D_DrawImageAt(img, x + w - 2 * r, y + h - 2 * r, 0, &tint, s, s);
+}
+
+static const Glyph* glyphOf(const Font* f, char ch) {
+    unsigned u = (unsigned char)ch;
+    return &f->glyphs[(u < 32 || u > 126 ? '?' : u) - 32];
+}
+
+float textWidth(const Font* f, const char* s) {
+    float w = 0;
+    for (; *s; s++) w += glyphOf(f, *s)->advance;
+    return w / FONT_SCALE;
+}
+
+float text(const Font* f, float x, float y, const char* s, Color c) {
+    C2D_ImageTint tint;
+    C2D_PlainImageTint(&tint, c, 1.0f);
+    float pen = x;
     for (; *s; s++) {
-        unsigned ch = (unsigned char)*s;
-        if (ch < 32 || ch > 126) ch = '?';
-        const Glyph* g = &f->glyphs[ch - 32];
-        const u8* a = f->data + g->offset;
-        for (int j = 0; j < g->h; j++)
-            for (int i = 0; i < g->w; i++) blend(c, pen + g->left + i, y + g->top + j, color, a[j * g->w + i]);
-        pen += g->advance;
+        const Glyph* g = glyphOf(f, *s);
+        if (g->w) {
+            Tex3DS_SubTexture sub = {
+                g->w, g->h,
+                (float)g->x / font_atlas_w, 1.0f - (float)g->y / font_atlas_h,
+                (float)(g->x + g->w) / font_atlas_w, 1.0f - (float)(g->y + g->h) / font_atlas_h,
+            };
+            C2D_Image img = {&atlas, &sub};
+            C2D_DrawImageAt(img, pen + (float)g->left / FONT_SCALE, y + (float)g->top / FONT_SCALE, 0, &tint,
+                            1.0f / FONT_SCALE, 1.0f / FONT_SCALE);
+        }
+        pen += (float)g->advance / FONT_SCALE;
     }
     return pen - x;
 }
 
-void icon(Canvas c, const u16* src, int x0, int y0, int scale) {
-    int n = 0;
-    for (int ty = 0; ty < 48; ty += 8)
-        for (int tx = 0; tx < 48; tx += 8)
-            for (int k = 0; k < 64; k++, n++) {
-                int x = (k & 1) | ((k >> 1) & 2) | ((k >> 2) & 4);
-                int y = ((k >> 1) & 1) | ((k >> 2) & 2) | ((k >> 3) & 4);
-                u16 v = src[n];
-                Rgb col = {(u8)((v >> 11) << 3), (u8)(((v >> 5) & 0x3F) << 2), (u8)((v & 0x1F) << 3)};
-                for (int i = 0; i < scale; i++)
-                    for (int j = 0; j < scale; j++) blend(c, x0 + (tx + x) * scale + i, y0 + (ty + y) * scale + j, col, 255);
-            }
+void icon(int slot, const u16* src, float x, float y, float size) {
+    if (slot < 0 || slot >= ICON_SLOTS) return;
+    C3D_Tex* t = &icon_tex[slot];
+    if (icon_src[slot] != src) {
+        // Decode the icon's own tiling, then lay it out as the top-left 48x48 of a 64x64 texture.
+        u16* px = (u16*)t->data;
+        memset(px, 0, 64 * 64 * 2);
+        int n = 0;
+        for (int ty = 0; ty < 48; ty += 8)
+            for (int tx = 0; tx < 48; tx += 8)
+                for (int k = 0; k < 64; k++, n++) {
+                    int ix = tx + ((k & 1) | ((k >> 1) & 2) | ((k >> 2) & 4));
+                    int iy = ty + (((k >> 1) & 1) | ((k >> 2) & 2) | ((k >> 3) & 4));
+                    px[tiled(ix, iy, 64)] = src[n];
+                }
+        C3D_TexFlush(t);
+        icon_src[slot] = src;
+    }
+    Tex3DS_SubTexture sub = {48, 48, 0.0f, 1.0f, 48.0f / 64, 1.0f - 48.0f / 64};
+    C2D_Image img = {t, &sub};
+    C2D_DrawImageAt(img, x, y, 0, NULL, size / 48, size / 48);
 }
+

@@ -213,7 +213,7 @@ class NxTestReceiver : BroadcastReceiver() {
                 // 3DS Download Play: the bundled client in place of a game file (as its row launches it).
                 NxTestResults.markShowWhenLocked(app)
                 val session = GameSession("3DS", N3dsDownloadPlay.TITLE, core, ContentRef(N3dsDownloadPlay.CONTENT), ContentRef(""),
-                    N3dsDownloadPlay.FILE_NAME, null, emptyList(), fresh = true)
+                    N3dsDownloadPlay.FILE_NAME, null, emptyList(), fresh = true, gamePath = gamePath ?: N3dsDownloadPlay.CONTENT)
                 scope.launch { LibretroRunner(app) { true }.apply { recordLaunches = false }.launch(session, Recent(path, N3dsDownloadPlay.TITLE)) }
                 return
             }

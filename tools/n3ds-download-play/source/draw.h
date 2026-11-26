@@ -1,22 +1,26 @@
-// Software drawing on the 3DS framebuffers (BGR8, stored rotated: column-major, bottom row first).
+// GPU drawing (citro2d): the emulator renders it at its 3D resolution, so text and shapes stay sharp when scaled up.
 #pragma once
+
+#include <citro2d.h>
 
 #include "font.h"
 
-typedef struct {
-    u8* px;
-    int w, h; // as seen: 400x240 top, 320x240 bottom
-} Canvas;
+typedef u32 Color; // C2D_Color32
 
-typedef struct { u8 r, g, b; } Rgb;
+void drawInit(void);
+void drawExit(void);
+// One frame: begin, then draw on the top screen, then the bottom, then end.
+void frameBegin(Color background);
+void onTop(void);
+void onBottom(void);
+void frameEnd(void);
 
-Canvas canvasOf(gfxScreen_t screen);
-void clear(Canvas c, Rgb color);
-void rect(Canvas c, int x, int y, int w, int h, Rgb color);
-// A filled rectangle with round corners of radius r, edges antialiased.
-void roundRect(Canvas c, int x, int y, int w, int h, int r, Rgb color);
+void rect(float x, float y, float w, float h, Color c);
+// A filled rectangle with round corners (radius r; h = 2r makes a pill).
+void roundRect(float x, float y, float w, float h, float r, Color c);
 // Text with its top at y; returns its width.
-int text(Canvas c, const Font* f, int x, int y, const char* s, Rgb color);
-int textWidth(const Font* f, const char* s);
-// A 48x48 3DS icon (RGB565 in 8x8 Morton-ordered tiles) at scale.
-void icon(Canvas c, const u16* src, int x, int y, int scale);
+float text(const Font* f, float x, float y, const char* s, Color c);
+float textWidth(const Font* f, const char* s);
+// A 3DS icon (48x48 RGB565 in 8x8 Morton-ordered tiles, as SMDH and Download Play keep them) drawn size x size.
+// slot: one of a few cached textures, so a list can show several icons.
+void icon(int slot, const u16* src, float x, float y, float size);

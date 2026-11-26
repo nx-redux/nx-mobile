@@ -16,7 +16,7 @@ CFLAGS	:=	-g -Wall -O2 -mword-relocations -ffunction-sections $(ARCH)
 CFLAGS	+=	$(INCLUDE) -D__3DS__
 ASFLAGS	:=	-g $(ARCH)
 LDFLAGS	=	-specs=3dsx.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
-LIBS	:= -lctru -lm
+LIBS	:= -lcitro2d -lcitro3d -lctru -lm
 LIBDIRS	:= $(CTRULIB)
 ifneq ($(BUILD),$(notdir $(CURDIR)))
 export OUTPUT	:=	$(CURDIR)/$(TARGET)

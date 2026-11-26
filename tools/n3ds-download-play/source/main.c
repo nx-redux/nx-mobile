@@ -1,5 +1,6 @@
 // 3DS Download Play: lists the Download Play games hosted nearby, downloads the one picked and starts it. Drawn the
-// way NX Redux draws its menus: black, light text, the selected row a light pill, button hints at the bottom.
+// way NX Redux draws its menus: black, light text, the selected row a light pill, button hints bottom right of the top
+// screen; the bottom screen shows the picked game.
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -8,15 +9,15 @@
 #include "dlp.h"
 #include "draw.h"
 
-#define MAX_HOSTS 6
+#define MAX_HOSTS 5
 
-static const Rgb BG = {0, 0, 0};
-static const Rgb INK = {0xD8, 0xD8, 0xD8};
-static const Rgb HINT = {0x99, 0x99, 0x99};
-static const Rgb PILL = {0xE4, 0xE4, 0xE7};
-static const Rgb ON_PILL = {0, 0, 0};
-static const Rgb LINE = {0x1F, 0x1F, 0x1F};
-static const Rgb GOOD = {0x82, 0xDC, 0x82};
+#define BG C2D_Color32(0x00, 0x00, 0x00, 0xFF)
+#define INK C2D_Color32(0xD8, 0xD8, 0xD8, 0xFF)
+#define HINT C2D_Color32(0x99, 0x99, 0x99, 0xFF)
+#define PILL C2D_Color32(0xE4, 0xE4, 0xE7, 0xFF)
+#define ON_PILL C2D_Color32(0x00, 0x00, 0x00, 0xFF)
+#define LINE C2D_Color32(0x26, 0x26, 0x26, 0xFF)
+#define GOOD C2D_Color32(0x82, 0xDC, 0x82, 0xFF)
 
 // Where the app learns which game is about to start, so it can apply that game's own settings first.
 #define PICK_DIR "sdmc:/nx-redux"
@@ -38,67 +39,62 @@ static void ascii(char* out, const u16* in, int n) {
     out[i] = 0;
 }
 
-// A button glyph as the app's hints draw it: the label in a light circle, then the action.
-static int hint(Canvas c, int x, int y, const char* key, const char* action) {
-    int kw = textWidth(&font_small, key);
-    int d = kw > 10 ? kw + 10 : 18;
-    roundRect(c, x, y, d, 18, 9, INK);
-    text(c, &font_small, x + (d - kw) / 2, y + 1, key, BG);
-    return d + 5 + text(c, &font_small, x + d + 5, y + 1, action, INK) + 16;
-}
+typedef struct { const char* key; const char* action; } Hint;
 
-static void hintsRight(Canvas c, const char* k1, const char* a1, const char* k2, const char* a2) {
-    // Laid out right to left: measure first.
-    int w = 0;
-    const char* keys[2] = {k1, k2};
-    const char* acts[2] = {a1, a2};
-    for (int i = 0; i < 2; i++)
-        if (keys[i]) {
-            int kw = textWidth(&font_small, keys[i]);
-            w += (kw > 10 ? kw + 10 : 18) + 5 + textWidth(&font_small, acts[i]) + 16;
-        }
-    int x = c.w - 12 - (w - 16);
-    for (int i = 0; i < 2; i++)
-        if (keys[i]) x += hint(c, x, c.h - 26, keys[i], acts[i]);
-}
-
-static void header(Canvas c, const char* title) {
-    text(c, &font_small, 16, 10, title, HINT);
+// The app's button hints: each key in a light pill, its action after it, laid out from the right edge.
+static void hints(const Hint* h, int n) {
+    float x = 400 - 14, y = 240 - 24;
+    for (int i = n - 1; i >= 0; i--) {
+        float aw = textWidth(&font_small, h[i].action);
+        x -= aw;
+        text(&font_small, x, y, h[i].action, INK);
+        float kw = textWidth(&font_small, h[i].key);
+        float pw = kw + 12 < 18 ? 18 : kw + 12;
+        x -= 5 + pw;
+        roundRect(x, y - 1, pw, 18, 9, INK);
+        text(&font_small, x + (pw - kw) / 2, y, h[i].key, BG);
+        x -= 16;
+    }
 }
 
 static void drawTop(void) {
-    Canvas c = canvasOf(GFX_TOP);
-    clear(c, BG);
-    header(c, "3DS Download Play");
+    onTop();
+    text(&font_small, 16, 10, "3DS Download Play", HINT);
     char name[65];
     if (phase == LISTING) {
         if (host_count == 0) {
             const char* dots[] = {"", ".", "..", "..."};
             char line[48];
             snprintf(line, sizeof line, "Looking for games nearby%s", dots[(frame / 30) % 4]);
-            text(c, &font_title, 24, 92, line, INK);
-            text(c, &font_body, 24, 122, "Ask the other player to open", HINT);
-            text(c, &font_body, 24, 142, "Download Play in their game.", HINT);
+            text(&font_title, 24, 90, line, INK);
+            text(&font_body, 24, 118, "Ask the other player to open", HINT);
+            text(&font_body, 24, 138, "Download Play in their game.", HINT);
+            Hint h[] = {{"START", "Quit"}};
+            hints(h, 1);
             return;
         }
         for (int i = 0; i < host_count; i++) {
-            int y = 34 + i * 34;
+            float y = 34 + i * 36;
             bool on = i == picked;
-            if (on) roundRect(c, 10, y, 380, 32, 16, PILL);
+            if (on) roundRect(10, y, 380, 34, 17, PILL);
+            icon(i, hosts[i].icon, 18, y + 3, 28);
             ascii(name, hosts[i].title_short, 64);
-            text(c, &font_title, 26, y + 6, name, on ? ON_PILL : INK);
+            text(&font_title, 56, y + 7, name, on ? ON_PILL : INK);
             char size[24];
             snprintf(size, sizeof size, "%lu MB", (unsigned long)((hosts[i].size + 512 * 1024) / (1024 * 1024)));
-            int sw = textWidth(&font_small, size);
-            text(c, &font_small, 380 - sw, y + 9, size, on ? ON_PILL : HINT);
+            text(&font_small, 376 - textWidth(&font_small, size), y + 10, size, on ? ON_PILL : HINT);
         }
+        Hint h[] = {{"A", "Download"}, {"START", "Quit"}};
+        hints(h, 2);
         return;
     }
     ascii(name, hosts[picked].title_short, 64);
-    icon(c, hosts[picked].icon, 24, 50, 2);
-    text(c, &font_big, 132, 62, name, INK);
+    icon(0, hosts[picked].icon, 24, 52, 72);
+    text(&font_big, 112, 60, name, INK);
     if (phase == FAILED) {
-        text(c, &font_body, 132, 96, message, INK);
+        text(&font_body, 112, 94, message, INK);
+        Hint h[] = {{"A", "Back to the list"}, {"START", "Quit"}};
+        hints(h, 2);
         return;
     }
     const char* line;
@@ -109,55 +105,52 @@ static void drawTop(void) {
         snprintf(pct, sizeof pct, "Downloading  %lu%%", (unsigned long)(100ULL * status.downloaded / status.total));
         line = pct;
     }
-    text(c, &font_body, 132, 96, line, phase == STARTING ? GOOD : HINT);
-    roundRect(c, 132, 128, 244, 8, 4, LINE);
-    int fill = status.total ? (int)(244ULL * status.downloaded / status.total) : 0;
-    if (phase == STARTING) fill = 244;
-    if (fill > 8) roundRect(c, 132, 128, fill, 8, 4, PILL);
-}
-
-static void drawBottom(void) {
-    Canvas c = canvasOf(GFX_BOTTOM);
-    clear(c, BG);
-    if (phase == LISTING && host_count > 0) {
-        char name[129];
-        ascii(name, hosts[picked].title_long, 128);
-        icon(c, hosts[picked].icon, 16, 20, 1);
-        // The long title over two lines at most, broken at a space.
-        char first[64] = {0};
-        const char* rest = name;
-        int n = (int)strlen(name);
-        if (textWidth(&font_body, name) > 230) {
-            int cut = n < (int)sizeof first - 1 ? n : (int)sizeof first - 1;
-            while (cut > 0) {
-                memcpy(first, name, cut);
-                first[cut] = 0;
-                if (textWidth(&font_body, first) <= 230 && (name[cut] == ' ' || name[cut] == 0)) break;
-                cut--;
-            }
-            rest = name + cut + (name[cut] == ' ');
-            text(c, &font_body, 76, 22, first, INK);
-            text(c, &font_body, 76, 42, rest, INK);
-        } else {
-            text(c, &font_body, 76, 30, name, INK);
-        }
-        text(c, &font_small, 16, 84, "Sent by the host for this session. Nothing", HINT);
-        text(c, &font_small, 16, 102, "of yours is needed.", HINT);
-        hintsRight(c, "A", "Download", "START", "Quit");
-    } else if (phase == DOWNLOADING) {
-        hintsRight(c, "B", "Back", "START", "Quit");
-    } else if (phase == FAILED) {
-        hintsRight(c, "A", "Back to the list", "START", "Quit");
-    } else if (phase == LISTING) {
-        hintsRight(c, NULL, NULL, "START", "Quit");
+    text(&font_body, 112, 94, line, phase == STARTING ? GOOD : HINT);
+    roundRect(112, 124, 264, 6, 3, LINE);
+    float fill = status.total ? 264.0f * status.downloaded / status.total : 0;
+    if (phase == STARTING) fill = 264;
+    if (fill >= 6) roundRect(112, 124, fill, 6, 3, PILL);
+    if (phase == DOWNLOADING) {
+        Hint h[] = {{"B", "Back"}, {"START", "Quit"}};
+        hints(h, 2);
     }
 }
 
+static void drawBottom(void) {
+    onBottom();
+    if (phase != LISTING || host_count == 0) return;
+    char name[129];
+    ascii(name, hosts[picked].title_long, 128);
+    icon(7, hosts[picked].icon, 136, 28, 48);
+    // The long title centred, over two lines at most, broken at a space.
+    char first[64] = {0};
+    const char* rest = NULL;
+    int n = (int)strlen(name);
+    if (textWidth(&font_body, name) > 288) {
+        int cut = n < (int)sizeof first - 1 ? n : (int)sizeof first - 1;
+        while (cut > 0) {
+            memcpy(first, name, cut);
+            first[cut] = 0;
+            if (textWidth(&font_body, first) <= 288 && (name[cut] == ' ' || name[cut] == 0)) break;
+            cut--;
+        }
+        rest = name + cut + (name[cut] == ' ');
+    } else {
+        strcpy(first, name);
+    }
+    text(&font_body, 160 - textWidth(&font_body, first) / 2, 92, first, INK);
+    if (rest) text(&font_body, 160 - textWidth(&font_body, rest) / 2, 112, rest, INK);
+    const char* note = "The host sends it for this session.";
+    text(&font_small, 160 - textWidth(&font_small, note) / 2, 160, note, HINT);
+    const char* note2 = "Nothing of yours is needed.";
+    text(&font_small, 160 - textWidth(&font_small, note2) / 2, 178, note2, HINT);
+}
+
 static void present(void) {
+    frameBegin(BG);
     drawTop();
     drawBottom();
-    gfxFlushBuffers();
-    gfxSwapBuffers();
+    frameEnd();
 }
 
 // Adds or refreshes the hosts dlp:CLNT has seen since the last refresh.
@@ -204,28 +197,22 @@ static void announce(u64 child) {
 }
 
 int main(void) {
-    gfxInitDefault();
-    gfxSetDoubleBuffering(GFX_TOP, true);
-    gfxSetDoubleBuffering(GFX_BOTTOM, true);
+    drawInit();
 
     if (R_FAILED(dlpOpen())) {
         fail("Download Play could not start.");
-        host_count = 0;
         while (aptMainLoop()) {
             hidScanInput();
             if (hidKeysDown() & (KEY_START | KEY_A)) break;
-            Canvas c = canvasOf(GFX_TOP);
-            clear(c, BG);
-            header(c, "3DS Download Play");
-            text(c, &font_title, 24, 100, message, INK);
-            Canvas b = canvasOf(GFX_BOTTOM);
-            clear(b, BG);
-            hintsRight(b, NULL, NULL, "START", "Quit");
-            gfxFlushBuffers();
-            gfxSwapBuffers();
-            gspWaitForVBlank();
+            frameBegin(BG);
+            onTop();
+            text(&font_small, 16, 10, "3DS Download Play", HINT);
+            text(&font_title, 24, 100, message, INK);
+            Hint h[] = {{"START", "Quit"}};
+            hints(h, 1);
+            frameEnd();
         }
-        gfxExit();
+        drawExit();
         return 0;
     }
     dlpRemoveOldChildren(); // a child only works with its host: last time's is no use
@@ -290,11 +277,10 @@ int main(void) {
         }
         frame++;
         present();
-        gspWaitForVBlank();
     }
 
     dlpStopSession();
     dlpClose();
-    gfxExit();
+    drawExit();
     return 0;
 }
