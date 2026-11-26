@@ -1,6 +1,8 @@
 package com.nxredux.mobile.runner
 
 import com.nxredux.mobile.netplay.NetplayCores
+import com.nxredux.mobile.cheats.Ps2Patches
+import com.nxredux.mobile.options.CoreConfig
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -34,11 +36,20 @@ class CoreRegistryPs2Test {
         assertTrue("armsx2_upscale" in core.lockedOptions)
     }
 
-    @Test fun patchesAndCheatsOffButUnlocked() {   // the player's to turn on; their files come from Cheats/PS2
-        for (k in listOf("armsx2_widescreen_patches", "armsx2_no_interlacing_patches", "armsx2_cheats")) {
+    @Test fun patchOptionsLockedOffCheatsUnlocked() {   // Widescreen / No-Interlacing live in the Patches tab now
+        for (k in Ps2Patches.RETIRED_OPTIONS) {
             assertEquals("disabled", core.defaultOptions[k], k)
-            assertFalse(k in core.lockedOptions, k)
+            assertTrue(k in core.lockedOptions, k)
         }
+        assertEquals(setOf("armsx2_widescreen_patches", "armsx2_no_interlacing_patches"), Ps2Patches.RETIRED_OPTIONS)
+        assertEquals("disabled", core.defaultOptions["armsx2_cheats"])
+        assertFalse("armsx2_cheats" in core.lockedOptions)
+        assertTrue(core.patchesTab)
+    }
+
+    @Test fun a_save_never_overwrites_a_retired_patch_option() {   // its stored value stays the new-game default
+        val running = listOf("armsx2_widescreen_patches" to "disabled", "armsx2_upscale" to "2x")
+        assertEquals(listOf("armsx2_upscale" to "2x"), CoreConfig.valuesToSave(running, emptyMap(), Ps2Patches.RETIRED_OPTIONS))
     }
 
     @Test fun softwareThreadsLocked() {

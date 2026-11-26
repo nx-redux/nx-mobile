@@ -1,5 +1,6 @@
 package com.nxredux.mobile.runner
 
+import com.nxredux.mobile.cheats.Ps2Patches
 import com.nxredux.mobile.library.NaomiSets
 import com.nxredux.mobile.library.Names
 
@@ -229,14 +230,15 @@ object CoreRegistry {
         biosSubdir = "pcsx2/bios",
         // BIOS: Auto lets the core pick from <system>/pcsx2/bios; Console Settings' BIOS row forces one file at launch.
         // Patches and cheats off until the player turns them on: the core reads the game's .pnach patches from
-        // Cheats/PS2/Patches/ (Tools → Cheats & Patches downloads PCSX2's patches.zip there) and its cheats from Cheats/PS2/
-        // (cores/patches/armsx2/0005), never shipped with the app. Software renderer threads stay hidden: they matter only
+        // Cheats/PS2/Patches/ (Tools → Cheats & Patches downloads PCSX2's patches.zip there), switched per game in the
+        // in-game Patches tab, and its cheats from Cheats/PS2/ (cores/patches/armsx2/0005), never shipped with the app. Software renderer threads stay hidden: they matter only
         // to a renderer the app never picks.
         defaultOptions = mapOf(
             "armsx2_renderer" to "OpenGL", "armsx2_bios" to "auto", "armsx2_upscale" to "2x",
             "armsx2_widescreen_patches" to "disabled", "armsx2_no_interlacing_patches" to "disabled", "armsx2_cheats" to "disabled", "armsx2_sw_threads" to "2",
         ),
-        lockedOptions = setOf("armsx2_renderer", "armsx2_bios", "armsx2_upscale", "armsx2_sw_threads"),
+        // Widescreen / No-Interlacing: rows of the Patches tab now, never the core's own name-matching (Ps2Patches).
+        lockedOptions = setOf("armsx2_renderer", "armsx2_bios", "armsx2_upscale", "armsx2_sw_threads") + Ps2Patches.RETIRED_OPTIONS,
         vulkan = VulkanSwitch(gles = mapOf("armsx2_renderer" to "OpenGL"), vulkan = mapOf("armsx2_renderer" to "Vulkan"), autoOnMali = true, autoOnXclipse = true),
         // The PS2's two controller ports, both DualShock2 (cores/patches/armsx2/0006); no multitap. Saves stay on card 1.
         players = 2,

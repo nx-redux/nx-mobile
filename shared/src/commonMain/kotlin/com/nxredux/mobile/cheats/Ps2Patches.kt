@@ -17,6 +17,8 @@ object Ps2Patches {
     const val CODE_PREFIX = "patch:"
     const val WIDESCREEN_OPTION = "armsx2_widescreen_patches"
     const val NO_INTERLACING_OPTION = "armsx2_no_interlacing_patches"
+    /** The core options the Patches tab replaced: locked off, their stored values kept ([initialEnabled]). */
+    val RETIRED_OPTIONS = setOf(WIDESCREEN_OPTION, NO_INTERLACING_OPTION)
 
     /** The core's card folder is `<saves>/<content file title>`. */
     fun listPath(savesDir: String, romFileName: String): String = "$savesDir/${romFileName.substringBeforeLast('.')}/$LIST_FILE"
