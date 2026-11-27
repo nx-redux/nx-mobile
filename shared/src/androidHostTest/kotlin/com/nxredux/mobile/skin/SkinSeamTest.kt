@@ -286,7 +286,7 @@ class SkinSeamTest {
             val c = p.controls.associateBy { it.spec.id }
             assertEquals(c.getValue("R").y, c.getValue("L").y, 1f, "$name L level with R")
             assertEquals((c.getValue("X").y + c.getValue("B").y) / 2f, c.getValue("STICK").y, 1f, "$name stick level with the face")
-            // (the d-pad's size and place: the pack draws them, SkinPackDrawingTest.the3dsOnTheFoldUprightHasItsDpadUpAndIn)
+            // (the d-pad's size and place: the pack draws them)
             fun ring(id: String) = c.getValue(id).let { k -> p.pieces.filter { it.piece >= 0 && p.spec.pieces[it.piece].glass == null &&
                 kotlin.math.abs(it.dst.x + it.dst.width / 2f - k.x) < 2f && kotlin.math.abs(it.dst.y + it.dst.height / 2f - k.y) < 2f }.maxOf { it.dst.width } }
             val s = c.getValue("STICK"); val d = c.getValue("DPAD")

@@ -475,14 +475,14 @@ class SkinWiiuTest {
                 val gc = assertNotNull(SkinChoice.place(pack, d.w, d.h, d.dpi, d.tablet, ds = false, picture = 640f to 528f, hingeY = d.hingeY, foldable = d.foldable, variant = SkinVariant.GC), label)
                 val gg = assertNotNull(gc.glasses.firstOrNull { it.screen != GlassScreen.TOP && it.screen != GlassScreen.PICTURE }, label).rect
                 for ((a, b) in listOf(gg.x to g.x, gg.y to g.y, gg.width to g.width, gg.height to g.height)) assertEquals(a, b, 1f, "$label glass $g, the GameCube's $gg")
-            } else if (d.hingeY == null) {
+            } else {
                 // flat: the 3DS's sides and bottom, grown up under a shorter TV frame to the 3DS's gap between the glasses
                 // (under a taller one, as the 3DS's)
                 for ((a, b) in listOf(nf.x to wf.x, nf.width to wf.width, nf.y + nf.height to wf.y + wf.height)) assertEquals(a, b, 1f, "$label frame $wf, the 3DS's $nf")
                 val nt = assertNotNull(n.glass(GlassScreen.TOP), label).rect; val nb = assertNotNull(n.glass(GlassScreen.TOUCH), label).rect
                 val wt = assertNotNull(p.glass(GlassScreen.TOP), label).rect
                 assertTrue(g.y - (wt.y + wt.height) <= nb.y - (nt.y + nt.height) + 1f, "$label no wider a gap under the TV than the 3DS's")
-            } else for ((a, b) in listOf(nf.x to wf.x, nf.y to wf.y, nf.width to wf.width, nf.height to wf.height)) assertEquals(a, b, 1f, "$label frame $wf, the 3DS's $nf")
+            }
             val (_, pad) = assertNotNull(WiiuLayout.skinRegions(null, p.glass(GlassScreen.TOP)?.rect, g, NdsSettings()), label).map { it.dst }
             assertEquals(g.width, pad.width, 1f, "$label GamePad across the glass"); assertEquals(16f / 9f, aspect(pad), 0.01f, "$label GamePad")
             assertEquals(g.y + g.height / 2f, pad.y + pad.height / 2f, 1f, "$label GamePad centred down")

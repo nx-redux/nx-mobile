@@ -41,6 +41,8 @@ object SkinChoice {
     private const val MENU_MIN_DP = 320f
     /** The longest a book foldable's inner screen is to its short side (the Galaxy Fold 7 / 8 Ultra 1.11, the Pixel Folds 1.04). */
     private const val NEAR_SQUARE = 1.2f
+    /** The consoles with two screens, which the fold board's hinge falls between. */
+    private val TWO_SCREEN = setOf(SkinVariant.DS, SkinVariant.N3DS, SkinVariant.N3DS_REGULAR, SkinVariant.WIIU)
     /** The smallest menu glass side, picture px: less and the menu would not be usable in it. */
     private const val MENU_MIN_GLASS = 400f
 
@@ -116,8 +118,9 @@ object SkinChoice {
         val k = scaleFor(pack, densityDpi)
         val tuned = tunedFor(windowW, windowH, densityDpi, hingeY)
         val landscape = windowW > windowH
-        // sideways, a book foldable's inner screen: the hinge runs across the window, so the two screens too, flat or not
-        val twoUp = if (landscape) (foldable || tablet) && nearSquare(windowW, windowH) else tablet
+        // sideways, a book foldable's inner screen (tablet-class): the hinge runs across the window, so the two screens too,
+        // flat or not; another near-square screen only half-folded (a flip's cover has no crease)
+        val twoUp = if (landscape) (foldable || tablet) && nearSquare(windowW, windowH) && (tablet || hingeY != null) else tablet
         // sideways the flat menu is the landscape shell: half-folded, the bottom screen ends where that one's does, so
         // folding and opening keep its bottom edge in place
         val flatEnd = menuFlatEnd(pack, windowW, windowH, k, topInset, densityDpi)
@@ -514,9 +517,10 @@ object SkinChoice {
         }
         val foldBoard = { if (v == SkinVariant.DC) foldBoardOf(true) ?: foldBoardOf(false) else foldBoardOf(null) }
         if (landscape) {
-            // a book foldable's inner screen sideways: its hinge runs across the window, where the board's is, flat too
-            // (controls beside the game would sit on the crease)
-            if ((foldable || tablet) && nearSquare(windowW, windowH)) foldBoard()?.let { return it }
+            // a book foldable's inner screen (tablet-class) sideways: its hinge runs across the window, where the board's is,
+            // flat too (controls beside the game would sit on the crease); another near-square screen half-folded, or a
+            // two-screen console's game
+            if ((foldable || tablet) && nearSquare(windowW, windowH) && (tablet || hingeY != null || v in TWO_SCREEN)) foldBoard()?.let { return it }
             // the Dreamcast, the N64 and the 3DS on a tablet / an inner screen: their shells with the stick and the d-pad both
             if (v == SkinVariant.DC && (foldable || tablet)) shell(tuned, pack, SkinFamily.GRIP, v, windowW, windowH, k, densityDpi, picture, topInset, row, hingeY = hingeY,
                 refH = Float.MAX_VALUE, pick = { it.minRefH > 0 && it.controls.none { c -> c.id == "STICK_SWAP" } })?.let { return it }
