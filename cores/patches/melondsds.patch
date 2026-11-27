@@ -1420,10 +1420,10 @@ index f6b5dfc..d3c0d5b 100644
  }
 diff --git a/src/libretro/net/wmb.cpp b/src/libretro/net/wmb.cpp
 new file mode 100644
-index 0000000..70481a9
+index 0000000..dc0cabf
 --- /dev/null
 +++ b/src/libretro/net/wmb.cpp
-@@ -0,0 +1,474 @@
+@@ -0,0 +1,463 @@
 +#include "wmb.hpp"
 +
 +#include <algorithm>
@@ -1650,15 +1650,6 @@ index 0000000..70481a9
 +    return RegionPackets(0) + RegionPackets(1) + RegionPackets(2);
 +}
 +
-+uint64_t WmbClient::KeptKey() const noexcept {
-+    if (!_haveRsa) return 0;
-+    uint64_t h = 0xcbf29ce484222325ULL;
-+    auto mix = [&](uint8_t b) { h = (h ^ b) * 0x100000001b3ULL; };
-+    for (int i = 0; i < 4; i++) mix(_offer.gameId >> (8 * i));
-+    for (uint8_t b : _rsa) mix(b);
-+    return h;
-+}
-+
 +bool WmbClient::UseKept(std::array<std::vector<uint8_t>, 3> regions) noexcept {
 +    if (!_haveRsa || _state != State::Download) return false;
 +    for (int r = 0; r < 3; r++)
@@ -1843,22 +1834,24 @@ index 0000000..70481a9
 +}
 +
 +namespace {
-+constexpr char KEPT_MAGIC[8] = {'N', 'X', 'D', 'L', 'P', 'K', '1', 0};
++constexpr char KEPT_MAGIC[8] = {'N', 'X', 'D', 'L', 'P', 'K', '2', 0};
 +
-+std::string KeptPath(const std::string& dir, uint64_t key) {
-+    char name[24];
-+    std::snprintf(name, sizeof name, "%016llx.bin", static_cast<unsigned long long>(key));
++std::string KeptPath(const std::string& dir, uint32_t gameId) {
++    char name[16];
++    std::snprintf(name, sizeof name, "%08x.bin", static_cast<unsigned>(gameId));
 +    return dir + "/" + name;
 +}
 +}
 +
-+bool MelonDsDs::SaveKept(const std::string& dir, uint64_t key, const std::array<std::vector<uint8_t>, 3>& regions, size_t keep) noexcept try {
++bool MelonDsDs::SaveKept(const std::string& dir, uint32_t gameId, const std::array<uint8_t, 0xE4>& rsa,
++                         const std::array<std::vector<uint8_t>, 3>& regions) noexcept try {
 +    namespace fs = std::filesystem;
 +    fs::create_directories(dir);
-+    const std::string path = KeptPath(dir, key), part = path + ".part";
++    const std::string path = KeptPath(dir, gameId), part = path + ".part";
 +    {
 +        std::ofstream f(part, std::ios::binary | std::ios::trunc);
 +        f.write(KEPT_MAGIC, sizeof KEPT_MAGIC);
++        f.write(reinterpret_cast<const char*>(rsa.data()), rsa.size());
 +        for (const auto& r : regions) {
 +            const uint32_t n = r.size();
 +            const uint8_t len[4] = {uint8_t(n), uint8_t(n >> 8), uint8_t(n >> 16), uint8_t(n >> 24)};
@@ -1869,22 +1862,18 @@ index 0000000..70481a9
 +    }
 +    // Written whole, then put in place: a copy cut short (a quit mid-write) is never taken for a good one.
 +    fs::rename(part, path);
-+    std::vector<fs::directory_entry> kept;
-+    for (const auto& e : fs::directory_iterator(dir))
-+        if (e.is_regular_file() && e.path().extension() == ".bin") kept.push_back(e);
-+    if (kept.size() > keep) {
-+        std::sort(kept.begin(), kept.end(), [](const auto& a, const auto& b) { return a.last_write_time() > b.last_write_time(); });
-+        for (size_t i = keep; i < kept.size(); i++) fs::remove(kept[i].path());
-+    }
 +    return true;
 +} catch (...) {
 +    return false;
 +}
 +
-+std::optional<std::array<std::vector<uint8_t>, 3>> MelonDsDs::LoadKept(const std::string& dir, uint64_t key) noexcept try {
-+    std::ifstream f(KeptPath(dir, key), std::ios::binary);
++std::optional<std::array<std::vector<uint8_t>, 3>> MelonDsDs::LoadKept(const std::string& dir, uint32_t gameId,
++                                                                      const std::array<uint8_t, 0xE4>& rsa) noexcept try {
++    std::ifstream f(KeptPath(dir, gameId), std::ios::binary);
 +    char magic[sizeof KEPT_MAGIC];
 +    if (!f.read(magic, sizeof magic) || !std::equal(magic, magic + sizeof magic, KEPT_MAGIC)) return std::nullopt;
++    std::array<uint8_t, 0xE4> keptRsa;
++    if (!f.read(reinterpret_cast<char*>(keptRsa.data()), keptRsa.size()) || keptRsa != rsa) return std::nullopt;
 +    std::array<std::vector<uint8_t>, 3> regions;
 +    for (auto& r : regions) {
 +        uint8_t len[4];
@@ -1900,10 +1889,10 @@ index 0000000..70481a9
 +}
 diff --git a/src/libretro/net/wmb.hpp b/src/libretro/net/wmb.hpp
 new file mode 100644
-index 0000000..1a6ae69
+index 0000000..199278e
 --- /dev/null
 +++ b/src/libretro/net/wmb.hpp
-@@ -0,0 +1,131 @@
+@@ -0,0 +1,132 @@
 +#pragma once
 +// DS Download Play (Wireless Multiboot) from the guest's side, per GBATEK "DS Wifi Nintendo Beacons" and "DS Wifi
 +// Nintendo DS Download Play". Frames are melonDS's: a 12-byte radio header, then the 802.11 frame. Pure: no logging,
@@ -1985,9 +1974,8 @@ index 0000000..1a6ae69
 +    uint32_t PacketsDone() const noexcept { return _kept ? PacketsTotal() : _packets.size(); }
 +    /// The host has sent the binaries' sizes and signature (the RSA frame).
 +    bool HaveRsa() const noexcept { return _haveRsa; }
-+    /// A name for this game's download: the game and its RSA frame, which is signed over what the host sends, so an
-+    /// equal one is the same game. 0 before the RSA frame.
-+    uint64_t KeptKey() const noexcept;
++    /// The RSA frame: the binaries' sizes and a signature over what the host sends, so an equal one is the same version.
++    const std::array<uint8_t, 0xE4>& Rsa() const noexcept { return _rsa; }
 +    /// A copy kept from an earlier download of this game (regions 0 header, 1 ARM9, 2 ARM7): the host is told it has
 +    /// everything and the copy is booted. False, and nothing changes, unless the sizes are the RSA frame's.
 +    bool UseKept(std::array<std::vector<uint8_t>, 3> regions) noexcept;
@@ -2027,9 +2015,11 @@ index 0000000..1a6ae69
 +    WmbMac host {}; // the console that sent it
 +};
 +
-+/// Downloads kept for a quicker rejoin ([WmbClient::KeptKey] names them), in [dir]; the [keep] newest stay.
-+bool SaveKept(const std::string& dir, uint64_t key, const std::array<std::vector<uint8_t>, 3>& regions, size_t keep = 4) noexcept;
-+std::optional<std::array<std::vector<uint8_t>, 3>> LoadKept(const std::string& dir, uint64_t key) noexcept;
++/// Downloads kept for a quicker rejoin, in [dir]: one per game ([gameId]), replaced by another version of it.
++bool SaveKept(const std::string& dir, uint32_t gameId, const std::array<uint8_t, 0xE4>& rsa,
++              const std::array<std::vector<uint8_t>, 3>& regions) noexcept;
++/// [gameId]'s kept download when it is the version [rsa] describes.
++std::optional<std::array<std::vector<uint8_t>, 3>> LoadKept(const std::string& dir, uint32_t gameId, const std::array<uint8_t, 0xE4>& rsa) noexcept;
 +
 +/// Each binary placed where the header says a cart holds it; nothing when the header is unusable.
 +std::optional<WmbChild> MakeWmbChild(const std::vector<uint8_t>& header, const std::vector<uint8_t>& arm9,
@@ -2088,7 +2078,7 @@ index 0000000..f2188c9
 +#endif
 diff --git a/src/libretro/net/wmb_session.cpp b/src/libretro/net/wmb_session.cpp
 new file mode 100644
-index 0000000..10e1e5e
+index 0000000..04925e2
 --- /dev/null
 +++ b/src/libretro/net/wmb_session.cpp
 @@ -0,0 +1,176 @@
@@ -2214,7 +2204,7 @@ index 0000000..10e1e5e
 +    // Once the host has said what it sends: the same game kept from an earlier download is booted instead.
 +    if (!_keptTried && !_keptDir.empty() && _client.GetState() == WmbClient::State::Download && _client.HaveRsa()) {
 +        _keptTried = true;
-+        if (auto kept = LoadKept(_keptDir, _client.KeptKey())) _client.UseKept(std::move(*kept));
++        if (auto kept = LoadKept(_keptDir, _client.Offer().gameId, _client.Rsa())) _client.UseKept(std::move(*kept));
 +    }
 +    if (_roomLost && Busy()) {
 +        _client.Cancel();
@@ -2227,7 +2217,7 @@ index 0000000..10e1e5e
 +    if (_client.GetState() == WmbClient::State::Done && !_booting) {
 +        _child = MakeWmbChild(_client.Region(0), _client.Region(1), _client.Region(2), _client.BootBlock());
 +        if (_child && !_client.UsingKept() && !_keptDir.empty())
-+            SaveKept(_keptDir, _client.KeptKey(), {_client.Region(0), _client.Region(1), _client.Region(2)});
++            SaveKept(_keptDir, _client.Offer().gameId, _client.Rsa(), {_client.Region(0), _client.Region(1), _client.Region(2)});
 +        if (_child) {
 +            _child->host = _client.Offer().host;
 +            _booting = true;

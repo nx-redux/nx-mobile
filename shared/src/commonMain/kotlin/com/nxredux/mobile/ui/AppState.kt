@@ -253,6 +253,8 @@ class AppDeps(
     val micAccess: MicAccess? = null,
     /** ROMs received over a Cable Link session (the Clear link ROM cache row on mGBA's Emulator Settings page); null: none on this platform. */
     val linkRomCache: LinkRomCache? = null,
+    /** The games kept by DS and 3DS Download Play: Library's Clear Download Play data. */
+    val downloadPlayData: com.nxredux.mobile.runner.DownloadPlayData? = null,
     /** Local folders for the list-style picker and the SAF → file conversion; null: Android's pickers only. */
     val localFiles: LocalFiles? = null,
     /**
@@ -3406,6 +3408,7 @@ class AppState(
                     SettingsKind.HOME_SCREEN -> deps.launcher?.let { it.setHome(!it.isHome()); settingsUi.refreshSettings() }
                     SettingsKind.ANDROID_GAMES -> androidApps.openToolApps(AppPick.GAMES)
                     SettingsKind.RESET_DEFAULTS -> _screen.value = s.copy(confirmReset = true)   // asks first
+                    SettingsKind.CLEAR_DOWNLOAD_PLAY -> _screen.value = s.copy(confirmReset = true)   // asks first
                     SettingsKind.ALL_FILES -> deps.allFilesAccess?.openSettings()
                     SettingsKind.MIC_ACCESS -> deps.micAccess?.request()
                     SettingsKind.KIDS_PIN -> kidsUi.kidsChangePin()

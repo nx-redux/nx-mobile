@@ -439,6 +439,7 @@ internal class SettingsController(
         when (page.rows.getOrNull(selection.value.index)?.kind) {
             SettingsKind.RESET_DEFAULTS -> resetToDefaults(page.section)
             SettingsKind.BUTTON_LAYOUT_RESET -> content.resetButtonLayoutConsole()
+            SettingsKind.CLEAR_DOWNLOAD_PLAY -> { deps.downloadPlayData?.clear(); refreshSettings() }
             else -> Unit
         }
     }

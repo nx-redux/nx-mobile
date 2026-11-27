@@ -535,14 +535,14 @@ static void client_refuses_a_kept_copy_of_other_sizes() {
     CHECK(!early.UseKept({Bytes(0x160, 0), Bytes(10, 0), Bytes(10, 0)}));
 }
 
-static void kept_copy_key_is_the_rsa_frame_and_game() {
+static void client_reports_its_rsa_frame() {
     WmbClient a = DownloadedClient(), b = DownloadedClient();
-    CHECK(a.KeptKey() == b.KeptKey());
+    CHECK(a.Rsa() == b.Rsa());
     WmbClient c = JoinedClient();
     std::vector<WmbOutgoing> out;
     const Bytes rsa = RsaCommand(HOST, 10, 11);
     c.FrameReceived(rsa.data(), rsa.size(), 0, true, 0, out);
-    CHECK(c.KeptKey() != a.KeptKey());
+    CHECK(c.Rsa() != a.Rsa());
 }
 
 static std::string TempDir() {
@@ -550,33 +550,44 @@ static std::string TempDir() {
     return mkdtemp(tmpl);
 }
 
+static std::array<uint8_t, 0xE4> RsaOf(uint8_t v) {
+    std::array<uint8_t, 0xE4> r {};
+    r.fill(v);
+    return r;
+}
+
 static void kept_copies_round_trip() {
     const std::string dir = TempDir() + "/Download Play";
     const std::array<Bytes, 3> regions {Bytes(0x160, 1), Bytes(300, 2), Bytes(40, 3)};
-    CHECK(SaveKept(dir, 0x1234, regions));
-    const auto back = LoadKept(dir, 0x1234);
+    CHECK(SaveKept(dir, 0x390, RsaOf(1), regions));
+    const auto back = LoadKept(dir, 0x390, RsaOf(1));
     CHECK(back.has_value() && *back == regions);
-    CHECK(!LoadKept(dir, 0x9999).has_value());
+    CHECK(!LoadKept(dir, 0x391, RsaOf(1)).has_value());
 }
 
-static void kept_copies_keep_only_the_newest() {
+static void kept_copy_is_one_per_game_and_only_its_version() {
     const std::string dir = TempDir();
-    for (uint64_t k = 1; k <= 6; k++) CHECK(SaveKept(dir, k, {Bytes(0x160, 0), Bytes(8, 0), Bytes(8, 0)}, 4));
-    CHECK(!LoadKept(dir, 1).has_value() && !LoadKept(dir, 2).has_value());
-    CHECK(LoadKept(dir, 3).has_value() && LoadKept(dir, 6).has_value());
+    CHECK(SaveKept(dir, 0x390, RsaOf(1), {Bytes(0x160, 0), Bytes(8, 1), Bytes(8, 0)}));
+    CHECK(!LoadKept(dir, 0x390, RsaOf(2)).has_value()); // another version of the game: downloaded again
+    CHECK(SaveKept(dir, 0x390, RsaOf(2), {Bytes(0x160, 0), Bytes(8, 2), Bytes(8, 0)}));
+    CHECK(!LoadKept(dir, 0x390, RsaOf(1)).has_value()); // replaced, not kept beside
+    const auto now = LoadKept(dir, 0x390, RsaOf(2));
+    CHECK(now.has_value() && (*now)[1] == Bytes(8, 2));
+    for (uint32_t g = 1; g <= 6; g++) CHECK(SaveKept(dir, g, RsaOf(0), {Bytes(0x160, 0), Bytes(8, 0), Bytes(8, 0)}));
+    CHECK(LoadKept(dir, 1, RsaOf(0)).has_value() && LoadKept(dir, 0x390, RsaOf(2)).has_value()); // no count limit
 }
 
 static void kept_copy_refuses_a_damaged_file() {
     const std::string dir = TempDir();
-    CHECK(SaveKept(dir, 7, {Bytes(0x160, 0), Bytes(8, 0), Bytes(8, 0)}));
-    char name[64];
-    std::snprintf(name, sizeof name, "/%016llx.bin", 7ULL);
-    std::FILE* f = std::fopen((dir + name).c_str(), "r+b");
-    std::fseek(f, 8, SEEK_SET);
+    CHECK(SaveKept(dir, 7, RsaOf(3), {Bytes(0x160, 0), Bytes(8, 0), Bytes(8, 0)}));
+    std::FILE* f = std::fopen((dir + "/00000007.bin").c_str(), "r+b");
+    CHECK(f != nullptr);
+    if (!f) return;
+    std::fseek(f, 8 + 0xE4, SEEK_SET);
     const uint8_t huge[4] = {0xFF, 0xFF, 0xFF, 0x7F};
     std::fwrite(huge, 1, 4, f);
     std::fclose(f);
-    CHECK(!LoadKept(dir, 7).has_value());
+    CHECK(!LoadKept(dir, 7, RsaOf(3)).has_value());
 }
 
 int main() {
@@ -604,9 +615,9 @@ int main() {
         {"make_child_pads_small_image", make_child_pads_small_image},
         {"client_takes_a_kept_copy_for_the_same_rsa_frame", client_takes_a_kept_copy_for_the_same_rsa_frame},
         {"client_refuses_a_kept_copy_of_other_sizes", client_refuses_a_kept_copy_of_other_sizes},
-        {"kept_copy_key_is_the_rsa_frame_and_game", kept_copy_key_is_the_rsa_frame_and_game},
+        {"client_reports_its_rsa_frame", client_reports_its_rsa_frame},
         {"kept_copies_round_trip", kept_copies_round_trip},
-        {"kept_copies_keep_only_the_newest", kept_copies_keep_only_the_newest},
+        {"kept_copy_is_one_per_game_and_only_its_version", kept_copy_is_one_per_game_and_only_its_version},
         {"kept_copy_refuses_a_damaged_file", kept_copy_refuses_a_damaged_file},
         {"mailbox_headers_identical", mailbox_headers_identical},
         {"mailbox_layout", mailbox_layout},
