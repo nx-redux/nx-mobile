@@ -1119,7 +1119,10 @@ internal class GameInputRouter(private val host: GameInputHost) {
         // Wii: the left-stick click recentres the phone's motion, the right-stick click is HOME ([GameInputHost.pressWiiHome]); neither
         // reaches the core as itself. 3DS split: the left-stick click is SWAP between the displays. Elsewhere (the PS2's
         // L3 / R3) they go on to the core.
-        when (thumbKeyRoute(mapped, host.isWii, host.isN3ds)) {
+        val thumb = thumbKeyRoute(mapped, host.isWii, host.isN3ds)
+        val earlyDedupe = dedupesBeforeThumb(thumb, trigger)
+        if (earlyDedupe && first && !routeTriggerKey(trigger!!, down = true, port)) return true   // its axis pressed it
+        when (thumb) {
             ThumbKeyRoute.WII_RECENTER -> { if (first) host.recenterWiiMotion(); return true }
             ThumbKeyRoute.WII_HOME -> { if (first) host.pressWiiHome(); return true }
             ThumbKeyRoute.N3DS_SWAP -> if (n3dsSwapKey.down(repeat = !first) { host.onN3dsSwapPressed(down = true) }) return true
@@ -1142,7 +1145,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
         }
         // A GameCube analog trigger is never remapped, so its key is dropped only while that key's job is the same trigger.
         if (gcPad && trigger != null && mapped == keyCode && gcAnalogTriggerKey(trigger, event.device)) return true
-        if (!host.isNds && !host.isDc && first && trigger != null && !routeTriggerKey(trigger, down = true, port)) return true   // its axis pressed it
+        if (!host.isNds && !host.isDc && !earlyDedupe && first && trigger != null && !routeTriggerKey(trigger, down = true, port)) return true   // its axis pressed it
         if (host.isN3ds) placed?.let { b ->
             if (!routeN3ds(b, down = true, repeat = !first)) return true
         }
@@ -1167,7 +1170,10 @@ internal class GameInputRouter(private val host: GameInputHost) {
         val port = portFor(event.device, claim = false) ?: return true
         val mapped = mappedKey(host.buttonMap, keyCode, isPhysical(event))
         val trigger = physicalTrigger(keyCode)
-        when (thumbKeyRoute(mapped, host.isWii, host.isN3ds)) {
+        val thumb = thumbKeyRoute(mapped, host.isWii, host.isN3ds)
+        val earlyDedupe = dedupesBeforeThumb(thumb, trigger)
+        if (earlyDedupe && !routeTriggerKey(trigger!!, down = false, port)) return true   // not held
+        when (thumb) {
             ThumbKeyRoute.WII_RECENTER, ThumbKeyRoute.WII_HOME -> return true
             ThumbKeyRoute.N3DS_SWAP -> if (host.onN3dsSwapPressed(down = false)) return true
             ThumbKeyRoute.CORE -> {}
@@ -1183,7 +1189,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
             }
         }
         if (gcPad && trigger != null && mapped == keyCode && gcAnalogTriggerKey(trigger, event.device)) return true
-        if (!host.isNds && !host.isDc && trigger != null && !routeTriggerKey(trigger, down = false, port)) return true   // not held
+        if (!host.isNds && !host.isDc && !earlyDedupe && trigger != null && !routeTriggerKey(trigger, down = false, port)) return true   // not held
         if (host.isN3ds) placed?.let { b ->
             if (!routeN3ds(b, down = false)) return true
         }
@@ -1205,8 +1211,15 @@ internal fun axisJobKey(map: ButtonMap, trigger: NxButton): Int =
     map.keyCodeFor(if (trigger == NxButton.L2) MapKey.L2.keyCode else MapKey.R2.keyCode)
 
 /** The physical trigger (L2 or R2) a raw key is, for the key / axis dedupe ([TriggerAxes]); null for any other key. */
-private fun physicalTrigger(keyCode: Int): NxButton? =
+internal fun physicalTrigger(keyCode: Int): NxButton? =
     PadKeymap.buttonFor(keyCode)?.takeIf { it == NxButton.L2 || it == NxButton.R2 }
+
+/**
+ * A physical [trigger] key doing a stick click's job that the Wii or 3DS takes ([route]) is deduped against its axis before
+ * that job runs, as the job returns early: else a pad sending both a key and an axis for one pull does it twice.
+ */
+internal fun dedupesBeforeThumb(route: ThumbKeyRoute, trigger: NxButton?): Boolean =
+    route != ThumbKeyRoute.CORE && trigger != null
 
 /** The buttons a release lets go of in the core ([GameInputRouter.releaseAllGameInput], [GameInputRouter.releasePort]). */
 private val RELEASED_BUTTONS = listOf(

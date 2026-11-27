@@ -34,4 +34,23 @@ class GameInputRouterButtonMapTest {
         sent.down(held, mappedKey(m1, KeyEvent.KEYCODE_BUTTON_R2, physical = true))
         assertEquals(KeyEvent.KEYCODE_BUTTON_A, sent.up(held, mappedKey(m2, KeyEvent.KEYCODE_BUTTON_R2, physical = true)))
     }
+
+    @Test fun triggerOnStickClickJobDedupesBeforeItsJob() {
+        val map = ButtonMap.DEFAULT.bind(MapKey.R3, MapKey.R2)
+        val r2 = KeyEvent.KEYCODE_BUTTON_R2
+        val trigger = physicalTrigger(r2)
+        assertEquals(NxButton.R2, trigger)
+        val wiiHome = thumbKeyRoute(mappedKey(map, r2, physical = true), wii = true, n3ds = false)
+        assertEquals(ThumbKeyRoute.WII_HOME, wiiHome)
+        assertEquals(true, dedupesBeforeThumb(wiiHome, trigger))
+        val n3dsSwap = thumbKeyRoute(mappedKey(ButtonMap.DEFAULT.bind(MapKey.L3, MapKey.L2), KeyEvent.KEYCODE_BUTTON_L2, physical = true), wii = false, n3ds = true)
+        assertEquals(true, dedupesBeforeThumb(n3dsSwap, physicalTrigger(KeyEvent.KEYCODE_BUTTON_L2)))
+        // The key marks the trigger as key-driven, so its axis twin no longer presses (the job runs once).
+        val axes = TriggerAxes()
+        axes.onKey(NxButton.R2, down = true)
+        assertEquals(0, axes.onAxes(0f, 1f))
+        // Elsewhere the dedupe stays at its place after the shortcuts.
+        assertEquals(false, dedupesBeforeThumb(ThumbKeyRoute.CORE, trigger))
+        assertEquals(false, dedupesBeforeThumb(ThumbKeyRoute.WII_HOME, physicalTrigger(KeyEvent.KEYCODE_BUTTON_THUMBR)))
+    }
 }
