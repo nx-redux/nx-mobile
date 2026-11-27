@@ -976,6 +976,9 @@ private fun pageHints(page: MenuPage, row: MenuRow?, infoTruncated: Boolean, pan
     page.kind == PageKind.Root && row is MenuRow.Slot ->
         listOf(Hint(NxButton.LEFT, "Slot"), Hint(NxButton.A, row.label), Hint(NxButton.B, "Resume"))
     page.kind == PageKind.Shortcuts && row is MenuRow.Option -> shortcutHints(row)
+    // Waiting for a key, every pad key binds (B too) and the row says Back cancels: no hints.
+    page.kind == PageKind.ButtonMapping && row is MenuRow.Option ->
+        if (row.valueLabel == SHORTCUT_PROMPT) emptyList() else listOf(Hint(NxButton.A, "Bind"), Hint(NxButton.B, "Back"))
     // The root has no info area (Disc N/M): A opens the info there.
     page.kind == PageKind.Root && row is MenuRow.Option -> buildList {
         add(Hint(NxButton.LEFT, "Change"))

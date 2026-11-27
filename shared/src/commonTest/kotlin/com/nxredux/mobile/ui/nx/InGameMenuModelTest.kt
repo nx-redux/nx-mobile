@@ -18,6 +18,8 @@ import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.OptionGroup
 import com.nxredux.mobile.options.WiiOptions
+import com.nxredux.mobile.runner.ButtonMap
+import com.nxredux.mobile.runner.MapKey
 import com.nxredux.mobile.runner.WiiController
 import com.nxredux.mobile.options.NdsView
 import com.nxredux.mobile.shortcuts.ConsoleHotkeys
@@ -493,13 +495,13 @@ class InGameMenuModelTest {
         assertEquals(listOf(true, true, true, true, true, false), m.state.page.rows.map { (it as MenuRow.Option).visual })
     }
 
-    // Controls: the console's pad rows, then the landscape pad opacity every console has.
+    // Controls: the console's pad rows, then the landscape pad opacity every console has, then Button Mapping.
     @Test fun controls_page_holds_the_landscape_pad_opacity() {
         val m = model().openFrontend()
         m.press(NxButton.B)                                  // back to Options
         assertNull(m.activate(m.optionsRow("Controls")))
         assertEquals(PageKind.Settings(OptionGroup.CONTROLS), m.state.page.kind)
-        assertEquals(listOf("Pad Opacity (landscape)"), m.state.page.rows.map { it.label })
+        assertEquals(listOf("Pad Opacity (landscape)", "Button Mapping"), m.state.page.rows.map { it.label })
         val opacity = m.optionRow(0)
         assertEquals(listOf("100%", "60%", "40%", "25%"), opacity.choices)
         assertEquals(1, opacity.index)                       // 60%, the default
@@ -1477,7 +1479,7 @@ class InGameMenuModelTest {
         assertEquals(
             mapOf(
                 "Display" to PICTURE_ROWS,
-                "Controls" to listOf("Pad Opacity (landscape)"),
+                "Controls" to listOf("Pad Opacity (landscape)", "Button Mapping"),
                 "Gameplay" to SPEED_ROWS,
                 "Audio" to listOf("Audio Resampling Quality", "Fill Audio Gaps"),   // Audio Buffer is read at launch
             ),
@@ -1495,7 +1497,7 @@ class InGameMenuModelTest {
         assertEquals(SPEED_ROWS + "Frame Skip", gc.getValue("Gameplay"))
         val wii = inGameGroups("WII")
         assertEquals(listOf("3D Resolution", "Max Scale") + PICTURE_ROWS, wii.getValue("Display"))   // no Wii Screen
-        assertEquals(listOf("Wii Controller", "Motion Controls", "Pad Opacity (landscape)"), wii.getValue("Controls"))
+        assertEquals(listOf("Wii Controller", "Motion Controls", "Pad Opacity (landscape)", "Button Mapping"), wii.getValue("Controls"))
         assertEquals(SPEED_ROWS + "Frame Skip", wii.getValue("Gameplay"))
     }
 
@@ -3006,5 +3008,106 @@ class InGameMenuModelTest {
         m.press(NxButton.A)
         assertEquals(listOf(Hint(NxButton.B, "Cancel")), hintsFor(m.state.page, m.row("Toggle FF")))
         assertEquals(NxButton.A, hintsFor(m.state.page, m.row("Touch button 1")).first().button)   // A changes it: no ◄►
+    }
+
+    // ------------------------------------------------------------------ Options → Controls → Button Mapping
+
+    private fun buttonMapping(tag: String = "PS", map: ButtonMap = ButtonMap.DEFAULT): InGameMenuModel {
+        val m = model().openConsoleSettings(group = OptionGroup.CONTROLS, tag = tag)
+        m.setButtonMap(map, wiiPad = null, newControls = false)
+        assertNull(m.activate(m.state.page.rows.indexOfFirst { it.label == "Button Mapping" }))
+        assertEquals(PageKind.ButtonMapping, m.state.page.kind)
+        return m
+    }
+
+    @Test fun controlsPageOpensButtonMapping() {
+        val controls = model().openConsoleSettings(group = OptionGroup.CONTROLS, tag = "PS")
+        assertEquals(MenuRow.Submenu("Button Mapping", PageKind.ButtonMapping), controls.state.page.rows.first { it.label == "Button Mapping" })
+        val m = buttonMapping()
+        val first = m.state.page.rows.first() as MenuRow.Option
+        assertEquals("×", first.label)
+        assertEquals("A", first.valueLabel)
+        assertEquals("Reset to default", m.state.page.rows.last().label)
+    }
+
+    @Test fun captureBindsAndSwaps() {
+        val m = buttonMapping()
+        m.selectRow("×")
+        assertNull(m.press(NxButton.A))
+        assertEquals("Press a button…", m.row("×").valueLabel)
+        assertTrue(m.takesKey(KeyCodes.BUTTON_B, down = true))
+        val effect = assertIs<MenuEffect.SetButtonMap>(m.captureKey(KeyCodes.BUTTON_B, down = true))
+        assertEquals(MapKey.B, effect.map.keyFor(MapKey.A))
+        assertEquals(effect.map, m.buttonMap)
+        assertEquals("B", m.row("×").valueLabel)
+        assertEquals("A", m.row("○").valueLabel)
+        // B's release is the page's too, never the menu's (it would go back).
+        assertTrue(m.takesKey(KeyCodes.BUTTON_B, down = false))
+        assertNull(m.captureKey(KeyCodes.BUTTON_B, down = false))
+        assertFalse(m.takesKey(KeyCodes.BUTTON_B, down = false))
+        assertEquals(PageKind.ButtonMapping, m.state.page.kind)
+    }
+
+    @Test fun captureRefusesStart() {
+        val m = buttonMapping()
+        m.selectRow("×"); m.press(NxButton.A)
+        assertNull(m.captureKey(KeyCodes.BUTTON_START, down = true))
+        assertEquals(ButtonMap.DEFAULT, m.buttonMap)
+        assertEquals(PageKind.Message, m.state.page.kind)
+        assertEquals("Pick A, B, X, Y, L1, R1, L2, R2, L3 or R3", m.state.page.footer)
+        m.press(NxButton.A)
+        assertEquals("A", m.row("×").valueLabel)
+    }
+
+    @Test fun dpadAndBackDoNotBind() {
+        val m = buttonMapping()
+        m.selectRow("×"); m.press(NxButton.A)
+        assertNull(m.captureKey(KeyCodes.DPAD_LEFT, down = true))           // refused, as a d-pad direction is on Shortcuts
+        assertEquals(PageKind.Message, m.state.page.kind)
+        m.press(NxButton.A)
+        m.selectRow("×"); m.press(NxButton.A)
+        assertNull(m.captureKey(KeyCodes.BACK, down = true))                // Back cancels
+        assertEquals(PageKind.ButtonMapping, m.state.page.kind)
+        assertEquals("A", m.row("×").valueLabel)
+        assertFalse(m.takesKey(KeyCodes.BUTTON_A, down = true))
+        m.selectRow("×"); m.press(NxButton.A)
+        assertNull(m.press(NxButton.B))                                     // a touch B cancels
+        assertEquals("A", m.row("×").valueLabel)
+        assertEquals(PageKind.ButtonMapping, m.state.page.kind)
+    }
+
+    @Test fun resetToDefault() {
+        val m = buttonMapping()
+        m.selectRow("×"); m.press(NxButton.A)
+        m.captureKey(KeyCodes.BUTTON_B, down = true)
+        m.captureKey(KeyCodes.BUTTON_B, down = false)
+        assertEquals(MenuEffect.SetButtonMap(ButtonMap.DEFAULT), m.activate(m.state.page.rows.indexOfFirst { it.label == "Reset to default" }))
+        assertEquals(ButtonMap.DEFAULT, m.buttonMap)
+        assertEquals("A", m.row("×").valueLabel)
+    }
+
+    @Test fun restoreDefaultsResetsTheButtonMap() {
+        val m = model()
+        m.setButtonMap(ButtonMap.DEFAULT.bind(MapKey.A, MapKey.B), wiiPad = null, newControls = false)
+        m.select(4); m.activate(4)
+        m.activate(m.state.page.rows.indexOfFirst { it.label == "Save Changes" })
+        assertEquals(MenuEffect.RestoreDefaults, m.activate(m.state.page.rows.indexOfFirst { it.label == "Restore defaults" }))
+        assertEquals(ButtonMap.DEFAULT, m.buttonMap)
+    }
+
+    @Test fun buttonMappingHints() {
+        val m = buttonMapping()
+        m.selectRow("×")
+        assertEquals(listOf(Hint(NxButton.A, "Bind"), Hint(NxButton.B, "Back")), hintsFor(m.state.page, m.row("×")))
+        m.press(NxButton.A)
+        assertEquals(emptyList(), hintsFor(m.state.page, m.row("×")))     // B binds: Back cancels, as the row says
+    }
+
+    @Test fun noControllerLayoutRow() {
+        for (tag in listOf("GBA", "SNES", "NES", "GB", "GBC", "NDS", "3DS", "N64", "PS", "PSP", "PS2", "GC", "WII", "WIIU", "MD", "DC", "SATURN")) {
+            val m = model().openConsoleSettings(group = OptionGroup.CONTROLS, tag = tag)
+            assertFalse(m.state.page.rows.any { it.label == "Controller Layout" }, tag)
+            assertTrue(m.state.page.rows.any { it.label == "Button Mapping" }, tag)
+        }
     }
 }

@@ -130,6 +130,8 @@ internal interface InGameMenuHost : GameScreenHost {
     var cheatSet: CheatSet
     val cheatsFolder: String
     val cheatsLoad: Job?
+    /** The game's button mapping ([MenuEffect.SetButtonMap] changes it while the menu is open). */
+    var buttonMap: ButtonMap
     fun padProfile(): PadProfile
     fun menuLocked(): Set<String>
     fun applyFrontend(values: Map<String, String>)
@@ -300,6 +302,7 @@ internal class InGameMenuController(
         model.setShaders(renderer.shaderValues, renderer.presetNames, renderer.shaderParams)
         model.setCheats(host.cheatSet.entries, host.cheatsFolder, host.cheatSet.expected)
         host.publishShortcuts(model)
+        publishButtonMap(model)
         model.setPadDrawn(padDrawn())   // Adjust buttons: only over a drawn skin or its bare buttons
         model.setControllerConnected(padLayout.controllerConnected.value)
         publishPlayers(model)
@@ -573,7 +576,11 @@ internal class InGameMenuController(
                     if (all != null && generation == optionsGeneration) menuModel?.updateOptions(all)
                 }
             }
-            is MenuEffect.SetFrontend -> host.applyFrontend(host.frontendValues + (effect.key to effect.value))
+            is MenuEffect.SetFrontend -> {
+                host.applyFrontend(host.frontendValues + (effect.key to effect.value))
+                // Wii Controller and New 3DS Controls rename the Button Mapping rows.
+                menuModel?.let { publishButtonMap(it); menuState.value = it.state }
+            }
             is MenuEffect.SetShader -> renderer.applyShader(renderer.shaderValues + (effect.key to effect.value))
             is MenuEffect.SetShaders -> renderer.applyShader(renderer.shaderValues + effect.entries)
             is MenuEffect.SetCheat -> {
@@ -597,6 +604,8 @@ internal class InGameMenuController(
             MenuEffect.SaveForGame -> saveOptions(game = true)
             MenuEffect.RestoreDefaults -> restoreOptions()
             is MenuEffect.ShortcutsChanged -> host.applyShortcuts(effect.overrides)
+            // The menu released every held game input on opening, so nothing is held under the old map.
+            is MenuEffect.SetButtonMap -> host.buttonMap = effect.map
             // A tile: the game runs with it on, so the menu closes.
             is MenuEffect.SetSpeed -> { host.setSpeedToggle(effect.ff, effect.rewind); closeMenu() }
             is MenuEffect.SetMicButton -> { host.setMicButton(effect.shown); closeMenu() }
@@ -665,10 +674,13 @@ internal class InGameMenuController(
                     // fires, so a later Controls → Shortcuts change still reaches the others; a row given back to the
                     // default loses its line ([Shortcuts.droppedOnSave]).
                     val overrides = host.shortcutOverrides
+                    val map = host.buttonMap
                     val values = CoreConfig.valuesToSave(all.map { it.key to it.value }, host.storedValues, host.graphicsForcedOptions + dualForcedOptions()) + host.frontendValues.toList() +
-                        ShaderOptions.activeParamEntries(renderer.shaderValues, renderer.shaderParams) + Shortcuts.toConfig(overrides) +
+                        ShaderOptions.activeParamEntries(renderer.shaderValues, renderer.shaderParams) + Shortcuts.toConfig(overrides) + ButtonMap.toConfig(map) +
                         if (game) listOf(FrontendOptions.CHEATS to CheatSet.encode(host.cheatSet.enabledKeys())) else emptyList()
-                    val drop = Shortcuts.droppedOnSave(overrides)
+                    val dropShortcuts = Shortcuts.droppedOnSave(overrides)
+                    val dropMap = ButtonMap.droppedOnSave(map)
+                    val drop = { key: String -> dropShortcuts(key) || dropMap(key) }
                     withContext(Dispatchers.IO) {
                         runCatching {
                             if (game) store.saveGame(values, drop) else store.saveConsole(values, drop).also { store.deleteGame() }
@@ -693,10 +705,10 @@ internal class InGameMenuController(
     private fun restoreOptions() {
         val store = host.configStore
         // The menu has already popped to Options; say so rather than silently doing nothing. Nothing restored: the
-        // model's dropped shortcut overrides come back ([publishShortcuts]).
-        if (store == null || host.retroView == null) { host.toast("Could not save options"); menuModel?.let(::republishShortcuts); return }
+        // model's dropped shortcut overrides and button map come back.
+        if (store == null || host.retroView == null) { host.toast("Could not save options"); menuModel?.let(::republishEdits); return }
         withCoreOptions { all ->
-            if (all == null) { host.toast("Could not save options"); menuModel?.let(::republishShortcuts); return@withCoreOptions }
+            if (all == null) { host.toast("Could not save options"); menuModel?.let(::republishEdits); return@withCoreOptions }
             lifecycleScope.launch {
                 val next = host.configWrites.withLock {   // after any hotkey save in flight, not interleaved with it
                     withContext(Dispatchers.IO) {
@@ -731,9 +743,11 @@ internal class InGameMenuController(
                     host.applyFrontend(FrontendOptions.fromConfig(next.values, host.gameTag))
                     renderer.applyShader(ShaderOptions.fromConfig(next.values))
                     host.applyShortcuts(Shortcuts.fromConfig(next.values))   // the layer fallen back to's, none for defaults
+                    host.buttonMap = ButtonMap.fromConfig(next.values, host.gameTag)
                 }
                 val model = menuModel ?: return@launch
                 host.publishShortcuts(model)   // the model dropped its overrides; a failed restore puts the ones in effect back
+                publishButtonMap(model)
                 if (next != null) {
                     model.setFrontend(host.frontendValues, renderer.overlayNames(), host.menuLocked(), host.gameTag, overlayAvailable = !renderer.ndsSplit)
                     model.setShaders(renderer.shaderValues, renderer.presetNames, renderer.shaderParams)
@@ -745,9 +759,16 @@ internal class InGameMenuController(
         }
     }
 
-    private fun republishShortcuts(model: InGameMenuModel) {
+    private fun republishEdits(model: InGameMenuModel) {
         host.publishShortcuts(model)
+        publishButtonMap(model)
         menuState.value = model.state
+    }
+
+    /** The game's button mapping, with the Wii controller and New 3DS controls its rows are named for. */
+    private fun publishButtonMap(model: InGameMenuModel) {
+        val profile = host.padProfile()
+        model.setButtonMap(host.buttonMap, profile.wiiPad, profile.n3dsNew)
     }
 
     /** The Players page's data in the open menu. */

@@ -61,7 +61,7 @@ class ShortcutCapture(private val reserved: List<ClaimedInput> = ConsoleHotkeys.
         return reserved.firstOrNull { it.binding == b }?.let { CaptureResult.Refused(b, it.note) } ?: CaptureResult.Bound(b)
     }
 
-    private companion object {
+    companion object {
         /** HOME, VOLUME_UP, VOLUME_DOWN, POWER, VOLUME_MUTE: the system's, never a binding. */
         val SYSTEM = setOf(3, 24, 25, 26, 164)
     }
