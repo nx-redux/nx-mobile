@@ -492,6 +492,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         private set
     override var frontendValues: Map<String, String> = FrontendOptions.defaults()   // every frontend key, as in effect now
         private set
+    /** The player's layout while a Download Play client shows the top screen alone ([DownloadPlayScreen]). */
+    var downloadPlayLayout: Map<String, String>? = null
     /** The core can rewind ([com.nxredux.mobile.runner.CoreDescriptor.rewind]); false until the launch resolves the core. */
     override var canRewind = false
         private set
@@ -834,6 +836,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     }
                     if (!queued) ack()
                     downloadPlayChildStarted = true
+                    withContext(Dispatchers.Main) { restoreDownloadPlayLayout() }
                 }
                 delay(250)
             }
@@ -845,11 +848,21 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         lifecycleScope.launch(Dispatchers.IO) {
             var hostLeft = -1
             while (isActive) {
-                if (!downloadPlayChildStarted && LibretroNetplay.dsDownloadPlayStarted()) downloadPlayChildStarted = true
+                if (!downloadPlayChildStarted && LibretroNetplay.dsDownloadPlayStarted()) {
+                    downloadPlayChildStarted = true
+                    withContext(Dispatchers.Main) { restoreDownloadPlayLayout() }
+                }
                 if (downloadPlayChildStarted) hostLeft = checkDownloadPlayHostLeft(hostLeft)
                 delay(250)
             }
         }
+    }
+
+    /** The received game plays on both screens, as the player lays them out. */
+    private fun restoreDownloadPlayLayout() {
+        val stored = downloadPlayLayout ?: return
+        downloadPlayLayout = null
+        applyFrontend(DownloadPlayScreen.restored(frontendValues, stored, n3ds = isN3ds))
     }
 
     /** The core's count of hosts gone, against the last one [seen]: a new one ends the session at once. The count now. */
@@ -2565,6 +2578,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         override var launchEnv by game::launchEnv
         override var graphicsForcedOptions by game::graphicsForcedOptions
         override var frontendValues by game::frontendValues
+        override var downloadPlayLayout by game::downloadPlayLayout
         override var configStore by game::configStore
         override var configSource by game::configSource
         override var lockedOptions by game::lockedOptions

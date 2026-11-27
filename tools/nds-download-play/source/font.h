@@ -1,4 +1,4 @@
-// Glyphs gen_font.py renders out of the app's own font into one atlas (A5I3), at each face's scale.
+// Glyphs gen_font.py renders out of the app's own font into one atlas (2 bits a texel), at each face's scale.
 #ifndef NXDLP_FONT_H
 #define NXDLP_FONT_H
 

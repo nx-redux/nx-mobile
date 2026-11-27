@@ -180,6 +180,8 @@ internal interface LaunchHost : GameScreenHost {
     var launchEnv: Map<String, String?>
     var graphicsForcedOptions: Set<String>
     var frontendValues: Map<String, String>
+    /** A Download Play row's own layout while its client shows the top screen alone ([DownloadPlayScreen]); null otherwise. */
+    var downloadPlayLayout: Map<String, String>?
     var configStore: CoreConfigStore?
     var configSource: ConfigSource
     var lockedOptions: Set<String>
@@ -1419,6 +1421,10 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // Size changes (first layout, rotation, cutout margin) re-lay out the picture and the overlay box.
             container.addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
                 if (right - left != oldRight - oldLeft || bottom - top != oldBottom - oldTop) container.post { renderer.relayoutFrontend() }
+            }
+            if (cfg.dsMenu || cfg.n3dsDownloadPlay) {
+                downloadPlayLayout = frontendValues
+                frontendValues = DownloadPlayScreen.single(frontendValues, n3ds = cfg.n3dsDownloadPlay)
             }
             applyFrontend(frontendValues)
             // Set before the first chain push: a chain built with the view reports its errors through this.

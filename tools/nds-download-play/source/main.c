@@ -25,8 +25,9 @@
 #define BIG 130
 
 static volatile NxDlpMailbox box __attribute__((aligned(32)));
-// The core knows this program by the magic in its binary, so it stays a plain constant, not folded into code.
-static const char magic[sizeof(box.magic)] __attribute__((used)) = NXDLP_MAGIC;
+// The core knows this program by the magic in its binary, so it stays a plain constant, not folded into code. One byte
+// past a 32-byte boundary: the core looks for the mailbox only on such boundaries, and must never take this copy for it.
+static const struct { char pad; char magic[sizeof(box.magic)]; } mark __attribute__((aligned(32), used)) = {0, NXDLP_MAGIC};
 
 static int selected, firstRow;
 static u32 frame;
@@ -106,7 +107,7 @@ static void draw(UiScreen screen, int count) {
         snprintf(line, sizeof line, "Looking for games nearby%s", dots[(frame / 30) % 4]);
         text(&font3d_title, 16, 70, line, INK);
         text(&font3d_body, 16, 94, "Ask the other player to start", HINT);
-        text(&font3d_body, 16, 110, "Download Play in their game.", HINT);
+        text(&font3d_body, 16, 110, "local multiplayer in their game.", HINT);
         Hint h[] = {{"START", "Quit"}};
         hints(h, 1);
     } else if (screen == UI_LIST) {
@@ -127,7 +128,7 @@ static void draw(UiScreen screen, int count) {
 }
 
 int main(void) {
-    memcpy((void*)box.magic, (const void* volatile)magic, sizeof(box.magic));
+    memcpy((void*)box.magic, (const void* volatile)mark.magic, sizeof(box.magic));
     drawInit();
     u32 seenSeq = ~0u;
     while (pmMainLoop()) {

@@ -3,8 +3,8 @@
 
 #include "draw.h"
 
-// Vertices are in half pixels, so a glyph drawn at twice its size maps one atlas pixel to one unit.
-#define UNIT 2
+// Vertices are in quarters of a pixel, so a glyph drawn at four times its size maps one atlas pixel to one unit.
+#define UNIT 4
 
 static int atlasTex;
 static int iconTex[ICON_SLOTS];
@@ -24,6 +24,7 @@ void drawInit(void) {
     BG_PALETTE_SUB[0] = RGB15(0, 0, 0);
     vramSetBankA(VRAM_A_TEXTURE);
     vramSetBankB(VRAM_B_TEXTURE);
+    vramSetBankC(VRAM_C_TEXTURE);
     vramSetBankD(VRAM_D_TEXTURE);
     vramSetBankE(VRAM_E_TEX_PALETTE);
 
@@ -39,12 +40,12 @@ void drawInit(void) {
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
 
-    // The atlas is white with the glyphs' alpha: one palette entry, 5-bit alpha per texel.
-    static const u16 white[8] = {RGB15(31, 31, 31)};
+    // The atlas's four levels: clear, then greys up to white (gen_font.py).
+    static const u16 levels[4] = {0, RGB15(10, 10, 10), RGB15(21, 21, 21), RGB15(31, 31, 31)};
     glGenTextures(1, &atlasTex);
     glBindTexture(0, atlasTex);
-    glTexImage2D(0, 0, GL_RGB8_A5, TEXTURE_SIZE_1024, TEXTURE_SIZE_256, 0, TEXGEN_TEXCOORD, font3d_atlas);
-    glColorTableEXT(0, 0, 8, 0, 0, white);
+    glTexImage2D(0, 0, GL_RGB4, TEXTURE_SIZE_1024, TEXTURE_SIZE_1024, 0, TEXGEN_TEXCOORD | GL_TEXTURE_COLOR0_TRANSPARENT, font3d_atlas);
+    glColorTableEXT(0, 0, 4, 0, 0, levels);
     glGenTextures(ICON_SLOTS, iconTex);
 }
 
@@ -88,7 +89,7 @@ void roundRect(int x, int y, int w, int h, u16 color) {
     // The ends: halves of the atlas's disc; the middle: its centre column stretched.
     quad(x * UNIT, y * UNIT, r, d, disc_x, disc_y, half, disc_d, color);
     quad(x * UNIT + w * UNIT - r, y * UNIT, r, d, disc_x + half, disc_y, disc_d - half, disc_d, color);
-    if (w * UNIT > d) quad(x * UNIT + r, y * UNIT, w * UNIT - d, d, disc_x + half - 1, disc_y, 2, disc_d, color);
+    if (w * UNIT > 2 * r) quad(x * UNIT + r, y * UNIT, w * UNIT - 2 * r, d, disc_x + half - 1, disc_y, 2, disc_d, color);
 }
 
 void textZoom(const Font* f, int zoom, int x, int y, const char* s, u16 color) {
