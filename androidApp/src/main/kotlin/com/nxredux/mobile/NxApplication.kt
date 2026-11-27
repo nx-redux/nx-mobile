@@ -52,6 +52,8 @@ class NxApplication : Application() {
         if (!game) {
             com.nxredux.mobile.runner.DsMenu.artDir = DsMenuArt.current(this)
                 ?: null.also { Thread({ com.nxredux.mobile.runner.DsMenu.artDir = DsMenuArt.copy(this) }, "ds-menu-art").start() }
+            com.nxredux.mobile.runner.N3dsDownloadPlay.dir = N3dsDownloadPlayFiles.current(this)
+                ?: null.also { Thread({ com.nxredux.mobile.runner.N3dsDownloadPlay.dir = N3dsDownloadPlayFiles.copy(this) }, "n3ds-dlp-files").start() }
         }
         if (!game) {
             Thread({

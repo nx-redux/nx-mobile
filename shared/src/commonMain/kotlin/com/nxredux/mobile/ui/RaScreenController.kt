@@ -145,9 +145,9 @@ internal class RaScreenController(
     private fun followRa(details: Boolean, force: Boolean, rested: Boolean = false) {
         val target = if (details) _detailsRa else _raPanel
         val s = screen.value as? Screen.Games
-        // The DS Download Play row has no file and no achievements: as no game.
+        // A Download Play row has no file and no achievements: as no game.
         val entry = (if (details) detailsEntry?.takeUnless { it.system.android } else s?.entries?.getOrNull(selection.value.index))
-            ?.takeUnless { com.nxredux.mobile.runner.DsMenu.isMenu(it.game.ref.value) }
+            ?.takeUnless { com.nxredux.mobile.runner.SystemRows.isRow(it.game.ref.value) }
         if (details && (entry == null || achievements == null || settings.raUsername.isBlank())) {
             raDetailJob?.cancel(); raDetailJob = null
             target.value = null

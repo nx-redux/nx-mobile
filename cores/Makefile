@@ -431,7 +431,8 @@ yabasanshiro_SUBMODULES = ':(exclude)yabause/src/retro_arena/nanogui-sdl/ext/eig
 # never copies an unfinished frame; the Large screen layout puts its small screen top-right (upstream: bottom-right).
 # It also starts Azahar's multiplayer room for local wireless between devices (on the Wi-Fi, the phone-to-phone cable
 # and the phone's own hotspot) and names the console after the player
-# (README, Azahar).
+# (README, Azahar). A Download Play child installed without console unique data is kept under a key made on the device
+# (sysdata/nx_dlp_child.key), and a reboot into a title takes a memory layout that fits the console.
 # patches/azahar/0001: the Vulkan upload buffer is sized from the device's RAM (64 MiB on 2 GB) instead of a fixed 512 MiB the
 # driver keeps resident. patches/azahar/0002: save states stream through ZSTD both ways, never whole and uncompressed in memory.
 # patches/azahar/0003: OpenGL stream buffers map only the range a draw writes (Mali flushes the whole mapped range on unmap).

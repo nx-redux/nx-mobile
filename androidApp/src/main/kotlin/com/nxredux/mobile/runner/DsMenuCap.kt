@@ -6,10 +6,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
- * A player who leaves the in-game menu open in a room holds the others back, so after [capMs] of it [onCap] runs on
- * [scope]. The countdown belongs to one stretch of menu-in-room: [sync] starts it once and a repeated call keeps it
- * running, so only leaving the room or the menu gives the next stretch a full cap. [onTick] gets the seconds left,
- * once a second, for the menu to show; null when no countdown runs.
+ * A player who leaves the in-game menu open in a room (or another window with the focus, see [dsHeldInRoom]) holds
+ * the others back, so after [capMs] of it [onCap] runs on [scope]. The countdown belongs to one stretch of
+ * held-in-room: [sync] starts it once and a repeated call keeps it running, so only leaving the room or the hold gives
+ * the next stretch a full cap. [onTick] gets the seconds left, once a second, for the menu to show; null when no
+ * countdown runs.
  */
 internal class DsMenuCap(
     private val scope: CoroutineScope,
@@ -29,7 +30,7 @@ internal class DsMenuCap(
         onTick(seconds)
     }
 
-    /** [idleInRoom]: the menu is open while in a room. True starts the countdown if none runs; false cancels it. */
+    /** [idleInRoom]: the game is held while in a room. True starts the countdown if none runs; false cancels it. */
     fun sync(idleInRoom: Boolean) {
         if (!idleInRoom) {
             job?.cancel()

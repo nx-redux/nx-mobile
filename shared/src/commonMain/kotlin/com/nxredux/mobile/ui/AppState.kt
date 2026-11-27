@@ -64,6 +64,7 @@ import com.nxredux.mobile.options.NoCoreOptions
 import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.runner.Console
 import com.nxredux.mobile.runner.DsMenu
+import com.nxredux.mobile.runner.N3dsDownloadPlay
 import com.nxredux.mobile.runner.withConsole
 import com.nxredux.mobile.runner.withEntry
 import com.nxredux.mobile.runner.ContentRef
@@ -231,6 +232,8 @@ class AppDeps(
     val ps2BiosFiles: () -> List<String> = { emptyList() },
     /** The ".bin" names in Bios/NDS/ (whether DS Download Play can boot the DS menu); blocking, called off the main thread. */
     val ndsBiosFiles: () -> List<String> = { emptyList() },
+    /** 3DS Download Play (our own client, no files of the player's): its row, and its console in a library without 3DS games. */
+    val n3dsDownloadPlay: Boolean = false,
     /**
      * The device turns its screen for an app that asks (Android's auto-rotate on). Off, Button layout offers only the
      * window's current orientation: a display that keeps its rotation leaves the other one's editor with nothing drawn.
@@ -1572,7 +1575,7 @@ class AppState(
      */
     private suspend fun offerSystems(gen: Long, systems: List<SystemFolder>, dsReady: Boolean = dsMenuReady): Boolean = systemsLock.withLock {
         (gen > systemsWritten).also {
-            if (it) { systemsWritten = gen; dsMenuReady = dsReady; systemsCache = DsMenu.withConsole(systems, dsReady); topScreen.followTopStats() }
+            if (it) { systemsWritten = gen; dsMenuReady = dsReady; systemsCache = DsMenu.withConsole(systems, dsReady).let { if (deps.n3dsDownloadPlay) N3dsDownloadPlay.withConsole(it) else it }; topScreen.followTopStats() }
         }
     }
 
@@ -2694,7 +2697,8 @@ class AppState(
     /** The dumps DS Download Play boots from are in Bios/NDS/, as read with [systemsCache] ([offerSystems]). */
     private var dsMenuReady = false
 
-    private fun buildConsoleEntries(systems: List<SystemFolder>): List<Listed> = DsMenu.withEntry(systems, gameEntries(systems), dsMenuReady)
+    private fun buildConsoleEntries(systems: List<SystemFolder>): List<Listed> =
+        DsMenu.withEntry(systems, gameEntries(systems), dsMenuReady).let { if (deps.n3dsDownloadPlay) N3dsDownloadPlay.withEntry(systems, it) else it }
 
     private fun gameEntries(systems: List<SystemFolder>): List<Listed> {
         systems.singleOrNull()?.let { s -> return s.games.map { Listed(s, it) } }

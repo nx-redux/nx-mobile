@@ -26,4 +26,5 @@ struct nx_3ds_link_interface {
     // The phone's own networks (its hotspot): broadcast addresses and masks, host order, up to 4. Null: the core does not
     // look there.
     void (*set_local)(const uint32_t* broadcasts, const uint32_t* masks, int n);
+    int (*host_left)(void);  // times the network this device joined lost its host to the host leaving; null: not said
 };
