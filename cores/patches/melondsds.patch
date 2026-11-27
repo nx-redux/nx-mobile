@@ -311,24 +311,62 @@ index 9d5c922..9bf1221 100644
      if (!VisibilityInitialized || ShowHybridOptions != oldShowHybridOptions) {
          set_option_visible(screen::HYBRID_SMALL_SCREEN, ShowHybridOptions);
 diff --git a/src/libretro/core/core.cpp b/src/libretro/core/core.cpp
-index df32f07..6b57f5e 100644
+index df32f07..ab144e5 100644
 --- a/src/libretro/core/core.cpp
 +++ b/src/libretro/core/core.cpp
-@@ -1,3 +1,4 @@
+@@ -1,3 +1,6 @@
++#include <chrono>
++#include <thread>
 +#include <cstdio>
  /*
      Copyright 2023 Jesse Talavera-Greenberg
  
-@@ -198,6 +199,8 @@ void MelonDsDs::CoreState::Run() noexcept {
+@@ -23,6 +26,7 @@
+ #include <retro_assert.h>
+ 
+ #include <NDS.h>
++#include <NDSCart.h>
+ #include <compat/strl.h>
+ #include <file/file_path.h>
+ #include <string/stdstring.h>
+@@ -198,6 +202,36 @@ void MelonDsDs::CoreState::Run() noexcept {
          return;
      }
  
 +    if (_mpState.IsReady()) _mpState.WmbService();
++    if (auto child = _mpState.TakeWmbChild()) BootWmbChild(std::move(*child));
++    // Spike: Saves/NDS/wmb-test.trigger boots the last download, without a host.
++    if (static int frames = 0; ++frames % 60 == 0) {
++        if (const auto dir = retro::get_save_directory()) {
++            const std::string trigger = fmt::format("{}/wmb-test.trigger", *dir);
++            if (FILE* t = fopen(trigger.c_str(), "rb")) {
++                fclose(t);
++                remove(trigger.c_str());
++                auto read = [&](const char* name) {
++                    std::vector<uint8_t> v;
++                    if (FILE* f = fopen(fmt::format("{}/wmb-{}.bin", *dir, name).c_str(), "rb")) {
++                        uint8_t buf[4096];
++                        size_t n;
++                        while ((n = fread(buf, 1, sizeof(buf), f)) > 0) v.insert(v.end(), buf, buf + n);
++                        fclose(f);
++                    }
++                    return v;
++                };
++                std::array<uint8_t, 0x40> block {};
++                const auto b = read("boot");
++                std::copy_n(b.begin(), std::min(b.size(), block.size()), block.begin());
++                if (auto child = MakeWmbChild(read("header"), read("arm9"), read("arm7"), block)) {
++                    retro::info("WMB: test boot of the last download");
++                    BootWmbChild(std::move(*child));
++                }
++            }
++        }
++    }
 +
      retro_assert(Console != nullptr);
      melonDS::NDS& nds = *Console;
  
-@@ -216,6 +219,7 @@ void MelonDsDs::CoreState::Run() noexcept {
+@@ -216,6 +250,7 @@ void MelonDsDs::CoreState::Run() noexcept {
  
      if (_renderState.Ready()) [[likely]] {
          // If the global state needed for rendering is ready...
@@ -336,7 +374,7 @@ index df32f07..6b57f5e 100644
          _inputState.Update(Config, _screenLayout);
          _inputState.Apply(nds, _screenLayout, _micState, Config);
          // melonDS pulls microphone samples as it needs them
-@@ -267,6 +271,7 @@ void MelonDsDs::CoreState::Run() noexcept {
+@@ -267,6 +302,7 @@ void MelonDsDs::CoreState::Run() noexcept {
              _inputState.StopRumble();
          }
  
@@ -344,7 +382,7 @@ index df32f07..6b57f5e 100644
          _renderState.Render(nds, _inputState, Config, _screenLayout);
          RenderAudio(*Console);
  
-@@ -450,6 +455,8 @@ void MelonDsDs::CoreState::RenderErrorScreen() noexcept {
+@@ -450,6 +486,8 @@ void MelonDsDs::CoreState::RenderErrorScreen() noexcept {
          _screenLayout.SetDirty();
      }
  
@@ -353,7 +391,7 @@ index df32f07..6b57f5e 100644
      // The screen layout hotkey works here too, even though there's no console to drive
      _inputState.Update(Config, _screenLayout);
      _inputState.Apply(_screenLayout);
-@@ -462,9 +469,71 @@ void MelonDsDs::CoreState::RenderErrorScreen() noexcept {
+@@ -462,9 +500,71 @@ void MelonDsDs::CoreState::RenderErrorScreen() noexcept {
          }
      }
  
@@ -425,7 +463,7 @@ index df32f07..6b57f5e 100644
  std::chrono::system_clock::time_point ToSystemTime(std::chrono::local_seconds time) noexcept {
      return std::chrono::system_clock::from_time_t(time.time_since_epoch().count());
  }
-@@ -580,6 +649,19 @@ void MelonDsDs::CoreState::StartConsole() {
+@@ -580,6 +680,19 @@ void MelonDsDs::CoreState::StartConsole() {
                  // If we know the name of the loaded ROM...
                  Console->SetupDirectBoot(ptr);
                  retro::debug("Initialized direct boot for \"{}\"", ptr);
@@ -445,7 +483,7 @@ index df32f07..6b57f5e 100644
              }
              else {
                  Console->SetupDirectBoot("unknown.nds");
-@@ -591,6 +673,7 @@ void MelonDsDs::CoreState::StartConsole() {
+@@ -591,6 +704,7 @@ void MelonDsDs::CoreState::StartConsole() {
          // (Some can do this, e.g. Flipnote Studio)
      }
  
@@ -453,7 +491,35 @@ index df32f07..6b57f5e 100644
      Console->Start();
  
      retro::info("Started emulated console");
-@@ -619,6 +702,14 @@ void MelonDsDs::CoreState::DestroyRenderState() {
+@@ -608,6 +722,27 @@ void MelonDsDs::CoreState::InitFlushFirmwareTask() noexcept
+     }
+ }
+ 
++void MelonDsDs::CoreState::BootWmbChild(MpState::WmbChild child) noexcept {
++    auto cart = melonDS::NDSCart::ParseROM(child.rom.data(), child.rom.size(), nullptr, std::nullopt);
++    if (!cart) {
++        retro::warn("WMB: the downloaded game is not a ROM melonDS can load");
++        return;
++    }
++    Console->SetNDSCart(std::move(cart));
++    Console->Reset();
++    SetConsoleTime(*Console);
++    Console->SetupDirectBoot("download-play.nds");
++    for (size_t i = 0; i < child.bootBlock.size(); i++) Console->MainRAM[(0x027FFC40 + i) & Console->MainRAMMask] = child.bootBlock[i];
++    Console->Start();
++    retro::info("WMB: booted the downloaded game ({} bytes)", child.rom.size());
++    std::thread([] {
++        for (int i = 0; i < 60; i++) {
++            std::this_thread::sleep_for(std::chrono::milliseconds(500));
++            retro::info("WMB watch: {}", MelonDsDs::WmbPhase.load());
++        }
++    }).detach();
++}
++
+ void MelonDsDs::CoreState::ResetRenderState() {
+     _renderState.ContextReset(*Console, Config);
+ }
+@@ -619,6 +754,14 @@ void MelonDsDs::CoreState::DestroyRenderState() {
  bool MelonDsDs::CoreState::LoadGame(unsigned type, std::span<const retro_game_info> game) noexcept try {
      ZoneScopedN(TracyFunction);
  
@@ -469,7 +535,7 @@ index df32f07..6b57f5e 100644
  
      // ...then load the game.
 diff --git a/src/libretro/core/core.hpp b/src/libretro/core/core.hpp
-index bb52319..e53199d 100644
+index bb52319..a12b45b 100644
 --- a/src/libretro/core/core.hpp
 +++ b/src/libretro/core/core.hpp
 @@ -96,7 +96,12 @@ namespace MelonDsDs {
@@ -485,7 +551,16 @@ index bb52319..e53199d 100644
  
          void WriteNdsSave(std::span<const std::byte> savedata, uint32_t writeoffset, uint32_t writelen) noexcept;
          void WriteGbaSave(std::span<const std::byte> savedata, uint32_t writeoffset, uint32_t writelen) noexcept;
-@@ -147,6 +152,14 @@ namespace MelonDsDs {
+@@ -131,6 +136,8 @@ namespace MelonDsDs {
+         /// as the buffers move with it.
+         [[gnu::cold]] void RegisterMemoryMap() const noexcept;
+         [[gnu::cold]] void StartConsole();
++        /// A game the Download Play client received boots in place of what runs now, as the DS menu boots it.
++        void BootWmbChild(MpState::WmbChild child) noexcept;
+         [[gnu::cold]] void SetConsoleTime(melonDS::NDS& nds) noexcept;
+         [[gnu::cold]] void SetConsoleTime(melonDS::NDS& nds, local_seconds time) noexcept;
+         /// \return The header of the loaded NDS ROM,
+@@ -147,6 +154,14 @@ namespace MelonDsDs {
              int type
          ) noexcept;
          [[gnu::hot]] static void RenderAudio(melonDS::NDS& nds) noexcept;
@@ -500,7 +575,7 @@ index bb52319..e53199d 100644
          [[gnu::cold]] bool InitErrorScreen(const config_exception& e) noexcept;
          [[gnu::cold]] void RenderErrorScreen() noexcept;
          [[gnu::cold]] void InitContent(unsigned type, std::span<const retro_game_info> game);
-@@ -196,6 +209,14 @@ namespace MelonDsDs {
+@@ -196,6 +211,14 @@ namespace MelonDsDs {
          /// \see UpdateSystemAvInfo
          bool _nudgeMaxHeight = false;
          uint32_t _flushTaskId = 0;
@@ -742,7 +817,7 @@ index fabccaa..d817085 100644
      }
  }
 diff --git a/src/libretro/libretro.cpp b/src/libretro/libretro.cpp
-index b56f23a..4edc321 100644
+index b56f23a..481fd2e 100644
 --- a/src/libretro/libretro.cpp
 +++ b/src/libretro/libretro.cpp
 @@ -20,12 +20,14 @@
@@ -787,17 +862,36 @@ index b56f23a..4edc321 100644
          return 0;
      }
      memcpy(data, o_p->Data(), o_p->Length());
-@@ -354,6 +360,7 @@ int DeconstructPacket(u8 *data, u64 *timestamp, const std::optional<MelonDsDs::P
+@@ -354,19 +360,24 @@ int DeconstructPacket(u8 *data, u64 *timestamp, const std::optional<MelonDsDs::P
  }
  
  int Platform::MP_SendPacket(u8* data, int len, u64 timestamp, void*) {
++    MelonDsDs::WmbPhase = "MP_SendPacket";
 +    MelonDsDs::NdsRadioSawFrame(data, len);
      return MelonDsDs::Core.MpSendPacket(MelonDsDs::Packet(data, len, timestamp, 0, MelonDsDs::Packet::Type::Other)) ? len : 0;
  }
  
-@@ -384,6 +391,16 @@ int Platform::MP_SendAck(u8* data, int len, u64 timestamp, void*) {
+ int Platform::MP_RecvPacket(u8* data, u64* timestamp, void*) {
++    MelonDsDs::WmbPhase = "MP_RecvPacket";
+     std::optional<MelonDsDs::Packet> o_p = MelonDsDs::Core.MpNextPacket();
+     return DeconstructPacket(data, timestamp, o_p);
+ }
+ 
+ int Platform::MP_SendCmd(u8* data, int len, u64 timestamp, void*) {
++    MelonDsDs::WmbPhase = "MP_SendCmd";
+     return MelonDsDs::Core.MpSendPacket(MelonDsDs::Packet(data, len, timestamp, 0, MelonDsDs::Packet::Type::Cmd)) ? len : 0;
+ }
+ 
+ int Platform::MP_SendReply(u8 *data, int len, u64 timestamp, u16 aid, void*) {
++    MelonDsDs::WmbPhase = "MP_SendReply";
+     // aid is always less than 16,
+     // otherwise sending a 16-bit wide aidmask in RecvReplies wouldn't make sense,
+     // and neither would this line[1] from melonDS itself.
+@@ -383,17 +394,35 @@ int Platform::MP_SendAck(u8* data, int len, u64 timestamp, void*) {
+ }
  
  int Platform::MP_RecvHostPacket(u8* data, u64 * timestamp, void*) {
++    MelonDsDs::WmbPhase = "MP_RecvHostPacket";
      std::optional<MelonDsDs::Packet> o_p = MelonDsDs::Core.MpNextPacketBlock();
 +    // melonDS asks again on every timer tick until it is told the host has left, and each ask waits a full timeout:
 +    // without this one frame never ends once the host is gone.
@@ -812,7 +906,9 @@ index b56f23a..4edc321 100644
      return DeconstructPacket(data, timestamp, o_p);
  }
  
-@@ -392,8 +409,14 @@ u16 Platform::MP_RecvReplies(u8* packets, u64 timestamp, u16 aidmask, void*) {
+ u16 Platform::MP_RecvReplies(u8* packets, u64 timestamp, u16 aidmask, void*) {
++    MelonDsDs::WmbPhase = "MP_RecvReplies";
+     if(!MelonDsDs::Core.MpActive()) {
          return 0;
      }
      u16 ret = 0;
@@ -828,7 +924,7 @@ index b56f23a..4edc321 100644
          std::optional<MelonDsDs::Packet> o_p = MelonDsDs::Core.MpNextPacketBlock();
          if(!o_p.has_value()) {
              return ret;
-@@ -405,9 +428,17 @@ u16 Platform::MP_RecvReplies(u8* packets, u64 timestamp, u16 aidmask, void*) {
+@@ -405,9 +434,17 @@ u16 Platform::MP_RecvReplies(u8* packets, u64 timestamp, u16 aidmask, void*) {
          if(p.PacketType() != MelonDsDs::Packet::Type::Reply) {
              continue;
          }
@@ -925,10 +1021,10 @@ index 0000000..cfaa783
 +
 +#endif //MELONDS_DS_LIBRETRO_VIEWS_H
 diff --git a/src/libretro/net/mp.cpp b/src/libretro/net/mp.cpp
-index caa185d..5903e34 100644
+index caa185d..cf1a7f4 100644
 --- a/src/libretro/net/mp.cpp
 +++ b/src/libretro/net/mp.cpp
-@@ -15,7 +15,11 @@
+@@ -15,16 +15,53 @@
  */
  #include "mp.hpp"
  #include "environment.hpp"
@@ -941,7 +1037,9 @@ index caa185d..5903e34 100644
  #include <libretro.h>
  #include <retro_assert.h>
  #include <retro_endianness.h>
-@@ -24,7 +28,39 @@ using namespace MelonDsDs;
+ using namespace MelonDsDs;
++std::atomic<const char*> MelonDsDs::WmbPhase {"none"};
+ 
  // How many successive timeouts before
  // the player gets notified they are not supposed to use a VPN.
  constexpr int SUCCESSIVE_TIMEOUTS_WARNING = 6;
@@ -982,7 +1080,7 @@ index caa185d..5903e34 100644
  
  uint64_t swapToNetwork(uint64_t n) {
      return swap_if_little64(n);
-@@ -95,6 +131,11 @@ bool MpState::IsReady() const noexcept {
+@@ -95,6 +132,11 @@ bool MpState::IsReady() const noexcept {
  void MpState::SetSendFn(retro_netpacket_send_t sendFn) noexcept {
      if (sendFn != nullptr) {
          retro::set_warn_message("LAN Multiplayer will NOT work using VPNs or tunnels such as Hamachi!");
@@ -994,7 +1092,7 @@ index caa185d..5903e34 100644
      }
      _sendFn = sendFn;
  }
-@@ -106,9 +147,55 @@ void MpState::SetPollFn(retro_netpacket_poll_receive_t pollFn) noexcept {
+@@ -106,9 +148,55 @@ void MpState::SetPollFn(retro_netpacket_poll_receive_t pollFn) noexcept {
  void MpState::PacketReceived(const void *buf, size_t len, uint16_t client_id) noexcept {
      retro_assert(IsReady());
      Packet p = Packet::parsePk(buf, len);
@@ -1050,7 +1148,18 @@ index caa185d..5903e34 100644
      }
      receivedPackets.push(std::move(p));
  }
-@@ -132,9 +219,15 @@ std::optional<Packet> MpState::NextPacket() noexcept {
+@@ -116,8 +204,10 @@ void MpState::PacketReceived(const void *buf, size_t len, uint16_t client_id) no
+ std::optional<Packet> MpState::NextPacket() noexcept {
+     retro_assert(IsReady());
+     if(receivedPackets.empty()) {
++        WmbPhase = "NextPacket poll";
+         _sendFn(RETRO_NETPACKET_FLUSH_HINT, NULL, 0, RETRO_NETPACKET_BROADCAST);
+         _pollFn();
++        WmbPhase = "NextPacket done";
+     }
+     if(receivedPackets.empty()) {
+         return std::nullopt;
+@@ -132,9 +222,16 @@ std::optional<Packet> MpState::NextPacket() noexcept {
  std::optional<Packet> MpState::NextPacketBlock() noexcept {
      retro_assert(IsReady());
      if (receivedPackets.empty()) {
@@ -1058,6 +1167,7 @@ index caa185d..5903e34 100644
 +        // Wall clock: std::clock counts CPU time, which stretches the wait many times over while this thread sleeps in poll.
 +        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(RECV_TIMEOUT_MS);
 +        while (std::chrono::steady_clock::now() < deadline) {
++            WmbPhase = "NextPacketBlock wait";
              _sendFn(RETRO_NETPACKET_FLUSH_HINT, NULL, 0, RETRO_NETPACKET_BROADCAST);
              _pollFn();
 +            // The frontend may end the session from inside its poll, when its room is gone.
@@ -1067,7 +1177,7 @@ index caa185d..5903e34 100644
              if(!receivedPackets.empty()) {
                  return NextPacket();
              }
-@@ -151,16 +244,121 @@ std::optional<Packet> MpState::NextPacketBlock() noexcept {
+@@ -151,16 +248,143 @@ std::optional<Packet> MpState::NextPacketBlock() noexcept {
      return std::nullopt;
  }
  
@@ -1169,6 +1279,7 @@ index caa185d..5903e34 100644
 +    if (now == before) return;
 +    retro::info("WMB client: state {} -> {}", (int)before, (int)now);
 +    if (now != WmbClient::State::Done) return;
++    _wmbChild = MakeWmbChild(_wmbClient.Region(0), _wmbClient.Region(1), _wmbClient.Region(2), _wmbClient.BootBlock());
 +    const auto dir = retro::get_save_directory();
 +    if (!dir) return;
 +    const char* names[] = {"header", "arm9", "arm7"};
@@ -1192,11 +1303,32 @@ index caa185d..5903e34 100644
 +        _pollFn();
 +    }
 +}
++
++std::optional<MpState::WmbChild> MelonDsDs::MakeWmbChild(const std::vector<uint8_t>& header, const std::vector<uint8_t>& arm9,
++                                                      const std::vector<uint8_t>& arm7, const std::array<uint8_t, 0x40>& bootBlock) noexcept {
++    if (header.size() < 0x160) return std::nullopt;
++    // The ROM a cart would hold: each binary where the header says it is read from.
++    auto le32 = [&](size_t at) { return header[at] | header[at + 1] << 8 | header[at + 2] << 16 | uint32_t(header[at + 3]) << 24; };
++    const uint32_t arm9At = le32(0x20), arm7At = le32(0x30);
++    // A forged header could ask for gigabytes: the DS has 4 MB of main RAM, so its binaries sit well inside 32 MB.
++    constexpr uint32_t ROM_MAX = 32 << 20;
++    if (arm9At < 0x160 || arm7At < 0x160 || arm9At + arm9.size() > ROM_MAX || arm7At + arm7.size() > ROM_MAX) {
++        retro::warn("WMB client: header places the binaries out of range ({:x}, {:x})", arm9At, arm7At);
++        return std::nullopt;
++    }
++    MpState::WmbChild child;
++    child.rom.resize(std::max(arm9At + arm9.size(), arm7At + arm7.size()));
++    std::copy(header.begin(), header.end(), child.rom.begin());
++    std::copy(arm9.begin(), arm9.end(), child.rom.begin() + arm9At);
++    std::copy(arm7.begin(), arm7.end(), child.rom.begin() + arm7At);
++    child.bootBlock = bootBlock;
++    return child;
++}
 diff --git a/src/libretro/net/mp.hpp b/src/libretro/net/mp.hpp
-index f6b5dfc..43b96e4 100644
+index f6b5dfc..9fcdae2 100644
 --- a/src/libretro/net/mp.hpp
 +++ b/src/libretro/net/mp.hpp
-@@ -14,13 +14,22 @@
+@@ -14,13 +14,25 @@
      with melonDS DS. If not, see http://www.gnu.org/licenses/.
  */
  #pragma once
@@ -1211,7 +1343,10 @@ index f6b5dfc..43b96e4 100644
  #include <libretro.h>
 +#include "wmb.hpp"
  
++#include <atomic>
  namespace MelonDsDs {
++/// Spike: the last step the network path entered, for the boot watchdog.
++extern std::atomic<const char*> WmbPhase;
 +/// Tell the frontend what the emulated radio is doing (emulation thread). Hosting is reported once per power-on.
 +void NdsRadioOn() noexcept;
 +void NdsRadioOff() noexcept;
@@ -1219,7 +1354,7 @@ index f6b5dfc..43b96e4 100644
  // timestamp, aid, and isReply, respectively.
  constexpr size_t HeaderSize = sizeof(uint64_t) + sizeof(uint8_t) + sizeof(uint8_t);
  
-@@ -48,6 +57,13 @@ public:
+@@ -48,6 +60,13 @@ public:
      [[nodiscard]] uint64_t Length() const noexcept {
          return _data.size();
      };
@@ -1233,7 +1368,7 @@ index f6b5dfc..43b96e4 100644
  
      std::vector<uint8_t> ToBuf() const;
  private:
-@@ -55,23 +71,57 @@ private:
+@@ -55,23 +74,65 @@ private:
      uint8_t _aid;
      Packet::Type _type;
      std::vector<uint8_t> _data;
@@ -1252,6 +1387,10 @@ index f6b5dfc..43b96e4 100644
 +    /// Once a frame: while the Download Play client is in a session, take the room's packets for a while so its replies
 +    /// go out in time, whatever the emulated radio is doing.
 +    void WmbService() noexcept;
++    /// A game the Download Play client finished: its ROM image (header, ARM9 and ARM7 at the header's offsets) and the
++    /// block to leave at 027FFC40; empty until then, and once taken.
++    struct WmbChild { std::vector<uint8_t> rom; std::array<uint8_t, 0x40> bootBlock {}; };
++    std::optional<WmbChild> TakeWmbChild() noexcept { auto c = std::move(_wmbChild); _wmbChild.reset(); return c; }
 +    void SetLocalMac(const std::array<uint8_t, 6>& mac) noexcept { _wmbClient.SetMac(mac); }
 +    /// [group]: the group this console is in, whose host a reply goes to.
 +    void SendPacket(const Packet &p, const GroupId& group) noexcept;
@@ -1270,6 +1409,7 @@ index f6b5dfc..43b96e4 100644
  private:
 +    WmbScanner _wmb;
 +    WmbClient _wmbClient;
++    std::optional<WmbChild> _wmbChild;
 +    void WmbStep(const Packet& p) noexcept;
      bool _warnedHighLatency = false;
      int _timeoutCount = 0;
@@ -1291,6 +1431,9 @@ index f6b5dfc..43b96e4 100644
 +    // When this console began waiting for a command of its group that hasn't come.
 +    std::optional<std::chrono::steady_clock::time_point> _hostWaitStart;
  };
++/// The ROM image and boot block for a downloaded game; nothing when the header is unusable.
++std::optional<MpState::WmbChild> MakeWmbChild(const std::vector<uint8_t>& header, const std::vector<uint8_t>& arm9,
++                                              const std::vector<uint8_t>& arm7, const std::array<uint8_t, 0x40>& bootBlock) noexcept;
  }
 diff --git a/src/libretro/net/wmb.cpp b/src/libretro/net/wmb.cpp
 new file mode 100644
@@ -1735,7 +1878,7 @@ index 0000000..9d5cc94
 +#define NX_NDS_RADIO_ON 1       // the game powered the radio on
 +#define NX_NDS_RADIO_HOSTING 2  // the game sent a beacon: it created a group (once per ON)
 diff --git a/src/libretro/platform/mp.cpp b/src/libretro/platform/mp.cpp
-index 30ee4c2..8f0541a 100644
+index 30ee4c2..e39704f 100644
 --- a/src/libretro/platform/mp.cpp
 +++ b/src/libretro/platform/mp.cpp
 @@ -18,6 +18,7 @@
@@ -1746,7 +1889,23 @@ index 30ee4c2..8f0541a 100644
  #include <fmt/base.h>
  #include <retro_assert.h>
  
-@@ -56,12 +57,29 @@ void MelonDsDs::CoreState::MpStopped() noexcept {
+@@ -31,6 +32,7 @@ constexpr retro_fastforwarding_override FASTFORWARD_OVERRIDE_FORBIDDEN = {
+ };
+ 
+ void MelonDsDs::CoreState::MpStarted(retro_netpacket_send_t send, retro_netpacket_poll_receive_t poll_receive) noexcept {
++    retro::info("WMB watch: MP started");
+     ZoneScopedN(TracyFunction);
+     _mpState.SetSendFn(send);
+     _mpState.SetPollFn(poll_receive);
+@@ -49,6 +51,7 @@ void MelonDsDs::CoreState::MpPacketReceived(const void *buf, size_t len, uint16_
+ }
+ 
+ void MelonDsDs::CoreState::MpStopped() noexcept {
++    retro::info("WMB watch: MP stopped");
+     ZoneScopedN(TracyFunction);
+     _mpState.SetSendFn(nullptr);
+     _mpState.SetPollFn(nullptr);
+@@ -56,12 +59,29 @@ void MelonDsDs::CoreState::MpStopped() noexcept {
      retro::info("Stopping multiplayer on libretro side");
  }
  
@@ -1777,7 +1936,7 @@ index 30ee4c2..8f0541a 100644
      return true;
  }
  
-@@ -81,15 +99,69 @@ std::optional<MelonDsDs::Packet> MelonDsDs::CoreState::MpNextPacketBlock() noexc
+@@ -81,15 +101,71 @@ std::optional<MelonDsDs::Packet> MelonDsDs::CoreState::MpNextPacketBlock() noexc
      return _mpState.NextPacketBlock();
  }
  
@@ -1807,7 +1966,9 @@ index 30ee4c2..8f0541a 100644
 +    bool hostingReported = false;
 +
 +    void ReportRadio(unsigned state) noexcept {
++        MelonDsDs::WmbPhase = "ReportRadio";
 +        retro::environment(NX_ENVIRONMENT_SET_NDS_RADIO, &state);
++        MelonDsDs::WmbPhase = "ReportRadio done";
 +    }
 +}
 +
