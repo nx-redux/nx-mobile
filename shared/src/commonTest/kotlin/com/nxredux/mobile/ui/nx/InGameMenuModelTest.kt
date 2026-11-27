@@ -379,6 +379,12 @@ class InGameMenuModelTest {
         assertEquals(listOf("Continue", "Disconnect", "Quit"), m.state.page.rows.map { it.label })
     }
 
+    @Test fun a_received_download_play_game_has_no_reset() {
+        val m = model().also { it.saveStates = false }
+        m.setDownloadPlayRow(true)
+        assertEquals(listOf("Continue", "Options", "Quit"), m.state.page.rows.map { it.label })
+    }
+
     @Test fun options_has_no_cheats_row_the_panel_has_them() {
         val m = model().also { it.cheatsAvailable = true }
         m.select(4)

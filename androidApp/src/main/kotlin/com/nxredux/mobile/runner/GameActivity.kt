@@ -807,11 +807,21 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      */
     private fun watchDownloadPlayPick(azahar: File, config: File) {
         val pick = File(azahar, N3dsDownloadPlayHandoff.PICK_FILE)
+        val failed = File(azahar, N3dsDownloadPlayHandoff.FAILED_FILE)
         lifecycleScope.launch(Dispatchers.IO) {
             pick.delete()   // a stale one from a session that ended mid-hand-off
+            failed.delete()
             var hostLeft = -1
             while (isActive) {
                 if (downloadPlayChildStarted) hostLeft = checkDownloadPlayHostLeft(hostLeft)
+                // The named game did not start: the client is back, on its one screen.
+                if (failed.isFile) {
+                    failed.delete()
+                    if (downloadPlayChildStarted) {
+                        downloadPlayChildStarted = false
+                        withContext(Dispatchers.Main) { showDownloadPlayClient() }
+                    }
+                }
                 if (pick.isFile) {
                     val child = runCatching { pick.readText() }.getOrDefault("")
                     pick.delete()
@@ -859,8 +869,17 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     }
 
     override val downloadPlayClientShowing: Boolean get() = downloadPlayLayout != null
+    override val downloadPlayRow: Boolean get() = launchPipeline.ndsDownloadPlay || launchPipeline.n3dsDownloadPlayDirs != null
 
     override fun frontendValuesToSave(): Map<String, String> = DownloadPlayScreen.toSave(frontendValues, downloadPlayLayout, n3ds = isN3ds)
+
+    /** The client again (a game that did not start): its one screen and its menu, the player's layout kept aside. */
+    private fun showDownloadPlayClient() {
+        if (downloadPlayLayout != null) return
+        downloadPlayLayout = frontendValues
+        applyFrontend(DownloadPlayScreen.single(frontendValues, n3ds = isN3ds))
+        withMenu { it.setDownloadPlayClient(true) }
+    }
 
     /** The received game plays on both screens, as the player lays them out. */
     private fun restoreDownloadPlayLayout() {

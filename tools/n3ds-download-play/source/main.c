@@ -23,6 +23,8 @@
 #define PICK_DIR "sdmc:/nx-redux"
 #define PICK_FILE PICK_DIR "/download-play.txt"
 #define PICK_ACK PICK_DIR "/download-play.ack"
+// Left when the picked game did not start after all: the app shows the client as it was.
+#define PICK_FAILED PICK_DIR "/download-play.failed"
 
 typedef enum { LISTING, DOWNLOADING, STARTING, FAILED } Phase;
 
@@ -240,6 +242,8 @@ int main(void) {
                     // The restart takes over from here.
                     for (int i = 0; i < 600 && aptMainLoop(); i++) gspWaitForVBlank();
                     dlpForgetChild(child);
+                    FILE* failed = fopen(PICK_FAILED, "w");
+                    if (failed) fclose(failed);
                     fail("The game did not start.");
                 } else if ((was_connected && !now.connected) || (!now.connected && osGetTime() - phase_started > 10000)) {
                     dlpStopSession();

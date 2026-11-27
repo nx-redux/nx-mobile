@@ -534,6 +534,15 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         refreshRoot()
     }
 
+    /** A Download Play row's session: no Reset, which would boot its client again under the game it received. */
+    private var downloadPlayRow = false
+
+    fun setDownloadPlayRow(on: Boolean) {
+        if (on == downloadPlayRow) return
+        downloadPlayRow = on
+        refreshRoot()
+    }
+
     /** From [setKidsLocked]: Kids Mode is on without Parent mode, so the root has no Options (a kid changes no settings). */
     private var kidsLocked = false
 
@@ -1749,7 +1758,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
                 add(MenuRow.Slot("Save", SlotAction.SAVE))
                 add(MenuRow.Slot("Load", SlotAction.LOAD))
             }
-            add(MenuRow.Action("Reset", MenuAction.ASK_RESET))   // asks first ([resetPage])
+            if (!downloadPlayRow) add(MenuRow.Action("Reset", MenuAction.ASK_RESET))   // asks first ([resetPage])
             if (screenTaken) add(MenuRow.Action(USE_TOP_SCREEN_LABEL, MenuAction.USE_TOP_SCREEN))
             if (!kidsLocked) add(MenuRow.Submenu("Options", PageKind.Options))
             add(MenuRow.Action("Quit", if (quitSaves) MenuAction.QUIT else MenuAction.QUIT_ONLY))

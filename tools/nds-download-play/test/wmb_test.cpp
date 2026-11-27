@@ -2,6 +2,8 @@
 #include "wmb.hpp"
 
 #include <cstdio>
+#include <cstdlib>
+#include <unistd.h>
 #include <cstring>
 #include <fstream>
 #include <functional>
@@ -502,6 +504,81 @@ static void make_child_pads_small_image() {
     if (child) CHECK(child->rom.size() >= 0x1000);
 }
 
+static void client_takes_a_kept_copy_for_the_same_rsa_frame() {
+    WmbClient c = JoinedClient();
+    std::vector<WmbOutgoing> out;
+    const Bytes rsa = RsaCommand(HOST, 10, 10);
+    c.FrameReceived(rsa.data(), rsa.size(), 0, true, 0, out);
+    CHECK(c.HaveRsa());
+    const Bytes header(0x160, 0x11);
+    CHECK(c.UseKept({header, Bytes(10, 0x99), Bytes(10, 0x77)}));
+    CHECK(c.PacketsDone() == c.PacketsTotal());
+    out.clear();
+    const Bytes d = DataCommand(HOST, 0, Bytes(250, 0));
+    c.FrameReceived(d.data(), d.size(), 0, true, 0, out);
+    CHECK(out.size() == 1 && out[0].frame[38] == 0x0A); // got all: the host goes on to Final
+    out.clear();
+    const Bytes final = Command(HOST, 0x05, Bytes(5, 0), 3);
+    c.FrameReceived(final.data(), final.size(), 0, true, 0, out);
+    CHECK(c.GetState() == WmbClient::State::Done);
+    CHECK(c.Region(0) == header && c.Region(1) == Bytes(10, 0x99) && c.Region(2) == Bytes(10, 0x77));
+}
+
+static void client_refuses_a_kept_copy_of_other_sizes() {
+    WmbClient c = JoinedClient();
+    std::vector<WmbOutgoing> out;
+    const Bytes rsa = RsaCommand(HOST, 10, 10);
+    c.FrameReceived(rsa.data(), rsa.size(), 0, true, 0, out);
+    CHECK(!c.UseKept({Bytes(0x160, 0), Bytes(12, 0), Bytes(10, 0)}));
+    CHECK(c.PacketsDone() == 0);
+    WmbClient early = JoinedClient(); // no RSA frame yet
+    CHECK(!early.UseKept({Bytes(0x160, 0), Bytes(10, 0), Bytes(10, 0)}));
+}
+
+static void kept_copy_key_is_the_rsa_frame_and_game() {
+    WmbClient a = DownloadedClient(), b = DownloadedClient();
+    CHECK(a.KeptKey() == b.KeptKey());
+    WmbClient c = JoinedClient();
+    std::vector<WmbOutgoing> out;
+    const Bytes rsa = RsaCommand(HOST, 10, 11);
+    c.FrameReceived(rsa.data(), rsa.size(), 0, true, 0, out);
+    CHECK(c.KeptKey() != a.KeptKey());
+}
+
+static std::string TempDir() {
+    char tmpl[] = "/tmp/wmbkeptXXXXXX";
+    return mkdtemp(tmpl);
+}
+
+static void kept_copies_round_trip() {
+    const std::string dir = TempDir() + "/Download Play";
+    const std::array<Bytes, 3> regions {Bytes(0x160, 1), Bytes(300, 2), Bytes(40, 3)};
+    CHECK(SaveKept(dir, 0x1234, regions));
+    const auto back = LoadKept(dir, 0x1234);
+    CHECK(back.has_value() && *back == regions);
+    CHECK(!LoadKept(dir, 0x9999).has_value());
+}
+
+static void kept_copies_keep_only_the_newest() {
+    const std::string dir = TempDir();
+    for (uint64_t k = 1; k <= 6; k++) CHECK(SaveKept(dir, k, {Bytes(0x160, 0), Bytes(8, 0), Bytes(8, 0)}, 4));
+    CHECK(!LoadKept(dir, 1).has_value() && !LoadKept(dir, 2).has_value());
+    CHECK(LoadKept(dir, 3).has_value() && LoadKept(dir, 6).has_value());
+}
+
+static void kept_copy_refuses_a_damaged_file() {
+    const std::string dir = TempDir();
+    CHECK(SaveKept(dir, 7, {Bytes(0x160, 0), Bytes(8, 0), Bytes(8, 0)}));
+    char name[64];
+    std::snprintf(name, sizeof name, "/%016llx.bin", 7ULL);
+    std::FILE* f = std::fopen((dir + name).c_str(), "r+b");
+    std::fseek(f, 8, SEEK_SET);
+    const uint8_t huge[4] = {0xFF, 0xFF, 0xFF, 0x7F};
+    std::fwrite(huge, 1, 4, f);
+    std::fclose(f);
+    CHECK(!LoadKept(dir, 7).has_value());
+}
+
 int main() {
     const std::pair<const char*, std::function<void()>> tests[] = {
         {"scanner_decodes_real_beacon_layout", scanner_decodes_real_beacon_layout},
@@ -525,6 +602,12 @@ int main() {
         {"client_refuses_oversized_binaries", client_refuses_oversized_binaries},
         {"client_refuses_impossible_packet_size", client_refuses_impossible_packet_size},
         {"make_child_pads_small_image", make_child_pads_small_image},
+        {"client_takes_a_kept_copy_for_the_same_rsa_frame", client_takes_a_kept_copy_for_the_same_rsa_frame},
+        {"client_refuses_a_kept_copy_of_other_sizes", client_refuses_a_kept_copy_of_other_sizes},
+        {"kept_copy_key_is_the_rsa_frame_and_game", kept_copy_key_is_the_rsa_frame_and_game},
+        {"kept_copies_round_trip", kept_copies_round_trip},
+        {"kept_copies_keep_only_the_newest", kept_copies_keep_only_the_newest},
+        {"kept_copy_refuses_a_damaged_file", kept_copy_refuses_a_damaged_file},
         {"mailbox_headers_identical", mailbox_headers_identical},
         {"mailbox_layout", mailbox_layout},
         {"offer_to_mailbox", offer_to_mailbox},
