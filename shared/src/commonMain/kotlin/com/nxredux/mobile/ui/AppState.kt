@@ -401,8 +401,9 @@ class AppState(
     )
     /** The action a Shortcuts bind row is waiting on a press for; while set the platform hands raw keys to [captureKey] first. */
     val capturingShortcut: StateFlow<ShortcutAction?> get() = controlBindings.capturingShortcut
-    /** A raw key from the platform, before it maps to an [NxButton]: true when press to bind took it. */
-    fun captureKey(keyCode: Int, down: Boolean): Boolean = controlBindings.captureKey(keyCode, down)
+    /** A raw key from the platform, before it maps to an [NxButton]: true when press to bind (Button Mapping's, then Shortcuts') took it. */
+    fun captureKey(keyCode: Int, down: Boolean): Boolean =
+        emulatorSettings.captureKey(keyCode, down) || controlBindings.captureKey(keyCode, down)
     /** Every key from a physical device, before anything else sees it: true when System buttons used it. */
     fun systemButtonKey(model: PadModel?, source: String?, keyCode: Int, scanCode: Int, down: Boolean, repeat: Boolean): Boolean =
         controlBindings.systemButtonKey(model, source, keyCode, scanCode, down, repeat)
@@ -3456,6 +3457,7 @@ class AppState(
         host = object : EmulatorSettingsHost {
             override fun showEmulatorsSettings() = settingsUi.showSettingsOn(SettingsSection.EMULATORS, SettingsKind.EMULATORS)
             override fun followRowEdit(key: Any?, from: Int, to: Int?) = settingsUi.followRowEdit(key, from, to)
+            override fun showMessage(title: String, text: String) { _message.value = title to text }
             override fun appSection(page: EmulatorPage, game: Listed?): EmulatorAppSection? = when {
                 page.forGame -> game?.let { gameBadges.section(it.game) }
                 EmulatorRows.hostsCableLink(page) ->
@@ -4267,6 +4269,7 @@ class AppState(
         if (_message.value != null) { dismissMessage(); return true }   // a page's message dialog: Back closes it, the page stays
         if (settingsUi.closePopup()) return true   // a touch chooser or a Settings row's info popup: Back closes it
         if (controlBindings.capturingShortcut.value != null) { controlBindings.cancelCapture(); return true }   // press to bind: Back cancels it, the page stays
+        if (emulatorSettings.cancelMapping()) return true   // likewise a Button Mapping wait
         if (controlBindings.systemButtonWaiting != null) { controlBindings.systemButtonWaiting = null; settingsUi.refreshSettings(); return true }   // likewise System buttons' wait
         if (_androidGamesAsk.value != null) { answerAndroidGames(false); return true }   // the dialog's B: Not now
         if (_firstTip.value != null) { answerTip(hide = true); return true }   // a tip's B: Don't show again

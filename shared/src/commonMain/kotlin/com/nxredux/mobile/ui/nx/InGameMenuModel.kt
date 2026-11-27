@@ -2221,10 +2221,10 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         const val TOUCH_KEY_PREFIX = "nx:touch:"
         const val BUTTON_MAPPING_LABEL = "Button Mapping"
         const val MAP_KEY_PREFIX = "nx:map:"
-        private const val RESET_BUTTON_MAP_LABEL = "Reset to default"
+        const val RESET_BUTTON_MAP_LABEL = "Reset to default"
         /** The waiting Button Mapping row's line: B binds there, so Back cancels. */
-        private const val MAP_CAPTURE_LINE = "Press Back to cancel"
-        private const val MAP_PICK_NOTE = "Pick A, B, X, Y, L1, R1, L2, R2, L3 or R3"
+        const val MAP_CAPTURE_LINE = "Press Back to cancel"
+        const val MAP_PICK_NOTE = "Pick A, B, X, Y, L1, R1, L2, R2, L3 or R3"
         /** A Shortcuts row inheriting Controls → Shortcuts. */
         private const val DEFAULT_SUFFIX = " (default)"
         private val LOCAL_WIRELESS_KEYS = setOf(NdsOptions.LOCAL_WIRELESS, N3dsOptions.LOCAL_WIRELESS)
