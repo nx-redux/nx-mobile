@@ -69,8 +69,6 @@ static void drawTop(void) {
             text(&font_title, 24, 90, line, INK);
             text(&font_body, 24, 118, "Ask the other player to start", HINT);
             text(&font_body, 24, 138, "local multiplayer in their game.", HINT);
-            Hint h[] = {{"START", "Quit"}};
-            hints(h, 1);
             return;
         }
         for (int i = 0; i < host_count; i++) {
@@ -84,8 +82,8 @@ static void drawTop(void) {
             snprintf(size, sizeof size, "%lu MB", (unsigned long)((hosts[i].size + 512 * 1024) / (1024 * 1024)));
             text(&font_small, 376 - textWidth(&font_small, size), y + 10, size, on ? ON_PILL : HINT);
         }
-        Hint h[] = {{"A", "Download"}, {"START", "Quit"}};
-        hints(h, 2);
+        Hint h[] = {{"A", "Download"}};
+        hints(h, 1);
         return;
     }
     // The picked game: icon, name and size, then how the download goes, as the DS client shows it.
@@ -97,8 +95,8 @@ static void drawTop(void) {
     text(&font_small, 112, 84, size, HINT);
     if (phase == FAILED) {
         text(&font_body, 24, 140, message, INK);
-        Hint h[] = {{"A", "Back to the list"}, {"START", "Quit"}};
-        hints(h, 2);
+        Hint h[] = {{"A", "Back to the list"}};
+        hints(h, 1);
         return;
     }
     const char* line;
@@ -115,8 +113,8 @@ static void drawTop(void) {
     if (phase == STARTING) fill = 352;
     if (fill >= 6) roundRect(24, 170, fill, 6, 3, PILL);
     if (phase == DOWNLOADING) {
-        Hint h[] = {{"B", "Back"}, {"START", "Quit"}};
-        hints(h, 2);
+        Hint h[] = {{"B", "Back"}};
+        hints(h, 1);
     }
 }
 
@@ -183,15 +181,12 @@ int main(void) {
 
     if (R_FAILED(dlpOpen())) {
         fail("Download Play could not start.");
+        // Left from the in-game menu, as every other game is.
         while (aptMainLoop()) {
-            hidScanInput();
-            if (hidKeysDown() & (KEY_START | KEY_A)) break;
             frameBegin(BG);
             onTop();
             text(&font_small, 16, 10, "3DS Download Play", HINT);
             text(&font_title, 24, 100, message, INK);
-            Hint h[] = {{"START", "Quit"}};
-            hints(h, 1);
             frameEnd();
         }
         drawExit();
@@ -206,7 +201,6 @@ int main(void) {
         hidScanInput();
         u32 down = hidKeysDown();
         bool tapped = (down & KEY_TOUCH) != 0;
-        if (down & KEY_START) break;
 
         if (phase == LISTING) {
             if (osGetTime() - last_refresh > 500) {

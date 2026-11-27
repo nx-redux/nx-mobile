@@ -7,7 +7,6 @@ DS menu's Download Play tile and the DS Lite (our own two-handheld icon and a pl
 and the spine. The client capture is a phone screenshot of the client; its top screen is found by its black margin.
 Fonts are macOS's (Arial Rounded Bold, Avenir Next), as the DS art's.
 """
-import shutil
 import sys
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
@@ -86,9 +85,6 @@ def client_top(capture):
     return band.crop((x0, 0, x0 + sw, top_h))
 
 
-# --- screenshot: the DS row's, as is
-shutil.copy(f'{DS}/screenshot.png', f'{OUT}/screenshot.png')
-
 # --- 2D box: the DS cover's size and grid paper (redrawn as the DS art draws it), a plain white strip, a new title
 # and our icon in place of the DS menu tile
 ds2d = Image.open(f'{DS}/boxart2d.png').convert('RGB')
@@ -122,6 +118,20 @@ icon = halo(pair_icon(120), 6)
 cover.paste(icon, (int(cx - icon.width / 2), 150), icon)
 centered(d, cx, 372, 'Play together from one Game Card', font(AVENIR, 21, 2), (70, 70, 70), 4, (255, 255, 255))
 cover.save(f'{OUT}/boxart2d.png')
+
+
+def abstract_shot(size, title):
+    """The screenshot: the cover's paper, our icon and the title, as the 2D box shows them (no client capture)."""
+    w, h = size
+    shot = menu_paper(size, h // 6)
+    d = ImageDraw.Draw(shot)
+    icon = halo(pair_icon(h * 3 // 10), max(4, h // 90))
+    shot.paste(icon, ((w - icon.width) // 2, int(h * 0.2)), icon)
+    centered(d, w / 2, int(h * 0.68), title, font(ROUNDED, h // 9), INK, max(4, h // 90), (255, 255, 255))
+    return shot
+
+# --- screenshot: abstract, as the 2D box
+abstract_shot((1000, 600), '3DS Download Play').save(f'{OUT}/screenshot.png')
 
 
 def warp(src, quad, size):

@@ -16,7 +16,9 @@ from PIL import Image, ImageDraw, ImageFont
 SCALE = 4
 regular, semibold, out = sys.argv[1], sys.argv[2], sys.argv[3]
 # (C name, file, size on screen in DS pixels)
-FACES_3D = [("font3d_small", regular, 11), ("font3d_body", regular, 13), ("font3d_title", semibold, 15)]
+# The 3DS client's sizes (13, 15, 17) as they show on a 4:3 handheld, where the wider 3DS screen fills the width at
+# 3.2x and the DS one the height at 5x: both clients' text is then the same size there.
+FACES_3D = [("font3d_small", regular, 8.3), ("font3d_body", regular, 9.6), ("font3d_title", semibold, 10.9)]
 TEXTURE_BYTES_MAX = 256 * 1024  # VRAM banks A and B
 
 
@@ -25,7 +27,7 @@ def pack(faces, scale, width, extra=None):
     pen_x, pen_y, row_h = 0, 0, 0
     placed = []
     for name, path, size in faces:
-        font = ImageFont.truetype(path, size * scale)
+        font = ImageFont.truetype(path, round(size * scale))
         for code in range(32, 127):
             left, top, right, bottom = font.getbbox(chr(code))
             w, h = max(0, right - left), max(0, bottom - top)

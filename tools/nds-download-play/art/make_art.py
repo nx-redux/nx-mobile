@@ -86,9 +86,7 @@ def client_screens(capture):
     return top.resize((256, 192), Image.LANCZOS), bottom.resize((256, 192), Image.LANCZOS)
 
 
-# --- screenshot: the client's top screen (the picked game and the hints)
 top_screen, bottom_screen = client_screens(CAPTURE)
-top_screen.save(f'{OUT}/screenshot.png')
 
 # --- 2D box: the DS cover's size and grid paper (redrawn as the DS art draws it), a plain white strip, a new title
 # and our icon in place of the DS menu tile
@@ -123,6 +121,20 @@ icon = halo(pair_icon(120), 6)
 cover.paste(icon, (int(cx - icon.width / 2), 150), icon)
 centered(d, cx, 372, 'Play together from one Game Card', font(AVENIR, 21, 2), (70, 70, 70), 4, (255, 255, 255))
 cover.save(f'{OUT}/boxart2d.png')
+
+
+def abstract_shot(size, title):
+    """The screenshot: the cover's paper, our icon and the title, as the 2D box shows them (no client capture)."""
+    w, h = size
+    shot = menu_paper(size, h // 6)
+    d = ImageDraw.Draw(shot)
+    icon = halo(pair_icon(h * 3 // 10), max(4, h // 90))
+    shot.paste(icon, ((w - icon.width) // 2, int(h * 0.2)), icon)
+    centered(d, w / 2, int(h * 0.68), title, font(ROUNDED, h // 9), INK, max(4, h // 90), (255, 255, 255))
+    return shot
+
+# --- screenshot: abstract, as the 2D box
+abstract_shot((768, 576), 'DS Download Play').save(f'{OUT}/screenshot.png')
 
 
 def warp(src, quad, size):
