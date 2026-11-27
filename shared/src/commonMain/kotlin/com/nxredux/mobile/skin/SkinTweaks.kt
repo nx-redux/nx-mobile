@@ -400,9 +400,19 @@ object SkinTweaks {
         return if (w > 0f && h > 0f) w * h else 0f
     }
 
-    /** [consoleId]'s tweaks for [layoutId] in the [stored] text ([decode]); none when it has none. */
-    fun of(stored: String, consoleId: String, layoutId: String): Map<String, SkinTweak> =
-        decode(stored)[consoleId]?.get(layoutId).orEmpty()
+    /**
+     * [consoleId]'s tweaks for [layoutId] in the [stored] text ([decode]); none when it has none. A group saved while
+     * SWAP was on the DS / 3DS pad (now in the touch strip) is keyed with it: its tweak also stands for the group without
+     * it, unless that one has its own.
+     */
+    fun of(stored: String, consoleId: String, layoutId: String): Map<String, SkinTweak> {
+        val mine = decode(stored)[consoleId]?.get(layoutId).orEmpty()
+        val moved = mine.mapNotNull { (id, t) ->
+            val ids = id.split('+')
+            if ("SWAP" in ids && ids.size > 1) (ids - "SWAP").joinToString("+") to t else null
+        }.filter { (id, _) -> id !in mine }
+        return if (moved.isEmpty()) mine else mine + moved
+    }
 
     /**
      * The overlay's tweaks: per group the [overlayStored] one when the player edited it there, else the [skinStored]
