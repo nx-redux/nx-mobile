@@ -135,23 +135,28 @@ class SkinSeamTest {
                 assertEquals(c.getValue("L").y, c.getValue("L2").y, 1f, "$name ZL level with L"); assertTrue(c.getValue("L2").x > c.getValue("L").x, "$name ZL inside L")
                 assertEquals(c.getValue("R").y, c.getValue("R2").y, 1f, "$name ZR level with R"); assertTrue(c.getValue("R2").x < c.getValue("R").x, "$name ZR inside R")
                 assertTrue(c.getValue("CSTICK").y > face, "$name C-stick under the face")
-                assertTrue(right.maxOf { it.dst.y + it.dst.height } <= 2256f - 16f * dp + 1f, "$name the C-stick in the window")
+                // (under the face buttons as the GameCube's: half-folded nearer the window's bottom than 16 dp, as its)
+                assertTrue(right.maxOf { it.dst.y + it.dst.height } <= 2256f, "$name the C-stick in the window")
             }
-            assertTrue(left.maxOf { it.dst.y + it.dst.height } <= 2256f - 16f * dp + 1f, "$name the d-pad in the window")
+            assertTrue(left.maxOf { it.dst.y + it.dst.height } <= 2256f, "$name the d-pad in the window")
             // MIC, MENU, SWAP, SELECT, START in one row under the touch screen, centred on it
             val row = listOf("MIC", "MENU", "SWAP", "SELECT", "START").map { c.getValue(it) }
             row.zipWithNext().forEach { (a, b) -> assertEquals(a.y, b.y, 1f, "$name row level"); assertTrue(b.x > a.x, "$name row order") }
             assertEquals(touch.x + touch.width / 2f, c.getValue("SWAP").x, 2f, "$name SWAP in the middle")
             assertTrue(row.all { it.y > touch.y + touch.height }, "$name row under the touch screen")
         }
-        // flat, the bottom half as half-folded: folding never moves the touch screen or the buttons
+        // flat, the GameCube's: the touch screen grown up into the hinge's room, its bottom kept; the buttons as
+        // half-folded, lifted as the boxes are flat (12 dp)
+        val lift = SkinBoxes.FLAT_LIFT_DP * 3f
         for (v in listOf(SkinVariant.N3DS, SkinVariant.N3DS_REGULAR)) {
             val flat = assertNotNull(SkinChoice.place(pack, 2504, 2256, 480, tablet = true, ds = true, hingeY = null, foldable = true, variant = v))
             val half = assertNotNull(SkinChoice.place(pack, 2504, 2256, 480, tablet = true, ds = true, hingeY = 1128f, foldable = true, variant = v))
             val ft = assertNotNull(flat.glass(GlassScreen.TOUCH)).rect; val ht = assertNotNull(half.glass(GlassScreen.TOUCH)).rect
-            listOf(ft.x to ht.x, ft.y to ht.y, ft.width to ht.width, ft.height to ht.height).forEach { (a, b) -> assertEquals(b, a, 0.5f, "$v touch $ft $ht") }
+            listOf(ft.x to ht.x, ft.y + ft.height to ht.y + ht.height, ft.width to ht.width).forEach { (a, b) -> assertEquals(b, a, 0.5f, "$v touch $ft $ht") }
             val hc = half.controls.associateBy { it.spec.id }
-            flat.controls.forEach { c -> hc[c.spec.id]?.let { assertEquals(it.x, c.x, 0.5f, "$v ${c.spec.id}"); assertEquals(it.y, c.y, 0.5f, "$v ${c.spec.id}") } }
+            // (the touch shortcuts and the row under the screen with the screen's bottom)
+            val kept = setOf("MIC", "MENU", "SWAP", "SELECT", "START")
+            flat.controls.forEach { c -> hc[c.spec.id]?.let { assertEquals(it.x, c.x, 0.5f, "$v ${c.spec.id}"); assertEquals(it.y - if (c.spec.id.startsWith("TOUCH_") || c.spec.id in kept) 0f else lift, c.y, 0.5f, "$v ${c.spec.id}") } }
         }
         val fold = assertNotNull(SkinChoice.place(pack, 1848, 2448, 420, tablet = true, ds = true, hingeY = 1224f, foldable = true, variant = SkinVariant.N3DS))
         // the Fold: its frame as wide as the render's, taller up to the hinge's spacing (half-folded): the 4:3 picture
@@ -162,11 +167,10 @@ class SkinSeamTest {
 
     @Test
     fun halfFoldedSidewaysTheMenusBottomScreenEndsWhereTheFlatOnesDoes() {
-        // the Ultra sideways: flat the landscape shell, half-folded the fold board; the menu screen's bottom edge alike
+        // the Ultra sideways: the fold board flat and half-folded; folding never moves the menu screen's bottom edge
         val flat = assertNotNull(SkinChoice.placeMenu(pack, 2504, 2256, 480, foldable = true, tablet = true))
         val half = assertNotNull(SkinChoice.placeMenu(pack, 2504, 2256, 480, foldable = true, tablet = true, hingeY = 1128f))
-        assertEquals(SkinFamily.GRIP, flat.spec.family)
-        val f = flat.glasses.first().rect
+        val f = flat.glasses.single { it.id == "menu" }.rect
         val m = half.glasses.single { it.id == "menu" }.rect
         assertEquals(f.y + f.height, m.y + m.height, 2f, "flat $f half-folded $m")
     }

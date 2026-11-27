@@ -130,8 +130,9 @@ class SkinPackDrawingTest {
             val p = assertNotNull(placeFor(pack, SkinVariant.DS, d), name)
             if (!p.spec.tree.parts.any { it.isHinge }) continue
             fun c(id: String) = p.controls.first { it.spec.id == id }
-            // (flat upright: MIC over MENU, SELECT over START, the menu's columns)
-            if (name in FLAT_UPRIGHT_INNER) { kotlin.test.assertEquals(c("MIC").y, c("SELECT").y, 1f, "$name SELECT level with MIC"); kotlin.test.assertEquals(c("MENU").y, c("START").y, 1f, "$name START level with MENU") }
+            // (flat upright and the Ultra sideways: MIC over MENU, SELECT over START, the menu's columns)
+            val columns = name in FLAT_UPRIGHT_INNER || name.startsWith("ultra_land")
+            if (columns) { kotlin.test.assertEquals(c("MIC").y, c("SELECT").y, 1f, "$name SELECT level with MIC"); kotlin.test.assertEquals(c("MENU").y, c("START").y, 1f, "$name START level with MENU") }
             else for (id in listOf("MENU", "SELECT", "START")) kotlin.test.assertEquals(c("MIC").y, c(id).y, 1f, "$name $id level with MIC")
             // the face buttons where the main menu has them (the baseline), on the boards the menu shares
             SkinChoice.placeMenu(pack, d.w, d.h, d.dpi, foldable = true, tablet = true, hingeY = d.hingeY)?.takeIf { it.spec.tree.parts.any { t -> t.isHinge } }?.let { m ->
@@ -140,7 +141,7 @@ class SkinPackDrawingTest {
             }
             val touch = assertNotNull(p.glasses.firstOrNull { it.screen == GlassScreen.TOUCH }, name).rect
             assertTrue(c("MENU").x < touch.x && c("SELECT").x > touch.x + touch.width, "$name MIC, MENU left of the touch screen; SELECT right")
-            if (name in FLAT_UPRIGHT_INNER) kotlin.test.assertEquals(d.w - c("MIC").x, c("SELECT").x, 1f, "$name SELECT across from MIC")
+            if (columns) kotlin.test.assertEquals(d.w - c("MIC").x, c("SELECT").x, 1f, "$name SELECT across from MIC")
             else {
                 assertTrue(c("MIC").x < c("MENU").x && c("SELECT").x < c("START").x, "$name in order")
                 kotlin.test.assertEquals(d.w - c("MENU").x, c("SELECT").x, 1f, "$name SELECT across from MENU")
@@ -149,9 +150,8 @@ class SkinPackDrawingTest {
                 assertTrue(kotlin.math.hypot(c(b).x - c(a).x, c(b).y - c(a).y) >= c(a).spec.r + c(b).spec.r - 1f, "$name $a $b clear")
             val menu = assertNotNull(SkinChoice.placeMenu(pack, d.w, d.h, d.dpi, foldable = true, tablet = true, hingeY = d.hingeY), "$name menu")
             fun foot(q: SkinPlacement) = q.pieces.filter { it.piece >= 0 && q.spec.pieces[it.piece].glass != null && it.dst.y + it.dst.height > d.h / 2f }.maxOfOrNull { it.dst.y + it.dst.height }
-            // (where the menu is on the fold board too: sideways and flat it is the landscape shell; sideways half-folded
-            // the menu's frame ends where the landscape shell's glass does, ~45 px higher: for review)
-            if (name != "ultra_land_half") foot(menu)?.let { kotlin.test.assertEquals(it, assertNotNull(foot(p), name), 2f, "$name the touch screen's frame down as far as the menu's") }
+            // (sideways the menu's frame ends where the landscape shell's glass does, ~45 px higher: for review)
+            if (name !in setOf("ultra_land", "ultra_land_half")) foot(menu)?.let { kotlin.test.assertEquals(it, assertNotNull(foot(p), name), 2f, "$name the touch screen's frame down as far as the menu's") }
         }
     }
 
@@ -170,8 +170,12 @@ class SkinPackDrawingTest {
                 .filter { kotlin.math.abs(it.x + it.width / 2f - x) < 3f && kotlin.math.abs(it.y + it.height / 2f - y) < 3f }.maxBy { it.width }
             val gap = ring(c("DPAD").x, c("DPAD").y).y - ring(c("STICK").x, c("STICK").y).let { it.y + it.height }
             val menu = assertNotNull(placeFor(pack, null, d), "$name menu").controls.associateBy { it.spec.id }
-            // (flat inner: the GameCube's, theFlatInnerScreensLowerPadsAreTheGamecubes)
-            if (name !in FLAT_INNER) {
+            // (flat inner: the GameCube's, theFlatInnerScreensLowerPadsAreTheGamecubes; the Ultra sideways: the GameCube's,
+            // its ring 12 px under the stick's, centred under it)
+            if (name.startsWith("ultra_land")) {
+                kotlin.test.assertEquals(12f * p.k, gap, 2f, "$name the d-pad's ring the GameCube's gap under the stick's")
+                kotlin.test.assertEquals(c("STICK").x, c("DPAD").x, 1f, "$name the d-pad under the stick")
+            } else if (name !in FLAT_INNER) {
                 kotlin.test.assertEquals(1f, gap, 2f, "$name the d-pad's ring just under the stick's")
                 kotlin.test.assertEquals(42f / 156f * menu.getValue("DPAD").spec.r, c("DPAD").x - c("STICK").x, 2f, "$name the d-pad toward the screen")
             }
@@ -399,9 +403,11 @@ class SkinPackDrawingTest {
             kotlin.test.assertEquals(d.w / 2f, (row.first().x + row.last().x) / 2f, 2f, "$v $name row centred")
             val touch = assertNotNull(p.glasses.firstOrNull { it.screen == GlassScreen.TOUCH }, "$v $name").rect
             assertTrue(row[0].y - row[0].spec.r > touch.y + touch.height, "$v $name row under the touch screen")
-            // the d-pad where the user's tweak put it (48 px right, 66 px up of under the stick: 2052.9 before); the New
-            // 3DS's C-stick level with it
-            kotlin.test.assertEquals(2052.9f - 66.28f * p.k, c("DPAD").y, 2f, "$v $name d-pad up as the tweak")
+            // the d-pad under the stick where the GameCube's is; the New 3DS's C-stick level with it
+            val gc = assertNotNull(placeFor(pack, SkinVariant.GC, d), "$name gc").controls.first { it.spec.id == "DPAD" }
+            kotlin.test.assertEquals(c("STICK").x, c("DPAD").x, 1f, "$v $name d-pad under the stick")
+            kotlin.test.assertEquals(gc.y, c("DPAD").y, 2f, "$v $name d-pad at the GameCube's height")
+            kotlin.test.assertEquals(gc.spec.r, c("DPAD").spec.r, 1f, "$v $name d-pad at the GameCube's size")
             if (v == SkinVariant.N3DS) kotlin.test.assertEquals(c("DPAD").y, c("CSTICK").y, 1f, "$v $name C-stick level with the d-pad")
             // the touch screen wide into the room between the side boxes (its 4:3 picture in it with bars), the inner gap
             // (16 dp) to the nearest piece each side beside it

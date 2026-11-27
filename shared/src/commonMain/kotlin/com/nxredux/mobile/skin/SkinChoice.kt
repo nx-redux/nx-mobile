@@ -41,8 +41,6 @@ object SkinChoice {
     private const val MENU_MIN_DP = 320f
     /** The longest a book foldable's inner screen is to its short side (the Galaxy Fold 7 / 8 Ultra 1.11, the Pixel Folds 1.04). */
     private const val NEAR_SQUARE = 1.2f
-    /** The consoles with two screens, which the fold board's hinge falls between. */
-    private val TWO_SCREEN = setOf(SkinVariant.DS, SkinVariant.N3DS, SkinVariant.N3DS_REGULAR, SkinVariant.WIIU)
     /** The smallest menu glass side, picture px: less and the menu would not be usable in it. */
     private const val MENU_MIN_GLASS = 400f
 
@@ -118,8 +116,8 @@ object SkinChoice {
         val k = scaleFor(pack, densityDpi)
         val tuned = tunedFor(windowW, windowH, densityDpi, hingeY)
         val landscape = windowW > windowH
-        // sideways, a book foldable's inner screen half-folded: the hinge runs across the window, so the two screens too
-        val twoUp = if (landscape) hingeY != null && (foldable || tablet) && nearSquare(windowW, windowH) else tablet
+        // sideways, a book foldable's inner screen: the hinge runs across the window, so the two screens too, flat or not
+        val twoUp = if (landscape) (foldable || tablet) && nearSquare(windowW, windowH) else tablet
         // sideways the flat menu is the landscape shell: half-folded, the bottom screen ends where that one's does, so
         // folding and opening keep its bottom edge in place
         val flatEnd = menuFlatEnd(pack, windowW, windowH, k, topInset, densityDpi)
@@ -250,55 +248,6 @@ object SkinChoice {
         // every board's screen the menu's least, so a game's side groups stand where the menu's do (a touch screen's picture
         // fits in it, a little smaller where it is narrower than the picture)
         return RowSpacing(ROW_EDGE_DP * px, ROW_GAP_DP * px, ROW_MIN_GAP_DP * px, MENU_MIN_DP * px, PAIR_GAP_DP * px)
-    }
-
-    /**
-     * This flat board with [half]'s bottom half (the same board half-folded): its pieces under the lid (the touch screen,
-     * the side groups, the row), its controls and its touch glass; the lid (the top screen's frame, a piece of no layout
-     * piece) and the background this one's.
-     */
-    private fun SkinPlacement.bottomOf(half: SkinPlacement): SkinPlacement = copy(
-        pieces = pieces.filter { it.piece < 0 } + half.pieces.filter { it.piece >= 0 },
-        controls = half.controls,
-        glasses = glasses.filter { it.screen != GlassScreen.TOUCH } + half.glasses.filter { it.screen == GlassScreen.TOUCH },
-        sideIn = half.sideIn,
-    )
-
-    /**
-     * The touch screen's frame and glass widened about their middle into the room beside them, to [gap] from the nearer
-     * side's pieces (its picture keeps its shape in the glass, bars beside it); the frame's middle column stretched, its
-     * edges moved out, the touch shortcuts spread across the new width. As it is with no room to grow.
-     */
-    private fun SkinPlacement.touchWideToTheBoxes(gap: Float): SkinPlacement {
-        val g = glass(GlassScreen.TOUCH) ?: return this
-        val gi = spec.pieces.indexOfFirst { it.glass?.screen == GlassScreen.TOUCH }
-        val frame = pieces.filter { it.piece == gi }
-        if (frame.isEmpty()) return this
-        val f0 = frame.minOf { it.dst.x }; val f1 = frame.maxOf { it.dst.x + it.dst.width }
-        val top = frame.minOf { it.dst.y }; val bottom = frame.maxOf { it.dst.y + it.dst.height }
-        val cx = (f0 + f1) / 2f
-        // the pieces beside it (not the screens', nor one across the window: the hinge)
-        val beside = pieces.filter { it.piece >= 0 && it.piece != gi && spec.pieces[it.piece].glass == null && it.dst.width < (f1 - f0) &&
-            it.dst.y < bottom && it.dst.y + it.dst.height > top }
-        val l1 = beside.filter { it.dst.x + it.dst.width / 2f < cx }.maxOfOrNull { it.dst.x + it.dst.width } ?: return this
-        val r0 = beside.filter { it.dst.x + it.dst.width / 2f > cx }.minOfOrNull { it.dst.x } ?: return this
-        val half = minOf(cx - (l1 + gap), (r0 - gap) - cx)
-        val extra = 2f * half - (f1 - f0)
-        if (extra < 1f) return this
-        val shift = extra / 2f
-        val moved = pieces.map { p -> when {
-            p.piece != gi -> p
-            kotlin.math.abs(p.dst.x - f0) < 0.5f -> p.copy(dst = p.dst.copy(x = p.dst.x - shift))
-            kotlin.math.abs(p.dst.x + p.dst.width - f1) < 0.5f -> p.copy(dst = p.dst.copy(x = p.dst.x + shift))
-            else -> p.copy(dst = p.dst.copy(x = p.dst.x - shift, width = p.dst.width + extra))
-        } }
-        val f = (g.rect.width + extra) / g.rect.width
-        val gcx = g.rect.x + g.rect.width / 2f
-        return copy(
-            pieces = moved,
-            glasses = glasses.map { if (it === g) it.copy(rect = it.rect.copy(x = it.rect.x - shift, width = it.rect.width + extra)) else it },
-            controls = controls.map { c -> if (c.spec.id.startsWith("TOUCH_")) c.copy(x = gcx + (c.x - gcx) * f, spec = c.spec.copy(hw = c.spec.hw * f)) else c },
-        )
     }
 
     /**
@@ -608,8 +557,6 @@ object SkinChoice {
                 fun fold(hinge: Float? = hingeY) = foldPieces(spec, windowW, windowH, s, picture, topInset, hinge, densityDpi, top, bottomMargin = shellMargin(pack),
                     bottomGlass = flatEnd, row = rowSpacing(densityDpi, s), centreControls = v !in N3DS_BOARD)
                 val placed = fold() ?: return@widest null
-                // the GamePad's boxes, sideways and flat: the bottom half as half-folded at the window's middle, as the 3DS's
-                if (v == SkinVariant.WIIU && landscape && hingeY == null && spec.boxes.isNotEmpty()) return@widest fold(windowH / 2f)?.let { placed.bottomOf(it) } ?: placed
                 // upright: the GamePad in the 3DS twin's bottom frame (flat, as tall as the row under it leaves room for), its row
                 // right under it, as the 3DS's row follows its touch frame
                 if (v == SkinVariant.WIIU && !landscape && spec.boxes.isNotEmpty()) {
@@ -621,28 +568,20 @@ object SkinChoice {
                     return@widest if (hingeY == null && theirs != null) under.touchUpToGap(theirs) else under
                 }
                 if (v !in N3DS_VARIANTS || spec.boxes.isEmpty()) return@widest placed
-                // the 3DS's touch screen, its 4:3 picture in a frame between the boxes: sideways (the room beside it) the frame
-                // cut to the picture's height and widened to the boxes, bars beside the picture; upright cut to the picture
-                // (a tablet's: the menu's frame, the picture between bars)
-                if (!landscape && spec.id.endsWith(TABLET_BOARD)) return@widest placed
+                // the 3DS's touch screen, its 4:3 picture in a frame between the boxes, bars beside it: sideways the
+                // GameCube's frame; upright cut to the picture (a tablet's: the menu's frame)
+                if (landscape || spec.id.endsWith(TABLET_BOARD)) return@widest placed
                 // flat upright: the menu's frame width, as tall as the row under it leaves room for (near the menu's), the
                 // picture between bars, as the tablet's; half-folded cut to the picture
-                if (!landscape && hingeY == null) return@widest placed
-                if (!landscape) return@widest placed.touchToItsPicture().touchToItsPictureHeight()
-                fun wide(hinge: Float?) = fold(hinge)?.touchToItsPictureHeight()?.touchWideToTheBoxes(SkinBoxes.GAP_DP * dp)
-                val wide = wide(hingeY)
-                // flat: the bottom half as half-folded at the window's middle (the touch screen not grown up into the
-                // hinge's room), so folding never moves it; the flat lid kept
-                val half = if (hingeY == null && wide != null) wide(windowH / 2f) else null
-                if (wide != null && half != null) wide.bottomOf(half) else wide
+                if (hingeY == null) return@widest placed
+                placed.touchToItsPicture().touchToItsPictureHeight()
             }
         }
         val foldBoard = { if (v == SkinVariant.DC) foldBoardOf(true) ?: foldBoardOf(false) else foldBoardOf(null) }
         if (landscape) {
-            // a book foldable's inner screen sideways: its hinge runs across the window, where the board's is. A DS or 3DS
-            // takes the board flat too (the crease between its screens); a one-screen game only half-folded, as flat the
-            // landscape shell gives it the window's whole height.
-            if ((foldable || tablet) && nearSquare(windowW, windowH) && (hingeY != null || v in TWO_SCREEN)) foldBoard()?.let { return it }
+            // a book foldable's inner screen sideways: its hinge runs across the window, where the board's is, flat too
+            // (controls beside the game would sit on the crease)
+            if ((foldable || tablet) && nearSquare(windowW, windowH)) foldBoard()?.let { return it }
             // the Dreamcast, the N64 and the 3DS on a tablet / an inner screen: their shells with the stick and the d-pad both
             if (v == SkinVariant.DC && (foldable || tablet)) shell(tuned, pack, SkinFamily.GRIP, v, windowW, windowH, k, densityDpi, picture, topInset, row, hingeY = hingeY,
                 refH = Float.MAX_VALUE, pick = { it.minRefH > 0 && it.controls.none { c -> c.id == "STICK_SWAP" } })?.let { return it }

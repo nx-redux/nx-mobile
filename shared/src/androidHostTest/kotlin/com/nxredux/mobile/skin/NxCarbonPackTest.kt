@@ -1106,7 +1106,8 @@ class NxCarbonPackTest {
     // where they are, B / A, MENU and START under it; the screen frame the menu's.
     @Test
     fun n64TallLandscapeHasTheMenusPadsAtFullSize() {
-        for ((w, h, dpi) in listOf(Triple(2448, 1848, 420), Triple(2504, 2256, 480), Triple(2304, 1440, 280))) {
+        // (the Ultra sideways takes the fold board)
+        for ((w, h, dpi) in listOf(Triple(2448, 1848, 420), Triple(2304, 1440, 280))) {
             val tablet = dpi == 280
             val p = assertNotNull(SkinChoice.place(pack, w, h, dpi, tablet, false, 320f to 240f, null, foldable = !tablet, variant = SkinVariant.N64), "$w")
             val m = assertNotNull(SkinChoice.placeMenu(pack, w, h, dpi, foldable = !tablet, tablet = tablet), "$w menu")
