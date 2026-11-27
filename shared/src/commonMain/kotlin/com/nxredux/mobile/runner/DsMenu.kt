@@ -15,7 +15,8 @@ object DsMenu {
     /** The bundled client and the row's art, as the app ships them in its assets folder [ASSET_DIR]. */
     const val ASSET_DIR = "nds-dlp"
     const val APP_FILE = "download-play.nds"
-    val ART_FILES = listOf("boxart.png", "boxart2d.png", "screenshot.png", "wheel.png", "mix.png")
+    // No screenshot: the row shows the generated picture a game without one gets.
+    val ART_FILES = listOf("boxart.png", "boxart2d.png", "wheel.png", "mix.png")
 
     /** The folder the app copied the client and the art to; null until the copy is there. */
     @kotlin.concurrent.Volatile var dir: String? = null
@@ -44,7 +45,6 @@ internal fun DsMenu.entry(): com.nxredux.mobile.library.GameEntry {
         fileName = DsMenu.FILE_NAME,
         shownName = DsMenu.TITLE,
         boxartRef = art("boxart.png"),
-        screenshotRef = art("screenshot.png"),
         box2dRef = art("boxart2d.png"),
         wheelRef = art("wheel.png"),
         mixRef = art("mix.png"),

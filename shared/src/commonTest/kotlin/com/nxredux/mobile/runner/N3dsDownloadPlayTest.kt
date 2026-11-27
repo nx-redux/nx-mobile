@@ -24,6 +24,16 @@ class N3dsDownloadPlayTest {
         assertTrue(N3dsDownloadPlay.isRow(rows.single().game.ref.value))
     }
 
+    @Test fun the_row_has_no_screenshot_so_its_generated_picture_shows() {
+        N3dsDownloadPlay.dir = "/data/app/files/n3ds-dlp"
+        try {
+            assertEquals(null, N3dsDownloadPlay.withEntry(listOf(system("3DS")), emptyList()).single().game.screenshotRef)
+            assertFalse("screenshot.png" in N3dsDownloadPlay.ART_FILES)
+        } finally {
+            N3dsDownloadPlay.dir = null
+        }
+    }
+
     @Test fun other_consoles_get_no_row() {
         assertTrue(N3dsDownloadPlay.withEntry(listOf(system("NDS")), emptyList()).isEmpty())
         assertTrue(N3dsDownloadPlay.withEntry(listOf(system("GBA")), emptyList()).isEmpty())

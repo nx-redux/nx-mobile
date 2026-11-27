@@ -53,6 +53,12 @@ class DsMenuTest {
         assertEquals("file:///data/app/files/nds-dlp/wheel.png", g.wheelRef?.value)
     }
 
+    @Test fun the_row_has_no_screenshot_so_its_generated_picture_shows() {
+        DsMenu.dir = "/data/app/files/nds-dlp"
+        assertEquals(null, DsMenu.withEntry(listOf(system("NDS")), emptyList()).single().game.screenshotRef)
+        assertFalse("screenshot.png" in DsMenu.ART_FILES)
+    }
+
     @Test fun other_consoles_get_no_menu_row() {
         assertTrue(DsMenu.withEntry(listOf(system("GBA")), emptyList()).isEmpty())
         assertTrue(DsMenu.withEntry(listOf(system("3DS")), emptyList()).isEmpty())

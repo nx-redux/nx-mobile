@@ -14,10 +14,9 @@ details the child reads (`APT GetWirelessRebootInfo`) are 16 bytes: host MAC, th
 
 ## Row art
 
-`art/make_art.py` builds the row's art (`androidApp/src/main/assets/n3ds-dlp/`: 3D box, 2D box, wheel, screenshot,
-mix) from the DS Download Play row's (`androidApp/src/main/assets/nds-dlp/`) and a phone capture of this client
-(`art/cap_client.png`, an AYANEO Pocket Air Mini screenshot of the list screen). The screenshot is the DS row's as is;
-the icon and the handheld are drawn here.
+`art/make_art.py` builds the row's art (`androidApp/src/main/assets/n3ds-dlp/`: 3D box, 2D box, wheel and mix;
+no screenshot, so the row shows the generated picture a game without one gets) from the DS Download Play row's (`androidApp/src/main/assets/nds-dlp/`) and a phone capture of this client
+(`art/cap_client.png`, an AYANEO Pocket Air Mini screenshot of the list screen). The icon and the handheld are drawn here.
 
 ```
 .venv/bin/python -I art/make_art.py ../../androidApp/src/main/assets/nds-dlp art/cap_client.png ../../androidApp/src/main/assets/n3ds-dlp

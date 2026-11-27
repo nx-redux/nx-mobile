@@ -3,8 +3,8 @@
 Usage: make_art.py <art dir> <client capture.png> <out dir>
 
 Kept from the row's art: the case and its paper cover. Replaced: the title (DS Download Play), our own two-handheld icon
-on the cover, the spine, the screenshot (the client's top screen, where it draws everything) and the mix (a plain
-handheld showing the client). The client capture is a phone screenshot of the client in the app's default DS layout: the top
+on the cover, the spine and the mix (a plain handheld showing the client). No screenshot: the row shows the generated
+picture a game without one gets. The client capture is a phone screenshot of the client in the app's default DS layout: the top
 screen at 3x across the top, the bottom one at 2x centred below it. Fonts are macOS's (Arial Rounded Bold, Avenir
 Next), as the DS art's.
 """
@@ -122,17 +122,6 @@ cover.paste(icon, (int(cx - icon.width / 2), 150), icon)
 centered(d, cx, 372, 'Play together from one Game Card', font(AVENIR, 21, 2), (70, 70, 70), 4, (255, 255, 255))
 cover.save(f'{OUT}/boxart2d.png')
 
-
-def abstract_shot(size):
-    """The screenshot: the cover's paper and our icon, as the 2D box shows them (no client capture, no title)."""
-    w, h = size
-    shot = menu_paper(size, h // 6)
-    icon = halo(pair_icon(h * 4 // 10), max(4, h // 90))
-    shot.paste(icon, ((w - icon.width) // 2, (h - icon.height) // 2), icon)
-    return shot
-
-# --- screenshot: abstract, as the 2D box; one image for both Download Play rows
-abstract_shot((960, 640)).save(f'{OUT}/screenshot.png')
 
 
 def warp(src, quad, size):

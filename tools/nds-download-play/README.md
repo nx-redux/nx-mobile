@@ -14,7 +14,7 @@ melondsds` once). `test-data/` holds a real exchange between the DS menu's own c
 
 ## Row art
 
-`art/make_art.py` builds the row's art (`androidApp/src/main/assets/nds-dlp/`: 3D box, 2D box, wheel, screenshot, mix)
+`art/make_art.py` builds the row's art (`androidApp/src/main/assets/nds-dlp/`: 3D box, 2D box, wheel and mix; no screenshot, so the row shows the generated picture a game without one gets)
 the way `tools/n3ds-download-play/art/make_art.py` built the 3DS row's: the DS row's case and paper (from before this
 client, `git show <commit>:androidApp/src/main/assets/nds-menu/<file>`), our two-handheld icon, and a phone capture of
 this client (`art/cap_client.png`, an AYANEO Pocket Air Mini screenshot of the list in the default DS layout).
