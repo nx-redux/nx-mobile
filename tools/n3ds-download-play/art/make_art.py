@@ -130,8 +130,8 @@ def abstract_shot(size, title):
     centered(d, w / 2, int(h * 0.68), title, font(ROUNDED, h // 9), INK, max(4, h // 90), (255, 255, 255))
     return shot
 
-# --- screenshot: abstract, as the 2D box
-abstract_shot((1000, 600), '3DS Download Play').save(f'{OUT}/screenshot.png')
+# --- screenshot: abstract, as the 2D box; one image for both Download Play rows
+abstract_shot((960, 640), 'Download Play').save(f'{OUT}/screenshot.png')
 
 
 def warp(src, quad, size):
