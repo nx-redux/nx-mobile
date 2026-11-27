@@ -13,7 +13,10 @@ using namespace MelonDsDs;
 using Bytes = std::vector<uint8_t>;
 using Mac = std::array<uint8_t, 6>;
 
-static int failures = 0;
+int failures = 0;
+void mailbox_headers_identical();
+void mailbox_layout();
+void offer_to_mailbox();
 #define CHECK(...) do { if (!(__VA_ARGS__)) { std::printf("  FAIL %s:%d: %s\n", __FILE__, __LINE__, #__VA_ARGS__); failures++; } } while (0)
 
 static const Mac HOST {0x00, 0x08, 0xBF, 0x63, 0xB6, 0xB2};
@@ -485,6 +488,9 @@ int main() {
         {"client_cancel_returns_idle", client_cancel_returns_idle},
         {"make_child_layout", make_child_layout},
         {"make_child_rejects_forged_offsets", make_child_rejects_forged_offsets},
+        {"mailbox_headers_identical", mailbox_headers_identical},
+        {"mailbox_layout", mailbox_layout},
+        {"offer_to_mailbox", offer_to_mailbox},
     };
     for (const auto& [name, test] : tests) {
         const int before = failures;

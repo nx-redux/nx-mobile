@@ -1,8 +1,8 @@
 # Host tests for DS Download Play: the core's protocol code (from the patched melonDS DS tree, which
 # `gmake -C cores melondsds` checks out) and the client's pure parts.
 CORE = ../../../cores/src/melondsds/src/libretro/net
-CXXFLAGS = -std=c++20 -Wall -Wextra -O1 -g -I$(CORE) -I../source
-SOURCES = wmb_test.cpp $(CORE)/wmb.cpp
+CXXFLAGS = -std=c++20 -Wall -Wextra -O1 -g -I$(CORE) -I../source -DCORE_DIR='"$(CORE)"'
+SOURCES = wmb_test.cpp mailbox_test.cpp $(CORE)/wmb.cpp
 
 test: wmb_test
 	./wmb_test
