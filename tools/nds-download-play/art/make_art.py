@@ -3,8 +3,8 @@
 Usage: make_art.py <art dir> <client capture.png> <out dir>
 
 Kept from the row's art: the case and its paper cover. Replaced: the title (DS Download Play), our own two-handheld icon
-on the cover, the spine, the screenshot (the client's top screen) and the mix (a plain handheld showing both of the
-client's screens). The client capture is a phone screenshot of the client in the app's default DS layout: the top
+on the cover, the spine, the screenshot (the client's top screen, where it draws everything) and the mix (a plain
+handheld showing the client). The client capture is a phone screenshot of the client in the app's default DS layout: the top
 screen at 3x across the top, the bottom one at 2x centred below it. Fonts are macOS's (Arial Rounded Bold, Avenir
 Next), as the DS art's.
 """

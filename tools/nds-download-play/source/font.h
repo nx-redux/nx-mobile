@@ -1,5 +1,4 @@
-// Glyphs gen_font.py renders out of the app's own font: a 3D atlas for the bottom screen (glyphs at their face's scale,
-// A5I3) and a 2D one for the top screen (1x, 8-bit alpha).
+// Glyphs gen_font.py renders out of the app's own font into one atlas (A5I3), at each face's scale.
 #ifndef NXDLP_FONT_H
 #define NXDLP_FONT_H
 
@@ -18,11 +17,10 @@ typedef struct {
     s16 ascent;
 } Font;
 
-extern const u16 font3d_w, font3d_h, font2d_w, font2d_h;
-// A white disc in the 3D atlas, disc_d across, for round corners.
+extern const u16 font3d_w, font3d_h;
+// A white disc in the atlas, disc_d across, for round corners.
 extern const u16 disc_x, disc_y, disc_d;
-extern const u8 font3d_atlas[], font2d_atlas[];
+extern const u8 font3d_atlas[];
 extern const Font font3d_small, font3d_body, font3d_title;
-extern const Font font2d_small, font2d_body, font2d_title, font2d_big;
 
 #endif
