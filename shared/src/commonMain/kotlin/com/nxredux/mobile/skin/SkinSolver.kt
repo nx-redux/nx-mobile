@@ -610,8 +610,10 @@ object SkinSolver {
             // the screen between the side groups grows up under a capped frame (its bottom kept by the row under it)
             val grown = at[3] + (if (p === between) (tallen + raise + screenRise) / p.scale else 0f)
             // the GamePad's frame hugs its 16:9 picture (no bars round it): no taller than the picture at the frame's
-            // width, its top kept; no wider than the picture at that height, centred where the frame would be
-            val pad = p.glass?.takeIf { p === between && spec.variant == SkinVariant.WIIU && it.screen == GlassScreen.TOUCH }
+            // width, its top kept; no wider than the picture at that height, centred where the frame would be (a
+            // tablet's, and a fold board's sideways or half-folded: the frame the other consoles' panels have, the picture
+            // between bars)
+            val pad = p.glass?.takeIf { p === between && spec.variant == SkinVariant.WIIU && it.screen == GlassScreen.TOUCH && !spec.id.endsWith(TABLET_BOARD) && windowW <= windowH && !(hingeY != null && hingeGap == null) }
             val gy = pad?.let { pg -> minOf(grown, (pg.w + wideGx) * 9f / 16f - pg.h) } ?: grown
             val gx = pad?.let { pg -> minOf(wideGx, (pg.h + gy) * 16f / 9f - pg.w) } ?: wideGx
             val px = wideX + (wideGx - gx) * p.scale / 2f
@@ -876,6 +878,9 @@ internal fun pieceStripSpan(p: PieceSpec): Pair<Float, Float> {
     val inner = p.glass?.let { maxOf(it.w, p.w - 2 * PIECE_FRAME_BORDER) } ?: p.w
     return (p.glass?.let { (p.w - inner) / 2f } ?: 0f) to inner.toFloat()
 }
+
+/** The id ending of a tablet's fold board layouts (a tablet that does not fold): their frames are the main menu's. */
+internal const val TABLET_BOARD = "_fold_tab"
 
 /** A glass piece's frame border, piece px ([pieceStripSpan]). */
 internal const val PIECE_FRAME_BORDER = 20

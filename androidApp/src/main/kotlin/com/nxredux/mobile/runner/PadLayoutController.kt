@@ -40,7 +40,7 @@ import com.nxredux.mobile.runner.GameActivity.Companion.EXTRA_TAG
 import com.nxredux.mobile.settings.AndroidAppSettings
 import com.nxredux.mobile.shortcuts.TouchSlot
 import com.nxredux.mobile.ui.nx.PadMic
-import com.nxredux.mobile.skin.withoutControl
+import com.nxredux.mobile.skin.withStripSwap
 import com.nxredux.mobile.ui.nx.CornerButtons
 import com.nxredux.mobile.ui.nx.cornerShortcuts
 import com.nxredux.mobile.ui.nx.isController
@@ -210,8 +210,8 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
         val variant: com.nxredux.mobile.skin.SkinVariant, val tweaks: String, val overlayTweaks: String, val micHidden: Boolean = false,
         val stackAspect: Float = SkinChoice.WIIU_STACK_ASPECT,
     )
-    // the pack without the mic button, made once a pack ([placeUntweaked])
-    private var noMic: Pair<PadSkinPack, com.nxredux.mobile.skin.SkinPackManifest>? = null
+    // the pack as a two-screen console's game draws it, made once a pack and mic setting ([placeUntweaked])
+    private var twoScreen: Triple<PadSkinPack, Boolean, com.nxredux.mobile.skin.SkinPackManifest>? = null
     /** The band portrait's bare buttons take at the bottom ([skinBandHeight]), px; 0 in landscape or without them. */
     private var overlayHeight = 0
     /** Shows the pads that waited for the picture once [reveal]'s timeout has passed; one pending at a time. */
@@ -454,8 +454,9 @@ internal class PadLayoutController(private val host: PadLayoutHost, private val 
     private fun placeUntweaked(pack: PadSkinPack, key: SkinKey, ds: Boolean, closest: Boolean): SkinPlacement? {
         val variant = key.variant
         val picture = key.aspect?.let { (it * 240f) to 240f }
-        val manifest = if (!key.micHidden) pack.manifest
-            else noMic?.takeIf { it.first === pack }?.second ?: pack.manifest.withoutControl("MIC").also { noMic = pack to it }
+        val manifest = if (!ds) pack.manifest
+            else twoScreen?.takeIf { it.first === pack && it.second == key.micHidden }?.third
+                ?: pack.manifest.withStripSwap(key.micHidden).also { twoScreen = Triple(pack, key.micHidden, it) }
         // no top inset: the skin and its screen run under the top camera cutout too (the frame keeps its own margin)
         return if (closest) SkinChoice.placeClosest(manifest, key.w, key.h, key.dpi, key.tablet, ds, picture, key.hinge, foldable = DeviceTraits.canHalfFold, variant = variant, stackAspect = key.stackAspect)
             else SkinChoice.place(manifest, key.w, key.h, key.dpi, key.tablet, ds, picture, key.hinge, foldable = DeviceTraits.canHalfFold, variant = variant, stackAspect = key.stackAspect)

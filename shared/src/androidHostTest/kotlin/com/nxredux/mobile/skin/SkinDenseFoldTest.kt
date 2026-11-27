@@ -55,19 +55,20 @@ class SkinDenseFoldTest {
     }
 
     @Test
-    fun aOneScreenGameSidewaysKeepsTheLandscapeShellUntilHalfFolded() {
+    fun aOneScreenGameSidewaysTakesTheFoldBoardFlatToo() {
+        // the hinge runs across the window: controls beside the game would sit on it
         for (v in listOf(SkinVariant.GBA, SkinVariant.SINGLE)) {
             val flat = assertNotNull(sideways(v), "$v")
-            assertEquals(SkinFamily.GRIP, flat.spec.family, "$v flat: ${flat.spec.id}")
+            assertTrue(foldBoard(flat), "$v flat: ${flat.spec.id}")
             val half = assertNotNull(sideways(v, hinge = 1128f), "$v")
             assertTrue(foldBoard(half), "$v half-folded: ${half.spec.id}")
         }
     }
 
     @Test
-    fun theMenuSidewaysIsTwoScreensOnlyHalfFolded() {
+    fun theMenuSidewaysIsTwoScreensFlatToo() {
         val flat = assertNotNull(SkinChoice.placeMenu(pack, 2504, 2256, 480, foldable = true, tablet = true))
-        assertEquals(SkinFamily.GRIP, flat.spec.family, flat.spec.id)
+        assertTrue(foldBoard(flat), flat.spec.id)
         val half = assertNotNull(SkinChoice.placeMenu(pack, 2504, 2256, 480, foldable = true, tablet = true, hingeY = 1128f))
         assertTrue(foldBoard(half), half.spec.id)
         // the camera cutout's strip below the menu (the Ultra turned one way): 2120 px tall

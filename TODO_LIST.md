@@ -13,6 +13,16 @@ Still owed:
 - [ ] After a pull, both phones re-enter the lobby and meet over the Wi-Fi (not run: the phones were on different subnets).
 - [ ] From review, not seen on a device: the Wi-Fi lost mid-game is never told to the runner (`LaunchPipeline` `onLost` only clears `pspWifi`; `pspWifiUpdate` sends nothing for no address), so with a cable coming the election may serve alone on the old Wi-Fi address after the hold.
 
+## Skin review pass (DS / 3DS SWAP in the strip, every device's boxes): device checks owed
+
+- [ ] DS / 3DS: SWAP sits in the middle of the touch shortcut strip and swaps the screens; no SWAP left on the pad.
+- [ ] A nudge saved on the DS / 3DS row (MENU, SELECT, START) before the upgrade still applies after it.
+- [ ] Fold 8 Ultra inner screen sideways, flat: every console on the dual-screen board (game over the hinge, controls under it), the menu too; half-folded the same with the hinge drawn.
+- [ ] Fold inner screen upright, flat and half-folded: controls 12 dp up, DS columns, the GameCube's two-pad blocks; 3DS / Wii U bottom screens as the N64's / GameCube's.
+- [ ] Flip cover screen sideways (near square, no crease): one-screen games keep the landscape shell, not the dual-screen board.
+- [ ] Phone, tablet, Fold cover, Flip inner, each way up: a console of each kind looks as on its review sheet (nx-skins `renders/review/`).
+- [ ] Known limit: a non-folding tablet upright of 1.33–1.4 aspect gets the inner screen's 12 dp lift.
+
 ## Review round 3: device checks owed
 
 - [ ] RA: revoke/sign out mid-game, unlock, sign in, sync → the unlock arrives; quit right after an unlock → no toast during the quit.

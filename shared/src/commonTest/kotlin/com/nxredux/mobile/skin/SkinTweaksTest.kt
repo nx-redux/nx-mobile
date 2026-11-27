@@ -69,4 +69,16 @@ class SkinTweaksTest {
         val skin = SkinTweaks.encode(mapOf("gba" to mapOf("stacked" to mapOf("A" to SkinTweak(1f, 2f, 1f)))))
         assertEquals(SkinTweaks.of(skin, "gba", "stacked"), SkinTweaks.overlayOf(skin, "", "gba", "stacked"))
     }
+
+    @Test fun a_group_saved_with_swap_on_the_pad_still_holds_its_tweak() {
+        val t = SkinTweak(4f, -6f, 1f)
+        fun stored(vararg g: Pair<String, SkinTweak>) = SkinTweaks.encode(mapOf("nds" to mapOf("stacked_ds" to mapOf(*g))))
+        val got = SkinTweaks.of(stored("MENU+MIC+SELECT+START+SWAP" to t, "L3+STICK_SWAP" to t), "nds", "stacked_ds")
+        assertEquals(t, got["MENU+MIC+SELECT+START"])
+        // (the stick switch is no SWAP)
+        assertEquals(null, got["L3"])
+        // the group's own tweak, saved since, stands
+        val own = SkinTweak(1f, 1f, 1f)
+        assertEquals(own, SkinTweaks.of(stored("MENU+MIC+SWAP" to t, "MENU+MIC" to own), "nds", "stacked_ds")["MENU+MIC"])
+    }
 }
