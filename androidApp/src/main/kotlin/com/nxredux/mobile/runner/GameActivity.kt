@@ -184,6 +184,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.isActive
 import java.io.File
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
@@ -249,6 +250,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         const val EXTRA_NETPLAY_RTC = "netplay_rtc"                      // Long: the session clock, epoch seconds
         /** Kids Mode's "Games close in 10 minutes" toast stays this long. */
         private const val KIDS_WARNING_MS = 6000L
+        private const val DOWNLOAD_PLAY_HOST_GONE_MS = 4_000L   // a host restarting its wireless between menus is back within this
         /** After the core text box's Cancel: the game's keyboard is still waiting. */
         private const val CORE_TEXT_CANCELLED = "The game's keyboard is still open. Start on the pad answers with the account's name."
         /** The failure dialog's title unless a caller names another. */
@@ -424,6 +426,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private val launchPipeline = LaunchPipeline(LaunchState())
     private val dsRoom = DsRoomWatcher(lifecycleScope, { DsPresence.of(LibretroNetplay.dsPresence()) }, ::onDsPresenceChanged,
         readOthers = { LibretroNetplay.dsOthers() }, onOthers = ::onDsOthersChanged)
+    private val ownNetworks by lazy { OwnNetworksWatcher(this, this) }
     private val dsCable = DsCable(this, lifecycleScope)
     // The cap is the Disconnect row pressed for the player: the automatic route leaves the room, a sheet session ends its link.
     private val dsMenuCap = DsMenuCap(lifecycleScope, onTick = { seconds -> withMenu { it.setIdleSeconds(seconds) } }) {
@@ -701,8 +704,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                 NxLog.i(TAG_LOG, "the previous game screen is torn down: starting")
             }
             launchPipeline.start()
-            if (launchPipeline.dsLinked && !isDestroyed) dsRoom.start()
+            if (launchPipeline.dsLinked && !isDestroyed) {
+                dsRoom.start()
+                ownNetworks.start()
+            }
             if (launchPipeline.dsCableAuto && !isDestroyed) dsCable.watch(launchPipeline.dsCableWithGame)
+            launchPipeline.n3dsDownloadPlayDirs?.let { (azahar, config) -> if (!isDestroyed) watchDownloadPlayPick(azahar, config) }
         }
     }
 
@@ -717,6 +724,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      */
     private fun onDsPresenceChanged(presence: DsPresence) {
         launchPipeline.dsRoomChanged(presence == DsPresence.ROOM)
+        retroView?.runWhilePaused = keepsRoomWhilePaused
         launchPipeline.dsWirelessChanged(presence != DsPresence.OUT)
         if (launchPipeline.dsAutoRoute) {
             if (launchPipeline.dsCableAuto) dsCable.wireless = presence != DsPresence.OUT
@@ -724,7 +732,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             shortcuts.refreshTouchShortcuts()
             withMenu { it.setDsWireless(dsWireless) }
         }
-        if (menuOpen && !quitting) holdCore()
+        if (corePaused() && !quitting) holdCore()
         syncDsMenuCap()
         withMenu { it.setLocalWirelessNow(localWirelessNow) }
     }
@@ -732,20 +740,111 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /** DS: a toast as devices join and leave the room (the 3DS core sends its own, with names). */
     private fun onDsOthersChanged(before: Int, now: Int) {
         if (launchPipeline.dsAutoRoute && gameCoreId == "melondsds") LocalWirelessText.change(before, now)?.let(dual::pictureToast)
+        followDownloadPlayHost(now)
         dual.refreshDualPanel()   // the session card says how many are linked
         withMenu { it.setLocalWirelessNow(localWirelessNow) }
     }
 
-    /** The menu open in a room counts toward the cap; anything else stops the count. */
-    private fun syncDsMenuCap() = dsMenuCap.sync(menuOpen && !quitting && dsRoom.current == DsPresence.ROOM)
+    /** 3DS Download Play: the downloaded game has started ([watchDownloadPlayPick]); its host is all it can play with. */
+    @Volatile private var downloadPlayChildStarted = false
+    private var downloadPlayHostGone: Job? = null
 
     /**
-     * A sheet session's room again after a leave for the background or a lost focus. Never on the automatic route, where
-     * only switching Local Wireless on rejoins: a session that fell back to it may still be a session in Azahar until
-     * its next frame, and a rejoin would put it back in the room it was left for.
+     * A Download Play child with no host left can only show its communication error, so the session ends as a quit:
+     * when the core says the host left the room (other guests may stay), or once the room has stayed empty a few
+     * seconds (a host restarting its wireless comes back within that). Not after the player's own Disconnect (the cap's
+     * too), nor while the app is in the background, which leaves the room too, or lost the focus: back, the room is
+     * checked afresh ([recheckDownloadPlayHost]), as a host that left meanwhile is never seen leaving.
+     */
+    private fun followDownloadPlayHost(others: Int) {
+        if (!downloadPlayChildStarted || quitting) return
+        if (others > 0) { downloadPlayHostGone?.cancel(); downloadPlayHostGone = null; return }
+        if (downloadPlayHostGone?.isActive == true) return
+        downloadPlayHostGone = lifecycleScope.launch { endDownloadPlaySession(DOWNLOAD_PLAY_HOST_GONE_MS) }
+    }
+
+    private suspend fun endDownloadPlaySession(afterMs: Long) {
+        delay(afterMs)
+        if (quitting || focusPaused || !localWirelessShownOn() || !lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return
+        NxLog.i(TAG_LOG, "3DS Download Play: the host left, quitting")
+        dual.pictureToast("The host left")
+        delay(1500)
+        if (!quitting) quitWithAutoState(chosen = false, autoState = false)
+    }
+
+    private val keepsRoomWhilePaused: Boolean get() = isN3ds && dsRoom.current == DsPresence.ROOM
+
+    private fun syncDsMenuCap() = dsMenuCap.sync(dsHeldInRoom(menuOpen, focusPaused, quitting, dsRoom.current == DsPresence.ROOM))
+
+    /**
+     * The room again after a leave for the background or a lost focus (a system dialog, such as the USB cable's). On the
+     * automatic route only while Local Wireless shows On: a session that fell back to it shows Off ([leaveLinkSession])
+     * and may still be a session in Azahar until its next frame, where a rejoin would put it back in the room it left.
      */
     private fun rejoinSessionRoom() {
-        if (!launchPipeline.dsAutoRoute) LibretroNetplay.dsRejoin()
+        if (!launchPipeline.dsAutoRoute || localWirelessShownOn()) LibretroNetplay.dsRejoin()
+        recheckDownloadPlayHost()
+    }
+
+    /** The empty-room wait again: a rejoin that finds the host cancels it ([followDownloadPlayHost]). */
+    private fun recheckDownloadPlayHost() {
+        downloadPlayHostGone?.cancel(); downloadPlayHostGone = null
+        followDownloadPlayHost(dsRoom.others)
+    }
+
+    private fun localWirelessShownOn(): Boolean = when {
+        isNds -> NdsOptions.localWireless(frontendValues)
+        isN3ds -> N3dsOptions.localWireless(frontendValues)
+        else -> false
+    }
+
+    /**
+     * 3DS Download Play: the client names the child it is about to start ([N3dsDownloadPlayHandoff.PICK_FILE]); the full
+     * game's own core options go to the core before the restart, then the answer lets the client go on. A game never
+     * launched here, or one with no settings of its own, starts on the row's.
+     */
+    private fun watchDownloadPlayPick(azahar: File, config: File) {
+        val pick = File(azahar, N3dsDownloadPlayHandoff.PICK_FILE)
+        lifecycleScope.launch(Dispatchers.IO) {
+            pick.delete()   // a stale one from a session that ended mid-hand-off
+            var hostLeft = -1
+            while (isActive) {
+                if (downloadPlayChildStarted) {
+                    val now = LibretroNetplay.dsHostLeft()
+                    if (hostLeft in 0 until now) withContext(Dispatchers.Main) {
+                        downloadPlayHostGone?.cancel()
+                        downloadPlayHostGone = lifecycleScope.launch { endDownloadPlaySession(0) }
+                    }
+                    hostLeft = now
+                }
+                if (pick.isFile) {
+                    val child = runCatching { pick.readText() }.getOrDefault("")
+                    pick.delete()
+                    val live = N3dsDownloadPlayHandoff.parentOf(child)?.let { parent ->
+                        val name = runCatching { N3dsDownloadPlayHandoff.titles(File(config, N3dsDownloadPlayHandoff.INDEX_FILE).readText())[parent] }.getOrNull()
+                        val game = name?.let { File(config, "$it.cfg") }?.takeIf { it.isFile }
+                        game?.let { NxLog.i(TAG_LOG, "3DS Download Play: ${it.name}'s own settings for the child") }
+                        game?.let { N3dsDownloadPlayHandoff.liveOptions(CoreConfig.parse(it.readText()).values) }
+                    }.orEmpty()
+                    val ack = { runCatching { File(azahar, N3dsDownloadPlayHandoff.ACK_FILE).apply { parentFile?.mkdirs() }.writeText("ok") } }
+                    // The ack lets the client restart into the child: only once the options are with the core, which
+                    // reads them at its next frame's start, before the restart that frame can run.
+                    val queued = live.isNotEmpty() && withContext(Dispatchers.Main) {
+                        val view = retroView ?: return@withContext false
+                        // The full game's values, for this session only: a save keeps the row's own.
+                        graphicsForcedOptions = graphicsForcedOptions + live.keys
+                        view.queueEvent {
+                            runCatching { view.updateVariables(*live.map { (k, v) -> Variable(k, v) }.toTypedArray()) }
+                            ack()
+                        }
+                        true
+                    }
+                    if (!queued) ack()
+                    downloadPlayChildStarted = true
+                }
+                delay(250)
+            }
+        }
     }
 
     /** Leaves the room with the game running: on the automatic route, Local Wireless switched off (PSP has no row). */
@@ -883,12 +982,19 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (isTopResumedActivity) focusResume() else if (settings.pauseWhenUnfocused) focusPause()
     }
 
-    /** The game holds as under the menu (see openMenu); an open menu has already paused it. */
+    /**
+     * The game holds as under the menu (see openMenu); an open menu has already paused it. A 3DS room is kept, the core
+     * running for its members under the menu's cap ([GLRetroView.runWhilePaused]): a Download Play child that loses its
+     * host cannot get it back. Any other room is left: its members would time out.
+     */
     private fun focusPause() {
         if (focusPaused || quitting) return
-        LibretroNetplay.dsLeaveNow()   // a DS room cannot wait out a pause: its members would time out
-        dsRoom.check()   // an open menu pauses the core now that the room is gone
+        if (!keepsRoomWhilePaused) {
+            LibretroNetplay.dsLeaveNow()
+            dsRoom.check()   // an open menu pauses the core now that the room is gone
+        }
         focusPaused = true
+        syncDsMenuCap()
         syncKeepScreenOn()
         if (menuOpen) return
         input.releaseAllGameInput()
@@ -899,6 +1005,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private fun focusResume() {
         if (!focusPaused) return
         focusPaused = false
+        syncDsMenuCap()
         if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) rejoinSessionRoom()
         syncKeepScreenOn()
         if (menuOpen || quitting || !lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return
@@ -1113,6 +1220,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         runCatching { unregisterReceiver(kidsWarn) }   // not registered when onCreate stopped early
         dsRoom.stop()   // launchPipeline.onDestroy lets the Wi-Fi lock go
         dsCable.close()
+        ownNetworks.stop()
         renderer.cancelGeometryWatch()
         res3d.cancelTick()
         rumbles.forEach { it.release() }
@@ -2210,6 +2318,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         speed.setToggle(rewind = false)
         lifecycleScope.launch(Dispatchers.IO) {
             runCatching { view.reset() }.onFailure { NxLog.w(TAG_LOG, "reset failed", it) }
+            // A reset console leaves its room as a real one would; on the automatic route it looks for rooms again
+            // (only switching Local Wireless on would bring it back otherwise).
+            withContext(Dispatchers.Main) { if (launchPipeline.dsAutoRoute && localWirelessShownOn()) LibretroNetplay.dsRejoin() }
         }
     }
 
@@ -2522,3 +2633,7 @@ internal fun focusPauseStep(focusPaused: Boolean, topResumed: Boolean, pauseWhen
         !focusPaused && pauseWhenUnfocused && !topResumed && resumed -> FocusPauseStep.PAUSE
         else -> FocusPauseStep.NONE
     }
+
+/** The game held in a room, by the menu or another window's focus: the others wait, so the cap counts ([DsMenuCap]). */
+internal fun dsHeldInRoom(menuOpen: Boolean, focusPaused: Boolean, quitting: Boolean, inRoom: Boolean): Boolean =
+    (menuOpen || focusPaused) && !quitting && inRoom

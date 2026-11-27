@@ -114,6 +114,8 @@ object LibretroNetplay {
     @JvmStatic external fun dsPresence(): Int
     /** The DS link: other devices in the room, 0 in none; -1 when the core's room does not say (PSP). Any thread. */
     @JvmStatic external fun dsOthers(): Int
+    /** 3DS: how many times the network this device joined lost its host to the host leaving the room. */
+    @JvmStatic external fun dsHostLeft(): Int
     /** The DS link: leave the room at once, without the radio-off linger (backgrounded, like closing the lid). Any thread. */
     @JvmStatic external fun dsLeaveNow()
     /** The DS link: undoes [dsLeaveNow], a sheet session's host reopens its room, a joiner asks its host again, the automatic route searches again. Any thread. */
@@ -122,6 +124,8 @@ object LibretroNetplay {
     @JvmStatic external fun dsSetNetwork(handle: Long)
     /** The DS link: the phone-to-phone cable beside the Wi-Fi. 0 none, 1 coming up (a room found on the Wi-Fi waits a few seconds for it), 2 up (rooms are looked for on it too, and one found there is the one joined). Any thread. */
     @JvmStatic external fun dsSetCable(state: Int)
+    /** The DS link: the phone's own IPv4 networks (its hotspot), which no `Network` handle covers: broadcast addresses and masks, host order, pairwise. Searches ask there too and sends there leave unpinned from the Wi-Fi. Replaces the last list. Any thread. */
+    @JvmStatic external fun dsSetLocalNetworks(broadcasts: IntArray, masks: IntArray)
 
     init {
         System.loadLibrary("libretrodroid")

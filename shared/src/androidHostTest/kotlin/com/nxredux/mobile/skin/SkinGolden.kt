@@ -82,7 +82,15 @@ private fun pictureOf(v: SkinVariant): Pair<Float, Float>? = when (v) {
 /** [v]'s placement on [d] (the main menu's for null), with its usual picture. */
 fun placeFor(pack: SkinPackManifest, v: SkinVariant?, d: DeviceClass): SkinPlacement? =
     if (v == null) SkinChoice.placeMenu(pack, d.w, d.h, d.dpi, foldable = d.foldable, tablet = d.tablet, hingeY = d.hingeY)
-    else SkinChoice.place(pack, d.w, d.h, d.dpi, d.tablet, ds = pictureOf(v) == null, picture = pictureOf(v), hingeY = d.hingeY, foldable = d.foldable, variant = v)
+    else SkinChoice.place(if (v.swapInStrip) drawnTwoScreen(pack) else pack, d.w, d.h, d.dpi, d.tablet, ds = pictureOf(v) == null,
+        picture = pictureOf(v), hingeY = d.hingeY, foldable = d.foldable, variant = v)
+
+private val drawnTwoScreens = java.util.IdentityHashMap<SkinPackManifest, SkinPackManifest>()
+
+/** [pack] as a two-screen console's game draws it: SWAP in the strip, off the pad ([withStripSwap]). */
+fun drawnTwoScreen(pack: SkinPackManifest): SkinPackManifest = synchronized(drawnTwoScreens) {
+    drawnTwoScreens.getOrPut(pack) { pack.withStripSwap(micHidden = false) }
+}
 
 private fun rect(r: PxRect) = buildJsonArray { add(JsonPrimitive(r.x)); add(JsonPrimitive(r.y)); add(JsonPrimitive(r.width)); add(JsonPrimitive(r.height)) }
 

@@ -22,6 +22,8 @@
 
 #include "nl_netpacket.h"
 
+#include "ndl_link.h"
+
 struct Variable;
 struct nx_3ds_link_interface;
 
@@ -40,6 +42,8 @@ namespace libretrodroid::dslink {
     void setCoreRoom(struct ::nx_3ds_link_interface* room);
     void setCable(int state);   // ndl_cable: the phone-to-phone cable beside the Wi-Fi; any thread
     void setNetwork(int64_t handle);   // the Wi-Fi network handle the link's sockets bind to; 0 = the default network
+    // The phone's own networks (its hotspot), which no Network handle covers; any thread.
+    void setLocalNetworks(const std::vector<ndl_subnet>& nets);
     // A core's own socket onto the cable's network (cable != 0) or the Wi-Fi: the route_socket a core-room core is given.
     void routeCoreSocket(int fd, int cable);
     void radio(unsigned state); // NX_ENVIRONMENT_SET_NDS_RADIO, from inside retro_run
@@ -50,6 +54,7 @@ namespace libretrodroid::dslink {
     bool inRoom();
     int presence();             // ndl_presence: 0 out, 1 seeking a room, 2 in a room
     int others();               // other devices in the room, 0 in none; -1: the core's room does not say
+    int hostLeft();             // the core's count of hosts lost to them leaving the room; 0 without one
     void leaveNow();            // leave without the radio-off linger, and stay out until rejoin
     void rejoin();              // undoes leaveNow: a session's room again, or the automatic route's search
 }
