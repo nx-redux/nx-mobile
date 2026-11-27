@@ -126,10 +126,40 @@ index 20c526d..f8d4416 100644
          std::array<ScreenLayout, config::screen::MAX_SCREEN_LAYOUTS> _screenLayouts;
          unsigned _screenGap = 0;
 diff --git a/src/libretro/config/console.cpp b/src/libretro/config/console.cpp
-index 73b7e24..9fc3236 100644
+index 73b7e24..f4914c2 100644
 --- a/src/libretro/config/console.cpp
 +++ b/src/libretro/config/console.cpp
-@@ -1196,7 +1196,14 @@ static void MelonDsDs::CustomizeFirmware(const CoreConfig& config, Firmware& fir
+@@ -648,9 +648,13 @@ static void MelonDsDs::ApplyCommonArgs(const CoreConfig& config, melonDS::NDSArg
+     // melonDS resamples the SPU's output to this rate,
+     // so it has to match the sample rate we report in retro_get_system_av_info.
+     args.OutputSampleRate = MelonDsDs::SAMPLE_RATE;
++    args.JIT = JitArgs(config);
++}
++
++std::optional<melonDS::JITArgs> MelonDsDs::JitArgs(const CoreConfig& config) noexcept {
+ #ifdef JIT_ENABLED
+     if (config.JitEnable()) {
+-        args.JIT = {
++        return melonDS::JITArgs {
+             .MaxBlockSize = config.MaxBlockSize(),
+             .LiteralOptimizations = config.LiteralOptimizations(),
+             .BranchOptimizations = config.BranchOptimizations(),
+@@ -661,12 +665,9 @@ static void MelonDsDs::ApplyCommonArgs(const CoreConfig& config, melonDS::NDSArg
+ #   endif
+         };
+     }
+-    else {
+-        args.JIT = std::nullopt;
+-    }
+-#else
+-    args.JIT = std::nullopt;
+ #endif
++    (void)config;
++    return std::nullopt;
+ }
+ 
+ static unique_ptr<melonDS::NDSCart::CartCommon> MelonDsDs::LoadNdsCart(const CoreConfig& config, const retro::GameInfo& ndsInfo) {
+@@ -1196,7 +1197,14 @@ static void MelonDsDs::CustomizeFirmware(const CoreConfig& config, Firmware& fir
      // If using generated firmware, we keep the wi-fi settings on the host disk separately.
      // Wi-fi access point data includes Nintendo WFC settings,
      // and if we didn't keep them then the player would have to reset them in each session.
@@ -145,6 +175,29 @@ index 73b7e24..9fc3236 100644
          // If we have Wi-fi settings to load...
          constexpr unsigned TOTAL_WFC_SETTINGS_SIZE =
              3 * (sizeof(Firmware::WifiAccessPoint) + sizeof(Firmware::ExtendedWifiAccessPoint));
+diff --git a/src/libretro/config/console.hpp b/src/libretro/config/console.hpp
+index 1087284..3abc5a1 100644
+--- a/src/libretro/config/console.hpp
++++ b/src/libretro/config/console.hpp
+@@ -18,7 +18,9 @@
+ #define MELONDSDS_CONFIG_CONSOLE_HPP
+ 
+ #include <memory>
++#include <optional>
+ #include <string_view>
++#include <Args.h>
+ #include "std/span.hpp"
+ #include "types.hpp"
+ 
+@@ -98,6 +100,8 @@ namespace MelonDsDs {
+ 
+     /// Modify a console instance with core options that are safe to adjust at runtime.
+     void UpdateConsole(const CoreConfig& config, melonDS::NDS& nds) noexcept;
++    /// The JIT as the player set it up; nothing when it is off or not built in.
++    std::optional<melonDS::JITArgs> JitArgs(const CoreConfig& config) noexcept;
+ 
+     /// Modify a console instance with core options that require a reset to adjust.
+     void ResetConsole(const CoreConfig& config, melonDS::NDS& nds);
 diff --git a/src/libretro/config/constants.hpp b/src/libretro/config/constants.hpp
 index e51359f..7b96732 100644
 --- a/src/libretro/config/constants.hpp
@@ -314,10 +367,16 @@ index 9d5c922..9bf1221 100644
      if (!VisibilityInitialized || ShowHybridOptions != oldShowHybridOptions) {
          set_option_visible(screen::HYBRID_SMALL_SCREEN, ShowHybridOptions);
 diff --git a/src/libretro/core/core.cpp b/src/libretro/core/core.cpp
-index df32f07..1c0ffc4 100644
+index df32f07..eb5f060 100644
 --- a/src/libretro/core/core.cpp
 +++ b/src/libretro/core/core.cpp
-@@ -23,6 +23,7 @@
+@@ -1,3 +1,5 @@
++#include <algorithm>
++#include <cstring>
+ /*
+     Copyright 2023 Jesse Talavera-Greenberg
+ 
+@@ -23,6 +25,7 @@
  #include <retro_assert.h>
  
  #include <NDS.h>
@@ -325,7 +384,7 @@ index df32f07..1c0ffc4 100644
  #include <compat/strl.h>
  #include <file/file_path.h>
  #include <string/stdstring.h>
-@@ -198,6 +199,9 @@ void MelonDsDs::CoreState::Run() noexcept {
+@@ -198,6 +201,9 @@ void MelonDsDs::CoreState::Run() noexcept {
          return;
      }
  
@@ -335,7 +394,7 @@ index df32f07..1c0ffc4 100644
      retro_assert(Console != nullptr);
      melonDS::NDS& nds = *Console;
  
-@@ -216,6 +220,7 @@ void MelonDsDs::CoreState::Run() noexcept {
+@@ -216,6 +222,7 @@ void MelonDsDs::CoreState::Run() noexcept {
  
      if (_renderState.Ready()) [[likely]] {
          // If the global state needed for rendering is ready...
@@ -343,7 +402,7 @@ index df32f07..1c0ffc4 100644
          _inputState.Update(Config, _screenLayout);
          _inputState.Apply(nds, _screenLayout, _micState, Config);
          // melonDS pulls microphone samples as it needs them
-@@ -267,6 +272,7 @@ void MelonDsDs::CoreState::Run() noexcept {
+@@ -267,6 +274,7 @@ void MelonDsDs::CoreState::Run() noexcept {
              _inputState.StopRumble();
          }
  
@@ -351,7 +410,7 @@ index df32f07..1c0ffc4 100644
          _renderState.Render(nds, _inputState, Config, _screenLayout);
          RenderAudio(*Console);
  
-@@ -450,6 +456,8 @@ void MelonDsDs::CoreState::RenderErrorScreen() noexcept {
+@@ -450,6 +458,8 @@ void MelonDsDs::CoreState::RenderErrorScreen() noexcept {
          _screenLayout.SetDirty();
      }
  
@@ -360,7 +419,7 @@ index df32f07..1c0ffc4 100644
      // The screen layout hotkey works here too, even though there's no console to drive
      _inputState.Update(Config, _screenLayout);
      _inputState.Apply(_screenLayout);
-@@ -462,9 +470,71 @@ void MelonDsDs::CoreState::RenderErrorScreen() noexcept {
+@@ -462,9 +472,71 @@ void MelonDsDs::CoreState::RenderErrorScreen() noexcept {
          }
      }
  
@@ -432,10 +491,30 @@ index df32f07..1c0ffc4 100644
  std::chrono::system_clock::time_point ToSystemTime(std::chrono::local_seconds time) noexcept {
      return std::chrono::system_clock::from_time_t(time.time_since_epoch().count());
  }
-@@ -608,6 +678,24 @@ void MelonDsDs::CoreState::InitFlushFirmwareTask() noexcept
+@@ -591,6 +663,11 @@ void MelonDsDs::CoreState::StartConsole() {
+         // (Some can do this, e.g. Flipnote Studio)
+     }
+ 
++    if (_ndsInfo && IsDownloadPlayClient(_ndsInfo->GetData())) {
++        // Our DS Download Play client (tools/nds-download-play): melonDS's JIT mis-runs it (its ARM9 lands at address 0),
++        // so it runs on the interpreter; the game it receives gets the JIT back (BootWmbChild).
++        Console->SetJITArgs(std::nullopt);
++    }
+     Console->Start();
+ 
+     retro::info("Started emulated console");
+@@ -608,6 +685,37 @@ void MelonDsDs::CoreState::InitFlushFirmwareTask() noexcept
      }
  }
  
++bool MelonDsDs::IsDownloadPlayClient(std::span<const std::byte> rom) noexcept {
++    // Our client keeps the mailbox's magic as a constant; a game the size of a whole cart is not it.
++    constexpr size_t CLIENT_MAX = 4 << 20;
++    if (rom.size() > CLIENT_MAX) return false;
++    const auto* data = reinterpret_cast<const char*>(rom.data());
++    return std::search(data, data + rom.size(), NXDLP_MAGIC, NXDLP_MAGIC + sizeof(NXDLP_MAGIC)) != data + rom.size();
++}
++
 +void MelonDsDs::CoreState::BootWmbChild(WmbChild child) noexcept {
 +    auto cart = melonDS::NDSCart::ParseROM(child.rom.data(), child.rom.size(), nullptr, std::nullopt);
 +    if (!cart) {
@@ -445,6 +524,11 @@ index df32f07..1c0ffc4 100644
 +    // First: the reset below powers the radio off, and the room must outlast it.
 +    NdsDownloadPlayStarted();
 +    _mpState.DownloadPlayStarted();
++    // The player's JIT, but without fast memory: melonDS maps that only when it creates the console, and the client ran
++    // with the JIT off.
++    auto jit = JitArgs(Config);
++    if (jit) jit->FastMemory = false;
++    Console->SetJITArgs(jit);
 +    Console->SetNDSCart(std::move(cart));
 +    Console->Reset();
 +    SetConsoleTime(*Console);
@@ -457,7 +541,7 @@ index df32f07..1c0ffc4 100644
  void MelonDsDs::CoreState::ResetRenderState() {
      _renderState.ContextReset(*Console, Config);
  }
-@@ -619,6 +707,14 @@ void MelonDsDs::CoreState::DestroyRenderState() {
+@@ -619,6 +727,14 @@ void MelonDsDs::CoreState::DestroyRenderState() {
  bool MelonDsDs::CoreState::LoadGame(unsigned type, std::span<const retro_game_info> game) noexcept try {
      ZoneScopedN(TracyFunction);
  
@@ -473,10 +557,20 @@ index df32f07..1c0ffc4 100644
  
      // ...then load the game.
 diff --git a/src/libretro/core/core.hpp b/src/libretro/core/core.hpp
-index bb52319..edfdb74 100644
+index bb52319..ae30776 100644
 --- a/src/libretro/core/core.hpp
 +++ b/src/libretro/core/core.hpp
-@@ -96,7 +96,13 @@ namespace MelonDsDs {
+@@ -55,6 +55,9 @@ namespace melonDS {
+ }
+ 
+ namespace MelonDsDs {
++    /// Our DS Download Play client (tools/nds-download-play), told by the mailbox magic it carries.
++    bool IsDownloadPlayClient(std::span<const std::byte> rom) noexcept;
++
+     class RenderState;
+     class config_exception;
+ 
+@@ -96,7 +99,13 @@ namespace MelonDsDs {
          bool MpSendPacket(const Packet &p) noexcept;
          std::optional<Packet> MpNextPacket() noexcept;
          std::optional<Packet> MpNextPacketBlock() noexcept;
@@ -490,7 +584,7 @@ index bb52319..edfdb74 100644
  
          void WriteNdsSave(std::span<const std::byte> savedata, uint32_t writeoffset, uint32_t writelen) noexcept;
          void WriteGbaSave(std::span<const std::byte> savedata, uint32_t writeoffset, uint32_t writelen) noexcept;
-@@ -131,6 +137,8 @@ namespace MelonDsDs {
+@@ -131,6 +140,8 @@ namespace MelonDsDs {
          /// as the buffers move with it.
          [[gnu::cold]] void RegisterMemoryMap() const noexcept;
          [[gnu::cold]] void StartConsole();
@@ -499,7 +593,7 @@ index bb52319..edfdb74 100644
          [[gnu::cold]] void SetConsoleTime(melonDS::NDS& nds) noexcept;
          [[gnu::cold]] void SetConsoleTime(melonDS::NDS& nds, local_seconds time) noexcept;
          /// \return The header of the loaded NDS ROM,
-@@ -147,6 +155,14 @@ namespace MelonDsDs {
+@@ -147,6 +158,14 @@ namespace MelonDsDs {
              int type
          ) noexcept;
          [[gnu::hot]] static void RenderAudio(melonDS::NDS& nds) noexcept;
@@ -514,7 +608,7 @@ index bb52319..edfdb74 100644
          [[gnu::cold]] bool InitErrorScreen(const config_exception& e) noexcept;
          [[gnu::cold]] void RenderErrorScreen() noexcept;
          [[gnu::cold]] void InitContent(unsigned type, std::span<const retro_game_info> game);
-@@ -196,6 +212,14 @@ namespace MelonDsDs {
+@@ -196,6 +215,14 @@ namespace MelonDsDs {
          /// \see UpdateSystemAvInfo
          bool _nudgeMaxHeight = false;
          uint32_t _flushTaskId = 0;

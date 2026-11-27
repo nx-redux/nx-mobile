@@ -7,10 +7,12 @@
 #include "mailbox.h"
 
 static NxDlpMailbox box __attribute__((aligned(32)));
+// The core knows this program by the magic in its binary, so it stays a plain constant, not folded into code.
+static const char magic[sizeof(box.magic)] __attribute__((used)) = NXDLP_MAGIC;
 
 int main(void) {
     consoleDemoInit();
-    memcpy(box.magic, NXDLP_MAGIC, sizeof(box.magic));
+    memcpy(box.magic, (const void* volatile)magic, sizeof(box.magic));
     uint32_t seenSeq = ~0u;
     bool asked = false;
     while (pmMainLoop()) {
