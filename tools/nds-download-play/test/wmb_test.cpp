@@ -17,6 +17,10 @@ int failures = 0;
 void mailbox_headers_identical();
 void mailbox_layout();
 void offer_to_mailbox();
+void ui_state_from_mailbox();
+void ui_progress_percent();
+void ui_selection_clamps();
+void ui_ascii_from_ucs2();
 #define CHECK(...) do { if (!(__VA_ARGS__)) { std::printf("  FAIL %s:%d: %s\n", __FILE__, __LINE__, #__VA_ARGS__); failures++; } } while (0)
 
 static const Mac HOST {0x00, 0x08, 0xBF, 0x63, 0xB6, 0xB2};
@@ -491,6 +495,10 @@ int main() {
         {"mailbox_headers_identical", mailbox_headers_identical},
         {"mailbox_layout", mailbox_layout},
         {"offer_to_mailbox", offer_to_mailbox},
+        {"ui_state_from_mailbox", ui_state_from_mailbox},
+        {"ui_progress_percent", ui_progress_percent},
+        {"ui_selection_clamps", ui_selection_clamps},
+        {"ui_ascii_from_ucs2", ui_ascii_from_ucs2},
     };
     for (const auto& [name, test] : tests) {
         const int before = failures;

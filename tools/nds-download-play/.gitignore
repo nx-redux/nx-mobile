@@ -6,3 +6,4 @@ source/font_data.c
 .venv/
 test/wmb_test
 test/*.dSYM/
+test/ui.o
