@@ -311,10 +311,19 @@ index 9d5c922..9bf1221 100644
      if (!VisibilityInitialized || ShowHybridOptions != oldShowHybridOptions) {
          set_option_visible(screen::HYBRID_SMALL_SCREEN, ShowHybridOptions);
 diff --git a/src/libretro/core/core.cpp b/src/libretro/core/core.cpp
-index df32f07..065e0fc 100644
+index df32f07..ec90e59 100644
 --- a/src/libretro/core/core.cpp
 +++ b/src/libretro/core/core.cpp
-@@ -216,6 +216,7 @@ void MelonDsDs::CoreState::Run() noexcept {
+@@ -198,6 +198,8 @@ void MelonDsDs::CoreState::Run() noexcept {
+         return;
+     }
+ 
++    if (_mpState.IsReady()) _mpState.WmbService();
++
+     retro_assert(Console != nullptr);
+     melonDS::NDS& nds = *Console;
+ 
+@@ -216,6 +218,7 @@ void MelonDsDs::CoreState::Run() noexcept {
  
      if (_renderState.Ready()) [[likely]] {
          // If the global state needed for rendering is ready...
@@ -322,7 +331,7 @@ index df32f07..065e0fc 100644
          _inputState.Update(Config, _screenLayout);
          _inputState.Apply(nds, _screenLayout, _micState, Config);
          // melonDS pulls microphone samples as it needs them
-@@ -267,6 +268,7 @@ void MelonDsDs::CoreState::Run() noexcept {
+@@ -267,6 +270,7 @@ void MelonDsDs::CoreState::Run() noexcept {
              _inputState.StopRumble();
          }
  
@@ -330,7 +339,7 @@ index df32f07..065e0fc 100644
          _renderState.Render(nds, _inputState, Config, _screenLayout);
          RenderAudio(*Console);
  
-@@ -450,6 +452,8 @@ void MelonDsDs::CoreState::RenderErrorScreen() noexcept {
+@@ -450,6 +454,8 @@ void MelonDsDs::CoreState::RenderErrorScreen() noexcept {
          _screenLayout.SetDirty();
      }
  
@@ -339,7 +348,7 @@ index df32f07..065e0fc 100644
      // The screen layout hotkey works here too, even though there's no console to drive
      _inputState.Update(Config, _screenLayout);
      _inputState.Apply(_screenLayout);
-@@ -462,9 +466,71 @@ void MelonDsDs::CoreState::RenderErrorScreen() noexcept {
+@@ -462,9 +468,71 @@ void MelonDsDs::CoreState::RenderErrorScreen() noexcept {
          }
      }
  
@@ -411,7 +420,7 @@ index df32f07..065e0fc 100644
  std::chrono::system_clock::time_point ToSystemTime(std::chrono::local_seconds time) noexcept {
      return std::chrono::system_clock::from_time_t(time.time_since_epoch().count());
  }
-@@ -619,6 +685,14 @@ void MelonDsDs::CoreState::DestroyRenderState() {
+@@ -619,6 +687,14 @@ void MelonDsDs::CoreState::DestroyRenderState() {
  bool MelonDsDs::CoreState::LoadGame(unsigned type, std::span<const retro_game_info> game) noexcept try {
      ZoneScopedN(TracyFunction);
  
@@ -883,20 +892,23 @@ index 0000000..cfaa783
 +
 +#endif //MELONDS_DS_LIBRETRO_VIEWS_H
 diff --git a/src/libretro/net/mp.cpp b/src/libretro/net/mp.cpp
-index caa185d..a2d2dee 100644
+index caa185d..d2e6674 100644
 --- a/src/libretro/net/mp.cpp
 +++ b/src/libretro/net/mp.cpp
-@@ -15,7 +15,8 @@
+@@ -15,7 +15,11 @@
  */
  #include "mp.hpp"
  #include "environment.hpp"
 -#include <ctime>
 +#include <algorithm>
++#include <cstdio>
++#include <map>
++#include <string>
 +#include <chrono>
  #include <libretro.h>
  #include <retro_assert.h>
  #include <retro_endianness.h>
-@@ -24,7 +25,19 @@ using namespace MelonDsDs;
+@@ -24,7 +28,39 @@ using namespace MelonDsDs;
  // How many successive timeouts before
  // the player gets notified they are not supposed to use a VPN.
  constexpr int SUCCESSIVE_TIMEOUTS_WARNING = 6;
@@ -914,10 +926,30 @@ index caa185d..a2d2dee 100644
 +constexpr size_t HOSTS_MAX = 16;
 +constexpr size_t RX_HEADER_LENGTH = 12;
 +constexpr size_t FRAME_HEAD_LENGTH = RX_HEADER_LENGTH + 24;
++
++
++namespace {
++// Spike capture: what a real Download Play client and its host exchange.
++void CaptureFrame(const char* dir, const Packet& p) noexcept {
++    const uint8_t* d = (const uint8_t*)p.Data();
++    if (p.Length() < 12 + 24) return;
++    const uint16_t fc = d[12] | d[13] << 8;
++    if (fc == 0x0080) return; // beacons
++    static std::map<std::string, int> seen;
++    // Per direction, frame control and (for MP frames) the command or reply type byte.
++    uint8_t kind = 0;
++    if (p.Length() > 12 + 24 + 6) kind = (p.PacketType() == Packet::Type::Cmd) ? d[12 + 24 + 6] : d[12 + 24 + 2];
++    const std::string key = fmt::format("{}{:04x}{:02x}{}", dir, fc, kind, (int)p.PacketType());
++    if (seen[key]++ >= 4) return;
++    std::string hex;
++    for (size_t i = 0; i < std::min<size_t>(p.Length(), 420); i++) hex += fmt::format("{:02x}", d[i]);
++    retro::info("WMBCAP {} type {} aid {} ts {} len {} {}", dir, (int)p.PacketType(), p.Aid(), p.Timestamp(), p.Length(), hex);
++}
++}
  
  uint64_t swapToNetwork(uint64_t n) {
      return swap_if_little64(n);
-@@ -95,6 +108,11 @@ bool MpState::IsReady() const noexcept {
+@@ -95,6 +131,11 @@ bool MpState::IsReady() const noexcept {
  void MpState::SetSendFn(retro_netpacket_send_t sendFn) noexcept {
      if (sendFn != nullptr) {
          retro::set_warn_message("LAN Multiplayer will NOT work using VPNs or tunnels such as Hamachi!");
@@ -929,11 +961,12 @@ index caa185d..a2d2dee 100644
      }
      _sendFn = sendFn;
  }
-@@ -106,9 +124,48 @@ void MpState::SetPollFn(retro_netpacket_poll_receive_t pollFn) noexcept {
+@@ -106,9 +147,55 @@ void MpState::SetPollFn(retro_netpacket_poll_receive_t pollFn) noexcept {
  void MpState::PacketReceived(const void *buf, size_t len, uint16_t client_id) noexcept {
      retro_assert(IsReady());
      Packet p = Packet::parsePk(buf, len);
 +    p.SetSenderId(client_id);
++    CaptureFrame("in", p);
 +    const auto now = std::chrono::steady_clock::now();
 +    // Only the consoles of this host's group reply to it; another group in the room must not be waited for.
 +    if(p.PacketType() == Packet::Type::Reply) {
@@ -961,6 +994,11 @@ index caa185d..a2d2dee 100644
 +        }
 +    }
 +    if(p.PacketType() == Packet::Type::Other && _wmb.FrameReceived((const uint8_t*)p.Data(), p.Length())) {
++        if (_wmbClient.GetState() == WmbClient::State::Idle) {
++            const WmbOffer& first = _wmb.Offers().begin()->second;
++            _wmbClient.Start(first, first.cmdDataSize);
++            retro::info("WMB client: joining \"{}\" (channel {}, {} bytes per command)", first.gameName, first.channel, first.cmdDataSize);
++        }
 +        for (const auto& [mac, offer] : _wmb.Offers()) {
 +            retro::info("WMB offer from {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}: game {:08x} stream {:04x} host \"{}\" "
 +                "players {} name \"{}\" description \"{}\"", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
@@ -972,13 +1010,14 @@ index caa185d..a2d2dee 100644
 +            }
 +        }
 +    }
++    WmbStep(p);
 +    // Nothing takes packets while the game's wireless is off in a room: keep the newest only.
 +    if(receivedPackets.size() >= RECEIVED_PACKETS_MAX) {
 +        receivedPackets.pop();
      }
      receivedPackets.push(std::move(p));
  }
-@@ -132,9 +189,15 @@ std::optional<Packet> MpState::NextPacket() noexcept {
+@@ -132,9 +219,15 @@ std::optional<Packet> MpState::NextPacket() noexcept {
  std::optional<Packet> MpState::NextPacketBlock() noexcept {
      retro_assert(IsReady());
      if (receivedPackets.empty()) {
@@ -995,7 +1034,7 @@ index caa185d..a2d2dee 100644
              if(!receivedPackets.empty()) {
                  return NextPacket();
              }
-@@ -151,14 +214,80 @@ std::optional<Packet> MpState::NextPacketBlock() noexcept {
+@@ -151,16 +244,119 @@ std::optional<Packet> MpState::NextPacketBlock() noexcept {
      return std::nullopt;
  }
  
@@ -1062,6 +1101,7 @@ index caa185d..a2d2dee 100644
 +
 +void MpState::SendPacket(const Packet &p, const GroupId& group) noexcept {
      retro_assert(IsReady());
++    CaptureFrame("out", p);
      uint16_t dest = RETRO_NETPACKET_BROADCAST;
      if(p.PacketType() == Packet::Type::Cmd) {
          _hostId = std::nullopt;
@@ -1079,8 +1119,46 @@ index caa185d..a2d2dee 100644
      }
      _sendFn(RETRO_NETPACKET_UNSEQUENCED | RETRO_NETPACKET_UNRELIABLE | RETRO_NETPACKET_FLUSH_HINT, p.ToBuf().data(), p.Length() + HeaderSize, dest);
  }
+ 
+ 
++
++void MpState::WmbStep(const Packet& p) noexcept {
++    const auto before = _wmbClient.GetState();
++    std::vector<WmbOutgoing> out;
++    _wmbClient.FrameReceived((const uint8_t*)p.Data(), p.Length(), p.Timestamp(), p.PacketType() == Packet::Type::Cmd, out);
++    for (const WmbOutgoing& o : out) {
++        Packet pk(o.frame.data(), o.frame.size(), o.timestamp, o.aid, o.reply ? Packet::Type::Reply : Packet::Type::Other);
++        const auto buf = pk.ToBuf();
++        _sendFn(RETRO_NETPACKET_UNSEQUENCED | RETRO_NETPACKET_UNRELIABLE | RETRO_NETPACKET_FLUSH_HINT, buf.data(), buf.size(),
++                o.reply ? p.SenderId() : RETRO_NETPACKET_BROADCAST);
++    }
++    const auto now = _wmbClient.GetState();
++    if (now == before) return;
++    retro::info("WMB client: state {} -> {}", (int)before, (int)now);
++    if (now != WmbClient::State::Done) return;
++    const auto dir = retro::get_save_directory();
++    if (!dir) return;
++    const char* names[] = {"header", "arm9", "arm7"};
++    for (int r = 0; r < 3; r++) {
++        const auto data = _wmbClient.Region(r);
++        const std::string path = fmt::format("{}/wmb-{}.bin", *dir, names[r]);
++        if (FILE* f = fopen(path.c_str(), "wb")) { fwrite(data.data(), 1, data.size(), f); fclose(f); }
++        retro::info("WMB client: {} {} bytes -> {}", names[r], data.size(), path);
++    }
++    const std::string rsa = fmt::format("{}/wmb-rsa.bin", *dir);
++    if (FILE* f = fopen(rsa.c_str(), "wb")) { fwrite(_wmbClient.Rsa().data(), 1, _wmbClient.Rsa().size(), f); fclose(f); }
++}
++
++void MpState::WmbService() noexcept {
++    const auto state = _wmbClient.GetState();
++    if (state != WmbClient::State::Auth && state != WmbClient::State::Assoc && state != WmbClient::State::Download) return;
++    const auto until = std::chrono::steady_clock::now() + std::chrono::milliseconds(12);
++    while (std::chrono::steady_clock::now() < until && IsReady()) {
++        _pollFn();
++    }
++}
 diff --git a/src/libretro/net/mp.hpp b/src/libretro/net/mp.hpp
-index f6b5dfc..56f8eff 100644
+index f6b5dfc..9d4288c 100644
 --- a/src/libretro/net/mp.hpp
 +++ b/src/libretro/net/mp.hpp
 @@ -14,13 +14,22 @@
@@ -1120,7 +1198,7 @@ index f6b5dfc..56f8eff 100644
  
      std::vector<uint8_t> ToBuf() const;
  private:
-@@ -55,23 +71,51 @@ private:
+@@ -55,23 +71,56 @@ private:
      uint8_t _aid;
      Packet::Type _type;
      std::vector<uint8_t> _data;
@@ -1136,6 +1214,9 @@ index f6b5dfc..56f8eff 100644
      void SetPollFn(retro_netpacket_poll_receive_t pollFn) noexcept;
      bool IsReady() const noexcept;
 -    void SendPacket(const Packet &p) noexcept;
++    /// Once a frame: while the Download Play client is in a session, take the room's packets for a while so its replies
++    /// go out in time, whatever the emulated radio is doing.
++    void WmbService() noexcept;
 +    /// [group]: the group this console is in, whose host a reply goes to.
 +    void SendPacket(const Packet &p, const GroupId& group) noexcept;
      std::optional<Packet> NextPacket() noexcept;
@@ -1152,6 +1233,8 @@ index f6b5dfc..56f8eff 100644
 +    void HostWaitEnded() noexcept;
  private:
 +    WmbScanner _wmb;
++    WmbClient _wmbClient;
++    void WmbStep(const Packet& p) noexcept;
      bool _warnedHighLatency = false;
      int _timeoutCount = 0;
      retro_netpacket_send_t _sendFn;
@@ -1175,13 +1258,14 @@ index f6b5dfc..56f8eff 100644
  }
 diff --git a/src/libretro/net/wmb.cpp b/src/libretro/net/wmb.cpp
 new file mode 100644
-index 0000000..094c60d
+index 0000000..e6933e5
 --- /dev/null
 +++ b/src/libretro/net/wmb.cpp
-@@ -0,0 +1,87 @@
+@@ -0,0 +1,308 @@
 +#include "wmb.hpp"
 +#include <algorithm>
 +#include <cstring>
++#include "../environment.hpp"
 +
 +using namespace MelonDsDs;
 +
@@ -1256,6 +1340,8 @@ index 0000000..094c60d
 +        offer.host = host;
 +        offer.gameId = gameId;
 +        offer.streamCode = stream;
++        offer.channel = frame[9];
++        offer.cmdDataSize = Le16(dd + 0x14);
 +        std::copy_n(d, offer.icon.size(), offer.icon.begin());
 +        offer.hostName = Ucs2(d + 0x222, std::min<size_t>(d[0x221], 10));
 +        offer.maxPlayers = d[0x236];
@@ -1266,18 +1352,237 @@ index 0000000..094c60d
 +    }
 +    return false;
 +}
++
++namespace {
++const uint8_t MP_CMD_MAC[6] = {0x03, 0x09, 0xBF, 0x00, 0x00, 0x00};
++const uint8_t MP_REPLY_MAC[6] = {0x03, 0x09, 0xBF, 0x00, 0x00, 0x10};
++constexpr uint32_t HEADER_SIZE = 0x160;
++// A host takes replies stamped no earlier than the end of its command's transmission (melonDS MP_RecvReplies): at
++// 2 Mbit/s 4 us a byte, plus preamble and the gap before replies.
++uint64_t ReplyTime(uint64_t cmdTimestamp, size_t cmdLen) noexcept { return cmdTimestamp + cmdLen * 4 + 96 + 112; }
++constexpr int BEACONS_PER_ASK = 5;
++// Seen from a real Download Play client: the flags byte of each reply.
++constexpr uint8_t REPLY_FLAGS = 0x81;
++const char16_t USERNAME[] = u"NX Redux";
++
++void Put16(std::vector<uint8_t>& v, uint16_t x) { v.push_back(x & 0xFF); v.push_back(x >> 8); }
++void PutMac(std::vector<uint8_t>& v, const uint8_t* m) { v.insert(v.end(), m, m + 6); }
++}
++
++void WmbClient::Start(const WmbOffer& offer, uint16_t cmdDataSize) noexcept {
++    *this = WmbClient {};
++    _offer = offer;
++    _payload = cmdDataSize > 6 ? cmdDataSize - 6 : 0;
++    _state = State::Auth;
++    _beaconsSinceAsk = BEACONS_PER_ASK; // ask at the next beacon
++}
++
++std::vector<uint8_t> WmbClient::Management(uint16_t fc, const std::vector<uint8_t>& body, uint8_t channel) noexcept {
++    const uint16_t length = 24 + body.size() + 4;
++    std::vector<uint8_t> f(8, 0);
++    f.push_back(0x14);
++    f.push_back(channel);
++    Put16(f, length);
++    Put16(f, fc);
++    Put16(f, 0);
++    PutMac(f, _offer.host.data());
++    PutMac(f, _mac.data());
++    PutMac(f, _offer.host.data());
++    Put16(f, _seq++ << 4);
++    f.insert(f.end(), body.begin(), body.end());
++    f.insert(f.end(), 4, 0); // FCS: melonDS doesn't check it
++    return f;
++}
++
++std::vector<uint8_t> WmbClient::Reply(const uint8_t* cmdFrame, const std::array<uint8_t, 8>& body) noexcept {
++    std::vector<uint8_t> f(8, 0);
++    f.push_back(0x14);
++    f.push_back(cmdFrame[9]);
++    Put16(f, 24 + 10 + 4);
++    Put16(f, 0x0118);
++    Put16(f, 0);
++    PutMac(f, _offer.host.data());
++    PutMac(f, _mac.data());
++    PutMac(f, MP_REPLY_MAC);
++    Put16(f, _seq++ << 4);
++    f.push_back(4); // halfwords of reply data
++    f.push_back(REPLY_FLAGS);
++    f.insert(f.end(), body.begin(), body.end());
++    f.insert(f.end(), 4, 0);
++    return f;
++}
++
++uint32_t WmbClient::RegionSize(int region) const noexcept {
++    if (region == 0) return HEADER_SIZE;
++    return Le32(_rsa.data() + (region == 1 ? 0x24 : 0x34));
++}
++
++uint32_t WmbClient::RegionPackets(int region) const noexcept {
++    return _payload ? (RegionSize(region) + _payload - 1) / _payload : 0;
++}
++
++uint32_t WmbClient::TotalPackets() const noexcept {
++    return RegionPackets(0) + RegionPackets(1) + RegionPackets(2);
++}
++
++std::vector<uint8_t> WmbClient::Region(int region) const noexcept {
++    uint32_t first = 0;
++    for (int r = 0; r < region; r++) first += RegionPackets(r);
++    std::vector<uint8_t> out;
++    for (uint32_t n = first; n < first + RegionPackets(region); n++) {
++        const auto it = _packets.find(n);
++        if (it == _packets.end()) return {};
++        out.insert(out.end(), it->second.begin(), it->second.end());
++    }
++    out.resize(RegionSize(region));
++    return out;
++}
++
++void WmbClient::FrameReceived(const uint8_t* f, size_t len, uint64_t timestamp, bool cmd, std::vector<WmbOutgoing>& out) noexcept {
++    if (_state == State::Idle || _state == State::Done || _state == State::Failed || len < RX_HEADER + MAC_HEADER) return;
++    const uint8_t* mac = f + RX_HEADER;
++    const uint16_t fc = Le16(mac);
++    const uint8_t* body = mac + MAC_HEADER;
++    const size_t bodyLen = len - RX_HEADER - MAC_HEADER;
++    const bool fromHost = std::equal(_offer.host.begin(), _offer.host.end(), mac + 10);
++    const bool toUs = std::equal(_mac.begin(), _mac.end(), mac + 4);
++    if (!fromHost) return;
++
++    if (fc == 0x0080 && (_state == State::Auth || _state == State::Assoc)) {
++        // A host only listens for joiners right after its beacons: ask again then, until it answers.
++        if (++_beaconsSinceAsk < BEACONS_PER_ASK) return;
++        _beaconsSinceAsk = 0;
++        if (_state == State::Auth) {
++            out.push_back({Management(0x00B0, {0, 0, 1, 0, 0, 0}, _offer.channel), timestamp});
++        } else {
++            std::vector<uint8_t> b;
++            Put16(b, 0x0021); // capability
++            Put16(b, 0x0001); // listen interval
++            b.push_back(0x00);
++            b.push_back(0x20); // SSID: game id and stream code, zero-padded
++            for (int i = 0; i < 4; i++) b.push_back(_offer.gameId >> (8 * i));
++            Put16(b, _offer.streamCode);
++            b.insert(b.end(), 0x1A, 0);
++            b.insert(b.end(), {0x01, 0x02, 0x82, 0x84}); // rates
++            out.push_back({Management(0x0000, b, _offer.channel), timestamp});
++        }
++        return;
++    }
++    if (fc == 0x00B0 && toUs && _state == State::Auth && bodyLen >= 6 && Le16(body + 2) == 2 && Le16(body + 4) == 0) {
++        _state = State::Assoc;
++        _beaconsSinceAsk = BEACONS_PER_ASK;
++        return;
++    }
++    if (fc == 0x0010 && toUs && _state == State::Assoc && bodyLen >= 6 && Le16(body + 2) == 0) {
++        _aid = Le16(body + 4) & 0x0F;
++        _state = State::Download;
++        return;
++    }
++    if (_state != State::Download || !cmd || fc != 0x0228 || !std::equal(MP_CMD_MAC, MP_CMD_MAC + 6, mac + 4) || bodyLen < 7) return;
++
++    const uint8_t command = body[6];
++    {
++        static uint8_t lastCommand = 0xFF;
++        if (command != lastCommand) {
++            retro::info("WMB client: command {:02x} (size byte {}, flags {:02x}, frame {} bytes)", command, body[4], body[5], len);
++            lastCommand = command;
++        }
++    }
++    std::array<uint8_t, 8> reply {};
++    switch (command) {
++    case 0x01: { // NameRequest: the username in 6-byte snippets
++        reply[0] = 0x07;
++        reply[1] = _nameSnippet;
++        auto put = [&](int at, uint16_t x) { reply[at] = x & 0xFF; reply[at + 1] = x >> 8; };
++        const size_t nameLen = sizeof(USERNAME) / sizeof(USERNAME[0]) - 1;
++        auto ch = [&](size_t i) -> uint16_t { return i < nameLen ? USERNAME[i] : 0; };
++        if (_nameSnippet == 0) {
++            put(2, _offer.gameId & 0xFFFF);
++            put(4, _offer.gameId >> 16);
++            reply[6] = 0x0F; // favourite colour
++            reply[7] = nameLen;
++        } else if (_nameSnippet < 4) {
++            for (int i = 0; i < 3; i++) put(2 + i * 2, ch((_nameSnippet - 1) * 3 + i));
++        } else {
++            put(2, ch(9));
++            put(4, 0x0002);
++        }
++        _nameSnippet = (_nameSnippet + 1) % 5;
++        break;
++    }
++    case 0x03: // RSA frame: the binaries' addresses and sizes
++        if (bodyLen >= 7 + _rsa.size()) {
++            std::copy_n(body + 7, _rsa.size(), _rsa.begin());
++            if (!_haveRsa)
++                retro::info("WMB client: RSA arm9 {:08x} size {} arm7 {:08x} size {} payload {} total packets {}",
++                    Le32(_rsa.data() + 0x20), RegionSize(1), Le32(_rsa.data() + 0x30), RegionSize(2), _payload, TotalPackets());
++            _haveRsa = true;
++        }
++        reply[0] = 0x08;
++        break;
++    case 0x04: { // Data
++        if (!_haveRsa || bodyLen < 11) break;
++        const uint16_t number = Le16(body + 9);
++        const size_t dataLen = std::min<size_t>(std::max(0, body[4] * 2 - 6), bodyLen - 11);
++        if (number < TotalPackets() && !_packets.count(number)) {
++            _packets[number].assign(body + 11, body + 11 + std::min<size_t>(dataLen, _payload));
++            if (_packets.size() <= 3 || _packets.size() % 100 == 0)
++                retro::info("WMB client: packet {} ({} bytes, size byte {}) -> {} of {}", number, dataLen, body[4], _packets.size(), TotalPackets());
++        } else if (number >= TotalPackets()) {
++            static int over = 0;
++            if (over++ < 5) retro::info("WMB client: packet {} beyond total {}", number, TotalPackets());
++        }
++        const uint32_t total = TotalPackets();
++        if (_packets.size() >= total) {
++            reply[0] = 0x0A;
++        } else {
++            uint16_t next = 0;
++            while (_packets.count(next)) next++;
++            reply[0] = 0x09;
++            reply[1] = next & 0xFF;
++            reply[2] = next >> 8;
++            reply[3] = _packets.size() & 0xFF;
++            reply[4] = _packets.size() >> 8;
++        }
++        break;
++    }
++    case 0x05: // Final
++        reply[0] = 0x0B;
++        out.push_back({Reply(f, reply), ReplyTime(timestamp, len), _aid, true});
++        out.push_back({Management(0x00C0, {3, 0}, f[9]), ReplyTime(timestamp, len)});
++        _state = _packets.size() >= TotalPackets() ? State::Done : State::Failed;
++        return;
++    default: // nothing asked (00 after each phase): where this client stands, as a real client answers
++        if (_haveRsa && !_packets.empty() && _packets.size() >= TotalPackets()) {
++            reply[0] = 0x0A;
++        } else if (_haveRsa && !_packets.empty()) {
++            uint16_t next = 0;
++            while (_packets.count(next)) next++;
++            reply[0] = 0x09;
++            reply[1] = next & 0xFF;
++            reply[2] = next >> 8;
++            reply[3] = _packets.size() & 0xFF;
++            reply[4] = _packets.size() >> 8;
++        } else if (_haveRsa) {
++            reply[0] = 0x08;
++        }
++        break;
++    }
++    out.push_back({Reply(f, reply), ReplyTime(timestamp, len), _aid, true});
++}
 diff --git a/src/libretro/net/wmb.hpp b/src/libretro/net/wmb.hpp
 new file mode 100644
-index 0000000..fa447f3
+index 0000000..475c623
 --- /dev/null
 +++ b/src/libretro/net/wmb.hpp
-@@ -0,0 +1,37 @@
+@@ -0,0 +1,80 @@
 +#pragma once
 +#include <array>
 +#include <cstddef>
 +#include <cstdint>
 +#include <map>
 +#include <string>
++#include <vector>
 +
 +namespace MelonDsDs {
 +/// What a DS Download Play host offers, gathered from its beacons (GBATEK "DS Wifi Nintendo Beacons").
@@ -1289,6 +1594,8 @@ index 0000000..fa447f3
 +    std::string gameName;
 +    std::string description;
 +    uint8_t maxPlayers = 0;
++    uint8_t channel = 0;
++    uint16_t cmdDataSize = 0; // bytes per host command (Tag DDh [14h])
 +    std::array<uint8_t, 0x220> icon {}; // palette (0x20) then 4bpp bitmap (0x200), as a cartridge icon
 +};
 +
@@ -1307,6 +1614,46 @@ index 0000000..fa447f3
 +    };
 +    std::map<std::array<uint8_t, 6>, Gathering> _gathering;
 +    std::map<std::array<uint8_t, 6>, WmbOffer> _offers;
++};
++
++/// One frame the client sends: melonDS's 12-byte TX header, then the 802.11 frame.
++struct WmbOutgoing {
++    std::vector<uint8_t> frame;
++    uint64_t timestamp = 0;
++    uint8_t aid = 0;
++    bool reply = false; // an MP reply to the host's command, else a plain frame (auth, assoc, deauth)
++};
++
++/// The Download Play client side of GBATEK "DS Wifi Nintendo DS Download Play": joins one host's offer, answers its
++/// commands and collects the header, ARM9 and ARM7 binaries it sends.
++class WmbClient {
++public:
++    enum class State { Idle, Auth, Assoc, Download, Done, Failed };
++    void Start(const WmbOffer& offer, uint16_t cmdDataSize) noexcept;
++    /// Every received frame (melonDS RX header first); what to send in answer goes to [out].
++    void FrameReceived(const uint8_t* frame, size_t len, uint64_t timestamp, bool cmd, std::vector<WmbOutgoing>& out) noexcept;
++    State GetState() const noexcept { return _state; }
++    const std::array<uint8_t, 0xE4>& Rsa() const noexcept { return _rsa; }
++    /// Done only: the region (0 header, 1 ARM9, 2 ARM7) as the host sent it.
++    std::vector<uint8_t> Region(int region) const noexcept;
++    std::array<uint8_t, 6> Mac() const noexcept { return _mac; }
++private:
++    std::vector<uint8_t> Reply(const uint8_t* cmdFrame, const std::array<uint8_t, 8>& body) noexcept;
++    std::vector<uint8_t> Management(uint16_t fc, const std::vector<uint8_t>& body, uint8_t channel) noexcept;
++    uint32_t RegionSize(int region) const noexcept;
++    uint32_t RegionPackets(int region) const noexcept;
++    uint32_t TotalPackets() const noexcept;
++    State _state = State::Idle;
++    WmbOffer _offer;
++    std::array<uint8_t, 6> _mac {0x00, 0x09, 0xBF, 0x4E, 0x58, 0x52};
++    uint16_t _seq = 0;
++    uint8_t _aid = 0;
++    uint8_t _nameSnippet = 0;
++    uint32_t _payload = 0; // data bytes per packet
++    bool _haveRsa = false;
++    std::array<uint8_t, 0xE4> _rsa {};
++    std::map<uint16_t, std::vector<uint8_t>> _packets;
++    int _beaconsSinceAsk = 0;
 +};
 +}
 diff --git a/src/libretro/nx_nds_radio.h b/src/libretro/nx_nds_radio.h
