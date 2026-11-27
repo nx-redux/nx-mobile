@@ -104,6 +104,19 @@ class ButtonMapTest {
     }
 
     @Test
+    fun hotkeyKeysAreLocked() {
+        assertEquals(setOf(MapKey.L2, MapKey.R2, MapKey.L3, MapKey.R3), ButtonMap.locked("NDS"))
+        assertEquals(setOf(MapKey.L3, MapKey.R3), ButtonMap.locked("3DS"))
+        assertEquals(setOf(MapKey.L3, MapKey.R3), ButtonMap.locked("wii"))
+        assertEquals(emptySet(), ButtonMap.locked("PS"))
+        assertFalse(ButtonMap.binds("NDS", MapKey.R2))
+        // A stored line moving a locked key is ignored: L2 keeps swapping the DS screens.
+        val stored = ButtonMap.toConfig(ButtonMap.DEFAULT.bind(MapKey.A, MapKey.L2)).toMap()
+        assertEquals(MapKey.L2, ButtonMap.fromConfig(stored, "NDS").keyFor(MapKey.L2))
+        assertEquals(MapKey.L2, ButtonMap.fromConfig(stored, "SFC").keyFor(MapKey.A))
+    }
+
+    @Test
     fun gameLinesWinElseConsoles() {
         val console = mapOf("nx_map_L1" to "R1", "nx_map_R1" to "L1")
         val game = mapOf("nx_map_A" to "B", "nx_map_B" to "A", "opt" to "x")

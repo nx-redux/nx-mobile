@@ -124,8 +124,10 @@ internal fun emulatorTouchRow(row: EmulatorRow): NxSettingRow = when (row) {
     is EmulatorRow.App -> settingsTouchRow(row.row, row.choices, SettingsSection.EMULATORS)
     EmulatorRow.ButtonMapping -> NxSettingRow(InGameMenuModel.BUTTON_MAPPING_LABEL, opens = true)
     is EmulatorRow.MapBind ->
-        if (row.waiting) NxSettingRow(row.label, info = InGameMenuModel.MAP_CAPTURE_LINE, value = SHORTCUT_PROMPT)
+        if (row.locked) NxSettingRow(row.label, value = row.key.label, enabled = false)
+        else if (row.waiting) NxSettingRow(row.label, info = InGameMenuModel.MAP_CAPTURE_LINE, value = SHORTCUT_PROMPT)
         else NxSettingRow(row.label, value = row.key.label)
+    is EmulatorRow.MapCombo -> NxSettingRow(row.label, value = row.keys, enabled = false)
     EmulatorRow.ResetButtonMap -> NxSettingRow(InGameMenuModel.RESET_BUTTON_MAP_LABEL)
 }
 
@@ -165,7 +167,7 @@ internal fun emulatorOptionsHints(row: EmulatorRow?, touch: NxSettingRow? = null
         is EmulatorRow.App -> if (touch != null && touch.choices.size >= 2) valueRow() else LIST_HINTS + x
         is EmulatorRow.Category, EmulatorRow.UseEmulatorSettings, EmulatorRow.ResetDefaults, EmulatorRow.ButtonMapping, EmulatorRow.ResetButtonMap -> LIST_HINTS + x
         // Waiting, the pad's B binds and the row's line says Back cancels, so no hints.
-        is EmulatorRow.MapBind -> if (row.waiting) emptyList() else listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Bind"))
+        is EmulatorRow.MapBind -> if (row.waiting) emptyList() else if (row.locked) listOf(Hint(NxButton.B, "Back")) else listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Bind"))
         else -> listOf(Hint(NxButton.B, "Back"))
     }
 }

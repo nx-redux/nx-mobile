@@ -22,6 +22,7 @@ import com.nxredux.mobile.options.GraphicsApiOptions
 import com.nxredux.mobile.options.OptionGroup
 import com.nxredux.mobile.options.Ps2Options
 import com.nxredux.mobile.runner.ButtonMap
+import com.nxredux.mobile.runner.ButtonMapRows
 import com.nxredux.mobile.runner.CoreDescriptor
 import com.nxredux.mobile.runner.CoreRegistry
 import com.nxredux.mobile.runner.MapKey
@@ -64,8 +65,13 @@ sealed interface EmulatorRow {
     data class App(val row: SettingsRow, val choices: SettingChoices?) : EmulatorRow
     /** The console's page, under Controls: opens its Button Mapping list. */
     data object ButtonMapping : EmulatorRow
-    /** A Button Mapping row: [job]'s button, named [label], sits on physical [key]; [waiting] for a press to bind. */
-    data class MapBind(val job: MapKey, val label: String, val key: MapKey, val waiting: Boolean = false) : EmulatorRow
+    /**
+     * A Button Mapping row: [job]'s button, named [label], sits on physical [key]; [waiting] for a press to bind.
+     * [locked]: the console keeps the key ([ButtonMap.locked]): dimmed, A does nothing.
+     */
+    data class MapBind(val job: MapKey, val label: String, val key: MapKey, val waiting: Boolean = false, val locked: Boolean = false) : EmulatorRow
+    /** A built-in combo on the Button Mapping list ([ButtonMapRows.combos]): what it does and its [keys], dimmed. */
+    data class MapCombo(val label: String, val keys: String) : EmulatorRow
     /** The Button Mapping list's last row: every button back on its own key. */
     data object ResetButtonMap : EmulatorRow
 }
@@ -143,9 +149,14 @@ object EmulatorRows {
         }
     }
 
-    /** [page]'s Button Mapping list: a row per button showing the key that does its job, [waiting]'s waiting; then Reset to default. */
+    /**
+     * [page]'s Button Mapping list: a row per button showing the key that does its job, [waiting]'s waiting; the console's
+     * built-in combos; then Reset to default.
+     */
     fun buttonMapping(page: EmulatorPage, waiting: MapKey?): List<EmulatorRow> =
-        page.mapRows.map { EmulatorRow.MapBind(it.job, it.label, page.buttonMap.keyFor(it.job), it.job == waiting) } + EmulatorRow.ResetButtonMap
+        page.mapRows.map { EmulatorRow.MapBind(it.job, it.label, page.buttonMap.keyFor(it.job), it.job == waiting, it.locked) } +
+            ButtonMapRows.combos(page.tag).map { EmulatorRow.MapCombo(it.label, it.keys(page.buttonMap)) } +
+            EmulatorRow.ResetButtonMap
 
     fun firstSelectable(rows: List<EmulatorRow>): Int = rows.indexOfFirst { it.selectable }.coerceAtLeast(0)
 
@@ -172,6 +183,7 @@ object EmulatorRows {
                 is EmulatorRow.App -> r is EmulatorRow.App && r.row.kind == previous.row.kind
                 EmulatorRow.ButtonMapping -> r == EmulatorRow.ButtonMapping
                 is EmulatorRow.MapBind -> r is EmulatorRow.MapBind && r.job == previous.job
+                is EmulatorRow.MapCombo -> r is EmulatorRow.MapCombo && r.label == previous.label && r.keys == previous.keys
                 EmulatorRow.ResetButtonMap -> r == EmulatorRow.ResetButtonMap
                 else -> false
             }
@@ -482,7 +494,7 @@ internal class EmulatorSettingsController(
                     screen.value = s.copy(rows = rows, buttonMapping = true)
                     selection.value = ListSelection(0, rows.size)
                 }
-                is EmulatorRow.MapBind -> { mapping = row.job; refreshMapping() }
+                is EmulatorRow.MapBind -> if (!row.locked) { mapping = row.job; refreshMapping() }
                 EmulatorRow.ResetButtonMap -> writeMap(s) { ButtonMap.DEFAULT }
                 else -> Unit
             }
@@ -574,7 +586,7 @@ internal class EmulatorSettingsController(
      * A raw key from the platform while a Button Mapping row waits, and the release of any key pressed since (system keys
      * never): true when the wait took it. A pad key ([MapKey]) binds the waiting row, swapping with the key that had the
      * job ([ButtonMap.bind]); Back cancels, since B is a key to bind here; any other key (START, SELECT, MENU, the d-pad,
-     * and L2 / R2 where they are analog triggers: [ButtonMap.binds]) is refused with a message.
+     * and the keys the console keeps: [ButtonMap.binds]) is refused with a message.
      */
     fun captureKey(keyCode: Int, down: Boolean): Boolean {
         val s = screen.value as? Screen.EmulatorOptions

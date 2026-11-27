@@ -3070,6 +3070,26 @@ class InGameMenuModelTest {
         }
     }
 
+    @Test fun dsHotkeysAndCombosShowDimmed() {
+        val m = buttonMapping("NDS")
+        val swap = m.row("Swap screens")
+        assertEquals("L2", swap.valueLabel)
+        assertFalse(swap.enabled)
+        assertTrue(m.row("A").enabled)
+        m.selectRow("Swap screens")
+        assertNull(m.press(NxButton.A))
+        assertEquals("L2", m.row("Swap screens").valueLabel)   // no wait
+        assertEquals(listOf(Hint(NxButton.B, "Back")), hintsFor(m.state.page, m.row("Swap screens")))
+        val next = m.state.page.rows.filterIsInstance<MenuRow.Option>().single { it.label == "Next layout" }
+        assertEquals("SELECT + Right", next.valueLabel)
+        assertFalse(next.enabled)
+        assertEquals("Reset to default", m.state.page.rows.last().label)
+        // L2 can't be picked for another row either.
+        m.selectRow("A"); m.press(NxButton.A)
+        assertNull(m.captureKey(KeyCodes.BUTTON_L2, down = true))
+        assertEquals("Pick A, B, X, Y, L1 or R1", m.state.page.footer)
+    }
+
     @Test fun gameCubeDiscUnderWiiShowsGameCubeRows() {
         val m = buttonMapping("WII", map = ButtonMap.DEFAULT.bind(MapKey.A, MapKey.L2), gameCube = true)
         val labels = m.state.page.rows.map { it.label }

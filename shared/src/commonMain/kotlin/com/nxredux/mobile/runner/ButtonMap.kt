@@ -38,8 +38,11 @@ class ButtonMap(private val jobOf: Map<MapKey, MapKey>) {
     fun keyCodeFor(physicalKeyCode: Int): Int =
         MapKey.ofKeyCode(physicalKeyCode)?.let { jobFor(it).keyCode } ?: physicalKeyCode
 
-    /** This map with L2 and R2 on their own keys ([analogTriggers]); the keys that fed or took their jobs swap among the rest. */
-    fun keepingTriggers(): ButtonMap = bind(MapKey.L2, MapKey.L2).bind(MapKey.R2, MapKey.R2)
+    /** This map with each of [keys] on its own job ([locked]); the keys that fed or took their jobs swap among the rest. */
+    fun keeping(keys: Set<MapKey>): ButtonMap = keys.fold(this) { m, k -> m.bind(k, k) }
+
+    /** This map with L2 and R2 on their own keys ([analogTriggers]). */
+    fun keepingTriggers(): ButtonMap = keeping(TRIGGERS)
 
     val isDefault: Boolean get() = MapKey.entries.all { jobFor(it) == it }
 
@@ -63,10 +66,9 @@ class ButtonMap(private val jobOf: Map<MapKey, MapKey>) {
         /**
          * Reads the `nx_map_<JOB>=<PHYSICAL>` lines of a cfg over the identity; anything that isn't a permutation of
          * [MapKey] is the default. Without any such line, a Nintendo Controller Layout on a console that took the pad's
-         * letters carries over as the A/B and X/Y swap. L2 and R2 stay put where they are [analogTriggers].
+         * letters carries over as the A/B and X/Y swap. The [locked] keys stay on their own jobs.
          */
-        fun fromConfig(values: Map<String, String>, tag: String): ButtonMap =
-            read(values, tag).let { if (analogTriggers(tag)) it.keepingTriggers() else it }
+        fun fromConfig(values: Map<String, String>, tag: String): ButtonMap = read(values, tag).keeping(locked(tag))
 
         private fun read(values: Map<String, String>, tag: String): ButtonMap {
             val lines = values.filterKeys { it.startsWith(PREFIX) }
@@ -94,9 +96,17 @@ class ButtonMap(private val jobOf: Map<MapKey, MapKey>) {
          */
         fun analogTriggers(tag: String): Boolean = DcInput.appliesTo(tag) || tag.trim().uppercase() == "GC"
 
-        /** Whether [physical] may take a job on [tag]'s Button Mapping page ([analogTriggers]). */
-        fun binds(tag: String, physical: MapKey): Boolean =
-            !(analogTriggers(tag) && (physical == MapKey.L2 || physical == MapKey.R2))
+        private val TRIGGERS = setOf(MapKey.L2, MapKey.R2)
+
+        /**
+         * The keys [tag]'s console keeps for itself: its single-key hotkeys ([ButtonMapRows.hotkeys]) and its [analogTriggers].
+         * Their rows show what they do but take no key, and no other row takes them.
+         */
+        fun locked(tag: String): Set<MapKey> =
+            ButtonMapRows.hotkeys(tag).keys + if (analogTriggers(tag)) TRIGGERS else emptySet()
+
+        /** Whether [physical] may take a job on [tag]'s Button Mapping page ([locked]). */
+        fun binds(tag: String, physical: MapKey): Boolean = physical !in locked(tag)
 
         /**
          * The mapping a game plays with: the game file's ([gameValues]) when it has `nx_map_*` lines or a retired layout

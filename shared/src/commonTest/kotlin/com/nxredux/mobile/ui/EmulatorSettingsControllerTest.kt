@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.ui.nx.Hint
 import com.nxredux.mobile.library.FakeRomsSource
 import com.nxredux.mobile.library.GameEntry
 import com.nxredux.mobile.library.SystemFolder
@@ -806,7 +807,13 @@ class EmulatorSettingsControllerTest {
         val configs = MemoryConfigs()
         val state = TestState(configs, src = padSource)
         openMapping(state, "flycast")
-        assertTrue(options(state).rows.filterIsInstance<EmulatorRow.MapBind>().none { it.job == MapKey.L2 || it.job == MapKey.R2 })
+        val triggers = options(state).rows.filterIsInstance<EmulatorRow.MapBind>().filter { it.job == MapKey.L2 || it.job == MapKey.R2 }
+        assertTrue(triggers.size == 2 && triggers.all { it.locked && !emulatorTouchRow(it).enabled }, triggers.toString())
+        // A locked row takes no wait.
+        select(state) { (it as? EmulatorRow.MapBind)?.job == MapKey.L2 }
+        state.onButton(NxButton.A)
+        assertFalse(options(state).rows.filterIsInstance<EmulatorRow.MapBind>().any { it.waiting })
+        assertEquals(listOf(Hint(NxButton.B, "Back")), emulatorOptionsHints(selected(state)))
         select(state) { (it as? EmulatorRow.MapBind)?.label == "A" }
         state.onButton(NxButton.A)
         assertTrue(state.captureKey(105, down = true))   // R2
@@ -814,6 +821,16 @@ class EmulatorSettingsControllerTest {
         assertFalse(bindRow(state, "A").waiting)
         advanceUntilIdle()
         assertTrue(configs.files.keys.none { it.startsWith("DC-") })
+    }
+
+    @Test fun listShowsTheBuiltInCombosDimmed() = runTest {
+        val state = TestState(MemoryConfigs(), src = padSource)
+        openMapping(state, "pcsx_rearmed")
+        val rows = options(state).rows
+        val combo = rows.filterIsInstance<EmulatorRow.MapCombo>().single()
+        assertEquals(EmulatorRow.MapCombo("Menu", "SELECT + START"), combo)
+        assertFalse(emulatorTouchRow(combo).enabled)
+        assertEquals(EmulatorRow.ResetButtonMap, rows.last())
     }
 
     @Test fun openingTheListDropsAStaleWait() = runTest {

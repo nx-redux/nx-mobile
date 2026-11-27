@@ -121,6 +121,8 @@ sealed interface MenuRow : NxDescribedRow {
         override val detail: String = "",
         /** The row opens a list page of its own to choose from (the shader picker), drawn and pressed as a picker row. */
         val opensList: Boolean = false,
+        /** False: shown dimmed and takes no change (a Button Mapping key the console keeps, a built-in combo). */
+        val enabled: Boolean = true,
     ) : MenuRow
 }
 
@@ -860,7 +862,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
                 state.page.kind == PageKind.Achievements -> null
                 // A bind row waits for a press ([captureKey]).
                 state.page.kind == PageKind.Shortcuts && row.choices.isEmpty() -> { bindAction(row.key)?.let(::startCapture); null }
-                state.page.kind == PageKind.ButtonMapping -> { mapJob(row.key)?.let(::startMapping); null }
+                state.page.kind == PageKind.ButtonMapping -> { if (row.enabled) mapJob(row.key)?.let(::startMapping); null }
                 // The root has no descriptions (Disc N/M): A shows it.
                 state.page.kind == PageKind.Root -> { if (row.fullInfo.isNotBlank()) push(message(row.label, row.fullInfo)); null }
                 row.visual && !inPanel -> { push(adjustPage(row.key)); null }
@@ -1983,7 +1985,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      * A raw key the host gave press to bind ([takesKey]): [MenuEffect.ShortcutsChanged] when it bound the waiting row. A
      * button or combo the console's hotkeys use (or the SELECT+START menu chord) is refused, saying which hotkey has it
      * (built-in hotkeys win); B or Back alone cancels. On the Button Mapping page a pad key binds the waiting row
-     * ([MenuEffect.SetButtonMap]); any other key (L2 / R2 too where they are analog triggers: [ButtonMap.binds]) is
+     * ([MenuEffect.SetButtonMap]); any other key (and one the console keeps: [ButtonMap.binds]) is
      * refused, and Back cancels (B is a key to bind there).
      */
     fun captureKey(keyCode: Int, down: Boolean): MenuEffect? {
@@ -2108,7 +2110,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         mapWiiPad = wiiPad
         mapNewControls = newControls
         mapGameCube = gameCube
-        buttonMap = if (ButtonMap.analogTriggers(mapTag())) map.keepingTriggers() else map
+        buttonMap = map.keeping(ButtonMap.locked(mapTag()))
         refreshButtonMappingPage()
     }
 
@@ -2150,16 +2152,22 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         state = state.copy(stack = state.stack.map { p -> if (p.kind == PageKind.ButtonMapping) rebuilt(p, buttonMappingPage()).copy(footer = SHORTCUTS_FOOTER) else p })
     }
 
-    /** One row per button the console has, showing the physical key that does its job; the row waiting for a key says so. */
+    /**
+     * One row per button the console has, showing the physical key that does its job (dimmed where the console keeps the
+     * key); the row waiting for a key says so. Then the console's built-in combos, dimmed, and Reset to default.
+     */
     private fun buttonMappingPage(): MenuPage {
         val rows = mapRows().map { r ->
             val key = MAP_KEY_PREFIX + r.job.name
             if (r.job == mapping) MenuRow.Option(r.label, key, SHORTCUT_PROMPT, MAP_CAPTURE_LINE)
-            else MenuRow.Option(r.label, key, buttonMap.keyFor(r.job).label)
+            else MenuRow.Option(r.label, key, buttonMap.keyFor(r.job).label, enabled = !r.locked)
+        }
+        val combos = ButtonMapRows.combos(mapTag()).mapIndexed { i, c ->
+            MenuRow.Option(c.label, MAP_COMBO_KEY_PREFIX + i, c.keys(buttonMap), enabled = false)
         }
         return MenuPage(
             PageKind.ButtonMapping, BUTTON_MAPPING_LABEL,
-            rows + MenuRow.Action(RESET_BUTTON_MAP_LABEL, MenuAction.RESET_BUTTON_MAP),
+            rows + combos + MenuRow.Action(RESET_BUTTON_MAP_LABEL, MenuAction.RESET_BUTTON_MAP),
             footer = SHORTCUTS_FOOTER,
         )
     }
@@ -2226,6 +2234,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         const val TOUCH_KEY_PREFIX = "nx:touch:"
         const val BUTTON_MAPPING_LABEL = "Button Mapping"
         const val MAP_KEY_PREFIX = "nx:map:"
+        /** A built-in combo's row on the Button Mapping page: shown, never bound. */
+        const val MAP_COMBO_KEY_PREFIX = "nx:combo:"
         const val RESET_BUTTON_MAP_LABEL = "Reset to default"
         /** The waiting Button Mapping row's line: B binds there, so Back cancels. */
         const val MAP_CAPTURE_LINE = "Press Back to cancel"
