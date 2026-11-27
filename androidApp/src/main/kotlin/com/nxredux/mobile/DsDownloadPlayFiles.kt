@@ -11,7 +11,7 @@ import java.io.File
  */
 internal object DsDownloadPlayFiles {
     private const val STAMP = ".stamp"
-    /** Where the DS menu row's art was copied before the row ran our client. */
+    /** An older folder of the row's art: removed on copy. */
     private const val OLD_DIR = "nds-menu"
 
     /** The folder when this install's copy is already there; null when it needs [copy]. */
