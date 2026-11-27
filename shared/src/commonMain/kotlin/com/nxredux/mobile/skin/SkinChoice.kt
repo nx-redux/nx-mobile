@@ -251,35 +251,6 @@ object SkinChoice {
     }
 
     /**
-     * The touch screen's frame cut to its 4:3 picture's height where its width holds the picture shorter than the glass
-     * (the Fold upright: no bars over and under the game), its top kept (its gap to the top screen's frame), its strip
-     * and the row under it up with its bottom. As it is where the picture fills the glass's height.
-     */
-    private fun SkinPlacement.touchToItsPictureHeight(): SkinPlacement {
-        val g = glass(GlassScreen.TOUCH) ?: return this
-        val cut = g.rect.height - g.rect.width * 3f / 4f
-        if (cut < 0.5f) return this
-        val gi = spec.pieces.indexOfFirst { it.glass?.screen == GlassScreen.TOUCH }
-        val frame = pieces.filter { it.piece == gi && !it.strip }
-        if (frame.isEmpty()) return this
-        val top = frame.minOf { it.dst.y }; val bottom = frame.maxOf { it.dst.y + it.dst.height }
-        fun centre(i: Int) = pieces[i].piece >= 0 && spec.pieces[pieces[i].piece].let { it.glass == null && it.anchor == PieceAnchor.CENTRE }
-        val moved = pieces.mapIndexed { i, p -> when {
-            p.piece == gi && p.strip -> p.copy(dst = p.dst.copy(y = p.dst.y - cut))
-            p.piece == gi && kotlin.math.abs(p.dst.y - top) < 0.5f -> p
-            p.piece == gi && kotlin.math.abs(p.dst.y + p.dst.height - bottom) < 0.5f -> p.copy(dst = p.dst.copy(y = p.dst.y - cut))
-            p.piece == gi -> p.copy(dst = p.dst.copy(height = p.dst.height - cut))
-            centre(i) && p.dst.y >= bottom - 0.5f -> p.copy(dst = p.dst.copy(y = p.dst.y - cut))
-            else -> p
-        } }
-        return copy(
-            pieces = moved,
-            glasses = glasses.map { if (it === g) it.copy(rect = it.rect.copy(height = it.rect.height - cut)) else it },
-            controls = controls.map { c -> if (c.spec.id.startsWith("TOUCH_") || (c.spec.anchor == PieceAnchor.CENTRE && c.y > bottom)) c.copy(y = c.y - cut) else c },
-        )
-    }
-
-    /**
      * The row under the touch screen's frame (the centred pieces and controls below it) up to [gap] under the frame, where
      * it is lower. With [shoulders] (the tablet upright's GamePad: room to spare), the frame first grows down to [gap] over
      * the shoulder buttons and widens to the GamePad at that height ([touchAcross]), so the GamePad has no black bars.
@@ -416,38 +387,6 @@ object SkinChoice {
     /** The shoulder buttons' control ids. */
     private val SHOULDER_IDS = setOf("L", "R", "L2", "R2")
 
-    /** Window px each side of the touch screen's glass past its 4:3 picture (its height the limit); 0 without one. */
-    private fun SkinPlacement.touchSpare(): Float =
-        glass(GlassScreen.TOUCH)?.rect?.let { (it.width - it.height * 4f / 3f) / 2f } ?: 0f
-
-    /**
-     * The touch screen's frame cut to its 4:3 picture (where its height holds the picture narrower than the glass), its
-     * strip's slots with it, centred where it was. As it is where the picture fills the glass's width.
-     */
-    private fun SkinPlacement.touchToItsPicture(): SkinPlacement {
-        val g = glass(GlassScreen.TOUCH) ?: return this
-        val cut = touchSpare()
-        if (cut < 0.5f) return this
-        val gi = spec.pieces.indexOfFirst { it.glass?.screen == GlassScreen.TOUCH }
-        val frame = pieces.filter { it.piece == gi && !it.strip }
-        if (frame.isEmpty()) return this
-        val left = frame.minOf { it.dst.x }; val right = frame.maxOf { it.dst.x + it.dst.width }
-        val cx = g.rect.x + g.rect.width / 2f
-        val ratio = (g.rect.width - 2f * cut) / g.rect.width
-        fun across(x: Float) = cx + (x - cx) * ratio
-        return copy(
-            pieces = pieces.map { p -> when {
-                p.piece != gi -> p
-                p.strip -> p.copy(dst = p.dst.copy(x = across(p.dst.x + p.dst.width / 2f) - p.dst.width / 2f))
-                kotlin.math.abs(p.dst.x - left) < 0.5f -> p.copy(dst = p.dst.copy(x = p.dst.x + cut))
-                kotlin.math.abs(p.dst.x + p.dst.width - right) < 0.5f -> p.copy(dst = p.dst.copy(x = p.dst.x - cut))
-                else -> p.copy(dst = p.dst.copy(x = p.dst.x + cut, width = p.dst.width - 2f * cut))
-            } },
-            glasses = glasses.map { if (it === g) it.copy(rect = it.rect.copy(x = it.rect.x + cut, width = it.rect.width - 2f * cut)) else it },
-            controls = controls.map { c -> if (c.spec.id.startsWith("TOUCH_")) c.copy(spec = c.spec.copy(hw = c.spec.hw * ratio), x = across(c.x)) else c },
-        )
-    }
-
     /** The Wii U's one screen frame's shape: the TV over the GamePad, both 16:9. */
     const val WIIU_STACK_ASPECT = 16f / 18f
 
@@ -559,22 +498,18 @@ object SkinChoice {
                 val placed = fold() ?: return@widest null
                 // upright: the GamePad in the 3DS twin's bottom frame (flat, as tall as the row under it leaves room for), its row
                 // right under it, as the 3DS's row follows its touch frame
-                if (v == SkinVariant.WIIU && !landscape && spec.boxes.isNotEmpty()) {
+                // (half-folded upright: the GameCube's frame, the GamePad between bars, as sideways)
+                if (v == SkinVariant.WIIU && !landscape && spec.boxes.isNotEmpty() && (hingeY == null || spec.id.endsWith(TABLET_BOARD))) {
                     val twin = pack.layouts.firstOrNull { it.id == spec.id.replace("_wiiugp", "_3ds") }.takeIf { !spec.id.endsWith(TABLET_BOARD) }
                     val theirs = twin?.let { t -> foldPieces(t, windowW, windowH, s, picture, topInset, hingeY, densityDpi, N3DS_TOP, bottomMargin = shellMargin(pack),
-                        bottomGlass = flatEnd, row = rowSpacing(densityDpi, s), centreControls = false)?.let { if (hingeY == null) it else it.touchToItsPicture().touchToItsPictureHeight() } }
+                        bottomGlass = flatEnd, row = rowSpacing(densityDpi, s), centreControls = false) }
                     val under = (theirs?.let { placed.touchAs(it) } ?: placed).rowUnderTouch(SkinBoxes.GAP_DP * dp, shoulders = spec.id.endsWith(TABLET_BOARD))
                     // flat: up under the TV's shorter frame, the 3DS's gap between the glasses (the menu's)
                     return@widest if (hingeY == null && theirs != null) under.touchUpToGap(theirs) else under
                 }
-                if (v !in N3DS_VARIANTS || spec.boxes.isEmpty()) return@widest placed
-                // the 3DS's touch screen, its 4:3 picture in a frame between the boxes, bars beside it: sideways the
-                // GameCube's frame; upright cut to the picture (a tablet's: the menu's frame)
-                if (landscape || spec.id.endsWith(TABLET_BOARD)) return@widest placed
-                // flat upright: the menu's frame width, as tall as the row under it leaves room for (near the menu's), the
-                // picture between bars, as the tablet's; half-folded cut to the picture
-                if (hingeY == null) return@widest placed
-                placed.touchToItsPicture().touchToItsPictureHeight()
+                // the 3DS's touch screen: its 4:3 picture between bars in the frame as placed (sideways and half-folded the
+                // GameCube's / N64's; flat upright the menu's width, as tall as the row under it leaves room for)
+                placed
             }
         }
         val foldBoard = { if (v == SkinVariant.DC) foldBoardOf(true) ?: foldBoardOf(false) else foldBoardOf(null) }

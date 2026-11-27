@@ -609,8 +609,9 @@ object SkinSolver {
             val grown = at[3] + (if (p === between) (tallen + raise + screenRise) / p.scale else 0f)
             // the GamePad's frame hugs its 16:9 picture (no bars round it): no taller than the picture at the frame's
             // width, its top kept; no wider than the picture at that height, centred where the frame would be (a
-            // tablet's, and a fold board's sideways: the frame the other consoles' panels have, the picture between bars)
-            val pad = p.glass?.takeIf { p === between && spec.variant == SkinVariant.WIIU && it.screen == GlassScreen.TOUCH && !spec.id.endsWith(TABLET_BOARD) && windowW <= windowH }
+            // tablet's, and a fold board's sideways or half-folded: the frame the other consoles' panels have, the picture
+            // between bars)
+            val pad = p.glass?.takeIf { p === between && spec.variant == SkinVariant.WIIU && it.screen == GlassScreen.TOUCH && !spec.id.endsWith(TABLET_BOARD) && windowW <= windowH && !(hingeY != null && hingeGap == null) }
             val gy = pad?.let { pg -> minOf(grown, (pg.w + wideGx) * 9f / 16f - pg.h) } ?: grown
             val gx = pad?.let { pg -> minOf(wideGx, (pg.h + gy) * 16f / 9f - pg.w) } ?: wideGx
             val px = wideX + (wideGx - gx) * p.scale / 2f

@@ -131,7 +131,7 @@ class SkinPackDrawingTest {
             if (!p.spec.tree.parts.any { it.isHinge }) continue
             fun c(id: String) = p.controls.first { it.spec.id == id }
             // (flat upright and the Ultra sideways: MIC over MENU, SELECT over START, the menu's columns)
-            val columns = name in FLAT_UPRIGHT_INNER || name.startsWith("ultra_land")
+            val columns = name in FLAT_UPRIGHT_INNER || name.startsWith("ultra_land") || name == "inner_half"
             if (columns) { kotlin.test.assertEquals(c("MIC").y, c("SELECT").y, 1f, "$name SELECT level with MIC"); kotlin.test.assertEquals(c("MENU").y, c("START").y, 1f, "$name START level with MENU") }
             else for (id in listOf("MENU", "SELECT", "START")) kotlin.test.assertEquals(c("MIC").y, c(id).y, 1f, "$name $id level with MIC")
             // the face buttons where the main menu has them (the baseline), on the boards the menu shares
@@ -172,7 +172,7 @@ class SkinPackDrawingTest {
             val menu = assertNotNull(placeFor(pack, null, d), "$name menu").controls.associateBy { it.spec.id }
             // (flat inner: the GameCube's, theFlatInnerScreensLowerPadsAreTheGamecubes; the Ultra sideways: the GameCube's,
             // its ring 12 px under the stick's, centred under it)
-            if (name.startsWith("ultra_land")) {
+            if (name.startsWith("ultra_land") || name == "inner_half") {
                 kotlin.test.assertEquals(12f * p.k, gap, 2f, "$name the d-pad's ring the GameCube's gap under the stick's")
                 kotlin.test.assertEquals(c("STICK").x, c("DPAD").x, 1f, "$name the d-pad under the stick")
             } else if (name !in FLAT_INNER) {
@@ -211,7 +211,8 @@ class SkinPackDrawingTest {
     // the New 3DS's C-stick the same under the face, from the row's other end.
     @Test
     fun the3dsOnTheFoldUprightHasItsDpadUpAndIn() {
-        for (v in listOf(SkinVariant.N3DS, SkinVariant.N3DS_REGULAR)) for (name in listOf("inner_half")) {
+        // (the Fold upright half-folded: the GameCube's, the d-pad under the stick)
+        for (v in listOf(SkinVariant.N3DS, SkinVariant.N3DS_REGULAR)) for (name in emptyList<String>()) {
             val d = GOLDEN_DEVICES.first { it.name == name }
             val p = assertNotNull(placeFor(pack, v, d), "$v $name")
             val dp = d.dpi / 160f
@@ -324,7 +325,7 @@ class SkinPackDrawingTest {
     }
 
     // The 3DS on the Ultra's inner screen upright (flat and half-folded), as on the Fold: MIC, MENU, SELECT, START in one
-    // row under the touch screen; half-folded the touch screen only its picture (4:3), the d-pad where the user's tweak put it.
+    // row under the touch screen; half-folded the touch screen the N64's panel, the d-pad where the user's tweak put it.
     @Test
     fun the3dsOnTheUltraUprightIsAsTheFolds() {
         for (v in listOf(SkinVariant.N3DS, SkinVariant.N3DS_REGULAR)) for (name in listOf("ultra", "ultra_half")) {
@@ -344,7 +345,9 @@ class SkinPackDrawingTest {
                 kotlin.test.assertEquals(c("STICK").x, c("DPAD").x, 1f, "$v $name d-pad under the stick")
                 continue
             }
-            kotlin.test.assertEquals(touch.width * 3f / 4f, touch.height, 2f, "$v $name touch screen only its picture (4:3)")
+            val n64 = assertNotNull(placeFor(pack, SkinVariant.N64, d), "$name n64").glasses.first { it.screen != GlassScreen.TOP && it.screen != GlassScreen.PICTURE }.rect
+            // (its height as its own row leaves: the Ultra half-folded upright has no row drawn as the N64's)
+            for ((a, b) in listOf(n64.x to touch.x, n64.y to touch.y, n64.width to touch.width)) kotlin.test.assertEquals(a, b, 1f, "$v $name touch screen $touch the N64's $n64")
             // the row as the art has it, SWAP still in it ([artRowEnds]): SWAP gone, the pads keep their places (user)
             val (rowLeft, _) = artRowEnds(v, d)
             val dpad = ring("DPAD")
@@ -453,6 +456,9 @@ class SkinPackDrawingTest {
 
 /** The golden devices that are a foldable's flat upright inner screen. */
 internal val FLAT_INNER = setOf("inner")
+
+/** The golden devices whose two-pad blocks are the GameCube's: the Fold's inner screen upright, flat and half-folded. */
+internal val GC_INNER = setOf("inner", "inner_half")
 
 /** The golden devices that are a book foldable's flat upright inner screen: the Fold, the Ultra. */
 internal val FLAT_UPRIGHT_INNER = setOf("inner", "ultra")
