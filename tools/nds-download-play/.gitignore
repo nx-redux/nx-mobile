@@ -1,2 +1,8 @@
+build/
+*.elf
+*.nds
+*.map
+source/font_data.c
+.venv/
 test/wmb_test
 test/*.dSYM/
