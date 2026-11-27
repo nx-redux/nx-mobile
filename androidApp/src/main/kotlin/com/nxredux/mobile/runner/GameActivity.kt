@@ -858,6 +858,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
     }
 
+    override val downloadPlayClientShowing: Boolean get() = downloadPlayLayout != null
+
     override fun frontendValuesToSave(): Map<String, String> = DownloadPlayScreen.toSave(frontendValues, downloadPlayLayout, n3ds = isN3ds)
 
     /** The received game plays on both screens, as the player lays them out. */
@@ -865,6 +867,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         val stored = downloadPlayLayout ?: return
         downloadPlayLayout = null
         applyFrontend(DownloadPlayScreen.restored(frontendValues, stored, n3ds = isN3ds))
+        withMenu { it.setDownloadPlayClient(false) }
     }
 
     /** The core's count of hosts gone, against the last one [seen]: a new one ends the session at once. The count now. */

@@ -133,6 +133,8 @@ internal interface InGameMenuHost : GameScreenHost {
     fun padProfile(): PadProfile
     fun menuLocked(): Set<String>
     fun applyFrontend(values: Map<String, String>)
+    /** A Download Play client is showing: the menu is Continue / Quit until the game it receives starts. */
+    val downloadPlayClientShowing: Boolean
     /** The frontend values a save writes: the player's layout, not a Download Play client's single screen. */
     fun frontendValuesToSave(): Map<String, String>
     fun applyOptions(vars: List<Variable>)
@@ -266,6 +268,7 @@ internal class InGameMenuController(
                 it.netplay = true; it.netplayLink = host.netplay?.endsAsLocalGame == true; it.netplayEnded = host.netplayEnded; it.netplayQuitOnly = host.netplayQuitOnly; it.refresh()
             }
             it.setDsWireless(host.dsWireless)   // a DS game's wireless on the automatic route: Continue, Disconnect, Quit
+            it.setDownloadPlayClient(host.downloadPlayClientShowing)
             it.setLocalWirelessNow(host.localWirelessNow)
             it.setIdleSeconds(host.dsIdleSeconds)
             it.setKidsLocked(host.kidsSettingsHidden)   // Kids Mode without Parent mode: no Options for a kid
