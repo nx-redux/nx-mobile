@@ -27,4 +27,21 @@ class DownloadPlayScreenTest {
         assertFalse(NdsOptions.LAYOUT_LANDSCAPE in back)   // no pick before: the screen's default again
         assertEquals("b", back["nx_other"])                // a menu change meanwhile is kept
     }
+
+    @Test fun a_save_while_the_client_shows_keeps_the_players_layout() {
+        val stored = mapOf(NdsOptions.LAYOUT_PORTRAIT to "stacked")
+        val shown = DownloadPlayScreen.single(stored, n3ds = false) + ("nx_other" to "b")
+        val saved = DownloadPlayScreen.toSave(shown, stored, n3ds = false)
+        assertEquals("stacked", saved[NdsOptions.LAYOUT_PORTRAIT])
+        assertFalse(NdsOptions.LAYOUT_LANDSCAPE in saved)
+        assertFalse(NdsOptions.BIG_SCREEN in saved)
+        assertEquals("b", saved["nx_other"])
+        assertEquals(shown, DownloadPlayScreen.toSave(shown, null, n3ds = false))   // not swapped: saved as shown
+    }
+
+    @Test fun the_rows_forced_core_options_are_never_saved() {
+        assertEquals(DsMenu.FORCED_OPTIONS.keys, DownloadPlayScreen.unsavedOptions(dsMenu = true, n3ds = false))
+        assertEquals(N3dsDownloadPlay.FORCED_OPTIONS.keys, DownloadPlayScreen.unsavedOptions(dsMenu = false, n3ds = true))
+        assertEquals(emptySet(), DownloadPlayScreen.unsavedOptions(dsMenu = false, n3ds = false))
+    }
 }

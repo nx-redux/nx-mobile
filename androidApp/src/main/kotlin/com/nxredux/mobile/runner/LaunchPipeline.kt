@@ -384,6 +384,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
         private set
     /** 3DS Download Play: Azahar's user folder (the client's hand-off file) and the 3DS config folder (the title index). */
     var n3dsDownloadPlayDirs: Pair<File, File>? = null
+        private set
     /** This launch is DS Download Play's client: GameActivity follows the game it receives. */
     var ndsDownloadPlay = false
         private set
@@ -1155,7 +1156,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                     // ParaLLEl-RDP's upscaling follows the driver just picked (Auto stays native on the Adreno's own one).
                     val res3dAlso = res3d.launchAlsoSet(customDriver = driver != null, gpu = launchGpu ?: DeviceTraits.gpu)
                     // netplay link: the link options are this launch's too (a session's port, mode and peer; a solo mGBA's cable): never saved.
-                    graphicsForcedOptions = graphics.forcedOptions.keys + cfg.linkOptions.keys + prepared.hleOptions.keys
+                    graphicsForcedOptions = graphics.forcedOptions.keys + cfg.linkOptions.keys + prepared.hleOptions.keys +
+                        DownloadPlayScreen.unsavedOptions(cfg.dsMenu, cfg.n3dsDownloadPlay)
                     GLRetroViewData(host.activity).apply {
                         coreFilePath = cfg.coreFile
                         systemDirectory = prepared.systemDir.absolutePath

@@ -146,6 +146,8 @@ int main(void) {
             if (down & KEY_UP) selected = (selected + count - 1) % count;
             if (selected < firstRow) firstRow = selected;
             if (selected >= firstRow + ROWS) firstRow = selected - ROWS + 1;
+            // A list that shrank shows as many rows as fit.
+            if (firstRow > count - ROWS) firstRow = count > ROWS ? count - ROWS : 0;
             if (confirm) {
                 memcpy(&joined, (const void*)&box.offers[selected], sizeof joined);
                 send(NXDLP_CMD_JOIN, joined.mac);

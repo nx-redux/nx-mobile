@@ -23,4 +23,12 @@ object DownloadPlayScreen {
         val layout = keys(n3ds)
         return now.filterKeys { it !in layout } + stored.filterKeys { it in layout }
     }
+
+    /** What a save writes from [now]: with the player's layout ([stored]) while the client shows the top screen alone. */
+    fun toSave(now: Map<String, String>, stored: Map<String, String>?, n3ds: Boolean): Map<String, String> =
+        stored?.let { restored(now, it, n3ds) } ?: now
+
+    /** The core options a row forces for its client: the session's only, never written to a saved config. */
+    fun unsavedOptions(dsMenu: Boolean, n3ds: Boolean): Set<String> =
+        (if (dsMenu) DsMenu.FORCED_OPTIONS.keys else emptySet()) + (if (n3ds) N3dsDownloadPlay.FORCED_OPTIONS.keys else emptySet())
 }

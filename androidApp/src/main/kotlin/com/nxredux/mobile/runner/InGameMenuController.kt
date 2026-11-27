@@ -133,6 +133,8 @@ internal interface InGameMenuHost : GameScreenHost {
     fun padProfile(): PadProfile
     fun menuLocked(): Set<String>
     fun applyFrontend(values: Map<String, String>)
+    /** The frontend values a save writes: the player's layout, not a Download Play client's single screen. */
+    fun frontendValuesToSave(): Map<String, String>
     fun applyOptions(vars: List<Variable>)
     fun applyCheats(view: GLRetroView)
     fun applyAchievements(model: InGameMenuModel)
@@ -665,7 +667,7 @@ internal class InGameMenuController(
                     // fires, so a later Controls → Shortcuts change still reaches the others; a row given back to the
                     // default loses its line ([Shortcuts.droppedOnSave]).
                     val overrides = host.shortcutOverrides
-                    val values = CoreConfig.valuesToSave(all.map { it.key to it.value }, host.storedValues, host.graphicsForcedOptions + dualForcedOptions()) + host.frontendValues.toList() +
+                    val values = CoreConfig.valuesToSave(all.map { it.key to it.value }, host.storedValues, host.graphicsForcedOptions + dualForcedOptions()) + host.frontendValuesToSave().toList() +
                         ShaderOptions.activeParamEntries(renderer.shaderValues, renderer.shaderParams) + Shortcuts.toConfig(overrides) +
                         if (game) listOf(FrontendOptions.CHEATS to CheatSet.encode(host.cheatSet.enabledKeys())) else emptyList()
                     val drop = Shortcuts.droppedOnSave(overrides)

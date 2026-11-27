@@ -116,7 +116,7 @@ void icon(int slot, const u8* icon, int x, int y, int size) {
     const u32 h = hashIcon(icon);
     if (iconHash[slot] != h) {
         // Cartridge icons are 8x8 tiles; a texture is rows: the same 4bpp texels, rearranged.
-        static u8 linear[32 * 32 / 2];
+        static u8 linear[32 * 32 / 2] __attribute__((aligned(4)));
         const u8* tiles = icon + 0x20;
         for (int ty = 0; ty < 4; ty++)
             for (int tx = 0; tx < 4; tx++)

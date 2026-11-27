@@ -858,6 +858,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         }
     }
 
+    override fun frontendValuesToSave(): Map<String, String> = DownloadPlayScreen.toSave(frontendValues, downloadPlayLayout, n3ds = isN3ds)
+
     /** The received game plays on both screens, as the player lays them out. */
     private fun restoreDownloadPlayLayout() {
         val stored = downloadPlayLayout ?: return
