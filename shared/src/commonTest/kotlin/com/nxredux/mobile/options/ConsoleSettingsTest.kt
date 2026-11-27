@@ -27,16 +27,16 @@ class ConsoleSettingsTest {
         assertEquals(NdsOptions.table + NdsOptions.shaderScreensRow + NdsOptions.localWirelessRow, rows)   // one definition
     }
 
-    @Test fun dc_offers_3d_resolution_graphics_api_and_the_shared_controller_layout_row() {
-        assertEquals(DcOptions.resolutionRows(null) + listOf(GraphicsApiOptions.row, BottomScreenOptions.row, PadOptions.layoutRow) + SpeedOptions.table + AudioOptions.rows, ConsoleSettings.tableFor("DC"))
-        assertEquals(listOf("3D Resolution", "Max Scale", "Scale", "Graphics API", "Bottom screen", "Controller Layout") + SpeedOptions.table.map { it.label } + AudioOptions.rows.map { it.label }, ConsoleSettings.tableFor(" dc ").map { it.label })
+    @Test fun dc_offers_3d_resolution_and_graphics_api() {
+        assertEquals(DcOptions.resolutionRows(null) + listOf(GraphicsApiOptions.row, BottomScreenOptions.row) + SpeedOptions.table + AudioOptions.rows, ConsoleSettings.tableFor("DC"))
+        assertEquals(listOf("3D Resolution", "Max Scale", "Scale", "Graphics API", "Bottom screen") + SpeedOptions.table.map { it.label } + AudioOptions.rows.map { it.label }, ConsoleSettings.tableFor(" dc ").map { it.label })
     }
 
-    @Test fun other_consoles_have_the_layout_row_only_and_n64_adds_3d_resolution_and_graphics_api() {
-        assertEquals(listOf(BottomScreenOptions.row, PadOptions.layoutRow) + SpeedOptions.table + AudioOptions.rows, ConsoleSettings.tableFor("GBA"))
-        assertEquals(listOf(BottomScreenOptions.row, PadOptions.layoutRow) + SpeedOptions.table + AudioOptions.rows, ConsoleSettings.tableFor(""))
-        assertEquals(N64Options.resolutionRows(null) + listOf(GraphicsApiOptions.rowFor(autoVulkan = false, mali = false, drivers = false, n64 = true), BottomScreenOptions.row, PadOptions.layoutRow) + SpeedOptions.table + AudioOptions.rows, ConsoleSettings.tableFor("N64"))
-        assertEquals(listOf(BottomScreenOptions.row, PadOptions.segaPadRow, PadOptions.layoutRow) + SpeedOptions.table + AudioOptions.rows, ConsoleSettings.tableFor("MD"))
+    @Test fun other_consoles_have_the_shared_rows_only_and_n64_adds_3d_resolution_and_graphics_api() {
+        assertEquals(listOf(BottomScreenOptions.row) + SpeedOptions.table + AudioOptions.rows, ConsoleSettings.tableFor("GBA"))
+        assertEquals(listOf(BottomScreenOptions.row) + SpeedOptions.table + AudioOptions.rows, ConsoleSettings.tableFor(""))
+        assertEquals(N64Options.resolutionRows(null) + listOf(GraphicsApiOptions.rowFor(autoVulkan = false, mali = false, drivers = false, n64 = true), BottomScreenOptions.row) + SpeedOptions.table + AudioOptions.rows, ConsoleSettings.tableFor("N64"))
+        assertEquals(listOf(BottomScreenOptions.row, PadOptions.segaPadRow) + SpeedOptions.table + AudioOptions.rows, ConsoleSettings.tableFor("MD"))
     }
 
     @Test fun everyConsoleHasTheRows() {

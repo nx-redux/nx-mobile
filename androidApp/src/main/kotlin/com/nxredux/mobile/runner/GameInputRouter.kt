@@ -12,7 +12,6 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import com.nxredux.mobile.layout.ScreenClass
 import com.nxredux.mobile.options.NdsOptions
-import com.nxredux.mobile.options.PadOptions
 import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.options.WiiuOptions
 import com.nxredux.mobile.options.NdsScreen
@@ -138,7 +137,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
     val inputDeviceListener = object : InputManager.InputDeviceListener {
         override fun onInputDeviceAdded(deviceId: Int) = host.onInputDevicesChanged()
         override fun onInputDeviceRemoved(deviceId: Int) {
-            padLayouts.remove(deviceId)
+            physicalPads.remove(deviceId)
             host.rumbles.forEach { it.deviceRemoved(deviceId) }
             val key = keysById.remove(deviceId)
             val port = key?.let { k -> slots?.disconnected(k) }
@@ -148,30 +147,29 @@ internal class GameInputRouter(private val host: GameInputHost) {
             host.onInputDevicesChanged()
         }
         override fun onInputDeviceChanged(deviceId: Int) {
-            padLayouts.remove(deviceId)
+            physicalPads.remove(deviceId)
             keysById[deviceId]?.let { k -> host.inputManager?.getInputDevice(deviceId)?.let { padNames[k] = it.name } }
             host.onInputDevicesChanged()
         }
     }
 
-    /** Each pad's detected face layout by device id ([PadFaceLayout.detect]); null for an id with no device. */
-    private val padLayouts = HashMap<Int, PadFaceLayout?>()
+    /** Whether each device id is a physical pad ([isPhysical]), cached per id. */
+    private val physicalPads = HashMap<Int, Boolean>()
 
     /** Each held on-screen button's sent code, so its release repeats its press's. */
     private val padSent = SentKeys<NxButton>()
 
     /**
-     * The keycode a hardware key is sent to the runner as, null to send nothing. Face keys work as printed (Console
-     * Settings → Controller Layout names the pad's letters, [PhysicalKeys]): N64 by its printed letter's name
-     * ([N64Input]); every other tag by the console's [com.nxredux.mobile.runner.FaceMode], then its [PadMap] picks what
-     * that button sends. A key-up repeats its key-down's.
+     * The keycode a hardware key is sent to the runner as, null to send nothing. Face keys go by their letter
+     * ([PhysicalKeys]): N64 by the letter's name ([N64Input]); every other tag by the console's
+     * [com.nxredux.mobile.runner.FaceMode], then its [PadMap] picks what that button sends. A key-up repeats its key-down's.
      */
     private fun runnerKey(event: KeyEvent, keyCode: Int, port: Int): Int? {
         if (host.isN64) {
-            // By name on every pad, as on the handheld: the printed letter picks the N64 input; R2 and SELECT send nothing.
-            val printed = positionOf(event, keyCode)
-            val button = PadKeymap.buttonFor(printed) ?: return printed
-            return N64Input.toRunner(button, printed)
+            // By name on every pad, as on the handheld: the letter picks the N64 input; R2 and SELECT send nothing.
+            val letter = positionOf(event, keyCode)
+            val button = PadKeymap.buttonFor(letter) ?: return letter
+            return N64Input.toRunner(button, letter)
         }
         val held = event.deviceId to keyCode
         val sent = inputs[port].sent
@@ -184,26 +182,16 @@ internal class GameInputRouter(private val host: GameInputHost) {
     private fun send(event: KeyEvent, keyCode: Int): Int = host.padMap.sendKey(positionOf(event, keyCode))
 
     /**
-     * The console button [keyCode] is for this game, as its keycode ([PhysicalKeys.toRunner]): the printed letter
-     * (Controls → Controller Layout names the pad's letters; Auto = the detected layout), through the core's
-     * letter swap on DC/NGP, or the key's position on the positional consoles (PlayStation, Sega, arcade...).
+     * The console button [keyCode] is for this game, as its keycode ([PhysicalKeys.toRunner]): the key's letter, through
+     * the core's letter swap on DC/NGP, or the key's position on the positional consoles (PlayStation, Sega, arcade...).
+     * A key from no physical pad is sent as is.
      */
-    private fun positionOf(event: KeyEvent, keyCode: Int): Int {
-        val detected = detectedLayout(event)
-        return PhysicalKeys.toRunner(host.gameTag, keyCode, detected, PadOptions.printedLayout(host.frontendValues, detected))
-    }
+    private fun positionOf(event: KeyEvent, keyCode: Int): Int =
+        if (isPhysical(event)) PhysicalKeys.toRunner(host.gameTag, keyCode) else keyCode
 
-    /** The letter printed on [keyCode] ([PhysicalKeys.printed]): what the in-game menus act on, so A confirms where A is printed. */
-    private fun printedKey(event: KeyEvent, keyCode: Int): Int {
-        val detected = detectedLayout(event)
-        return PhysicalKeys.printed(keyCode, detected, PadOptions.printedLayout(host.frontendValues, detected))
-    }
-
-    /** Where [event]'s device has its face keycodes ([PadFaceLayout.detectDevice]), cached per device id. */
-    private fun detectedLayout(event: KeyEvent): PadFaceLayout? =
-        if (padLayouts.containsKey(event.deviceId)) padLayouts[event.deviceId] else
-            event.device?.let { d -> PadFaceLayout.detectDevice(event.deviceId, d.isVirtual, d.vendorId, d.name.orEmpty()) }
-                .also { padLayouts[event.deviceId] = it }
+    /** False for no physical pad: a negative device id or a virtual device (adb-injected events carry deviceId -1). */
+    private fun isPhysical(event: KeyEvent): Boolean =
+        physicalPads.getOrPut(event.deviceId) { event.deviceId >= 0 && event.device?.isVirtual == false }
 
     val menuAxes = AxisDirections { host.menuRouter.onEvent(it) }   // the hat / left stick as held menu directions
     val menuHat = HatKeys()   // the hat as d-pad keys for the Shortcuts page's press to bind
@@ -1081,7 +1069,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
             // Press to bind first, on the raw code (as [ShortcutKeys] matches it in game), Back too: it cancels.
             if (host.menuCaptureKey(keyCode, down = true, repeat = event.repeatCount > 0)) return true
             if (keyCode == KeyEvent.KEYCODE_BACK) { if (event.repeatCount == 0) host.backPressed(); return true }
-            if (event.repeatCount == 0) PadKeymap.buttonFor(printedKey(event, keyCode))?.let { host.menuRouter.onEvent(PadEvent.Down(it)) }
+            if (event.repeatCount == 0) PadKeymap.buttonFor(keyCode)?.let { host.menuRouter.onEvent(PadEvent.Down(it)) }
             return true
         }
         if (keyCode == KeyEvent.KEYCODE_BACK) { if (event.repeatCount == 0) host.backPressed(); return true }
@@ -1110,7 +1098,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
         // Shortcuts, P1's (port 0's) only, as the menu chord: after the built-in hotkeys above, which they can't bind
         // ([com.nxredux.mobile.shortcuts.EffectiveShortcuts.blocked]), before the DS / 3DS routing and the core.
         if (port == 0) host.shortcutKeys?.let { keys -> if (shortcut(keys.onDown(keyCode, repeat = !first), keyCode, port)) return true }
-        // The hotkeys and stylus see the console button the key is (its printed letter on DS/3DS), as the core will.
+        // The hotkeys and stylus see the console button the key is (its letter on DS/3DS), as the core will.
         val placed = PadKeymap.buttonFor(positionOf(event, keyCode))
         if (host.isNds) (placed ?: ndsThumbButton(keyCode))?.let { b ->
             if (b == NxButton.L2 || b == NxButton.R2) { if (first && routeTriggerKey(b, down = true)) routeNds(b, down = true); return true }
@@ -1126,7 +1114,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
         if (isWiiu && port == 0) placed?.let { b ->
             if (!routeWiiu(b, down = true, repeat = !first)) return true
         }
-        // As printed (or by position on positional consoles) through the console's pad map; N64 by name ([runnerKey]).
+        // By letter (or by position on positional consoles) through the console's pad map; N64 by name ([runnerKey]).
         runnerKey(event, keyCode, port)?.let { host.retroView?.sendKeyEvent(event.action, it, port) }
         return true
     }
@@ -1135,7 +1123,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
         if (isVolumeKey(keyCode)) return host.superKeyUp(keyCode, event)
         if (host.menuOpen) {
             if (host.menuCaptureKey(keyCode, down = false, repeat = false)) return true
-            PadKeymap.buttonFor(printedKey(event, keyCode))?.let { host.menuRouter.onEvent(PadEvent.Up(it)) }
+            PadKeymap.buttonFor(keyCode)?.let { host.menuRouter.onEvent(PadEvent.Up(it)) }
             return true
         }
         if (keyCode == KeyEvent.KEYCODE_BACK) return true
@@ -1164,7 +1152,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
         if (isWiiu && port == 0) placed?.let { b ->
             if (!routeWiiu(b, down = false)) return true
         }
-        // As printed (or by position on positional consoles) through the console's pad map; N64 by name ([runnerKey]).
+        // By letter (or by position on positional consoles) through the console's pad map; N64 by name ([runnerKey]).
         runnerKey(event, keyCode, port)?.let { host.retroView?.sendKeyEvent(event.action, it, port) }
         return true
     }

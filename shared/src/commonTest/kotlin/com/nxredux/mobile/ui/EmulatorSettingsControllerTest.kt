@@ -61,7 +61,7 @@ class EmulatorSettingsControllerTest {
         "opt_b", "on", label = "Option B", labelCategorized = "B", category = "video", categoryLabel = "Video",
         values = listOf("on", "off"), defaultValue = "on",
     )
-    private val layout = ConsoleRow(PadOptions.all.first { it.key == PadOptions.LAYOUT }, PadOptions.AUTO)
+    private val layout = ConsoleRow(PadOptions.segaPadRow, PadOptions.segaPadRow.default)
 
     private fun page(console: List<ConsoleRow> = listOf(layout), core: List<CoreOption>? = listOf(optA, optB), forGame: Boolean = false, gameFile: Boolean = false) =
         EmulatorPage("GBA", "gpsp", "gpSP", console, core, forGame, gameFile)
@@ -416,10 +416,10 @@ class EmulatorSettingsControllerTest {
         await { BottomScreenOptions.KEY !in keys() }
     }
 
-    // GBA with its Controller Layout and speed rows locked in the cfg and no core options: Bottom screen is the page's only row.
+    // GBA with its speed and audio rows locked in the cfg and no core options: Bottom screen is the page's only row.
     @Test fun a_page_left_empty_when_the_second_screen_goes_closes() = runTest {
         val noOptions = object : CoreOptionSource { override fun table(coreId: String) = CoreOptionTable(coreId, "gpSP", emptyList()) }
-        val state = TestState(MemoryConfigs(mapOf("GBA-gpsp/minarch.cfg" to "-${PadOptions.LAYOUT} = ${PadOptions.AUTO}\n" +
+        val state = TestState(MemoryConfigs(mapOf("GBA-gpsp/minarch.cfg" to
             (SpeedOptions.table + AudioOptions.rows).joinToString("") { "-${it.key} = ${it.default}\n" })), tables = noOptions)
         state.onSecondScreenChanged(true)
         openOptions(state, "gpsp")

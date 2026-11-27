@@ -2,8 +2,7 @@ package com.nxredux.mobile.runner
 
 /**
  * What each held key was sent to the core as, so its key-up releases the same code even if the mapping changed while it
- * was held (Controller Layout changed, a device re-detected). Keyed by (device id, keycode) for physical keys and by the
- * on-screen button for the pad.
+ * was held. Keyed by (device id, keycode) for physical keys and by the on-screen button for the pad.
  */
 class SentKeys<K> {
     private val sent = HashMap<K, Int>()
