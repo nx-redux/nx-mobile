@@ -16,6 +16,8 @@
  */
 
 #include <jni.h>
+#include <algorithm>
+#include <vector>
 
 #include <exception>
 #include <string>
@@ -136,6 +138,13 @@ JNIEXPORT jint JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_dsOthers
     return dslink::others();   // short locks; never throws
 }
 
+JNIEXPORT jint JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_dsHostLeft(
+    JNIEnv* env,
+    jclass obj
+) {
+    return dslink::hostLeft();
+}
+
 JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_dsInRoom(
     JNIEnv* env,
     jclass obj
@@ -158,6 +167,23 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_dsSetCab
     jint state
 ) {
     dslink::setCable((int) state);
+}
+
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_dsSetLocalNetworks(
+    JNIEnv* env,
+    jclass obj,
+    jintArray broadcasts,
+    jintArray masks
+) {
+    std::vector<ndl_subnet> nets;
+    if (broadcasts != nullptr && masks != nullptr) {
+        const jsize n = std::min(env->GetArrayLength(broadcasts), env->GetArrayLength(masks));
+        std::vector<jint> b(n), m(n);
+        env->GetIntArrayRegion(broadcasts, 0, n, b.data());
+        env->GetIntArrayRegion(masks, 0, n, m.data());
+        for (jsize i = 0; i < n && nets.size() < NDL_LOCAL_MAX; i++) nets.push_back({ (uint32_t) b[i], (uint32_t) m[i] });
+    }
+    dslink::setLocalNetworks(nets);
 }
 
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroNetplay_dsLeaveNow(

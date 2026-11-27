@@ -21,8 +21,8 @@ import com.nxredux.mobile.options.PxRect
 import com.nxredux.mobile.shortcuts.TouchSlot
 import com.nxredux.mobile.skin.PlacedControl
 import com.nxredux.mobile.skin.STRIP_SWAP
-import com.nxredux.mobile.skin.SkinVariant
 import com.nxredux.mobile.skin.arrangeStrip
+import com.nxredux.mobile.skin.swapInStrip
 import com.nxredux.mobile.skin.stripPill
 import com.nxredux.mobile.skin.stackedMenuRoom
 import com.nxredux.mobile.skin.underMenu
@@ -298,7 +298,7 @@ internal class PadSkinView(
     }
     /**
      * The strip's filled slots spread over the strip's whole width, an even share each (two: centred in its halves),
-     * in slot order, around the Wii U's SWAP in the middle ([arrangeStrip]); the strip's other buttons as placed.
+     * in slot order, around a two-screen console's SWAP in the middle ([arrangeStrip]); the strip's other buttons as placed.
      */
     private fun spread(controls: List<PlacedControl>, p: SkinPlacement, ids: Set<String>): List<PlacedControl> {
         val all = p.controls.filter { it.spec.id in ids && slotOf(it.spec.id) != null }
@@ -307,8 +307,8 @@ internal class PadSkinView(
         if (all.isEmpty() || (centre == null && (kept.isEmpty() || kept.size == all.size))) return controls
         return controls.filterNot { it in all } + arrangeStrip(all, kept, centre)
     }
-    /** The strip's fixed middle button: the Wii U's SWAP while the strip shows; none on other consoles. */
-    private fun stripCentre(p: SkinPlacement): String? = STRIP_SWAP.takeIf { p.spec.variant == SkinVariant.WIIU && !stripHidden }
+    /** The strip's fixed middle button: a two-screen console's SWAP while the strip shows; none on other consoles. */
+    private fun stripCentre(p: SkinPlacement): String? = STRIP_SWAP.takeIf { p.spec.variant.swapInStrip && !stripHidden }
     private fun slotOf(id: String): TouchSlot? = SkinAction.entries.firstOrNull { it.name == id }?.slot
     private val shade = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.argb((SKIN_PRESS_SHADE * 255).roundToInt(), 0, 0, 0) }
 
@@ -374,8 +374,8 @@ internal class PadSkinView(
             canvas.drawText(text, c.x + dx, c.y + c.spec.labelDy + c.spec.labelH / 2f, label)   // the baseline: cap height centred
         }
         // the strip's touch slots: the action's short name, in the label grey (a running toggle in white); on the overlay
-        // (no frame under them) each on a see-through pill, as the corner shortcut buttons, lit while on. The Wii U's
-        // SWAP in its middle reads SWAP, never lit
+        // (no frame under them) each on a see-through pill, as the corner shortcut buttons, lit while on. A two-screen
+        // console's SWAP in its middle reads SWAP, never lit
         val centre = stripCentre(p)
         for (c in p.controls) {
             val sc = slotOf(c.spec.id)?.let(shortcuts::get)
