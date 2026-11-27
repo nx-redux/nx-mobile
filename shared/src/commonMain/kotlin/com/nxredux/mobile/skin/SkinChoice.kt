@@ -186,8 +186,8 @@ object SkinChoice {
         pack.layouts.filter { it.family == family && it.variant == variant && it.foldBoard == fold && it.minRefH <= refH }
             .sortedWith(compareByDescending<SkinLayoutSpec> { tuned(it) }.thenByDescending { it.boxes.isNotEmpty() }.thenByDescending { it.minRefH }.thenByDescending { it.width }).firstNotNullOfOrNull(placed)
 
-    /** A layout on a foldable's board: its background has a hinge (an inner screen's two halves). */
-    private val SkinLayoutSpec.foldBoard: Boolean get() = tree.parts.any { it.isHinge }
+    /** A layout on a foldable's board: its wide background has a hinge (an inner screen's two halves, not a Flip's). */
+    private val SkinLayoutSpec.foldBoard: Boolean get() = width >= 1500 && tree.parts.any { it.isHinge }
 
     /**
      * [placed] at scale [k], else at smaller scales down to [FOLD_MIN_SHRINK] of it: a dense inner screen (a large

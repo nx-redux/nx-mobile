@@ -69,7 +69,8 @@ object SkinBoxes {
         val w = windowW.toFloat(); val h = windowH.toFloat()
         val edge = EDGE_DP * dp; val gap = GAP_DP * dp
         val shape = DeviceShape(w / dp, h / dp, hingeY != null)
-        val beside = w > h || (spec.pieces.any { it.glass != null && it.anchor == PieceAnchor.CENTRE } && spec.tree.parts.any { it.isHinge })
+        val foldBoard = spec.width >= 1500 && spec.tree.parts.any { it.isHinge }
+        val beside = w > h || (spec.pieces.any { it.glass != null && it.anchor == PieceAnchor.CENTRE } && foldBoard)
         val minScreen = MIN_SCREEN_DP * dp
         // room across for both side boxes, and the height a box may take
         val sideRoom = if (beside) w - 2f * edge - 2f * gap - minScreen else w - 2f * edge - gap
@@ -110,7 +111,7 @@ object SkinBoxes {
         val bare = spec.copy(boxes = emptyList(), pieces = spec.pieces.filter { it.glass != null }, controls = emptyList())
         val base = screen(bare, room) ?: return null
         val frameBottom = base.pieces.filter { it.piece < 0 && !it.strip }.maxOfOrNull { it.dst.y + it.dst.height } ?: base.glasses.maxOfOrNull { it.rect.y + it.rect.height } ?: 0f
-        val fold = if (spec.tree.parts.any { it.isHinge }) (hingeY ?: (h / 2f)) else null
+        val fold = if (foldBoard) (hingeY ?: (h / 2f)) else null
         // the control area: a fold board's half under the fold, else (sideways) the window's height; an upright phone's
         // boxes keep to the bottom (its screen takes the height they leave)
         val area: ClosedFloatingPointRange<Float>? = if (fold != null) fold..h else if (w > h) 0f..h else null

@@ -291,8 +291,9 @@ object SkinSolver {
             }
         }
         val gripRow = frameRow?.takeIf { spec.family == SkinFamily.GRIP }
+        val foldBoard = spec.width >= 1500 && spec.tree.parts.any { it.isHinge }
         // the screen between a fold board's side groups takes the boxes' room; the frame above keeps its own
-        val boxesBeside = spec.pieces.any { it.glass != null && it.anchor == PieceAnchor.CENTRE } && spec.tree.parts.any { it.isHinge }
+        val boxesBeside = spec.pieces.any { it.glass != null && it.anchor == PieceAnchor.CENTRE } && foldBoard
         val left = roomLeft?.takeUnless { boxesBeside }?.let { it / k } ?: gripRow?.get(2) ?: if (frame.side >= 0) frame.side.toFloat() else frame.x.toFloat()
         val right = roomRight?.takeUnless { boxesBeside }?.let { w - it / k } ?: gripRow?.let { w - it[2] - it[3] } ?: if (frame.side >= 0) frame.side.toFloat() else (spec.refW - frame.x - frame.w).toFloat()
         val ownTop = if (frame.top >= 0) frame.top.toFloat() else frame.y.toFloat()
@@ -304,7 +305,8 @@ object SkinSolver {
             else if (roomBottom != null && !boxesBeside) roomBottom / k - roomTop
             else h - roomTop - (if (frame.bottom >= 0) frame.bottom.toFloat() else (spec.refH - frame.y - frame.h).toFloat())
         // half-folded, the pad's pieces all go below the fold
-        if (folded && spec.pieces.any { it.y + down(it.level, it.drop) < hingeY!! / k + gap }) return null
+        val belowGap = if (foldBoard) gap else minOf(gap, 40f)
+        if (folded && spec.pieces.any { it.y + down(it.level, it.drop) < hingeY!! / k + belowGap }) return null
         val (aw, ah) = gameSize(g.screen, picture) ?: (g.w.toFloat() to g.h.toFloat())   // the menu's: the glass's own
         val fit = minOf((roomW - bl - br) / aw, (roomH - bt - bb) / ah)
         if (fit <= 0f) return null
@@ -350,7 +352,7 @@ object SkinSolver {
         // grow into them; the side groups move in by [sideInset] of that ([sideShift]) and the screen's frame takes the rest.
         // (the fold board's: its touch screen or panel between the clusters)
         val between = spec.pieces.firstOrNull { it.glass != null && it.anchor == PieceAnchor.CENTRE }
-            ?.takeIf { spec.tree.parts.any { it.isHinge } }
+            ?.takeIf { foldBoard }
         var betweenMoved = 0f to 0f   // set below, once [spot] can place it (its own spot needs no side shift)
         // [row]'s spacing: the left and right groups' shifts, the screen's frame's x and width, the inner gap, the edge gap
         // (picture px); null: no row
