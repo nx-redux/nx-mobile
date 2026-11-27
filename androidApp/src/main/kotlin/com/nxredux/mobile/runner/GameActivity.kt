@@ -723,6 +723,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      */
     private fun onDsPresenceChanged(presence: DsPresence) {
         launchPipeline.dsRoomChanged(presence == DsPresence.ROOM)
+        retroView?.runWhilePaused = keepsRoomWhilePaused
         launchPipeline.dsWirelessChanged(presence != DsPresence.OUT)
         if (launchPipeline.dsAutoRoute) {
             if (launchPipeline.dsCableAuto) dsCable.wireless = presence != DsPresence.OUT
@@ -730,7 +731,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             shortcuts.refreshTouchShortcuts()
             withMenu { it.setDsWireless(dsWireless) }
         }
-        if (menuOpen && !quitting) holdCore()
+        if (corePaused() && !quitting) holdCore()
         syncDsMenuCap()
         withMenu { it.setLocalWirelessNow(localWirelessNow) }
     }
@@ -750,9 +751,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /**
      * A Download Play child with no host left can only show its communication error, so the session ends as a quit:
      * when the core says the host left the room (other guests may stay), or once the room has stayed empty a few
-     * seconds (a host restarting its wireless comes back within that). Not after the player's own Disconnect, nor
-     * while the app is in the background or lost the focus, which leave the room too: back, the room is joined again
-     * and checked afresh ([recheckDownloadPlayHost]), as a host that left meanwhile is never seen leaving.
+     * seconds (a host restarting its wireless comes back within that). Not after the player's own Disconnect (the cap's
+     * too), nor while the app is in the background, which leaves the room too, or lost the focus: back, the room is
+     * checked afresh ([recheckDownloadPlayHost]), as a host that left meanwhile is never seen leaving.
      */
     private fun followDownloadPlayHost(others: Int) {
         if (!downloadPlayChildStarted || quitting) return
@@ -770,8 +771,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (!quitting) quitWithAutoState(chosen = false, autoState = false)
     }
 
-    /** The menu open in a room counts toward the cap; anything else stops the count. */
-    private fun syncDsMenuCap() = dsMenuCap.sync(menuOpen && !quitting && dsRoom.current == DsPresence.ROOM)
+    private val keepsRoomWhilePaused: Boolean get() = isN3ds && dsRoom.current == DsPresence.ROOM
+
+    private fun syncDsMenuCap() = dsMenuCap.sync(dsHeldInRoom(menuOpen, focusPaused, quitting, dsRoom.current == DsPresence.ROOM))
 
     /**
      * The room again after a leave for the background or a lost focus (a system dialog, such as the USB cable's). On the
@@ -979,12 +981,19 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         if (isTopResumedActivity) focusResume() else if (settings.pauseWhenUnfocused) focusPause()
     }
 
-    /** The game holds as under the menu (see openMenu); an open menu has already paused it. */
+    /**
+     * The game holds as under the menu (see openMenu); an open menu has already paused it. A 3DS room is kept, the core
+     * running for its members under the menu's cap ([GLRetroView.runWhilePaused]): a Download Play child that loses its
+     * host cannot get it back. Any other room is left: its members would time out.
+     */
     private fun focusPause() {
         if (focusPaused || quitting) return
-        LibretroNetplay.dsLeaveNow()   // a DS room cannot wait out a pause: its members would time out
-        dsRoom.check()   // an open menu pauses the core now that the room is gone
+        if (!keepsRoomWhilePaused) {
+            LibretroNetplay.dsLeaveNow()
+            dsRoom.check()   // an open menu pauses the core now that the room is gone
+        }
         focusPaused = true
+        syncDsMenuCap()
         syncKeepScreenOn()
         if (menuOpen) return
         input.releaseAllGameInput()
@@ -995,6 +1004,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private fun focusResume() {
         if (!focusPaused) return
         focusPaused = false
+        syncDsMenuCap()
         if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) rejoinSessionRoom()
         syncKeepScreenOn()
         if (menuOpen || quitting || !lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return
@@ -2620,3 +2630,7 @@ internal fun focusPauseStep(focusPaused: Boolean, topResumed: Boolean, pauseWhen
         !focusPaused && pauseWhenUnfocused && !topResumed && resumed -> FocusPauseStep.PAUSE
         else -> FocusPauseStep.NONE
     }
+
+/** The game held in a room, by the menu or another window's focus: the others wait, so the cap counts ([DsMenuCap]). */
+internal fun dsHeldInRoom(menuOpen: Boolean, focusPaused: Boolean, quitting: Boolean, inRoom: Boolean): Boolean =
+    (menuOpen || focusPaused) && !quitting && inRoom

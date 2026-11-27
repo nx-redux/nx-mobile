@@ -346,6 +346,13 @@ class GLRetroView(
     @Volatile
     var afterStep: (() -> Unit)? = null
 
+    private val lifecyclePause = LifecyclePause()
+
+    /** The core runs on under a window over the visible game (a system dialog) and stops only once the activity does. */
+    var runWhilePaused: Boolean
+        get() = lifecyclePause.runWhilePaused
+        set(value) { lifecyclePause.runWhilePaused = value }
+
     private var isGameLoaded = false
     @Volatile private var isEmulationReady = false   // set on the lifecycle thread, read on the GL thread
     private var isAborted = false
@@ -995,13 +1002,23 @@ class GLRetroView(
     private inner class RenderLifecycleObserver : LifecycleObserver {
         @OnLifecycleEvent(Lifecycle.Event.ON_RESUME)
         private fun resume() = catchExceptions {
+            if (!lifecyclePause.onResume()) return@catchExceptions
             LibretroDroid.resume()
             onResume()
             isEmulationReady = true
         }
 
         @OnLifecycleEvent(Lifecycle.Event.ON_PAUSE)
-        private fun pause() = catchExceptions {
+        private fun pause() {
+            if (lifecyclePause.onPause()) stop()
+        }
+
+        @OnLifecycleEvent(Lifecycle.Event.ON_STOP)
+        private fun stopped() {
+            if (lifecyclePause.onStop()) stop()
+        }
+
+        private fun stop() = catchExceptions {
             isEmulationReady = false
             LibretroNetplay.linkUnblock()   // a held GBA link cable must not block the GL thread this pause waits on
             onPause()

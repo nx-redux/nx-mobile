@@ -26,4 +26,15 @@ class FocusPauseStepTest {
         assertEquals(FocusPauseStep.NONE, step(paused = false, top = true, setting = true))
         assertEquals(FocusPauseStep.NONE, step(paused = false, top = false, setting = false))
     }
+
+    @Test fun aFocusPauseInARoomCountsTowardTheCapAsTheMenuDoes() {
+        assertEquals(true, dsHeldInRoom(menuOpen = false, focusPaused = true, quitting = false, inRoom = true))
+        assertEquals(true, dsHeldInRoom(menuOpen = true, focusPaused = false, quitting = false, inRoom = true))
+    }
+
+    @Test fun nothingHeldOutOfARoomOrQuittingStopsTheCap() {
+        assertEquals(false, dsHeldInRoom(menuOpen = false, focusPaused = false, quitting = false, inRoom = true))
+        assertEquals(false, dsHeldInRoom(menuOpen = true, focusPaused = true, quitting = false, inRoom = false))
+        assertEquals(false, dsHeldInRoom(menuOpen = true, focusPaused = true, quitting = true, inRoom = true))
+    }
 }
