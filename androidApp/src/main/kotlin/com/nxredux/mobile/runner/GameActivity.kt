@@ -751,7 +751,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      * A Download Play child with no host left can only show its communication error, so the session ends as a quit:
      * when the core says the host left the room (other guests may stay), or once the room has stayed empty a few
      * seconds (a host restarting its wireless comes back within that). Not after the player's own Disconnect, nor
-     * while the app is in the background, which leaves the room too.
+     * while the app is in the background or lost the focus, which leave the room too: back, the room is joined again
+     * and checked afresh ([recheckDownloadPlayHost]), as a host that left meanwhile is never seen leaving.
      */
     private fun followDownloadPlayHost(others: Int) {
         if (!downloadPlayChildStarted || quitting) return
@@ -762,7 +763,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
 
     private suspend fun endDownloadPlaySession(afterMs: Long) {
         delay(afterMs)
-        if (quitting || !localWirelessShownOn() || !lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return
+        if (quitting || focusPaused || !localWirelessShownOn() || !lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return
         NxLog.i(TAG_LOG, "3DS Download Play: the host left, quitting")
         dual.pictureToast("The host left")
         delay(1500)
@@ -779,6 +780,13 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      */
     private fun rejoinSessionRoom() {
         if (!launchPipeline.dsAutoRoute || localWirelessShownOn()) LibretroNetplay.dsRejoin()
+        recheckDownloadPlayHost()
+    }
+
+    /** The empty-room wait again: a rejoin that finds the host cancels it ([followDownloadPlayHost]). */
+    private fun recheckDownloadPlayHost() {
+        downloadPlayHostGone?.cancel(); downloadPlayHostGone = null
+        followDownloadPlayHost(dsRoom.others)
     }
 
     private fun localWirelessShownOn(): Boolean = when {

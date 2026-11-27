@@ -17,6 +17,11 @@ class N3dsDownloadPlayDefaultsTest {
     }
 
     // OpenGL ES at 2x ran a Mali guest at ~52 fps, which pulls a race out of sync.
+    @Test fun mali_follows_the_app_wide_driver_when_the_3ds_console_left_it_on_default() {
+        assertEquals("def", n3dsDownloadPlayDefaults("Mali-G76", listOf("abc", "def"), chosen = "default", appWide = "def")["nx_gpu_driver"])
+        assertEquals("abc", n3dsDownloadPlayDefaults("Mali-G76", listOf("abc", "def"), chosen = "abc", appWide = "def")["nx_gpu_driver"])
+    }
+
     @Test fun mali_without_driver_starts_at_1x() {
         assertEquals(mapOf("nx_3ds_3d_resolution" to "performance", "nx_3ds_3d_scale" to "1"), n3dsDownloadPlayDefaults("Mali-G76", emptyList()))
     }

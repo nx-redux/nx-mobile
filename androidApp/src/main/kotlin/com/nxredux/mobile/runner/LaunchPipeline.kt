@@ -664,7 +664,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 val (consoleFile, gameFile) = if (!N3dsDownloadPlay.isRow(content.value)) console to perGame else {
                     val rowDefaults = n3dsDownloadPlayDefaults(AndroidDeviceInfo.gpu(),
                         AndroidGpuDrivers(AndroidGpuDrivers.root(activity.filesDir), Build.VERSION.SDK_INT).installed().map { it.id },
-                        chosen = console?.values?.get(GpuDriverOptions.KEY))
+                        chosen = console?.values?.get(GpuDriverOptions.KEY), appWide = settings.gpuDriver)
                     n3dsDownloadPlayConfigs(rowDefaults, console, perGame)
                 }
                 CoreConfig.resolve(descriptorDefaults, consoleFile, gameFile, forcedOptions, hiddenValues)
