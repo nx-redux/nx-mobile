@@ -367,7 +367,7 @@ index 9d5c922..9bf1221 100644
      if (!VisibilityInitialized || ShowHybridOptions != oldShowHybridOptions) {
          set_option_visible(screen::HYBRID_SMALL_SCREEN, ShowHybridOptions);
 diff --git a/src/libretro/core/core.cpp b/src/libretro/core/core.cpp
-index df32f07..eb5f060 100644
+index df32f07..86444dc 100644
 --- a/src/libretro/core/core.cpp
 +++ b/src/libretro/core/core.cpp
 @@ -1,3 +1,5 @@
@@ -503,7 +503,7 @@ index df32f07..eb5f060 100644
      Console->Start();
  
      retro::info("Started emulated console");
-@@ -608,6 +685,37 @@ void MelonDsDs::CoreState::InitFlushFirmwareTask() noexcept
+@@ -608,6 +685,40 @@ void MelonDsDs::CoreState::InitFlushFirmwareTask() noexcept
      }
  }
  
@@ -519,11 +519,14 @@ index df32f07..eb5f060 100644
 +    auto cart = melonDS::NDSCart::ParseROM(child.rom.data(), child.rom.size(), nullptr, std::nullopt);
 +    if (!cart) {
 +        retro::warn("DS Download Play: the received game is not a ROM melonDS can load");
++        _mpState.WmbBootFailed();
 +        return;
 +    }
 +    // First: the reset below powers the radio off, and the room must outlast it.
 +    NdsDownloadPlayStarted();
-+    _mpState.DownloadPlayStarted();
++    MpState::GroupId own;
++    std::copy_n(Console->SPI.GetFirmware().GetHeader().MacAddr.begin(), own.size(), own.begin());
++    _mpState.DownloadPlayStarted(child.host, own);
 +    // The player's JIT, but without fast memory: melonDS maps that only when it creates the console, and the client ran
 +    // with the JIT off.
 +    auto jit = JitArgs(Config);
@@ -541,7 +544,7 @@ index df32f07..eb5f060 100644
  void MelonDsDs::CoreState::ResetRenderState() {
      _renderState.ContextReset(*Console, Config);
  }
-@@ -619,6 +727,14 @@ void MelonDsDs::CoreState::DestroyRenderState() {
+@@ -619,6 +730,14 @@ void MelonDsDs::CoreState::DestroyRenderState() {
  bool MelonDsDs::CoreState::LoadGame(unsigned type, std::span<const retro_game_info> game) noexcept try {
      ZoneScopedN(TracyFunction);
  
@@ -1034,7 +1037,7 @@ index 0000000..cfaa783
 +
 +#endif //MELONDS_DS_LIBRETRO_VIEWS_H
 diff --git a/src/libretro/net/mp.cpp b/src/libretro/net/mp.cpp
-index caa185d..8676db8 100644
+index caa185d..1fe08c6 100644
 --- a/src/libretro/net/mp.cpp
 +++ b/src/libretro/net/mp.cpp
 @@ -15,7 +15,8 @@
@@ -1080,7 +1083,7 @@ index caa185d..8676db8 100644
      }
      _sendFn = sendFn;
  }
-@@ -106,9 +124,48 @@ void MpState::SetPollFn(retro_netpacket_poll_receive_t pollFn) noexcept {
+@@ -106,9 +124,52 @@ void MpState::SetPollFn(retro_netpacket_poll_receive_t pollFn) noexcept {
  void MpState::PacketReceived(const void *buf, size_t len, uint16_t client_id) noexcept {
      retro_assert(IsReady());
      Packet p = Packet::parsePk(buf, len);
@@ -1091,12 +1094,16 @@ index caa185d..8676db8 100644
 +        _wmb.FrameReceived((const uint8_t*)p.Data(), p.Length(), p.Timestamp(), p.PacketType() == Packet::Type::Cmd,
 +                           client_id, nowMs, [this](const WmbOutgoing& f, uint16_t host) { SendWmb(f, host); });
 +    }
-+    // A received game's host that leaves cleanly says so: a deauthentication from a host of this room.
++    // A received game's host that leaves cleanly says so: a deauthentication from that host, to this console or to all.
++    // One it sends another guest, or another group's host ending its own session, is not this game ending.
 +    if (_dlpChild && p.Length() >= FRAME_HEAD_LENGTH) {
 +        const uint8_t* head = (const uint8_t*)p.Data();
-+        GroupId from;
++        GroupId to, from;
++        std::copy_n(head + RX_HEADER_LENGTH + 4, to.size(), to.begin());
 +        std::copy_n(head + RX_HEADER_LENGTH + 10, from.size(), from.begin());
-+        if ((head[RX_HEADER_LENGTH] | head[RX_HEADER_LENGTH + 1] << 8) == 0x00C0 && _hosts.count(from)) ReportHostLeft();
++        constexpr GroupId everyone {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
++        const bool deauth = (head[RX_HEADER_LENGTH] | head[RX_HEADER_LENGTH + 1] << 8) == 0x00C0;
++        if (deauth && from == _dlpHost && (to == _dlpOwn || to == everyone)) ReportHostLeft();
 +    }
 +    // Only the consoles of this host's group reply to it; another group in the room must not be waited for.
 +    if(p.PacketType() == Packet::Type::Reply) {
@@ -1129,7 +1136,7 @@ index caa185d..8676db8 100644
      }
      receivedPackets.push(std::move(p));
  }
-@@ -132,9 +189,15 @@ std::optional<Packet> MpState::NextPacket() noexcept {
+@@ -132,9 +193,15 @@ std::optional<Packet> MpState::NextPacket() noexcept {
  std::optional<Packet> MpState::NextPacketBlock() noexcept {
      retro_assert(IsReady());
      if (receivedPackets.empty()) {
@@ -1146,7 +1153,7 @@ index caa185d..8676db8 100644
              if(!receivedPackets.empty()) {
                  return NextPacket();
              }
-@@ -151,16 +214,112 @@ std::optional<Packet> MpState::NextPacketBlock() noexcept {
+@@ -151,16 +218,112 @@ std::optional<Packet> MpState::NextPacketBlock() noexcept {
      return std::nullopt;
  }
  
@@ -1263,7 +1270,7 @@ index caa185d..8676db8 100644
 +    NdsDownloadPlayHostLeft();
 +}
 diff --git a/src/libretro/net/mp.hpp b/src/libretro/net/mp.hpp
-index f6b5dfc..6b00b05 100644
+index f6b5dfc..84e970e 100644
 --- a/src/libretro/net/mp.hpp
 +++ b/src/libretro/net/mp.hpp
 @@ -14,13 +14,26 @@
@@ -1307,7 +1314,7 @@ index f6b5dfc..6b00b05 100644
  
      std::vector<uint8_t> ToBuf() const;
  private:
-@@ -55,23 +75,62 @@ private:
+@@ -55,23 +75,71 @@ private:
      uint8_t _aid;
      Packet::Type _type;
      std::vector<uint8_t> _data;
@@ -1327,9 +1334,16 @@ index f6b5dfc..6b00b05 100644
 +    /// lasts (the emulated radio is not in use).
 +    void WmbService(melonDS::NDS& console) noexcept;
 +    std::optional<WmbChild> TakeWmbChild() noexcept { return _wmb.TakeChild(); }
++    void WmbBootFailed() noexcept { _wmb.BootFailed(); }
 +    void WmbRoomStopped() noexcept { _wmb.RoomStopped(); }
 +    /// The received game booted: from now on its host leaving is reported.
-+    void DownloadPlayStarted() noexcept { _dlpChild = true; _dlpHostLeftReported = false; }
++    /// The received game runs: its [host] leaving ends it; [own] is this console's address.
++    void DownloadPlayStarted(const GroupId& host, const GroupId& own) noexcept {
++        _dlpChild = true;
++        _dlpHostLeftReported = false;
++        _dlpHost = host;
++        _dlpOwn = own;
++    }
 +    void ReportHostLeft() noexcept;
 +    /// [group]: the group this console is in, whose host a reply goes to.
 +    void SendPacket(const Packet &p, const GroupId& group) noexcept;
@@ -1350,6 +1364,8 @@ index f6b5dfc..6b00b05 100644
 +    WmbSession _wmb;
 +    bool _dlpChild = false;
 +    bool _dlpHostLeftReported = false;
++    GroupId _dlpHost {};
++    GroupId _dlpOwn {};
      bool _warnedHighLatency = false;
      int _timeoutCount = 0;
      retro_netpacket_send_t _sendFn;
@@ -1373,10 +1389,10 @@ index f6b5dfc..6b00b05 100644
  }
 diff --git a/src/libretro/net/wmb.cpp b/src/libretro/net/wmb.cpp
 new file mode 100644
-index 0000000..00c023c
+index 0000000..39608e2
 --- /dev/null
 +++ b/src/libretro/net/wmb.cpp
-@@ -0,0 +1,378 @@
+@@ -0,0 +1,395 @@
 +#include "wmb.hpp"
 +#include <algorithm>
 +#include <cstring>
@@ -1392,6 +1408,9 @@ index 0000000..00c023c
 +constexpr uint64_t HOST_FORGET_MS = 5000;
 +constexpr uint64_t HOST_SILENT_MS = 3000;
 +constexpr uint32_t HEADER_SIZE = 0x160;
++constexpr size_t PAYLOAD_MAX = 504;
++constexpr uint32_t BINARY_MAX = 0x3BFE00;
++constexpr uint32_t ROM_MIN = 0x1000;
 +constexpr int BEACONS_PER_ASK = 5;
 +// Seen from a real Download Play client: the flags byte of each reply.
 +constexpr uint8_t REPLY_FLAGS = 0x81;
@@ -1525,6 +1544,12 @@ index 0000000..00c023c
 +    _mac = mac;
 +    _username = username.substr(0, 10);
 +    _payload = offer.cmdDataSize > 6 ? offer.cmdDataSize - 6 : 0;
++    // A data packet carries at most 504 bytes (GBATEK); anything else is not a host we can download from.
++    if (_payload == 0 || _payload > PAYLOAD_MAX) {
++        _state = State::Failed;
++        _failure = Failure::BadDownload;
++        return;
++    }
 +    _state = State::Auth;
 +    _beaconsSinceAsk = BEACONS_PER_ASK; // ask at the next beacon
 +    _hostHeardAt = nowMs;
@@ -1689,6 +1714,13 @@ index 0000000..00c023c
 +        if (!_haveRsa && bodyLen >= 7 + _rsa.size()) {
 +            std::copy_n(body + 7, _rsa.size(), _rsa.begin());
 +            _haveRsa = true;
++            // The binaries load into the DS's 4 MB of main RAM: larger sizes are forged, and would be allocated.
++            if (RegionSize(1) > BINARY_MAX || RegionSize(2) > BINARY_MAX) {
++                _haveRsa = false;
++                _state = State::Failed;
++                _failure = Failure::BadDownload;
++                return;
++            }
 +        }
 +        reply[0] = 0x08;
 +        break;
@@ -1748,7 +1780,8 @@ index 0000000..00c023c
 +    if (arm9At < HEADER_SIZE || arm7At < HEADER_SIZE || arm9At + arm9.size() > ROM_MAX || arm7At + arm7.size() > ROM_MAX)
 +        return std::nullopt;
 +    WmbChild child;
-+    child.rom.resize(std::max(arm9At + arm9.size(), arm7At + arm7.size()));
++    // melonDS refuses a cartridge image under 4 KB, which small binaries placed low would make.
++    child.rom.resize(std::max({arm9At + arm9.size(), arm7At + arm7.size(), uint64_t(ROM_MIN)}));
 +    std::copy(header.begin(), header.end(), child.rom.begin());
 +    std::copy(arm9.begin(), arm9.end(), child.rom.begin() + arm9At);
 +    std::copy(arm7.begin(), arm7.end(), child.rom.begin() + arm7At);
@@ -1757,10 +1790,10 @@ index 0000000..00c023c
 +}
 diff --git a/src/libretro/net/wmb.hpp b/src/libretro/net/wmb.hpp
 new file mode 100644
-index 0000000..40ec0a1
+index 0000000..8a42045
 --- /dev/null
 +++ b/src/libretro/net/wmb.hpp
-@@ -0,0 +1,116 @@
+@@ -0,0 +1,117 @@
 +#pragma once
 +// DS Download Play (Wireless Multiboot) from the guest's side, per GBATEK "DS Wifi Nintendo Beacons" and "DS Wifi
 +// Nintendo DS Download Play". Frames are melonDS's: a 12-byte radio header, then the 802.11 frame. Pure: no logging,
@@ -1871,6 +1904,7 @@ index 0000000..40ec0a1
 +struct WmbChild {
 +    std::vector<uint8_t> rom;
 +    std::array<uint8_t, 0x40> bootBlock {};
++    WmbMac host {}; // the console that sent it
 +};
 +
 +/// Each binary placed where the header says a cart holds it; nothing when the header is unusable.
@@ -1930,10 +1964,10 @@ index 0000000..f2188c9
 +#endif
 diff --git a/src/libretro/net/wmb_session.cpp b/src/libretro/net/wmb_session.cpp
 new file mode 100644
-index 0000000..f0b1790
+index 0000000..d24c158
 --- /dev/null
 +++ b/src/libretro/net/wmb_session.cpp
-@@ -0,0 +1,153 @@
+@@ -0,0 +1,164 @@
 +#include "wmb_session.hpp"
 +
 +#include <cstring>
@@ -1974,6 +2008,12 @@ index 0000000..f0b1790
 +    auto child = std::move(_child);
 +    _child.reset();
 +    return child;
++}
++
++void WmbSession::BootFailed() noexcept {
++    _booting = false;
++    _client.Cancel();
++    _failedReason = NXDLP_BAD_DOWNLOAD;
 +}
 +
 +void WmbSession::RoomStopped() noexcept {
@@ -2052,8 +2092,13 @@ index 0000000..f0b1790
 +    }
 +    if (_client.GetState() == WmbClient::State::Done && !_booting) {
 +        _child = MakeWmbChild(_client.Region(0), _client.Region(1), _client.Region(2), _client.BootBlock());
-+        if (_child) _booting = true;
-+        else _failedReason = NXDLP_BAD_DOWNLOAD;
++        if (_child) {
++            _child->host = _client.Offer().host;
++            _booting = true;
++        } else {
++            _client.Cancel(); // or the same download would be rebuilt every frame
++            _failedReason = NXDLP_BAD_DOWNLOAD;
++        }
 +    }
 +
 +    const size_t before = _scanner.Offers().size();
@@ -2089,10 +2134,10 @@ index 0000000..f0b1790
 +}
 diff --git a/src/libretro/net/wmb_session.hpp b/src/libretro/net/wmb_session.hpp
 new file mode 100644
-index 0000000..c2889d1
+index 0000000..40ec635
 --- /dev/null
 +++ b/src/libretro/net/wmb_session.hpp
-@@ -0,0 +1,74 @@
+@@ -0,0 +1,76 @@
 +#pragma once
 +// A DS Download Play session for our client (tools/nds-download-play): the core finds the client's mailbox in the
 +// DS's main RAM, lists the hosts it hears there, joins the one the client picks and hands back the received game.
@@ -2151,6 +2196,8 @@ index 0000000..c2889d1
 +    /// Joining or downloading: the host waits on each reply, so the room is read more often.
 +    bool Busy() const noexcept;
 +    std::optional<WmbChild> TakeChild() noexcept;
++    /// The received game could not be started: the client shows the download as failed.
++    void BootFailed() noexcept;
 +private:
 +    void WriteState(melonDS::NDS& console) noexcept;
 +    std::optional<uint32_t> _box; // offset of the mailbox in main RAM

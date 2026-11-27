@@ -472,6 +472,36 @@ static void make_child_rejects_forged_offsets() {
     CHECK(!MakeWmbChild(Bytes(0x100, 0), Bytes(16, 0), Bytes(16, 0), {}).has_value());
 }
 
+static void client_refuses_oversized_binaries() {
+    WmbClient c = JoinedClient();
+    std::vector<WmbOutgoing> out;
+    const Bytes rsa = RsaCommand(HOST, 0xF0000000, 0x1000);
+    c.FrameReceived(rsa.data(), rsa.size(), 0, true, 0, out);
+    CHECK(c.GetState() == WmbClient::State::Failed);
+    CHECK(c.GetFailure() == WmbClient::Failure::BadDownload);
+    CHECK(c.PacketsTotal() == 0);
+}
+
+static void client_refuses_impossible_packet_size() {
+    WmbOffer o = MarioParty();
+    o.cmdDataSize = 0xFFFF;
+    WmbClient c;
+    c.Start(o, CLIENT, u"NX Redux", 0);
+    CHECK(c.GetState() == WmbClient::State::Failed);
+    o.cmdDataSize = 6; // no room for data
+    c.Start(o, CLIENT, u"NX Redux", 0);
+    CHECK(c.GetState() == WmbClient::State::Failed);
+}
+
+static void make_child_pads_small_image() {
+    Bytes header(0x160, 0);
+    header[0x21] = 0x02; // ARM9 at 0x200
+    header[0x31] = 0x03; // ARM7 at 0x300
+    const auto child = MakeWmbChild(header, Bytes(16, 0x99), Bytes(16, 0x77), {});
+    CHECK(child.has_value());
+    if (child) CHECK(child->rom.size() >= 0x1000);
+}
+
 int main() {
     const std::pair<const char*, std::function<void()>> tests[] = {
         {"scanner_decodes_real_beacon_layout", scanner_decodes_real_beacon_layout},
@@ -492,6 +522,9 @@ int main() {
         {"client_cancel_returns_idle", client_cancel_returns_idle},
         {"make_child_layout", make_child_layout},
         {"make_child_rejects_forged_offsets", make_child_rejects_forged_offsets},
+        {"client_refuses_oversized_binaries", client_refuses_oversized_binaries},
+        {"client_refuses_impossible_packet_size", client_refuses_impossible_packet_size},
+        {"make_child_pads_small_image", make_child_pads_small_image},
         {"mailbox_headers_identical", mailbox_headers_identical},
         {"mailbox_layout", mailbox_layout},
         {"offer_to_mailbox", offer_to_mailbox},
