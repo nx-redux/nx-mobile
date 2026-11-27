@@ -120,18 +120,16 @@ centered(d, cx, 372, 'Play together from one Game Card', font(AVENIR, 21, 2), (7
 cover.save(f'{OUT}/boxart2d.png')
 
 
-def abstract_shot(size, title):
-    """The screenshot: the cover's paper, our icon and the title, as the 2D box shows them (no client capture)."""
+def abstract_shot(size):
+    """The screenshot: the cover's paper and our icon, as the 2D box shows them (no client capture, no title)."""
     w, h = size
     shot = menu_paper(size, h // 6)
-    d = ImageDraw.Draw(shot)
-    icon = halo(pair_icon(h * 3 // 10), max(4, h // 90))
-    shot.paste(icon, ((w - icon.width) // 2, int(h * 0.2)), icon)
-    centered(d, w / 2, int(h * 0.68), title, font(ROUNDED, h // 9), INK, max(4, h // 90), (255, 255, 255))
+    icon = halo(pair_icon(h * 4 // 10), max(4, h // 90))
+    shot.paste(icon, ((w - icon.width) // 2, (h - icon.height) // 2), icon)
     return shot
 
 # --- screenshot: abstract, as the 2D box; one image for both Download Play rows
-abstract_shot((960, 640), 'Download Play').save(f'{OUT}/screenshot.png')
+abstract_shot((960, 640)).save(f'{OUT}/screenshot.png')
 
 
 def warp(src, quad, size):
