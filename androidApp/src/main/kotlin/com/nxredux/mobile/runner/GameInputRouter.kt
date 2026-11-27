@@ -47,6 +47,8 @@ internal interface GameInputHost : LifecycleOwner {
     val lockedOptions: Set<String>
     /** The pad table for this game ([GameActivity] resolves it at launch and on a Controller Type change). */
     val padMap: PadMap
+    /** The console's button mapping: which job each physical key does ([GameActivity] reads it at launch). */
+    val buttonMap: ButtonMap
     val wiiPad: WiiPad?
     val isN64: Boolean
     val isDc: Boolean
@@ -162,21 +164,23 @@ internal class GameInputRouter(private val host: GameInputHost) {
     /**
      * The keycode a hardware key is sent to the runner as, null to send nothing. Face keys go by their letter
      * ([PhysicalKeys]): N64 by the letter's name ([N64Input]); every other tag by the console's
-     * [com.nxredux.mobile.runner.FaceMode], then its [PadMap] picks what that button sends. A key-up repeats its key-down's.
+     * [com.nxredux.mobile.runner.FaceMode], then its [PadMap] picks what that button sends. [mapped] is the key whose job
+     * the physical [keyCode] does ([mappedKey]); the release is recorded under [keyCode], so it repeats its key-down's
+     * even if the mapping changed in between.
      */
-    private fun runnerKey(event: KeyEvent, keyCode: Int, port: Int): Int? {
+    private fun runnerKey(event: KeyEvent, keyCode: Int, mapped: Int, port: Int): Int? {
         if (host.isN64) {
             // By name on every pad, as on the handheld: the letter picks the N64 input; R2 and SELECT send nothing.
-            val letter = positionOf(event, keyCode)
+            val letter = positionOf(event, mapped)
             val button = PadKeymap.buttonFor(letter) ?: return letter
             return N64Input.toRunner(button, letter)
         }
         val held = event.deviceId to keyCode
         val sent = inputs[port].sent
-        if (event.action == KeyEvent.ACTION_UP) return sent.up(held, send(event, keyCode))
+        if (event.action == KeyEvent.ACTION_UP) return sent.up(held, send(event, mapped))
         // Only the first down records; a key-repeat sends what it recorded.
-        if (event.repeatCount > 0) return sent.held(held) ?: send(event, keyCode)
-        return sent.down(held, send(event, keyCode))
+        if (event.repeatCount > 0) return sent.held(held) ?: send(event, mapped)
+        return sent.down(held, send(event, mapped))
     }
 
     private fun send(event: KeyEvent, keyCode: Int): Int = host.padMap.sendKey(positionOf(event, keyCode))
@@ -671,12 +675,30 @@ internal class GameInputRouter(private val host: GameInputHost) {
     private fun leftTrigger(event: MotionEvent) = maxOf(event.getAxisValue(MotionEvent.AXIS_LTRIGGER), event.getAxisValue(MotionEvent.AXIS_BRAKE))
     private fun rightTrigger(event: MotionEvent) = maxOf(event.getAxisValue(MotionEvent.AXIS_RTRIGGER), event.getAxisValue(MotionEvent.AXIS_GAS))
 
-    /** An axis trigger's press or release: to the DS hotkeys, the 3DS hotkeys (ZL/ZR, always forwarded) or the core. */
-    private fun sendAxisTrigger(button: NxButton, down: Boolean, port: Int) {
+    /**
+     * An axis trigger's press or release as the job the button mapping gives that trigger ([axisJobKey]), routed as that
+     * job's key would be: the Wii's and the 3DS's stick clicks, the DS hotkeys, the 3DS hotkeys (ZL/ZR, always forwarded),
+     * the Wii U's SELECT chords, then the core. The DS's L2/R2 are its hotkeys only, as on the keys.
+     */
+    private fun sendAxisTrigger(trigger: NxButton, down: Boolean, port: Int) {
+        val code = axisJobKey(host.buttonMap, trigger)
+        when (thumbKeyRoute(code, host.isWii, host.isN3ds)) {
+            ThumbKeyRoute.WII_RECENTER -> { if (down) host.recenterWiiMotion(); return }
+            ThumbKeyRoute.WII_HOME -> { if (down) host.pressWiiHome(); return }
+            ThumbKeyRoute.N3DS_SWAP -> {
+                val taken = if (down) n3dsSwapKey.down(repeat = false) { host.onN3dsSwapPressed(down = true) } else host.onN3dsSwapPressed(down = false)
+                if (taken) return
+            }
+            ThumbKeyRoute.CORE -> {}
+        }
+        val placed = PadKeymap.buttonFor(code)
+        val job = placed ?: ndsThumbButton(code) ?: return
+        val isTrigger = job == NxButton.L2 || job == NxButton.R2
         when {
-            host.isNds -> routeNds(button, down)
-            host.isN3ds -> if (routeN3ds(button, down)) sendTriggerKey(button, down)
-            else -> sendTriggerKey(button, down, port)
+            host.isNds -> if (routeNds(job, down) && !isTrigger) sendTriggerKey(job, down, port)
+            host.isN3ds -> if (placed == null || routeN3ds(placed, down)) sendTriggerKey(job, down)
+            isWiiu && port == 0 && placed != null && !isTrigger -> if (routeWiiu(placed, down)) sendTriggerKey(job, down, port)
+            else -> sendTriggerKey(job, down, port)
         }
     }
 
@@ -715,10 +737,17 @@ internal class GameInputRouter(private val host: GameInputHost) {
         return axes.any { device.getMotionRange(it) != null }
     }
 
-    /** An axis trigger's press or release to the core, as its L2/R2 key would be sent (by name on N64, else the pad map). */
+    /**
+     * A trigger axis's job ([button]) pressed or released in the core, as that key from a physical pad would be sent
+     * ([runnerKey]): by name on N64, else by letter or position through the pad map.
+     */
     private fun sendTriggerKey(button: NxButton, down: Boolean, port: Int = 0) {
         val keyCode = PadKeymap.keyCodeFor(button) ?: return
-        val code = if (host.isN64) N64Input.toRunner(button, keyCode) else host.padMap.sendKey(keyCode)
+        val code = when {
+            !host.isN64 -> host.padMap.sendKey(PhysicalKeys.toRunner(host.gameTag, keyCode))
+            PadKeymap.buttonFor(keyCode) == null -> keyCode   // a stick click goes as itself, as its key does
+            else -> N64Input.toRunner(button, keyCode)
+        }
         code?.let { host.retroView?.sendKeyEvent(if (down) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP, it, port) }
     }
 
@@ -1083,10 +1112,14 @@ internal class GameInputRouter(private val host: GameInputHost) {
             return true
         }
         val port = portFor(event.device, claim = true) ?: return true   // no slot: dropped
+        // From here a physical key acts as the key whose job the button mapping gives it; the menu chord and the shortcuts
+        // match the raw key, and the L2/R2 axis dedupe goes by the physical trigger, as its axes do.
+        val mapped = mappedKey(host.buttonMap, keyCode, isPhysical(event))
+        val trigger = physicalTrigger(keyCode)
         // Wii: the left-stick click recentres the phone's motion, the right-stick click is HOME ([GameInputHost.pressWiiHome]); neither
         // reaches the core as itself. 3DS split: the left-stick click is SWAP between the displays. Elsewhere (the PS2's
         // L3 / R3) they go on to the core.
-        when (thumbKeyRoute(keyCode, host.isWii, host.isN3ds)) {
+        when (thumbKeyRoute(mapped, host.isWii, host.isN3ds)) {
             ThumbKeyRoute.WII_RECENTER -> { if (first) host.recenterWiiMotion(); return true }
             ThumbKeyRoute.WII_HOME -> { if (first) host.pressWiiHome(); return true }
             ThumbKeyRoute.N3DS_SWAP -> if (n3dsSwapKey.down(repeat = !first) { host.onN3dsSwapPressed(down = true) }) return true
@@ -1099,15 +1132,17 @@ internal class GameInputRouter(private val host: GameInputHost) {
         // ([com.nxredux.mobile.shortcuts.EffectiveShortcuts.blocked]), before the DS / 3DS routing and the core.
         if (port == 0) host.shortcutKeys?.let { keys -> if (shortcut(keys.onDown(keyCode, repeat = !first), keyCode, port)) return true }
         // The hotkeys and stylus see the console button the key is (its letter on DS/3DS), as the core will.
-        val placed = PadKeymap.buttonFor(positionOf(event, keyCode))
-        if (host.isNds) (placed ?: ndsThumbButton(keyCode))?.let { b ->
-            if (b == NxButton.L2 || b == NxButton.R2) { if (first && routeTriggerKey(b, down = true)) routeNds(b, down = true); return true }
-            if (!routeNds(b, down = true, repeat = !first)) return true
+        val placed = PadKeymap.buttonFor(positionOf(event, mapped))
+        if (host.isNds) {
+            if (first && trigger != null && !routeTriggerKey(trigger, down = true)) return true   // its axis pressed it
+            (placed ?: ndsThumbButton(mapped))?.let { b ->
+                if (b == NxButton.L2 || b == NxButton.R2) { if (first) routeNds(b, down = true); return true }
+                if (!routeNds(b, down = true, repeat = !first)) return true
+            }
         }
-        if (gcPad) placed?.let { b -> if (gcAnalogTriggerKey(b, event.device)) return true }
-        if (!host.isNds && !host.isDc && first) placed?.let { b ->
-            if ((b == NxButton.L2 || b == NxButton.R2) && !routeTriggerKey(b, down = true, port)) return true   // its axis pressed it
-        }
+        // A GameCube analog trigger is never remapped, so its key is dropped only while that key's job is the same trigger.
+        if (gcPad && trigger != null && mapped == keyCode && gcAnalogTriggerKey(trigger, event.device)) return true
+        if (!host.isNds && !host.isDc && first && trigger != null && !routeTriggerKey(trigger, down = true, port)) return true   // its axis pressed it
         if (host.isN3ds) placed?.let { b ->
             if (!routeN3ds(b, down = true, repeat = !first)) return true
         }
@@ -1115,7 +1150,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
             if (!routeWiiu(b, down = true, repeat = !first)) return true
         }
         // By letter (or by position on positional consoles) through the console's pad map; N64 by name ([runnerKey]).
-        runnerKey(event, keyCode, port)?.let { host.retroView?.sendKeyEvent(event.action, it, port) }
+        runnerKey(event, keyCode, mapped, port)?.let { host.retroView?.sendKeyEvent(event.action, it, port) }
         return true
     }
 
@@ -1130,22 +1165,25 @@ internal class GameInputRouter(private val host: GameInputHost) {
         // A held-back MENU (a MENU combo is bound): its release opens the menu if no combo fired, from any pad as its press.
         if (PadKeymap.buttonFor(keyCode) == NxButton.MENU) host.shortcutKeys?.takeIf { it.holdsMenu }?.let { shortcut(it.onUp(keyCode)); return true }
         val port = portFor(event.device, claim = false) ?: return true
-        when (thumbKeyRoute(keyCode, host.isWii, host.isN3ds)) {
+        val mapped = mappedKey(host.buttonMap, keyCode, isPhysical(event))
+        val trigger = physicalTrigger(keyCode)
+        when (thumbKeyRoute(mapped, host.isWii, host.isN3ds)) {
             ThumbKeyRoute.WII_RECENTER, ThumbKeyRoute.WII_HOME -> return true
             ThumbKeyRoute.N3DS_SWAP -> if (host.onN3dsSwapPressed(down = false)) return true
             ThumbKeyRoute.CORE -> {}
         }
         PadKeymap.buttonFor(keyCode)?.let { inputs.menuChord(port, it, down = false) }
         if (port == 0) host.shortcutKeys?.let { keys -> if (shortcut(keys.onUp(keyCode), keyCode, port)) return true }
-        val placed = PadKeymap.buttonFor(positionOf(event, keyCode))   // as on the down
-        if (host.isNds) (placed ?: ndsThumbButton(keyCode))?.let { b ->
-            if (b == NxButton.L2 || b == NxButton.R2) { if (routeTriggerKey(b, down = false)) routeNds(b, down = false); return true }
-            if (!routeNds(b, down = false)) return true
+        val placed = PadKeymap.buttonFor(positionOf(event, mapped))   // as on the down
+        if (host.isNds) {
+            if (trigger != null && !routeTriggerKey(trigger, down = false)) return true   // not held
+            (placed ?: ndsThumbButton(mapped))?.let { b ->
+                if (b == NxButton.L2 || b == NxButton.R2) { routeNds(b, down = false); return true }
+                if (!routeNds(b, down = false)) return true
+            }
         }
-        if (gcPad) placed?.let { b -> if (gcAnalogTriggerKey(b, event.device)) return true }
-        if (!host.isNds && !host.isDc) placed?.let { b ->
-            if ((b == NxButton.L2 || b == NxButton.R2) && !routeTriggerKey(b, down = false, port)) return true   // not held
-        }
+        if (gcPad && trigger != null && mapped == keyCode && gcAnalogTriggerKey(trigger, event.device)) return true
+        if (!host.isNds && !host.isDc && trigger != null && !routeTriggerKey(trigger, down = false, port)) return true   // not held
         if (host.isN3ds) placed?.let { b ->
             if (!routeN3ds(b, down = false)) return true
         }
@@ -1153,10 +1191,22 @@ internal class GameInputRouter(private val host: GameInputHost) {
             if (!routeWiiu(b, down = false)) return true
         }
         // By letter (or by position on positional consoles) through the console's pad map; N64 by name ([runnerKey]).
-        runnerKey(event, keyCode, port)?.let { host.retroView?.sendKeyEvent(event.action, it, port) }
+        runnerKey(event, keyCode, mapped, port)?.let { host.retroView?.sendKeyEvent(event.action, it, port) }
         return true
     }
 }
+
+/** The key whose job a key does under [map]: a physical pad's keys follow it, a key from no physical pad goes as is. */
+internal fun mappedKey(map: ButtonMap, keyCode: Int, physical: Boolean): Int =
+    if (physical) map.keyCodeFor(keyCode) else keyCode
+
+/** The key whose job a pulled trigger axis ([trigger], L2 or R2) does under [map]. */
+internal fun axisJobKey(map: ButtonMap, trigger: NxButton): Int =
+    map.keyCodeFor(if (trigger == NxButton.L2) MapKey.L2.keyCode else MapKey.R2.keyCode)
+
+/** The physical trigger (L2 or R2) a raw key is, for the key / axis dedupe ([TriggerAxes]); null for any other key. */
+private fun physicalTrigger(keyCode: Int): NxButton? =
+    PadKeymap.buttonFor(keyCode)?.takeIf { it == NxButton.L2 || it == NxButton.R2 }
 
 /** The buttons a release lets go of in the core ([GameInputRouter.releaseAllGameInput], [GameInputRouter.releasePort]). */
 private val RELEASED_BUTTONS = listOf(

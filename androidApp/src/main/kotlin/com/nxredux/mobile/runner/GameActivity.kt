@@ -356,6 +356,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     /** The pad table for this game (Sega pad type resolved at launch and on a Controller Type change; [PadMap.IDENTITY] for DC). */
     override var padMap: PadMap = PadMap.IDENTITY
         private set
+    override var buttonMap: ButtonMap = ButtonMap.DEFAULT
     /** The resolved Sega pad (Sega pad tags only; null = unknown or another console). */
     private var segaPad: SegaPad? = null
     /** The cart header's pad type read at launch (null = none read), kept so Auto can be resolved again mid-game. */
@@ -2424,6 +2425,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         override var canRewind by game::canRewind
         override var canSaveStates by game::canSaveStates
         override var padMap by game::padMap
+        override var buttonMap by game::buttonMap
         override var segaPad by game::segaPad
         override var segaHeader by game::segaHeader
         override var launchedSegaSetting by game::launchedSegaSetting

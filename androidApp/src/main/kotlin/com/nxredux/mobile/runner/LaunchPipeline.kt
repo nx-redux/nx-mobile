@@ -163,6 +163,7 @@ internal interface LaunchHost : GameScreenHost {
     var canRewind: Boolean
     var canSaveStates: Boolean
     var padMap: PadMap
+    var buttonMap: ButtonMap
     var segaPad: SegaPad?
     var segaHeader: SegaPad?
     var launchedSegaSetting: String?
@@ -708,6 +709,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             canSaveStates = descriptor?.saveStates != false
             speed.setSession(netplay = np != null)   // first: the touch buttons [ShortcutsMicController.launch] builds follow the session
             shortcuts.launch(microphone = descriptor?.microphone == true, netplay = np != null, tag, Shortcuts.fromConfig(resolved.values), saveStates = canSaveStates)
+            buttonMap = ButtonMap.fromConfig(resolved.values, tag)
             val netplayPad = if (np != null) NetplayPads.forSession(tag, descriptor?.id, sessionPad) else null
             renderer.shaderValues = ShaderOptions.fromConfig(resolved.values)
             renderer.presetNames = withContext(Dispatchers.IO) { Shaders.presets(shaderRoots) }
