@@ -480,7 +480,7 @@ class MainActivity : ComponentActivity(), FolderPicker {
                 screenRotates = { Settings.System.getInt(contentResolver, Settings.System.ACCELEROMETER_ROTATION, 1) != 0 },
                 ps2BiosFiles = { BiosImport.binFiles(applicationContext, AndroidHomeLocator(applicationContext).current(), "PS2") },
                 n3dsDownloadPlay = true,
-                ndsBiosFiles = { BiosImport.binFiles(applicationContext, AndroidHomeLocator(applicationContext).current(), "NDS") },
+                ndsDownloadPlay = true,
                 saveTransfer = saveTransfer,
                 biosIntake = biosIntake,
                 deviceSync = DeviceSyncs.get(this),

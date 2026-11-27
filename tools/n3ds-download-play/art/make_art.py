@@ -1,4 +1,4 @@
-"""Builds the 3DS Download Play row's art from the DS Download Play row's (androidApp/src/main/assets/nds-menu/).
+"""Builds the 3DS Download Play row's art from the DS Download Play row's (androidApp/src/main/assets/nds-dlp/).
 
 Usage: make_art.py <ds art dir> <client capture.png> <out dir>
 

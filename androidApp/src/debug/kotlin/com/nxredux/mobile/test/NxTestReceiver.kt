@@ -53,7 +53,7 @@ import java.io.File
  *   game.json, battery.json and resume.json. Send it with `am broadcast --allow-background-activity-starts`: a receiver
  *   may not start an activity from the background otherwise (Android 10+). The game shows over the lock screen and
  *   turns the screen on ([NxTestResults.markShowWhenLocked]).
- * - GAME with `--es path nds-menu: --es tag NDS`: DS Download Play (the DS menu, no file).
+ * - GAME with `--es path nds-menu: --es tag NDS`: DS Download Play (the bundled client).
  * - GAME with `--es path n3ds-dlp: --es tag 3DS`: 3DS Download Play (the bundled client).
  * - GAME_STOP: the live game quits as the menu's Quit does (battery save and auto state written); its process ends.
  * - GAME_FF (`--ez on true|false`, default true): fast forward on or off in the live game, as the panel's tile sets it.
