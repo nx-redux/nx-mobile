@@ -14084,13 +14084,13 @@
          "anchor": "centre",
          "label": "MENU",
          "labelH": 17.0,
+         "labelDx": -68.0,
+         "markH": 32.73,
+         "markDy": 0.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 154,
-         "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -68.0
+         "markSh": 154
         },
         {
          "id": "MIC",
@@ -14102,13 +14102,13 @@
          "anchor": "centre",
          "label": "MIC",
          "labelH": 17.0,
+         "labelDx": -68.0,
+         "markH": 33.0,
+         "markDy": 0.5,
          "markSx": 2294,
          "markSy": 418,
          "markSw": 103,
-         "markSh": 160,
-         "markH": 33.0,
-         "markDy": 0.5,
-         "labelDx": -68.0
+         "markSh": 160
         }
        ],
        "when": {
@@ -14207,13 +14207,13 @@
          "anchor": "centre",
          "label": "MENU",
          "labelH": 17.0,
+         "labelDx": -68.0,
+         "markH": 32.73,
+         "markDy": 0.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 154,
-         "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -68.0
+         "markSh": 154
         },
         {
          "id": "MIC",
@@ -14225,13 +14225,13 @@
          "anchor": "centre",
          "label": "MIC",
          "labelH": 17.0,
+         "labelDx": -68.0,
+         "markH": 33.0,
+         "markDy": 0.5,
          "markSx": 2294,
          "markSy": 418,
          "markSw": 103,
-         "markSh": 160,
-         "markH": 33.0,
-         "markDy": 0.5,
-         "labelDx": -68.0
+         "markSh": 160
         }
        ],
        "when": {
@@ -14330,13 +14330,13 @@
          "anchor": "centre",
          "label": "MENU",
          "labelH": 17.0,
+         "labelDx": -68.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -68.0
+         "markDy": 0.0
         },
         {
          "id": "MIC",
@@ -14348,13 +14348,13 @@
          "anchor": "centre",
          "label": "MIC",
          "labelH": 17.0,
+         "labelDx": -68.0,
          "markSx": 2294,
          "markSy": 418,
          "markSw": 103,
          "markSh": 160,
          "markH": 33.0,
-         "markDy": 0.5,
-         "labelDx": -68.0
+         "markDy": 0.5
         }
        ],
        "when": {
@@ -14453,13 +14453,13 @@
          "anchor": "centre",
          "label": "MENU",
          "labelH": 17.0,
+         "labelDx": -68.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -68.0
+         "markDy": 0.0
         },
         {
          "id": "MIC",
@@ -14471,13 +14471,13 @@
          "anchor": "centre",
          "label": "MIC",
          "labelH": 17.0,
+         "labelDx": -68.0,
          "markSx": 2294,
          "markSy": 418,
          "markSw": 103,
          "markSh": 160,
          "markH": 33.0,
-         "markDy": 0.5,
-         "labelDx": -68.0
+         "markDy": 0.5
         }
        ],
        "when": {
@@ -14620,13 +14620,13 @@
          "anchor": "centre",
          "label": "START",
          "labelH": 17.0,
+         "labelDx": 68.0,
+         "markH": 30.0,
+         "markDy": 0.0,
          "markSx": 324,
          "markSy": 724,
          "markSw": 137,
-         "markSh": 160,
-         "markH": 30.0,
-         "markDy": 0.0,
-         "labelDx": 68.0
+         "markSh": 160
         },
         {
          "id": "SELECT",
@@ -14638,13 +14638,13 @@
          "anchor": "centre",
          "label": "SELECT",
          "labelH": 17.0,
+         "labelDx": 68.0,
+         "markH": 28.0,
+         "markDy": 0.0,
          "markSx": 162,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 28.0,
-         "markDy": 0.0,
-         "labelDx": 68.0
+         "markSh": 160
         }
        ],
        "when": {
@@ -14782,13 +14782,13 @@
          "anchor": "centre",
          "label": "START",
          "labelH": 17.0,
+         "labelDx": 68.0,
+         "markH": 30.0,
+         "markDy": 0.0,
          "markSx": 324,
          "markSy": 724,
          "markSw": 137,
-         "markSh": 160,
-         "markH": 30.0,
-         "markDy": 0.0,
-         "labelDx": 68.0
+         "markSh": 160
         },
         {
          "id": "SELECT",
@@ -14800,13 +14800,13 @@
          "anchor": "centre",
          "label": "SELECT",
          "labelH": 17.0,
+         "labelDx": 68.0,
+         "markH": 28.0,
+         "markDy": 0.0,
          "markSx": 162,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 28.0,
-         "markDy": 0.0,
-         "labelDx": 68.0
+         "markSh": 160
         }
        ],
        "when": {
@@ -14944,13 +14944,13 @@
          "anchor": "centre",
          "label": "START",
          "labelH": 17.0,
+         "labelDx": 68.0,
          "markSx": 324,
          "markSy": 724,
          "markSw": 137,
          "markSh": 160,
          "markH": 30.0,
-         "markDy": 0.0,
-         "labelDx": 68.0
+         "markDy": 0.0
         },
         {
          "id": "SELECT",
@@ -14962,13 +14962,13 @@
          "anchor": "centre",
          "label": "SELECT",
          "labelH": 17.0,
+         "labelDx": 68.0,
          "markSx": 162,
          "markSy": 724,
          "markSw": 160,
          "markSh": 160,
          "markH": 28.0,
-         "markDy": 0.0,
-         "labelDx": 68.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -15106,13 +15106,13 @@
          "anchor": "centre",
          "label": "START",
          "labelH": 17.0,
+         "labelDx": 68.0,
          "markSx": 324,
          "markSy": 724,
          "markSw": 137,
          "markSh": 160,
          "markH": 30.0,
-         "markDy": 0.0,
-         "labelDx": 68.0
+         "markDy": 0.0
         },
         {
          "id": "SELECT",
@@ -15124,13 +15124,13 @@
          "anchor": "centre",
          "label": "SELECT",
          "labelH": 17.0,
+         "labelDx": 68.0,
          "markSx": 162,
          "markSy": 724,
          "markSw": 160,
          "markSh": 160,
          "markH": 28.0,
-         "markDy": 0.0,
-         "labelDx": 68.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -28715,7 +28715,7 @@
      "alt": "dpad"
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -29248,7 +29248,7 @@
        "h": 512,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -29379,7 +29379,7 @@
        "h": 512,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -29510,7 +29510,7 @@
        "h": 512,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -30816,7 +30816,7 @@
      "inward": 40
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -31097,7 +31097,7 @@
        "h": 512,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -31203,7 +31203,7 @@
        "h": 512,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -31309,7 +31309,7 @@
        "h": 512,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -32368,7 +32368,7 @@
      "inward": 40
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -32649,7 +32649,7 @@
        "h": 512,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -32755,7 +32755,7 @@
        "h": 512,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -32861,7 +32861,7 @@
        "h": 512,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -34010,7 +34010,7 @@
      "alt": "dpad"
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -34567,7 +34567,7 @@
        "h": 512,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -34743,7 +34743,7 @@
        "h": 512,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -34919,7 +34919,7 @@
        "h": 512,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -36271,7 +36271,7 @@
      "alt": "dpad"
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -36694,7 +36694,7 @@
        "h": 512,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -36809,7 +36809,7 @@
        "h": 512,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -36924,7 +36924,7 @@
        "h": 512,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -61597,7 +61597,7 @@
      "alt": "dpad"
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -62068,7 +62068,7 @@
      "inward": 40
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -62476,7 +62476,7 @@
      "inward": 40
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -62974,7 +62974,7 @@
      "alt": "dpad"
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -63494,7 +63494,7 @@
      "alt": "dpad"
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -76479,7 +76479,7 @@
      "alt": "dpad"
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -76764,7 +76764,7 @@
        "h": 538,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -77550,7 +77550,7 @@
      "inward": 40
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -77709,7 +77709,7 @@
        "h": 538,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -78411,7 +78411,7 @@
      "inward": 40
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -78570,7 +78570,7 @@
        "h": 538,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -79362,7 +79362,7 @@
      "alt": "dpad"
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -79671,7 +79671,7 @@
        "h": 538,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -80520,7 +80520,7 @@
      "alt": "dpad"
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -80743,7 +80743,7 @@
        "h": 538,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -107779,7 +107779,7 @@
        "h": 1092,
        "pieces": [
         {
-         "sx": 2074,
+         "sx": 2570,
          "sy": 886,
          "w": 110,
          "h": 108,
@@ -107860,9 +107860,9 @@
          "hw": 70.0,
          "hh": 42.0,
          "anchor": "left",
+         "mark": "Z",
          "markH": 32.0,
-         "markDy": -2.0,
-         "mark": "Z"
+         "markDy": -2.0
         },
         {
          "id": "STICK",
@@ -107882,9 +107882,9 @@
          "hw": 45.0,
          "hh": 42.0,
          "anchor": "left",
+         "mark": "L",
          "markH": 27.0,
-         "markDy": -1.5,
-         "mark": "L"
+         "markDy": -1.5
         },
         {
          "id": "MENU",
@@ -107897,12 +107897,12 @@
          "label": "MENU",
          "labelDx": -68.0,
          "labelH": 17.0,
+         "markH": 32.73,
+         "markDy": 0.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 154,
-         "markH": 32.73,
-         "markDy": 0.0
+         "markSh": 154
         }
        ],
        "when": {
@@ -108093,12 +108093,12 @@
          "label": "START",
          "labelDx": 68.0,
          "labelH": 17.0,
+         "markH": 30.0,
+         "markDy": -1.0,
          "markSx": 324,
          "markSy": 724,
          "markSw": 137,
-         "markSh": 160,
-         "markH": 30.0,
-         "markDy": -1.0
+         "markSh": 160
         }
        ],
        "when": {
@@ -111317,12 +111317,12 @@
          "label": "MENU",
          "labelDx": -68.0,
          "labelH": 17.0,
+         "markH": 32.73,
+         "markDy": 0.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 154,
-         "markH": 32.73,
-         "markDy": 0.0
+         "markSh": 154
         }
        ],
        "when": {
@@ -111465,9 +111465,9 @@
          "hw": 70.0,
          "hh": 42.0,
          "anchor": "left",
+         "mark": "R",
          "markH": 32.0,
-         "markDy": -2.0,
-         "mark": "R"
+         "markDy": -2.0
         },
         {
          "id": "R",
@@ -111477,9 +111477,9 @@
          "hw": 45.0,
          "hh": 42.0,
          "anchor": "left",
+         "mark": "Z",
          "markH": 27.0,
-         "markDy": -1.5,
-         "mark": "Z"
+         "markDy": -1.5
         },
         {
          "id": "CSTICK",
@@ -111502,12 +111502,12 @@
          "label": "START",
          "labelDx": 68.0,
          "labelH": 17.0,
+         "markH": 30.0,
+         "markDy": -1.0,
          "markSx": 324,
          "markSy": 724,
          "markSw": 137,
-         "markSh": 160,
-         "markH": 30.0,
-         "markDy": -1.0
+         "markSh": 160
         }
        ],
        "when": {
@@ -114631,7 +114631,7 @@
      "level": "bottom"
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -115489,7 +115489,7 @@
        "h": 834,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -115611,7 +115611,7 @@
        "h": 834,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -115733,7 +115733,7 @@
        "h": 834,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -115855,7 +115855,7 @@
        "h": 834,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -115977,7 +115977,7 @@
        "h": 834,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -116099,7 +116099,7 @@
        "h": 834,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -117585,7 +117585,7 @@
      "level": "bottom"
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -117881,12 +117881,12 @@
          "r": 58.0,
          "capR": 40.0,
          "anchor": "left",
+         "markH": 3.9,
+         "markDy": -0.56,
          "markSx": 74,
          "markSy": 1032,
          "markSw": 160,
-         "markSh": 24,
-         "markH": 3.9,
-         "markDy": -0.56
+         "markSh": 24
         },
         {
          "id": "MENU",
@@ -117898,13 +117898,13 @@
          "anchor": "left",
          "label": "MENU",
          "labelH": 17.0,
+         "labelDx": -68.0,
+         "markH": 32.73,
+         "markDy": -0.44,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 154,
-         "markH": 32.73,
-         "markDy": -0.44,
-         "labelDx": -68.0
+         "markSh": 154
         }
        ],
        "when": {
@@ -118155,12 +118155,12 @@
          "r": 58.0,
          "capR": 40.0,
          "anchor": "left",
+         "markH": 3.9,
+         "markDy": -0.56,
          "markSx": 74,
          "markSy": 1032,
          "markSw": 160,
-         "markSh": 24,
-         "markH": 3.9,
-         "markDy": -0.56
+         "markSh": 24
         },
         {
          "id": "MENU",
@@ -118172,13 +118172,13 @@
          "anchor": "left",
          "label": "MENU",
          "labelH": 17.0,
+         "labelDx": -68.0,
+         "markH": 32.73,
+         "markDy": -0.44,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 154,
-         "markH": 32.73,
-         "markDy": -0.44,
-         "labelDx": -68.0
+         "markSh": 154
         }
        ],
        "when": {
@@ -118200,7 +118200,7 @@
        "h": 744,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -118334,7 +118334,7 @@
          "group": "HOME+MOTION"
         },
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -118456,12 +118456,12 @@
          "r": 58.0,
          "capR": 40.0,
          "anchor": "right",
+         "markH": 26.0,
+         "markDy": -0.56,
          "markSx": 2578,
          "markSy": 418,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 26.0,
-         "markDy": -0.56
+         "markSh": 160
         },
         {
          "id": "HOME",
@@ -118473,13 +118473,13 @@
          "anchor": "right",
          "label": "HOME",
          "labelH": 17.0,
+         "labelDx": 68.0,
+         "markH": 33.98,
+         "markDy": 0.06,
          "markSx": 1424,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 151,
-         "markH": 33.98,
-         "markDy": 0.06,
-         "labelDx": 68.0
+         "markSh": 151
         },
         {
          "id": "MOTION",
@@ -118491,13 +118491,13 @@
          "anchor": "right",
          "label": "MOTION",
          "labelH": 17.0,
+         "labelDx": 68.0,
+         "markH": 28.8,
+         "markDy": -0.44,
          "markSx": 1406,
          "markSy": 886,
          "markSw": 160,
-         "markSh": 128,
-         "markH": 28.8,
-         "markDy": -0.44,
-         "labelDx": 68.0
+         "markSh": 128
         }
        ],
        "when": {
@@ -118514,7 +118514,7 @@
        "h": 744,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -118638,7 +118638,7 @@
        "h": 744,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -118772,7 +118772,7 @@
          "group": "HOME+MOTION"
         },
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -118894,12 +118894,12 @@
          "r": 58.0,
          "capR": 40.0,
          "anchor": "right",
+         "markH": 26.0,
+         "markDy": -0.56,
          "markSx": 2578,
          "markSy": 418,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 26.0,
-         "markDy": -0.56
+         "markSh": 160
         },
         {
          "id": "HOME",
@@ -118911,13 +118911,13 @@
          "anchor": "right",
          "label": "HOME",
          "labelH": 17.0,
+         "labelDx": 68.0,
+         "markH": 33.98,
+         "markDy": 0.06,
          "markSx": 1424,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 151,
-         "markH": 33.98,
-         "markDy": 0.06,
-         "labelDx": 68.0
+         "markSh": 151
         },
         {
          "id": "MOTION",
@@ -118929,13 +118929,13 @@
          "anchor": "right",
          "label": "MOTION",
          "labelH": 17.0,
+         "labelDx": 68.0,
+         "markH": 28.8,
+         "markDy": -0.44,
          "markSx": 1406,
          "markSy": 886,
          "markSw": 160,
-         "markSh": 128,
-         "markH": 28.8,
-         "markDy": -0.44,
-         "labelDx": 68.0
+         "markSh": 128
         }
        ],
        "when": {
@@ -119710,7 +119710,7 @@
      "level": "bottom"
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -120006,12 +120006,12 @@
          "r": 58.0,
          "capR": 40.0,
          "anchor": "left",
+         "markH": 3.9,
+         "markDy": -0.56,
          "markSx": 74,
          "markSy": 1032,
          "markSw": 160,
-         "markSh": 24,
-         "markH": 3.9,
-         "markDy": -0.56
+         "markSh": 24
         },
         {
          "id": "MENU",
@@ -120023,13 +120023,13 @@
          "anchor": "left",
          "label": "MENU",
          "labelH": 17.0,
+         "labelDx": -68.0,
+         "markH": 32.73,
+         "markDy": -0.44,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 154,
-         "markH": 32.73,
-         "markDy": -0.44,
-         "labelDx": -68.0
+         "markSh": 154
         }
        ],
        "when": {
@@ -120280,12 +120280,12 @@
          "r": 58.0,
          "capR": 40.0,
          "anchor": "left",
+         "markH": 3.9,
+         "markDy": -0.56,
          "markSx": 74,
          "markSy": 1032,
          "markSw": 160,
-         "markSh": 24,
-         "markH": 3.9,
-         "markDy": -0.56
+         "markSh": 24
         },
         {
          "id": "MENU",
@@ -120297,13 +120297,13 @@
          "anchor": "left",
          "label": "MENU",
          "labelH": 17.0,
+         "labelDx": -68.0,
+         "markH": 32.73,
+         "markDy": -0.44,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 154,
-         "markH": 32.73,
-         "markDy": -0.44,
-         "labelDx": -68.0
+         "markSh": 154
         }
        ],
        "when": {
@@ -120325,7 +120325,7 @@
        "h": 744,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -120459,7 +120459,7 @@
          "group": "HOME+MOTION"
         },
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -120581,12 +120581,12 @@
          "r": 58.0,
          "capR": 40.0,
          "anchor": "right",
+         "markH": 26.0,
+         "markDy": -0.56,
          "markSx": 2578,
          "markSy": 418,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 26.0,
-         "markDy": -0.56
+         "markSh": 160
         },
         {
          "id": "HOME",
@@ -120598,13 +120598,13 @@
          "anchor": "right",
          "label": "HOME",
          "labelH": 17.0,
+         "labelDx": 68.0,
+         "markH": 33.98,
+         "markDy": 0.06,
          "markSx": 1424,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 151,
-         "markH": 33.98,
-         "markDy": 0.06,
-         "labelDx": 68.0
+         "markSh": 151
         },
         {
          "id": "MOTION",
@@ -120616,13 +120616,13 @@
          "anchor": "right",
          "label": "MOTION",
          "labelH": 17.0,
+         "labelDx": 68.0,
+         "markH": 28.8,
+         "markDy": -0.44,
          "markSx": 1406,
          "markSy": 886,
          "markSw": 160,
-         "markSh": 128,
-         "markH": 28.8,
-         "markDy": -0.44,
-         "labelDx": 68.0
+         "markSh": 128
         }
        ],
        "when": {
@@ -120639,7 +120639,7 @@
        "h": 744,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -120763,7 +120763,7 @@
        "h": 744,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -120897,7 +120897,7 @@
          "group": "HOME+MOTION"
         },
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -121019,12 +121019,12 @@
          "r": 58.0,
          "capR": 40.0,
          "anchor": "right",
+         "markH": 26.0,
+         "markDy": -0.56,
          "markSx": 2578,
          "markSy": 418,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 26.0,
-         "markDy": -0.56
+         "markSh": 160
         },
         {
          "id": "HOME",
@@ -121036,13 +121036,13 @@
          "anchor": "right",
          "label": "HOME",
          "labelH": 17.0,
+         "labelDx": 68.0,
+         "markH": 33.98,
+         "markDy": 0.06,
          "markSx": 1424,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 151,
-         "markH": 33.98,
-         "markDy": 0.06,
-         "labelDx": 68.0
+         "markSh": 151
         },
         {
          "id": "MOTION",
@@ -121054,13 +121054,13 @@
          "anchor": "right",
          "label": "MOTION",
          "labelH": 17.0,
+         "labelDx": 68.0,
+         "markH": 28.8,
+         "markDy": -0.44,
          "markSx": 1406,
          "markSy": 886,
          "markSw": 160,
-         "markSh": 128,
-         "markH": 28.8,
-         "markDy": -0.44,
-         "labelDx": 68.0
+         "markSh": 128
         }
        ],
        "when": {
@@ -121880,7 +121880,7 @@
      "level": "bottom"
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -122771,7 +122771,7 @@
        "h": 834,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -122958,7 +122958,7 @@
        "h": 834,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -123145,7 +123145,7 @@
        "h": 834,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -123332,7 +123332,7 @@
        "h": 834,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -123519,7 +123519,7 @@
        "h": 834,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -124650,7 +124650,7 @@
      "level": "bottom"
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -125155,13 +125155,13 @@
          "anchor": "left",
          "label": "SELECT",
          "labelH": 17.0,
+         "labelDy": 64.5,
+         "markH": 28.0,
+         "markDy": -0.4,
          "markSx": 162,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 28.0,
-         "markDy": -0.4,
-         "labelDy": 64.5
+         "markSh": 160
         }
        ],
        "when": {
@@ -125366,7 +125366,7 @@
        "h": 750,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -125568,7 +125568,7 @@
        "h": 746,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -125770,7 +125770,7 @@
        "h": 746,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -125972,7 +125972,7 @@
        "h": 740,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -126095,13 +126095,13 @@
          "anchor": "right",
          "label": "MENU",
          "labelH": 17.0,
+         "labelDy": 64.5,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": -0.4,
-         "labelDy": 64.5
+         "markDy": -0.4
         },
         {
          "id": "START",
@@ -126113,13 +126113,13 @@
          "anchor": "right",
          "label": "START",
          "labelH": 17.0,
+         "labelDy": 64.5,
+         "markH": 30.0,
+         "markDy": -0.4,
          "markSx": 324,
          "markSy": 724,
          "markSw": 137,
-         "markSh": 160,
-         "markH": 30.0,
-         "markDy": -0.4,
-         "labelDy": 64.5
+         "markSh": 160
         }
        ],
        "when": {
@@ -126136,7 +126136,7 @@
        "h": 740,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -126338,7 +126338,7 @@
        "h": 750,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -145857,13 +145857,13 @@
          "label": "MENU",
          "labelH": 17.0,
          "anchor": "left",
+         "labelDx": -68.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -68.0
+         "markDy": 0.0
         },
         {
          "id": "B",
@@ -146288,13 +146288,13 @@
          "label": "SELECT",
          "labelH": 17.0,
          "anchor": "left",
+         "labelDy": 64.5,
+         "markH": 28.0,
+         "markDy": 0.3,
          "markSx": 162,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 28.0,
-         "markDy": 0.3,
-         "labelDy": 64.5
+         "markSh": 160
         },
         {
          "id": "MENU",
@@ -146306,13 +146306,13 @@
          "label": "MENU",
          "labelH": 17.0,
          "anchor": "left",
+         "labelDx": -68.0,
+         "markH": 32.73,
+         "markDy": -0.21,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 154,
-         "markH": 32.73,
-         "markDy": -0.21,
-         "labelDx": -68.0
+         "markSh": 154
         }
        ],
        "when": {
@@ -146912,13 +146912,13 @@
          "label": "SELECT",
          "labelH": 17.0,
          "anchor": "right",
+         "labelDx": 68.0,
          "markSx": 162,
          "markSy": 724,
          "markSw": 160,
          "markSh": 160,
          "markH": 28.0,
-         "markDy": 0.0,
-         "labelDx": 68.0
+         "markDy": 0.0
         },
         {
          "id": "START",
@@ -146930,13 +146930,13 @@
          "label": "START",
          "labelH": 17.0,
          "anchor": "right",
+         "labelDx": 68.0,
          "markSx": 324,
          "markSy": 724,
          "markSw": 137,
          "markSh": 160,
          "markH": 30.0,
-         "markDy": 0.0,
-         "labelDx": 68.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -147265,13 +147265,13 @@
          "label": "START",
          "labelH": 17.0,
          "anchor": "right",
+         "labelDy": 64.5,
+         "markH": 30.0,
+         "markDy": 0.3,
          "markSx": 324,
          "markSy": 724,
          "markSw": 137,
-         "markSh": 160,
-         "markH": 30.0,
-         "markDy": 0.3,
-         "labelDy": 64.5
+         "markSh": 160
         }
        ],
        "when": {
@@ -148058,13 +148058,13 @@
          "label": "MENU",
          "labelH": 17.0,
          "anchor": "left",
+         "labelDx": -68.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -68.0
+         "markDy": 0.0
         },
         {
          "id": "B",
@@ -148423,13 +148423,13 @@
          "label": "ROTATE",
          "labelH": 17.0,
          "anchor": "left",
+         "labelDy": 64.5,
+         "markH": 28.0,
+         "markDy": 0.3,
          "markSx": 162,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 28.0,
-         "markDy": 0.3,
-         "labelDy": 64.5
+         "markSh": 160
         },
         {
          "id": "MENU",
@@ -148441,13 +148441,13 @@
          "label": "MENU",
          "labelH": 17.0,
          "anchor": "left",
+         "labelDx": -68.0,
+         "markH": 32.73,
+         "markDy": -0.21,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 154,
-         "markH": 32.73,
-         "markDy": -0.21,
-         "labelDx": -68.0
+         "markSh": 154
         }
        ],
        "when": {
@@ -148959,13 +148959,13 @@
          "label": "ROTATE",
          "labelH": 17.0,
          "anchor": "right",
+         "labelDx": 68.0,
          "markSx": 162,
          "markSy": 724,
          "markSw": 160,
          "markSh": 160,
          "markH": 28.0,
-         "markDy": 0.0,
-         "labelDx": 68.0
+         "markDy": 0.0
         },
         {
          "id": "START",
@@ -148977,13 +148977,13 @@
          "label": "START",
          "labelH": 17.0,
          "anchor": "right",
+         "labelDx": 68.0,
          "markSx": 324,
          "markSy": 724,
          "markSw": 137,
          "markSh": 160,
          "markH": 30.0,
-         "markDy": 0.0,
-         "labelDx": 68.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -149246,13 +149246,13 @@
          "label": "START",
          "labelH": 17.0,
          "anchor": "right",
+         "labelDy": 64.5,
+         "markH": 30.0,
+         "markDy": 0.3,
          "markSx": 324,
          "markSy": 724,
          "markSw": 137,
-         "markSh": 160,
-         "markH": 30.0,
-         "markDy": 0.3,
-         "labelDy": 64.5
+         "markSh": 160
         }
        ],
        "when": {
@@ -159346,7 +159346,7 @@
          "group": "STICK"
         },
         {
-         "sx": 2074,
+         "sx": 2570,
          "sy": 886,
          "w": 110,
          "h": 108,
@@ -159470,7 +159470,7 @@
          "group": "STICK"
         },
         {
-         "sx": 2074,
+         "sx": 2570,
          "sy": 886,
          "w": 110,
          "h": 108,
@@ -159599,7 +159599,7 @@
          "group": "A+B+CSTICK+X+Y"
         },
         {
-         "sx": 2074,
+         "sx": 2570,
          "sy": 886,
          "w": 110,
          "h": 108,
@@ -159763,7 +159763,7 @@
          "group": "A+B+CSTICK+X+Y"
         },
         {
-         "sx": 2074,
+         "sx": 2570,
          "sy": 886,
          "w": 110,
          "h": 108,
@@ -159980,7 +159980,7 @@
          "group": "L3+MENU+R3+SELECT+START+STICK_SWAP"
         },
         {
-         "sx": 2784,
+         "sx": 2682,
          "sy": 886,
          "w": 100,
          "h": 100,
@@ -160047,12 +160047,12 @@
          "labelDy": 64.5,
          "labelH": 17.0,
          "alt": "stick",
+         "markH": 34.0,
+         "markDy": 0.0,
          "markSx": 1988,
          "markSy": 418,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 34.0,
-         "markDy": 0.0
+         "markSh": 160
         },
         {
          "id": "STICK_SWAP",
@@ -160066,12 +160066,12 @@
          "labelDy": 64.5,
          "labelH": 17.0,
          "alt": "dpad",
+         "markH": 34.0,
+         "markDy": 0.0,
          "markSx": 463,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 34.0,
-         "markDy": 0.0
+         "markSh": 160
         },
         {
          "id": "MENU",
@@ -160084,12 +160084,12 @@
          "label": "MENU",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 32.73,
+         "markDy": 0.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 154,
-         "markH": 32.73,
-         "markDy": 0.0
+         "markSh": 154
         },
         {
          "id": "SELECT",
@@ -160102,12 +160102,12 @@
          "label": "SELECT",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 3.9,
+         "markDy": 0.0,
          "markSx": 74,
          "markSy": 1032,
          "markSw": 160,
-         "markSh": 24,
-         "markH": 3.9,
-         "markDy": 0.0
+         "markSh": 24
         },
         {
          "id": "START",
@@ -160120,12 +160120,12 @@
          "label": "START",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 26.0,
+         "markDy": 0.0,
          "markSx": 2578,
          "markSy": 418,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 26.0,
-         "markDy": 0.0
+         "markSh": 160
         },
         {
          "id": "R3",
@@ -160219,7 +160219,7 @@
          "group": "L3+MENU+R3+SELECT+START+STICK_SWAP"
         },
         {
-         "sx": 2784,
+         "sx": 2682,
          "sy": 886,
          "w": 100,
          "h": 100,
@@ -160286,12 +160286,12 @@
          "labelDy": 64.5,
          "labelH": 17.0,
          "alt": "stick",
+         "markH": 34.0,
+         "markDy": 0.0,
          "markSx": 1988,
          "markSy": 418,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 34.0,
-         "markDy": 0.0
+         "markSh": 160
         },
         {
          "id": "STICK_SWAP",
@@ -160305,12 +160305,12 @@
          "labelDy": 64.5,
          "labelH": 17.0,
          "alt": "dpad",
+         "markH": 34.0,
+         "markDy": 0.0,
          "markSx": 463,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 34.0,
-         "markDy": 0.0
+         "markSh": 160
         },
         {
          "id": "MENU",
@@ -160323,12 +160323,12 @@
          "label": "MENU",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 32.73,
+         "markDy": 0.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 154,
-         "markH": 32.73,
-         "markDy": 0.0
+         "markSh": 154
         },
         {
          "id": "SELECT",
@@ -160341,12 +160341,12 @@
          "label": "SELECT",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 3.9,
+         "markDy": 0.0,
          "markSx": 74,
          "markSy": 1032,
          "markSw": 160,
-         "markSh": 24,
-         "markH": 3.9,
-         "markDy": 0.0
+         "markSh": 24
         },
         {
          "id": "START",
@@ -160359,12 +160359,12 @@
          "label": "START",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 26.0,
+         "markDy": 0.0,
          "markSx": 2578,
          "markSy": 418,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 26.0,
-         "markDy": 0.0
+         "markSh": 160
         },
         {
          "id": "R3",
@@ -163534,7 +163534,7 @@
          "group": "STICK"
         },
         {
-         "sx": 2074,
+         "sx": 2570,
          "sy": 886,
          "w": 110,
          "h": 108,
@@ -163644,7 +163644,7 @@
          "group": "R"
         },
         {
-         "sx": 2074,
+         "sx": 2570,
          "sy": 886,
          "w": 110,
          "h": 108,
@@ -163811,7 +163811,7 @@
          "y": 0
         },
         {
-         "sx": 2784,
+         "sx": 2682,
          "sy": 886,
          "w": 100,
          "h": 100,
@@ -163934,12 +163934,12 @@
          "label": "MENU",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 32.73,
+         "markDy": 0.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 154,
-         "markH": 32.73,
-         "markDy": 0.0
+         "markSh": 154
         },
         {
          "id": "STICK_SWAP",
@@ -163953,12 +163953,12 @@
          "labelDy": 64.5,
          "labelH": 17.0,
          "alt": "stick",
+         "markH": 34.0,
+         "markDy": 0.0,
          "markSx": 1988,
          "markSy": 418,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 34.0,
-         "markDy": 0.0
+         "markSh": 160
         },
         {
          "id": "STICK_SWAP",
@@ -163972,12 +163972,12 @@
          "labelDy": 64.5,
          "labelH": 17.0,
          "alt": "dpad",
+         "markH": 34.0,
+         "markDy": 0.0,
          "markSx": 463,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 34.0,
-         "markDy": 0.0
+         "markSh": 160
         },
         {
          "id": "L3",
@@ -171025,7 +171025,7 @@
          "y": 0
         },
         {
-         "sx": 2784,
+         "sx": 2682,
          "sy": 886,
          "w": 100,
          "h": 100,
@@ -171089,12 +171089,12 @@
          "label": "MENU",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 32.73,
+         "markDy": 0.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 154,
-         "markH": 32.73,
-         "markDy": 0.0
+         "markSh": 154
         },
         {
          "id": "STICK_SWAP",
@@ -171108,12 +171108,12 @@
          "labelDy": 64.5,
          "labelH": 17.0,
          "alt": "stick",
+         "markH": 34.0,
+         "markDy": 0.0,
          "markSx": 1988,
          "markSy": 418,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 34.0,
-         "markDy": 0.0
+         "markSh": 160
         },
         {
          "id": "STICK_SWAP",
@@ -171127,12 +171127,12 @@
          "labelDy": 64.5,
          "labelH": 17.0,
          "alt": "dpad",
+         "markH": 34.0,
+         "markDy": 0.0,
          "markSx": 463,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 34.0,
-         "markDy": 0.0
+         "markSh": 160
         },
         {
          "id": "L3",
@@ -178198,7 +178198,7 @@
          "group": "STICK"
         },
         {
-         "sx": 2074,
+         "sx": 2570,
          "sy": 886,
          "w": 110,
          "h": 108,
@@ -178333,7 +178333,7 @@
          "group": "STICK"
         },
         {
-         "sx": 2074,
+         "sx": 2570,
          "sy": 886,
          "w": 110,
          "h": 108,
@@ -178468,7 +178468,7 @@
          "group": "STICK"
         },
         {
-         "sx": 2074,
+         "sx": 2570,
          "sy": 886,
          "w": 110,
          "h": 108,
@@ -178603,7 +178603,7 @@
          "group": "STICK"
         },
         {
-         "sx": 2074,
+         "sx": 2570,
          "sy": 886,
          "w": 110,
          "h": 108,
@@ -178738,7 +178738,7 @@
          "group": "STICK"
         },
         {
-         "sx": 2074,
+         "sx": 2570,
          "sy": 886,
          "w": 110,
          "h": 108,
@@ -178873,7 +178873,7 @@
          "group": "STICK"
         },
         {
-         "sx": 2074,
+         "sx": 2570,
          "sy": 886,
          "w": 110,
          "h": 108,
@@ -178992,7 +178992,7 @@
          "group": "R"
         },
         {
-         "sx": 2074,
+         "sx": 2570,
          "sy": 886,
          "w": 110,
          "h": 108,
@@ -179168,7 +179168,7 @@
          "group": "R"
         },
         {
-         "sx": 2074,
+         "sx": 2570,
          "sy": 886,
          "w": 110,
          "h": 108,
@@ -179344,7 +179344,7 @@
          "group": "R"
         },
         {
-         "sx": 2074,
+         "sx": 2570,
          "sy": 886,
          "w": 110,
          "h": 108,
@@ -179517,7 +179517,7 @@
          "group": "R"
         },
         {
-         "sx": 2074,
+         "sx": 2570,
          "sy": 886,
          "w": 110,
          "h": 108,
@@ -179695,7 +179695,7 @@
          "group": "R"
         },
         {
-         "sx": 2074,
+         "sx": 2570,
          "sy": 886,
          "w": 110,
          "h": 108,
@@ -179871,7 +179871,7 @@
          "group": "R"
         },
         {
-         "sx": 2074,
+         "sx": 2570,
          "sy": 886,
          "w": 110,
          "h": 108,
@@ -180060,7 +180060,7 @@
          "y": 0
         },
         {
-         "sx": 2784,
+         "sx": 2682,
          "sy": 886,
          "w": 100,
          "h": 100,
@@ -180102,12 +180102,12 @@
          "label": "MENU",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 32.73,
+         "markDy": 0.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 154,
-         "markH": 32.73,
-         "markDy": 0.0
+         "markSh": 154
         },
         {
          "id": "SELECT",
@@ -180120,12 +180120,12 @@
          "label": "SELECT",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 3.9,
+         "markDy": 0.0,
          "markSx": 74,
          "markSy": 1032,
          "markSw": 160,
-         "markSh": 24,
-         "markH": 3.9,
-         "markDy": 0.0
+         "markSh": 24
         },
         {
          "id": "START",
@@ -180138,12 +180138,12 @@
          "label": "START",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 26.0,
+         "markDy": 0.0,
          "markSx": 2578,
          "markSy": 418,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 26.0,
-         "markDy": 0.0
+         "markSh": 160
         }
        ],
        "when": {
@@ -180191,7 +180191,7 @@
          "y": -23
         },
         {
-         "sx": 2784,
+         "sx": 2682,
          "sy": 886,
          "w": 100,
          "h": 100,
@@ -180233,12 +180233,12 @@
          "label": "MENU",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 32.73,
+         "markDy": 0.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 154,
-         "markH": 32.73,
-         "markDy": 0.0
+         "markSh": 154
         },
         {
          "id": "SELECT",
@@ -180251,12 +180251,12 @@
          "label": "SELECT",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 3.9,
+         "markDy": 0.0,
          "markSx": 74,
          "markSy": 1032,
          "markSw": 160,
-         "markSh": 24,
-         "markH": 3.9,
-         "markDy": 0.0
+         "markSh": 24
         },
         {
          "id": "START",
@@ -180269,12 +180269,12 @@
          "label": "START",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 26.0,
+         "markDy": 0.0,
          "markSx": 2578,
          "markSy": 418,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 26.0,
-         "markDy": 0.0
+         "markSh": 160
         }
        ],
        "when": {
@@ -180322,7 +180322,7 @@
          "y": 0
         },
         {
-         "sx": 2784,
+         "sx": 2682,
          "sy": 886,
          "w": 100,
          "h": 100,
@@ -180364,12 +180364,12 @@
          "label": "MENU",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 32.73,
+         "markDy": 0.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 154,
-         "markH": 32.73,
-         "markDy": 0.0
+         "markSh": 154
         },
         {
          "id": "SELECT",
@@ -180382,12 +180382,12 @@
          "label": "SELECT",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 3.9,
+         "markDy": 0.0,
          "markSx": 74,
          "markSy": 1032,
          "markSw": 160,
-         "markSh": 24,
-         "markH": 3.9,
-         "markDy": 0.0
+         "markSh": 24
         },
         {
          "id": "START",
@@ -180400,12 +180400,12 @@
          "label": "START",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 26.0,
+         "markDy": 0.0,
          "markSx": 2578,
          "markSy": 418,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 26.0,
-         "markDy": 0.0
+         "markSh": 160
         }
        ],
        "when": {
@@ -180453,7 +180453,7 @@
          "y": -29
         },
         {
-         "sx": 2784,
+         "sx": 2682,
          "sy": 886,
          "w": 100,
          "h": 100,
@@ -180495,12 +180495,12 @@
          "label": "MENU",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 32.73,
+         "markDy": 0.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 154,
-         "markH": 32.73,
-         "markDy": 0.0
+         "markSh": 154
         },
         {
          "id": "SELECT",
@@ -180513,12 +180513,12 @@
          "label": "SELECT",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 3.9,
+         "markDy": 0.0,
          "markSx": 74,
          "markSy": 1032,
          "markSw": 160,
-         "markSh": 24,
-         "markH": 3.9,
-         "markDy": 0.0
+         "markSh": 24
         },
         {
          "id": "START",
@@ -180531,12 +180531,12 @@
          "label": "START",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 26.0,
+         "markDy": 0.0,
          "markSx": 2578,
          "markSy": 418,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 26.0,
-         "markDy": 0.0
+         "markSh": 160
         }
        ],
        "when": {
@@ -180584,7 +180584,7 @@
          "y": -33
         },
         {
-         "sx": 2784,
+         "sx": 2682,
          "sy": 886,
          "w": 100,
          "h": 100,
@@ -180626,12 +180626,12 @@
          "label": "MENU",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 32.73,
+         "markDy": 0.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 154,
-         "markH": 32.73,
-         "markDy": 0.0
+         "markSh": 154
         },
         {
          "id": "SELECT",
@@ -180644,12 +180644,12 @@
          "label": "SELECT",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 3.9,
+         "markDy": 0.0,
          "markSx": 74,
          "markSy": 1032,
          "markSw": 160,
-         "markSh": 24,
-         "markH": 3.9,
-         "markDy": 0.0
+         "markSh": 24
         },
         {
          "id": "START",
@@ -180662,12 +180662,12 @@
          "label": "START",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 26.0,
+         "markDy": 0.0,
          "markSx": 2578,
          "markSy": 418,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 26.0,
-         "markDy": 0.0
+         "markSh": 160
         }
        ],
        "when": {
@@ -180715,7 +180715,7 @@
          "y": -33
         },
         {
-         "sx": 2784,
+         "sx": 2682,
          "sy": 886,
          "w": 100,
          "h": 100,
@@ -180757,12 +180757,12 @@
          "label": "MENU",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 32.73,
+         "markDy": 0.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 154,
-         "markH": 32.73,
-         "markDy": 0.0
+         "markSh": 154
         },
         {
          "id": "SELECT",
@@ -180775,12 +180775,12 @@
          "label": "SELECT",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 3.9,
+         "markDy": 0.0,
          "markSx": 74,
          "markSy": 1032,
          "markSw": 160,
-         "markSh": 24,
-         "markH": 3.9,
-         "markDy": 0.0
+         "markSh": 24
         },
         {
          "id": "START",
@@ -180793,12 +180793,12 @@
          "label": "START",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 26.0,
+         "markDy": 0.0,
          "markSx": 2578,
          "markSy": 418,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 26.0,
-         "markDy": 0.0
+         "markSh": 160
         }
        ],
        "when": {
@@ -181313,14 +181313,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -182019,14 +182019,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -182202,14 +182202,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -183536,14 +183536,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -184261,14 +184261,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -184444,14 +184444,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -185708,14 +185708,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -186462,14 +186462,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         },
         {
          "id": "L2",
@@ -187277,14 +187277,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         },
         {
          "id": "TURBO_B",
@@ -187969,14 +187969,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -188104,14 +188104,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -189379,14 +189379,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         },
         {
          "id": "L2",
@@ -189610,14 +189610,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         },
         {
          "id": "L2",
@@ -191138,14 +191138,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         },
         {
          "id": "TURBO_B",
@@ -191369,14 +191369,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         },
         {
          "id": "TURBO_B",
@@ -195353,14 +195353,14 @@
          "anchor": "right",
          "label": "START",
          "level": "middle",
+         "labelDx": 67.0,
+         "labelH": 17.0,
          "markSx": 324,
          "markSy": 724,
          "markSw": 137,
          "markSh": 160,
          "markH": 30.0,
-         "markDy": -1.0,
-         "labelDx": 67.0,
-         "labelH": 17.0
+         "markDy": -1.0
         }
        ],
        "when": {
@@ -199928,13 +199928,13 @@
          "label": "MENU",
          "labelH": 17.0,
          "level": "middle",
+         "labelDx": -67.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": -0.4,
-         "labelDx": -67.0
+         "markDy": -0.4
         }
        ],
        "when": {
@@ -200788,13 +200788,13 @@
          "label": "START",
          "labelH": 17.0,
          "level": "middle",
+         "labelDx": 67.0,
          "markSx": 324,
          "markSy": 724,
          "markSw": 137,
          "markSh": 160,
          "markH": 30.0,
-         "markDy": -0.4,
-         "labelDx": 67.0
+         "markDy": -0.4
         }
        ],
        "when": {
@@ -202514,14 +202514,14 @@
          "anchor": "right",
          "label": "START",
          "level": "middle",
+         "labelDx": 67.0,
+         "labelH": 17.0,
          "markSx": 324,
          "markSy": 724,
          "markSw": 137,
          "markSh": 160,
          "markH": 30.0,
-         "markDy": -1.0,
-         "labelDx": 67.0,
-         "labelH": 17.0
+         "markDy": -1.0
         },
         {
          "id": "R",
@@ -203402,13 +203402,13 @@
          "label": "MENU",
          "labelH": 17.0,
          "level": "middle",
+         "labelDx": -67.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": -0.35,
-         "labelDx": -67.0
+         "markDy": -0.35
         }
        ],
        "when": {
@@ -204157,13 +204157,13 @@
          "label": "START",
          "labelH": 17.0,
          "level": "middle",
+         "labelDx": 67.0,
          "markSx": 324,
          "markSy": 724,
          "markSw": 137,
          "markSh": 160,
          "markH": 30.0,
-         "markDy": -0.35,
-         "labelDx": 67.0
+         "markDy": -0.35
         }
        ],
        "when": {
@@ -206674,12 +206674,12 @@
          "capR": 39.0,
          "anchor": "left",
          "level": "middle",
+         "markH": 3.9,
+         "markDy": 0.4,
          "markSx": 74,
          "markSy": 1032,
          "markSw": 160,
-         "markSh": 24,
-         "markH": 3.9,
-         "markDy": 0.4
+         "markSh": 24
         },
         {
          "id": "MENU",
@@ -206692,13 +206692,13 @@
          "label": "MENU",
          "labelH": 17.0,
          "level": "middle",
+         "labelDx": -67.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.4,
-         "labelDx": -67.0
+         "markDy": 0.4
         }
        ],
        "when": {
@@ -207566,12 +207566,12 @@
          "capR": 39.0,
          "anchor": "right",
          "level": "middle",
+         "markH": 26.0,
+         "markDy": 0.4,
          "markSx": 2578,
          "markSy": 418,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 26.0,
-         "markDy": 0.4
+         "markSh": 160
         },
         {
          "id": "HOME",
@@ -207584,13 +207584,13 @@
          "label": "HOME",
          "labelH": 17.0,
          "level": "middle",
+         "labelDx": 67.0,
          "markSx": 1424,
          "markSy": 724,
          "markSw": 160,
          "markSh": 151,
          "markH": 33.98,
-         "markDy": 0.9,
-         "labelDx": 67.0
+         "markDy": 0.9
         }
        ],
        "when": {
@@ -208372,7 +208372,7 @@
      "alt": "dpad"
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -208792,7 +208792,7 @@
          "group": "R2"
         },
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -209490,7 +209490,7 @@
      "level": "middle"
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -210108,13 +210108,13 @@
          "label": "MENU",
          "labelH": 17.0,
          "level": "middle",
+         "labelDx": -67.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.4,
-         "labelDx": -67.0
+         "markDy": 0.4
         }
        ],
        "when": {
@@ -210297,7 +210297,7 @@
          "group": "R2"
         },
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -210455,14 +210455,14 @@
          "anchor": "right",
          "labelDx": 67.0,
          "level": "middle",
+         "label": "SELECT",
+         "labelH": 17.0,
          "markSx": 74,
          "markSy": 1032,
          "markSw": 160,
          "markSh": 24,
          "markH": 3.9,
-         "markDy": 0.0,
-         "label": "SELECT",
-         "labelH": 17.0
+         "markDy": 0.0
         },
         {
          "id": "R",
@@ -210474,14 +210474,14 @@
          "anchor": "right",
          "labelDx": 67.0,
          "level": "middle",
+         "label": "START",
+         "labelH": 17.0,
          "markSx": 2578,
          "markSy": 418,
          "markSw": 160,
          "markSh": 160,
          "markH": 26.0,
-         "markDy": 0.0,
-         "label": "START",
-         "labelH": 17.0
+         "markDy": 0.0
         },
         {
          "id": "HOME",
@@ -210529,7 +210529,7 @@
          "group": "R2"
         },
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -210809,7 +210809,7 @@
          "group": "R2"
         },
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -210973,13 +210973,13 @@
          "label": "HOME",
          "labelH": 17.0,
          "level": "middle",
+         "labelDx": 67.0,
+         "markH": 33.98,
+         "markDy": 0.5,
          "markSx": 1424,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 151,
-         "markH": 33.98,
-         "markDy": 0.5,
-         "labelDx": 67.0
+         "markSh": 151
         },
         {
          "id": "MOTION",
@@ -210992,13 +210992,13 @@
          "label": "MOTION",
          "labelH": 17.0,
          "level": "middle",
+         "labelDx": 67.0,
          "markSx": 1406,
          "markSy": 886,
          "markSw": 160,
          "markSh": 128,
          "markH": 28.8,
-         "markDy": 0.4,
-         "labelDx": 67.0
+         "markDy": 0.4
         }
        ],
        "when": {
@@ -211027,7 +211027,7 @@
          "group": "R2"
         },
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -211732,7 +211732,7 @@
      "level": "middle"
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -211990,7 +211990,7 @@
          "group": "R2"
         },
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -212594,7 +212594,7 @@
      "level": "middle"
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -213033,13 +213033,13 @@
          "label": "MENU",
          "labelH": 17.0,
          "level": "middle",
+         "labelDx": -67.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -213204,7 +213204,7 @@
          "group": "R2"
         },
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -213339,13 +213339,13 @@
          "labelDx": 67.0,
          "labelH": 17.0,
          "level": "middle",
+         "label": "SELECT",
          "markSx": 74,
          "markSy": 1032,
          "markSw": 160,
          "markSh": 24,
          "markH": 3.9,
-         "markDy": 0.0,
-         "label": "SELECT"
+         "markDy": 0.0
         },
         {
          "id": "START",
@@ -213358,13 +213358,13 @@
          "labelDx": 67.0,
          "labelH": 17.0,
          "level": "middle",
+         "label": "START",
          "markSx": 2578,
          "markSy": 418,
          "markSw": 160,
          "markSh": 160,
          "markH": 26.0,
-         "markDy": 0.0,
-         "label": "START"
+         "markDy": 0.0
         },
         {
          "id": "HOME",
@@ -213411,7 +213411,7 @@
          "group": "R2"
         },
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -213627,7 +213627,7 @@
          "group": "R2"
         },
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -213767,13 +213767,13 @@
          "label": "HOME",
          "labelH": 17.0,
          "level": "middle",
+         "labelDx": 67.0,
          "markSx": 1424,
          "markSy": 724,
          "markSw": 160,
          "markSh": 151,
          "markH": 33.98,
-         "markDy": 0.5,
-         "labelDx": 67.0
+         "markDy": 0.5
         },
         {
          "id": "MOTION",
@@ -213786,13 +213786,13 @@
          "label": "MOTION",
          "labelH": 17.0,
          "level": "middle",
+         "labelDx": 67.0,
          "markSx": 1406,
          "markSy": 886,
          "markSw": 160,
          "markSh": 128,
          "markH": 28.8,
-         "markDy": 0.0,
-         "labelDx": 67.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -213820,7 +213820,7 @@
          "group": "R2"
         },
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -214461,7 +214461,7 @@
      "level": "middle"
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -214719,7 +214719,7 @@
          "group": "R2"
         },
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -215323,7 +215323,7 @@
      "level": "middle"
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -215762,13 +215762,13 @@
          "label": "MENU",
          "labelH": 17.0,
          "level": "middle",
+         "labelDx": -67.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -215933,7 +215933,7 @@
          "group": "R2"
         },
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -216068,13 +216068,13 @@
          "labelDx": 67.0,
          "labelH": 17.0,
          "level": "middle",
+         "label": "SELECT",
          "markSx": 74,
          "markSy": 1032,
          "markSw": 160,
          "markSh": 24,
          "markH": 3.9,
-         "markDy": 0.0,
-         "label": "SELECT"
+         "markDy": 0.0
         },
         {
          "id": "START",
@@ -216087,13 +216087,13 @@
          "labelDx": 67.0,
          "labelH": 17.0,
          "level": "middle",
+         "label": "START",
          "markSx": 2578,
          "markSy": 418,
          "markSw": 160,
          "markSh": 160,
          "markH": 26.0,
-         "markDy": 0.0,
-         "label": "START"
+         "markDy": 0.0
         },
         {
          "id": "HOME",
@@ -216140,7 +216140,7 @@
          "group": "R2"
         },
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -216356,7 +216356,7 @@
          "group": "R2"
         },
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -216496,13 +216496,13 @@
          "label": "HOME",
          "labelH": 17.0,
          "level": "middle",
+         "labelDx": 67.0,
          "markSx": 1424,
          "markSy": 724,
          "markSw": 160,
          "markSh": 151,
          "markH": 33.98,
-         "markDy": 0.5,
-         "labelDx": 67.0
+         "markDy": 0.5
         },
         {
          "id": "MOTION",
@@ -216515,13 +216515,13 @@
          "label": "MOTION",
          "labelH": 17.0,
          "level": "middle",
+         "labelDx": 67.0,
          "markSx": 1406,
          "markSy": 886,
          "markSw": 160,
          "markSh": 128,
          "markH": 28.8,
-         "markDy": 0.0,
-         "labelDx": 67.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -216549,7 +216549,7 @@
          "group": "R2"
         },
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -217288,7 +217288,7 @@
      "alt": "dpad"
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -217728,7 +217728,7 @@
          "group": "R2"
         },
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -218485,7 +218485,7 @@
      "level": "middle"
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -218737,14 +218737,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         },
         {
          "id": "STICK",
@@ -219090,14 +219090,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         },
         {
          "id": "STICK",
@@ -219355,7 +219355,7 @@
          "group": "R2"
         },
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -219627,7 +219627,7 @@
          "group": "R2"
         },
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -219899,7 +219899,7 @@
          "group": "R2"
         },
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -220171,7 +220171,7 @@
          "group": "R2"
         },
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -220878,7 +220878,7 @@
      "alt": "dpad"
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -221214,7 +221214,7 @@
          "group": "R"
         },
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -221805,7 +221805,7 @@
      "level": "middle"
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -222297,7 +222297,7 @@
          "group": "R"
         },
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -222514,7 +222514,7 @@
          "group": "R"
         },
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -222730,7 +222730,7 @@
          "group": "R"
         },
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -222947,7 +222947,7 @@
          "group": "R"
         },
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -223553,14 +223553,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -223663,14 +223663,14 @@
          "anchor": "right",
          "label": "START",
          "level": "middle",
+         "labelDx": 67.0,
+         "labelH": 17.0,
          "markSx": 324,
          "markSy": 724,
          "markSw": 137,
          "markSh": 160,
          "markH": 30.0,
-         "markDy": 0.0,
-         "labelDx": 67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -225215,14 +225215,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -225325,14 +225325,14 @@
          "anchor": "right",
          "label": "PAUSE",
          "level": "middle",
+         "labelDx": 67.0,
+         "labelH": 17.0,
          "markSx": 2487,
          "markSy": 418,
          "markSw": 89,
          "markSh": 160,
          "markH": 24.0,
-         "markDy": 0.0,
-         "labelDx": 67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -225762,14 +225762,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -225872,14 +225872,14 @@
          "anchor": "right",
          "label": "START",
          "level": "middle",
+         "labelDx": 67.0,
+         "labelH": 17.0,
          "markSx": 324,
          "markSy": 724,
          "markSw": 137,
          "markSh": 160,
          "markH": 30.0,
-         "markDy": 0.0,
-         "labelDx": 67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -226339,14 +226339,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -226929,14 +226929,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -227041,14 +227041,14 @@
          "anchor": "right",
          "label": "OPTION",
          "level": "middle",
+         "labelDx": 67.0,
+         "labelH": 17.0,
          "markSx": 324,
          "markSy": 724,
          "markSw": 137,
          "markSh": 160,
          "markH": 30.0,
-         "markDy": 0.0,
-         "labelDx": 67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -227508,14 +227508,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -228093,14 +228093,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -229318,14 +229318,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         },
         {
          "id": "L",
@@ -229874,14 +229874,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -231823,14 +231823,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -231958,14 +231958,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -232135,14 +232135,14 @@
          "anchor": "right",
          "label": "PAUSE",
          "level": "middle",
+         "labelDx": 67.0,
+         "labelH": 17.0,
          "markSx": 2487,
          "markSy": 418,
          "markSw": 89,
          "markSh": 160,
          "markH": 24.0,
-         "markDy": 0.0,
-         "labelDx": 67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -232347,14 +232347,14 @@
          "anchor": "right",
          "label": "PAUSE",
          "level": "middle",
+         "labelDx": 67.0,
+         "labelH": 17.0,
          "markSx": 2487,
          "markSy": 418,
          "markSw": 89,
          "markSh": 160,
          "markH": 24.0,
-         "markDy": 0.0,
-         "labelDx": 67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -232894,14 +232894,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -233029,14 +233029,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -233206,14 +233206,14 @@
          "anchor": "right",
          "label": "START",
          "level": "middle",
+         "labelDx": 67.0,
+         "labelH": 17.0,
          "markSx": 324,
          "markSy": 724,
          "markSw": 137,
          "markSh": 160,
          "markH": 30.0,
-         "markDy": 0.0,
-         "labelDx": 67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -233418,14 +233418,14 @@
          "anchor": "right",
          "label": "START",
          "level": "middle",
+         "labelDx": 67.0,
+         "labelH": 17.0,
          "markSx": 324,
          "markSy": 724,
          "markSw": 137,
          "markSh": 160,
          "markH": 30.0,
-         "markDy": 0.0,
-         "labelDx": 67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -233995,14 +233995,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -234130,14 +234130,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -235232,14 +235232,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -235367,14 +235367,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -235546,14 +235546,14 @@
          "anchor": "right",
          "label": "OPTION",
          "level": "middle",
+         "labelDx": 67.0,
+         "labelH": 17.0,
          "markSx": 324,
          "markSy": 724,
          "markSw": 137,
          "markSh": 160,
          "markH": 30.0,
-         "markDy": 0.0,
-         "labelDx": 67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -235762,14 +235762,14 @@
          "anchor": "right",
          "label": "OPTION",
          "level": "middle",
+         "labelDx": 67.0,
+         "labelH": 17.0,
          "markSx": 324,
          "markSy": 724,
          "markSw": 137,
          "markSh": 160,
          "markH": 30.0,
-         "markDy": 0.0,
-         "labelDx": 67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -236341,14 +236341,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -236476,14 +236476,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -237573,14 +237573,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -237708,14 +237708,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -238723,14 +238723,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         },
         {
          "id": "L",
@@ -238906,14 +238906,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         },
         {
          "id": "L",
@@ -240002,14 +240002,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         },
         {
          "id": "L",
@@ -240185,14 +240185,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         },
         {
          "id": "L",
@@ -241142,14 +241142,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -241277,14 +241277,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -246373,14 +246373,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         },
         {
          "id": "STICK",
@@ -246626,14 +246626,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         },
         {
          "id": "STICK",
@@ -251084,14 +251084,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -251768,14 +251768,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -251903,14 +251903,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -253112,14 +253112,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -253213,14 +253213,14 @@
          "anchor": "right",
          "label": "START",
          "level": "middle",
+         "labelDx": 67.0,
+         "labelH": 17.0,
          "markSx": 324,
          "markSy": 724,
          "markSw": 137,
          "markSh": 160,
          "markH": 30.0,
-         "markDy": 0.0,
-         "labelDx": 67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -254822,14 +254822,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -254986,14 +254986,14 @@
          "anchor": "right",
          "label": "START",
          "level": "middle",
+         "labelDx": 67.0,
+         "labelH": 17.0,
          "markSx": 324,
          "markSy": 724,
          "markSw": 137,
          "markSh": 160,
          "markH": 30.0,
-         "markDy": 0.0,
-         "labelDx": 67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -260824,14 +260824,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.4,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.4
         },
         {
          "id": "MIC",
@@ -260843,14 +260843,14 @@
          "anchor": "left",
          "label": "MIC",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 2294,
          "markSy": 418,
          "markSw": 103,
          "markSh": 160,
          "markH": 33.0,
-         "markDy": 0.9,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.9
         },
         {
          "id": "STICK",
@@ -261029,14 +261029,14 @@
          "anchor": "left",
          "label": "SELECT",
          "level": "middle",
+         "labelH": 17.0,
+         "labelDy": 64.5,
+         "markH": 28.0,
+         "markDy": 0.4,
          "markSx": 162,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 28.0,
-         "markDy": 0.4,
-         "labelH": 17.0,
-         "labelDy": 64.5
+         "markSh": 160
         },
         {
          "id": "MENU",
@@ -261048,14 +261048,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelH": 17.0,
+         "labelDx": -67.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.4,
-         "labelH": 17.0,
-         "labelDx": -67.0
+         "markDy": 0.4
         }
        ],
        "when": {
@@ -261458,14 +261458,14 @@
          "anchor": "right",
          "label": "START",
          "level": "middle",
+         "labelDx": 67.0,
+         "labelH": 17.0,
          "markSx": 324,
          "markSy": 724,
          "markSw": 137,
          "markSh": 160,
          "markH": 30.0,
-         "markDy": 0.4,
-         "labelDx": 67.0,
-         "labelH": 17.0
+         "markDy": 0.4
         },
         {
          "id": "SELECT",
@@ -261477,14 +261477,14 @@
          "anchor": "right",
          "label": "SELECT",
          "level": "middle",
+         "labelDx": 67.0,
+         "labelH": 17.0,
          "markSx": 162,
          "markSy": 724,
          "markSw": 160,
          "markSh": 160,
          "markH": 28.0,
-         "markDy": 0.4,
-         "labelDx": 67.0,
-         "labelH": 17.0
+         "markDy": 0.4
         },
         {
          "id": "R2",
@@ -261707,14 +261707,14 @@
          "anchor": "right",
          "label": "START",
          "level": "middle",
+         "labelH": 17.0,
+         "labelDy": 64.5,
+         "markH": 30.0,
+         "markDy": 0.4,
          "markSx": 324,
          "markSy": 724,
          "markSw": 137,
-         "markSh": 160,
-         "markH": 30.0,
-         "markDy": 0.4,
-         "labelH": 17.0,
-         "labelDy": 64.5
+         "markSh": 160
         },
         {
          "id": "MIC",
@@ -261726,14 +261726,14 @@
          "anchor": "right",
          "label": "MIC",
          "level": "middle",
+         "labelH": 17.0,
+         "labelDx": 67.0,
          "markSx": 2294,
          "markSy": 418,
          "markSw": 103,
          "markSh": 160,
          "markH": 33.0,
-         "markDy": 0.9,
-         "labelH": 17.0,
-         "labelDx": 67.0
+         "markDy": 0.9
         }
        ],
        "when": {
@@ -263791,14 +263791,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.4,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.4
         },
         {
          "id": "MIC",
@@ -263810,14 +263810,14 @@
          "anchor": "left",
          "label": "MIC",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 2294,
          "markSy": 418,
          "markSw": 103,
          "markSh": 160,
          "markH": 33.0,
-         "markDy": 0.9,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.9
         },
         {
          "id": "STICK",
@@ -263959,14 +263959,14 @@
          "anchor": "left",
          "label": "SELECT",
          "level": "middle",
+         "labelH": 17.0,
+         "labelDy": 64.5,
+         "markH": 28.0,
+         "markDy": 0.4,
          "markSx": 162,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 28.0,
-         "markDy": 0.4,
-         "labelH": 17.0,
-         "labelDy": 64.5
+         "markSh": 160
         },
         {
          "id": "MENU",
@@ -263978,14 +263978,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelH": 17.0,
+         "labelDx": -67.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.4,
-         "labelH": 17.0,
-         "labelDx": -67.0
+         "markDy": 0.4
         }
        ],
        "when": {
@@ -264327,14 +264327,14 @@
          "anchor": "right",
          "label": "START",
          "level": "middle",
+         "labelDx": 67.0,
+         "labelH": 17.0,
          "markSx": 324,
          "markSy": 724,
          "markSw": 137,
          "markSh": 160,
          "markH": 30.0,
-         "markDy": 0.4,
-         "labelDx": 67.0,
-         "labelH": 17.0
+         "markDy": 0.4
         },
         {
          "id": "SELECT",
@@ -264346,14 +264346,14 @@
          "anchor": "right",
          "label": "SELECT",
          "level": "middle",
+         "labelDx": 67.0,
+         "labelH": 17.0,
          "markSx": 162,
          "markSy": 724,
          "markSw": 160,
          "markSh": 160,
          "markH": 28.0,
-         "markDy": 0.4,
-         "labelDx": 67.0,
-         "labelH": 17.0
+         "markDy": 0.4
         }
        ],
        "when": {
@@ -264491,14 +264491,14 @@
          "anchor": "right",
          "label": "START",
          "level": "middle",
+         "labelH": 17.0,
+         "labelDy": 64.5,
+         "markH": 30.0,
+         "markDy": 0.4,
          "markSx": 324,
          "markSy": 724,
          "markSw": 137,
-         "markSh": 160,
-         "markH": 30.0,
-         "markDy": 0.4,
-         "labelH": 17.0,
-         "labelDy": 64.5
+         "markSh": 160
         },
         {
          "id": "MIC",
@@ -264510,14 +264510,14 @@
          "anchor": "right",
          "label": "MIC",
          "level": "middle",
+         "labelH": 17.0,
+         "labelDx": 67.0,
          "markSx": 2294,
          "markSy": 418,
          "markSw": 103,
          "markSh": 160,
          "markH": 33.0,
-         "markDy": 0.9,
-         "labelH": 17.0,
-         "labelDx": 67.0
+         "markDy": 0.9
         }
        ],
        "when": {
@@ -265523,7 +265523,7 @@
          "group": "DPAD"
         },
         {
-         "sx": 2784,
+         "sx": 2682,
          "sy": 886,
          "w": 100,
          "h": 100,
@@ -265560,7 +265560,7 @@
          "group": "STICK"
         },
         {
-         "sx": 2074,
+         "sx": 2570,
          "sy": 886,
          "w": 110,
          "h": 108,
@@ -265647,12 +265647,12 @@
          "labelH": 17.0,
          "level": "middle",
          "drop": 0.75,
+         "markH": 32.73,
+         "markDy": 0.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 154,
-         "markH": 32.73,
-         "markDy": 0.0
+         "markSh": 154
         },
         {
          "id": "STICK",
@@ -265693,12 +265693,12 @@
          "level": "middle",
          "drop": 0.6,
          "alt": "stick",
+         "markH": 34.0,
+         "markDy": 0.0,
          "markSx": 1988,
          "markSy": 418,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 34.0,
-         "markDy": 0.0
+         "markSh": 160
         },
         {
          "id": "STICK_SWAP",
@@ -265714,12 +265714,12 @@
          "level": "middle",
          "drop": 0.6,
          "alt": "dpad",
+         "markH": 34.0,
+         "markDy": 0.0,
          "markSx": 463,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 34.0,
-         "markDy": 0.0
+         "markSh": 160
         },
         {
          "id": "L3",
@@ -265835,7 +265835,7 @@
          "group": "R3+SELECT+START+SWAP"
         },
         {
-         "sx": 2074,
+         "sx": 2570,
          "sy": 886,
          "w": 110,
          "h": 108,
@@ -265961,12 +265961,12 @@
          "labelDy": 64.5,
          "labelH": 17.0,
          "level": "middle",
+         "markH": 26.0,
+         "markDy": 0.0,
          "markSx": 2578,
          "markSy": 418,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 26.0,
-         "markDy": 0.0
+         "markSh": 160
         },
         {
          "id": "SELECT",
@@ -265980,12 +265980,12 @@
          "labelDy": 64.5,
          "labelH": 17.0,
          "level": "middle",
+         "markH": 3.9,
+         "markDy": 0.0,
          "markSx": 74,
          "markSy": 1032,
          "markSw": 160,
-         "markSh": 24,
-         "markH": 3.9,
-         "markDy": 0.0
+         "markSh": 24
         },
         {
          "id": "R2",
@@ -266678,7 +266678,7 @@
          "group": "DPAD"
         },
         {
-         "sx": 2784,
+         "sx": 2682,
          "sy": 886,
          "w": 100,
          "h": 100,
@@ -266713,7 +266713,7 @@
          "group": "STICK"
         },
         {
-         "sx": 2074,
+         "sx": 2570,
          "sy": 886,
          "w": 110,
          "h": 108,
@@ -266769,14 +266769,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
+         "markH": 32.73,
+         "markDy": 0.4,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 154,
-         "markH": 32.73,
-         "markDy": 0.4,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markSh": 154
         },
         {
          "id": "STICK",
@@ -266855,7 +266855,7 @@
          "group": "DPAD"
         },
         {
-         "sx": 2784,
+         "sx": 2682,
          "sy": 886,
          "w": 100,
          "h": 100,
@@ -266890,7 +266890,7 @@
          "group": "STICK"
         },
         {
-         "sx": 2074,
+         "sx": 2570,
          "sy": 886,
          "w": 110,
          "h": 108,
@@ -266957,14 +266957,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
+         "markH": 32.73,
+         "markDy": 0.4,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 154,
-         "markH": 32.73,
-         "markDy": 0.4,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markSh": 154
         },
         {
          "id": "STICK",
@@ -267014,12 +267014,12 @@
          "capR": 39.0,
          "anchor": "left",
          "level": "middle",
+         "markH": 3.9,
+         "markDy": 0.4,
          "markSx": 74,
          "markSy": 1032,
          "markSw": 160,
-         "markSh": 24,
-         "markH": 3.9,
-         "markDy": 0.4
+         "markSh": 24
         }
        ],
        "when": {
@@ -267093,7 +267093,7 @@
          "group": "DPAD"
         },
         {
-         "sx": 2784,
+         "sx": 2682,
          "sy": 886,
          "w": 100,
          "h": 100,
@@ -267127,7 +267127,7 @@
          "group": "STICK"
         },
         {
-         "sx": 2074,
+         "sx": 2570,
          "sy": 886,
          "w": 110,
          "h": 108,
@@ -267185,12 +267185,12 @@
          "labelDy": 64.5,
          "labelH": 17.0,
          "level": "middle",
+         "markH": 32.73,
+         "markDy": 0.1,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 154,
-         "markH": 32.73,
-         "markDy": 0.1
+         "markSh": 154
         },
         {
          "id": "STICK",
@@ -267274,7 +267274,7 @@
          "scale": 0.85
         },
         {
-         "sx": 2074,
+         "sx": 2570,
          "sy": 886,
          "w": 110,
          "h": 108,
@@ -267470,14 +267470,14 @@
          "anchor": "right",
          "label": "SELECT",
          "level": "middle",
+         "labelDx": 67.0,
+         "labelH": 17.0,
+         "markH": 3.9,
+         "markDy": 0.4,
          "markSx": 74,
          "markSy": 1032,
          "markSw": 160,
-         "markSh": 24,
-         "markH": 3.9,
-         "markDy": 0.4,
-         "labelDx": 67.0,
-         "labelH": 17.0
+         "markSh": 24
         },
         {
          "id": "START",
@@ -267489,14 +267489,14 @@
          "anchor": "right",
          "label": "START",
          "level": "middle",
+         "labelDx": 67.0,
+         "labelH": 17.0,
+         "markH": 26.0,
+         "markDy": 0.4,
          "markSx": 2578,
          "markSy": 418,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 26.0,
-         "markDy": 0.4,
-         "labelDx": 67.0,
-         "labelH": 17.0
+         "markSh": 160
         }
        ],
        "when": {
@@ -267537,7 +267537,7 @@
          "scale": 0.85
         },
         {
-         "sx": 2074,
+         "sx": 2570,
          "sy": 886,
          "w": 110,
          "h": 108,
@@ -267710,12 +267710,12 @@
          "capR": 39.0,
          "anchor": "right",
          "level": "middle",
+         "markH": 26.0,
+         "markDy": 0.4,
          "markSx": 2578,
          "markSy": 418,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 26.0,
-         "markDy": 0.4
+         "markSh": 160
         }
        ],
        "when": {
@@ -267811,7 +267811,7 @@
          "group": "R3+SELECT+START+SWAP"
         },
         {
-         "sx": 2074,
+         "sx": 2570,
          "sy": 886,
          "w": 110,
          "h": 108,
@@ -267937,12 +267937,12 @@
          "labelDy": 64.5,
          "labelH": 17.0,
          "level": "middle",
+         "markH": 26.0,
+         "markDy": 0.1,
          "markSx": 2578,
          "markSy": 418,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 26.0,
-         "markDy": 0.1
+         "markSh": 160
         },
         {
          "id": "SELECT",
@@ -267956,12 +267956,12 @@
          "labelDy": 64.5,
          "labelH": 17.0,
          "level": "middle",
+         "markH": 3.9,
+         "markDy": 0.1,
          "markSx": 74,
          "markSy": 1032,
          "markSw": 160,
-         "markSh": 24,
-         "markH": 3.9,
-         "markDy": 0.1
+         "markSh": 24
         },
         {
          "id": "R2",
@@ -270998,13 +270998,13 @@
          "anchor": "centre",
          "label": "MENU",
          "labelH": 17.0,
+         "labelDx": -68.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -68.0
+         "markDy": 0.0
         },
         {
          "id": "MIC",
@@ -271016,13 +271016,13 @@
          "anchor": "centre",
          "label": "MIC",
          "labelH": 17.0,
+         "labelDx": -68.0,
          "markSx": 2294,
          "markSy": 418,
          "markSw": 103,
          "markSh": 160,
          "markH": 33.0,
-         "markDy": 0.5,
-         "labelDx": -68.0
+         "markDy": 0.5
         }
        ],
        "when": {
@@ -271492,13 +271492,13 @@
          "anchor": "centre",
          "label": "START",
          "labelH": 17.0,
+         "labelDx": 68.0,
          "markSx": 324,
          "markSy": 724,
          "markSw": 137,
          "markSh": 160,
          "markH": 30.0,
-         "markDy": 0.0,
-         "labelDx": 68.0
+         "markDy": 0.0
         },
         {
          "id": "SELECT",
@@ -271510,13 +271510,13 @@
          "anchor": "centre",
          "label": "SELECT",
          "labelH": 17.0,
+         "labelDx": 68.0,
          "markSx": 162,
          "markSy": 724,
          "markSw": 160,
          "markSh": 160,
          "markH": 28.0,
-         "markDy": 0.0,
-         "labelDx": 68.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -275571,7 +275571,7 @@
      "level": "bottom"
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -275875,7 +275875,7 @@
        "h": 990,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -276077,12 +276077,12 @@
          "label": "MENU",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 32.73,
+         "markDy": 0.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 154,
-         "markH": 32.73,
-         "markDy": 0.0
+         "markSh": 154
         },
         {
          "id": "HOME",
@@ -276095,12 +276095,12 @@
          "label": "HOME",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 33.98,
+         "markDy": 0.5,
          "markSx": 1424,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 151,
-         "markH": 33.98,
-         "markDy": 0.5
+         "markSh": 151
         },
         {
          "id": "MOTION",
@@ -276113,12 +276113,12 @@
          "label": "MOTION",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 28.8,
+         "markDy": 0.0,
          "markSx": 1406,
          "markSy": 886,
          "markSw": 160,
-         "markSh": 128,
-         "markH": 28.8,
-         "markDy": 0.0
+         "markSh": 128
         },
         {
          "id": "L",
@@ -276128,12 +276128,12 @@
          "r": 58.0,
          "capR": 40.0,
          "anchor": "centre",
+         "markH": 3.9,
+         "markDy": 0.0,
          "markSx": 74,
          "markSy": 1032,
          "markSw": 160,
-         "markSh": 24,
-         "markH": 3.9,
-         "markDy": 0.0
+         "markSh": 24
         },
         {
          "id": "R",
@@ -276564,7 +276564,7 @@
      "level": "bottom"
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -276853,7 +276853,7 @@
        "h": 946,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -276977,7 +276977,7 @@
        "h": 946,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -277156,12 +277156,12 @@
          "label": "MENU",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 32.73,
+         "markDy": 0.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 154,
-         "markH": 32.73,
-         "markDy": 0.0
+         "markSh": 154
         },
         {
          "id": "HOME",
@@ -277174,12 +277174,12 @@
          "label": "HOME",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 33.98,
+         "markDy": 0.5,
          "markSx": 1424,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 151,
-         "markH": 33.98,
-         "markDy": 0.5
+         "markSh": 151
         },
         {
          "id": "MOTION",
@@ -277192,12 +277192,12 @@
          "label": "MOTION",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 28.8,
+         "markDy": 0.0,
          "markSx": 1406,
          "markSy": 886,
          "markSw": 160,
-         "markSh": 128,
-         "markH": 28.8,
-         "markDy": 0.0
+         "markSh": 128
         },
         {
          "id": "SELECT",
@@ -277207,12 +277207,12 @@
          "r": 58.0,
          "capR": 40.0,
          "anchor": "centre",
+         "markH": 3.9,
+         "markDy": 0.0,
          "markSx": 74,
          "markSy": 1032,
          "markSw": 160,
-         "markSh": 24,
-         "markH": 3.9,
-         "markDy": 0.0
+         "markSh": 24
         },
         {
          "id": "START",
@@ -277753,7 +277753,7 @@
      "level": "bottom"
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -278042,7 +278042,7 @@
        "h": 946,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -278166,7 +278166,7 @@
        "h": 946,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -278345,12 +278345,12 @@
          "label": "MENU",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 32.73,
+         "markDy": 0.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 154,
-         "markH": 32.73,
-         "markDy": 0.0
+         "markSh": 154
         },
         {
          "id": "HOME",
@@ -278363,12 +278363,12 @@
          "label": "HOME",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 33.98,
+         "markDy": 0.5,
          "markSx": 1424,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 151,
-         "markH": 33.98,
-         "markDy": 0.5
+         "markSh": 151
         },
         {
          "id": "MOTION",
@@ -278381,12 +278381,12 @@
          "label": "MOTION",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 28.8,
+         "markDy": 0.0,
          "markSx": 1406,
          "markSy": 886,
          "markSw": 160,
-         "markSh": 128,
-         "markH": 28.8,
-         "markDy": 0.0
+         "markSh": 128
         },
         {
          "id": "SELECT",
@@ -278396,12 +278396,12 @@
          "r": 58.0,
          "capR": 40.0,
          "anchor": "centre",
+         "markH": 3.9,
+         "markDy": 0.0,
          "markSx": 74,
          "markSy": 1032,
          "markSw": 160,
-         "markSh": 24,
-         "markH": 3.9,
-         "markDy": 0.0
+         "markSh": 24
         },
         {
          "id": "START",
@@ -278987,7 +278987,7 @@
      "level": "bottom"
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -279474,7 +279474,7 @@
        "h": 958,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -279661,7 +279661,7 @@
        "h": 958,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -280463,7 +280463,7 @@
      "level": "bottom"
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -280697,7 +280697,7 @@
        "h": 974,
        "pieces": [
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -300381,6 +300381,7 @@
       "h": 692,
       "corner": 16
      },
+     "grow": 40,
      "strip": {
       "y": 42,
       "hh": 28,
@@ -300399,7 +300400,6 @@
        }
       ]
      },
-     "grow": 40,
      "srcW": 200,
      "srcH": 200,
      "hole": [
@@ -300547,7 +300547,7 @@
          "group": "STICK"
         },
         {
-         "sx": 2074,
+         "sx": 2570,
          "sy": 886,
          "w": 110,
          "h": 108,
@@ -300666,7 +300666,7 @@
          "group": "R"
         },
         {
-         "sx": 2074,
+         "sx": 2570,
          "sy": 886,
          "w": 110,
          "h": 108,
@@ -300856,7 +300856,7 @@
          "group": "MENU+SELECT+START"
         },
         {
-         "sx": 2784,
+         "sx": 2682,
          "sy": 886,
          "w": 100,
          "h": 100,
@@ -300879,12 +300879,12 @@
          "label": "START",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 26.0,
+         "markDy": 0.0,
          "markSx": 2578,
          "markSy": 418,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 26.0,
-         "markDy": 0.0
+         "markSh": 160
         },
         {
          "id": "SELECT",
@@ -300897,12 +300897,12 @@
          "label": "SELECT",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 3.9,
+         "markDy": 0.0,
          "markSx": 74,
          "markSy": 1032,
          "markSw": 160,
-         "markSh": 24,
-         "markH": 3.9,
-         "markDy": 0.0
+         "markSh": 24
         },
         {
          "id": "MENU",
@@ -300915,12 +300915,12 @@
          "label": "MENU",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 32.73,
+         "markDy": 0.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 154,
-         "markH": 32.73,
-         "markDy": 0.0
+         "markSh": 154
         }
        ],
        "when": {
@@ -306101,14 +306101,14 @@
          "anchor": "right",
          "label": "MENU",
          "level": "middle",
+         "labelDx": 67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": 67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         },
         {
          "id": "START",
@@ -306120,14 +306120,14 @@
          "anchor": "right",
          "label": "START",
          "level": "middle",
+         "labelDx": 67.0,
+         "labelH": 17.0,
          "markSx": 324,
          "markSy": 724,
          "markSw": 137,
          "markSh": 160,
          "markH": 30.0,
-         "markDy": 0.0,
-         "labelDx": 67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -307670,13 +307670,13 @@
          "label": "START",
          "labelH": 17.0,
          "level": "middle",
+         "labelDy": 64.5,
+         "markH": 30.0,
+         "markDy": -1.0,
          "markSx": 324,
          "markSy": 724,
          "markSw": 137,
-         "markSh": 160,
-         "markH": 30.0,
-         "markDy": -1.0,
-         "labelDy": 64.5
+         "markSh": 160
         }
        ],
        "when": {
@@ -308801,12 +308801,12 @@
          "labelDy": 64.5,
          "labelH": 17.0,
          "level": "middle",
+         "markH": 3.9,
+         "markDy": -1.0,
          "markSx": 74,
          "markSy": 1032,
          "markSw": 160,
-         "markSh": 24,
-         "markH": 3.9,
-         "markDy": -1.0
+         "markSh": 24
         },
         {
          "id": "START",
@@ -308820,12 +308820,12 @@
          "labelDy": 64.5,
          "labelH": 17.0,
          "level": "middle",
+         "markH": 26.0,
+         "markDy": -1.0,
          "markSx": 2578,
          "markSy": 418,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 26.0,
-         "markDy": -1.0
+         "markSh": 160
         }
        ],
        "when": {
@@ -309377,7 +309377,7 @@
      "alt": "dpad"
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -309650,7 +309650,7 @@
          "group": "R2"
         },
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -310423,7 +310423,7 @@
      "level": "middle"
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -310568,14 +310568,14 @@
          "y": 58.0,
          "anchor": "left",
          "level": "middle",
+         "hw": 45.0,
+         "hh": 42.0,
+         "markH": 3.9,
+         "markDy": 0.0,
          "markSx": 74,
          "markSy": 1032,
          "markSw": 160,
-         "markSh": 24,
-         "markH": 3.9,
-         "markDy": 0.0,
-         "hw": 45.0,
-         "hh": 42.0
+         "markSh": 24
         },
         {
          "id": "MENU",
@@ -310587,14 +310587,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -310627,7 +310627,7 @@
          "group": "HOME+MOTION"
         },
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -310758,14 +310758,14 @@
          "y": 58.0,
          "anchor": "right",
          "level": "middle",
+         "hw": 45.0,
+         "hh": 42.0,
+         "markH": 26.0,
+         "markDy": 0.0,
          "markSx": 2578,
          "markSy": 418,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 26.0,
-         "markDy": 0.0,
-         "hw": 45.0,
-         "hh": 42.0
+         "markSh": 160
         },
         {
          "id": "HOME",
@@ -310777,14 +310777,14 @@
          "anchor": "right",
          "label": "HOME",
          "level": "middle",
+         "labelDx": 67.0,
+         "labelH": 17.0,
          "markSx": 1424,
          "markSy": 724,
          "markSw": 160,
          "markSh": 151,
          "markH": 33.98,
-         "markDy": 0.5,
-         "labelDx": 67.0,
-         "labelH": 17.0
+         "markDy": 0.5
         },
         {
          "id": "MOTION",
@@ -310796,14 +310796,14 @@
          "anchor": "right",
          "label": "MOTION",
          "level": "middle",
+         "labelDx": 67.0,
+         "labelH": 17.0,
          "markSx": 1406,
          "markSy": 886,
          "markSw": 160,
          "markSh": 128,
          "markH": 28.8,
-         "markDy": 0.0,
-         "labelDx": 67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -311273,7 +311273,7 @@
      "level": "middle"
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -311418,14 +311418,14 @@
          "y": 58.0,
          "anchor": "left",
          "level": "middle",
+         "hw": 45.0,
+         "hh": 42.0,
+         "markH": 3.9,
+         "markDy": 0.0,
          "markSx": 74,
          "markSy": 1032,
          "markSw": 160,
-         "markSh": 24,
-         "markH": 3.9,
-         "markDy": 0.0,
-         "hw": 45.0,
-         "hh": 42.0
+         "markSh": 24
         },
         {
          "id": "MENU",
@@ -311437,14 +311437,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -311477,7 +311477,7 @@
          "group": "HOME+MOTION"
         },
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -311608,14 +311608,14 @@
          "y": 58.0,
          "anchor": "right",
          "level": "middle",
+         "hw": 45.0,
+         "hh": 42.0,
+         "markH": 26.0,
+         "markDy": 0.0,
          "markSx": 2578,
          "markSy": 418,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 26.0,
-         "markDy": 0.0,
-         "hw": 45.0,
-         "hh": 42.0
+         "markSh": 160
         },
         {
          "id": "HOME",
@@ -311627,14 +311627,14 @@
          "anchor": "right",
          "label": "HOME",
          "level": "middle",
+         "labelDx": 67.0,
+         "labelH": 17.0,
          "markSx": 1424,
          "markSy": 724,
          "markSw": 160,
          "markSh": 151,
          "markH": 33.98,
-         "markDy": 0.5,
-         "labelDx": 67.0,
-         "labelH": 17.0
+         "markDy": 0.5
         },
         {
          "id": "MOTION",
@@ -311646,14 +311646,14 @@
          "anchor": "right",
          "label": "MOTION",
          "level": "middle",
+         "labelDx": 67.0,
+         "labelH": 17.0,
          "markSx": 1406,
          "markSy": 886,
          "markSw": 160,
          "markSh": 128,
          "markH": 28.8,
-         "markDy": 0.0,
-         "labelDx": 67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -312221,7 +312221,7 @@
      "alt": "dpad"
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -312544,7 +312544,7 @@
          "group": "R2"
         },
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -313338,7 +313338,7 @@
      "alt": "dpad"
     },
     {
-     "sx": 0,
+     "sx": 836,
      "sy": 0,
      "w": 416,
      "h": 416,
@@ -313546,7 +313546,7 @@
          "group": "R"
         },
         {
-         "sx": 0,
+         "sx": 836,
          "sy": 0,
          "w": 416,
          "h": 416,
@@ -313730,12 +313730,12 @@
          "labelH": 17.0,
          "level": "middle",
          "labelDy": 64.5,
+         "markH": 28.0,
+         "markDy": -1.0,
          "markSx": 162,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 28.0,
-         "markDy": -1.0
+         "markSh": 160
         },
         {
          "id": "START",
@@ -313749,12 +313749,12 @@
          "labelH": 17.0,
          "level": "middle",
          "labelDy": 64.5,
+         "markH": 30.0,
+         "markDy": -1.0,
          "markSx": 324,
          "markSy": 724,
          "markSw": 137,
-         "markSh": 160,
-         "markH": 30.0,
-         "markDy": -1.0
+         "markSh": 160
         }
        ],
        "when": {
@@ -323951,14 +323951,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -324052,14 +324052,14 @@
          "anchor": "right",
          "label": "START",
          "level": "middle",
+         "labelDx": 67.0,
+         "labelH": 17.0,
          "markSx": 324,
          "markSy": 724,
          "markSw": 137,
          "markSh": 160,
          "markH": 30.0,
-         "markDy": 0.0,
-         "labelDx": 67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -324594,14 +324594,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -324758,14 +324758,14 @@
          "anchor": "right",
          "label": "START",
          "level": "middle",
+         "labelDx": 67.0,
+         "labelH": 17.0,
          "markSx": 324,
          "markSy": 724,
          "markSw": 137,
          "markSh": 160,
          "markH": 30.0,
-         "markDy": 0.0,
-         "labelDx": 67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         }
        ],
        "when": {
@@ -325396,14 +325396,14 @@
          "anchor": "left",
          "label": "MENU",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
          "markSh": 154,
          "markH": 32.73,
-         "markDy": 0.0,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.0
         },
         {
          "id": "MIC",
@@ -325415,14 +325415,14 @@
          "anchor": "left",
          "label": "MIC",
          "level": "middle",
+         "labelDx": -67.0,
+         "labelH": 17.0,
          "markSx": 2294,
          "markSy": 418,
          "markSw": 103,
          "markSh": 160,
          "markH": 33.0,
-         "markDy": 0.5,
-         "labelDx": -67.0,
-         "labelH": 17.0
+         "markDy": 0.5
         }
        ],
        "when": {
@@ -325575,14 +325575,14 @@
          "anchor": "right",
          "label": "START",
          "level": "middle",
+         "labelDx": 67.0,
+         "labelH": 17.0,
+         "markH": 30.0,
+         "markDy": 0.5,
          "markSx": 324,
          "markSy": 724,
          "markSw": 137,
-         "markSh": 160,
-         "markH": 30.0,
-         "markDy": 0.5,
-         "labelDx": 67.0,
-         "labelH": 17.0
+         "markSh": 160
         },
         {
          "id": "SELECT",
@@ -325594,14 +325594,14 @@
          "anchor": "right",
          "label": "SELECT",
          "level": "middle",
+         "labelDx": 67.0,
+         "labelH": 17.0,
+         "markH": 28.0,
+         "markDy": 0.5,
          "markSx": 162,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 28.0,
-         "markDy": 0.5,
-         "labelDx": 67.0,
-         "labelH": 17.0
+         "markSh": 160
         }
        ],
        "when": {
@@ -328601,7 +328601,7 @@
          "group": "STICK"
         },
         {
-         "sx": 2074,
+         "sx": 2570,
          "sy": 886,
          "w": 110,
          "h": 108,
@@ -328730,7 +328730,7 @@
          "scale": 0.85
         },
         {
-         "sx": 2074,
+         "sx": 2570,
          "sy": 886,
          "w": 110,
          "h": 108,
@@ -328922,7 +328922,7 @@
          "group": "MENU+SELECT+START"
         },
         {
-         "sx": 2784,
+         "sx": 2682,
          "sy": 886,
          "w": 100,
          "h": 100,
@@ -328955,12 +328955,12 @@
          "label": "SELECT",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 3.9,
+         "markDy": 0.0,
          "markSx": 74,
          "markSy": 1032,
          "markSw": 160,
-         "markSh": 24,
-         "markH": 3.9,
-         "markDy": 0.0
+         "markSh": 24
         },
         {
          "id": "MENU",
@@ -328974,12 +328974,12 @@
          "labelDy": 64.5,
          "labelH": 17.0,
          "level": "middle",
+         "markH": 32.73,
+         "markDy": 0.0,
          "markSx": 938,
          "markSy": 724,
          "markSw": 160,
-         "markSh": 154,
-         "markH": 32.73,
-         "markDy": 0.0
+         "markSh": 154
         },
         {
          "id": "START",
@@ -328992,12 +328992,12 @@
          "label": "START",
          "labelDy": 64.5,
          "labelH": 17.0,
+         "markH": 26.0,
+         "markDy": 0.0,
          "markSx": 2578,
          "markSy": 418,
          "markSw": 160,
-         "markSh": 160,
-         "markH": 26.0,
-         "markDy": 0.0
+         "markSh": 160
         }
        ],
        "when": {
