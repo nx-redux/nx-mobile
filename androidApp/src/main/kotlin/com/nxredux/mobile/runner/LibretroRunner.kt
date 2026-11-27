@@ -54,7 +54,8 @@ class LibretroRunner(private val context: Context, private val ownTask: () -> Bo
 
     private fun start(session: GameSession, recent: Recent, leave: Int?) {
         val records = LaunchRecords.of(context)
-        val launchId = if (recordLaunches) records.pending(recent) else LaunchRecords.NONE
+        // The DS menu is no file: a Recents entry for it could not be opened again.
+        val launchId = if (recordLaunches && !SystemRows.isRow(session.content.value)) records.pending(recent) else LaunchRecords.NONE
         records.markSwitcherReturn(launchId, session.fromSwitcher)   // on disk: this menu process may not see the game end
         val intent = Intent(context, GameActivity::class.java)
             .putExtra(GameActivity.EXTRA_LAUNCH_ID, launchId)

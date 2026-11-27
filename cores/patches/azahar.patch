@@ -2,7 +2,7 @@
 # the GPLv2 text; see LICENSES/azahar.txt); this patch is distributed under the same licence. It also carries
 # azahar-emu/azahar#2718 (video views), whose new files are GPL-3.0 or later, so the patched core is GPL-3.0.
 diff --git a/CMakeModules/GenerateSettingKeys.cmake b/CMakeModules/GenerateSettingKeys.cmake
-index f75bfe5..8ddc633 100644
+index f75bfe5fe..8ddc63334 100644
 --- a/CMakeModules/GenerateSettingKeys.cmake
 +++ b/CMakeModules/GenerateSettingKeys.cmake
 @@ -298,6 +298,7 @@ if (ENABLE_LIBRETRO)
@@ -14,7 +14,7 @@ index f75bfe5..8ddc633 100644
          string(REPLACE "_" "_1" KEY_JNI_ESCAPED ${KEY})
          set(SETTING_KEY_LIST "${SETTING_KEY_LIST}\n\"${KEY}\",")
 diff --git a/src/citra_libretro/CMakeLists.txt b/src/citra_libretro/CMakeLists.txt
-index e28f994..4312b31 100644
+index e28f9941b..4312b31f7 100644
 --- a/src/citra_libretro/CMakeLists.txt
 +++ b/src/citra_libretro/CMakeLists.txt
 @@ -13,7 +13,15 @@ add_library(citra_libretro_common OBJECT
@@ -44,7 +44,7 @@ index e28f994..4312b31 100644
  if(ENABLE_VULKAN)
    target_link_libraries(citra_libretro PRIVATE sirit vulkan-headers vma)
 diff --git a/src/citra_libretro/citra_libretro.cpp b/src/citra_libretro/citra_libretro.cpp
-index 8a65f9d..1e6896d 100644
+index 8a65f9da8..bdf4f25cf 100644
 --- a/src/citra_libretro/citra_libretro.cpp
 +++ b/src/citra_libretro/citra_libretro.cpp
 @@ -2,6 +2,7 @@
@@ -207,7 +207,20 @@ index 8a65f9d..1e6896d 100644
  #ifdef ENABLE_OPENGL
      if (Settings::values.graphics_api.GetValue() == Settings::GraphicsAPI::OpenGL) {
          // We can't assume that the frontend has been nice and preserved all OpenGL settings. Reset.
-@@ -368,12 +458,33 @@ static void setup_memory_maps() {
+@@ -287,6 +377,12 @@ void retro_run() {
+     while (!emu_instance->emu_window->HasSubmittedFrame()) {
+         auto result = Core::System::GetInstance().RunLoop();
+ 
++        // The program asked for a shutdown (a homebrew app returning from main, our Download Play
++        // client included): the session ends as a quit, not as an error.
++        if (result == Core::System::ResultStatus::ShutdownRequested) {
++            LibRetro::Shutdown();
++            return;
++        }
+         if (result != Core::System::ResultStatus::Success) {
+             std::string errorContent = Core::System::GetInstance().GetStatusDetails();
+             std::string msg;
+@@ -368,12 +464,33 @@ static void setup_memory_maps() {
      }
  }
  
@@ -241,7 +254,7 @@ index 8a65f9d..1e6896d 100644
          break; // Expected case
      case Core::System::ResultStatus::ErrorGetLoader:
          LibRetro::DisplayMessage("Failed to obtain loader for specified ROM!");
-@@ -513,6 +624,8 @@ bool retro_load_game(const struct retro_game_info* info) {
+@@ -513,6 +630,8 @@ bool retro_load_game(const struct retro_game_info* info) {
  #endif
  
      UpdateSettings();
@@ -250,7 +263,7 @@ index 8a65f9d..1e6896d 100644
  
      // If using HW rendering, don't actually load the game here. azahar wants
      // the graphics context ready and available before calling System::Load.
-@@ -634,7 +747,16 @@ bool retro_load_game(const struct retro_game_info* info) {
+@@ -634,7 +753,16 @@ bool retro_load_game(const struct retro_game_info* info) {
  
  void retro_unload_game() {
      LOG_DEBUG(Frontend, "Unloading game...");
@@ -267,7 +280,7 @@ index 8a65f9d..1e6896d 100644
  }
  
  unsigned retro_get_region() {
-@@ -727,6 +849,11 @@ bool retro_unserialize(const void* data, size_t size) {
+@@ -727,6 +855,11 @@ bool retro_unserialize(const void* data, size_t size) {
      if (!DrainAsyncOperations(system)) {
          return false;
      }
@@ -280,7 +293,7 @@ index 8a65f9d..1e6896d 100644
      std::vector<u8> buffer(static_cast<const u8*>(data), static_cast<const u8*>(data) + size);
      try {
 diff --git a/src/citra_libretro/core_settings.cpp b/src/citra_libretro/core_settings.cpp
-index 53fb164..553d215 100644
+index 53fb164fe..553d2154d 100644
 --- a/src/citra_libretro/core_settings.cpp
 +++ b/src/citra_libretro/core_settings.cpp
 @@ -6,6 +6,7 @@
@@ -561,7 +574,7 @@ index 53fb164..553d215 100644
  }
  
 diff --git a/src/citra_libretro/core_settings.h b/src/citra_libretro/core_settings.h
-index 15d613d..6d69246 100644
+index 15d613d30..6d69246b9 100644
 --- a/src/citra_libretro/core_settings.h
 +++ b/src/citra_libretro/core_settings.h
 @@ -4,8 +4,11 @@
@@ -608,7 +621,7 @@ index 15d613d..6d69246 100644
 +
  } // namespace LibRetro
 diff --git a/src/citra_libretro/emu_window/libretro_window.cpp b/src/citra_libretro/emu_window/libretro_window.cpp
-index f8cfb2c..f12c8c3 100644
+index f8cfb2c91..f12c8c354 100644
 --- a/src/citra_libretro/emu_window/libretro_window.cpp
 +++ b/src/citra_libretro/emu_window/libretro_window.cpp
 @@ -12,6 +12,7 @@
@@ -660,7 +673,7 @@ index f8cfb2c..f12c8c3 100644
      return {baseX, baseY, emulated_pointer};
  }
 diff --git a/src/citra_libretro/environment.cpp b/src/citra_libretro/environment.cpp
-index 23c053b..4660543 100644
+index 23c053b60..4660543d5 100644
 --- a/src/citra_libretro/environment.cpp
 +++ b/src/citra_libretro/environment.cpp
 @@ -7,10 +7,11 @@
@@ -747,7 +760,7 @@ index 23c053b..4660543 100644
      info->geometry.aspect_ratio = (float)geom.width / (float)geom.height;
  }
 diff --git a/src/citra_libretro/environment.h b/src/citra_libretro/environment.h
-index d321f95..a513225 100644
+index d321f9531..a51322584 100644
 --- a/src/citra_libretro/environment.h
 +++ b/src/citra_libretro/environment.h
 @@ -5,6 +5,7 @@
@@ -813,7 +826,7 @@ index d321f95..a513225 100644
  bool SetSerializationQuirks(uint64_t quirks);
  
 diff --git a/src/citra_libretro/input/mouse_tracker.cpp b/src/citra_libretro/input/mouse_tracker.cpp
-index a4ba964..52f5c30 100644
+index a4ba96467..52f5c3004 100644
 --- a/src/citra_libretro/input/mouse_tracker.cpp
 +++ b/src/citra_libretro/input/mouse_tracker.cpp
 @@ -12,6 +12,7 @@
@@ -1027,7 +1040,7 @@ index a4ba964..52f5c30 100644
  } // namespace Input
 diff --git a/src/citra_libretro/libretro_views.h b/src/citra_libretro/libretro_views.h
 new file mode 100644
-index 0000000..e160fc7
+index 000000000..e160fc70f
 --- /dev/null
 +++ b/src/citra_libretro/libretro_views.h
 @@ -0,0 +1,54 @@
@@ -1087,15 +1100,17 @@ index 0000000..e160fc7
 +#endif
 diff --git a/src/citra_libretro/nx_3ds_link.h b/src/citra_libretro/nx_3ds_link.h
 new file mode 100644
-index 0000000..68440c3
+index 000000000..17b0203b8
 --- /dev/null
 +++ b/src/citra_libretro/nx_3ds_link.h
-@@ -0,0 +1,37 @@
+@@ -0,0 +1,45 @@
 +// Copyright Citra Emulator Project / Azahar Emulator Project
 +// Licensed under GPLv2 or any later version
 +// Refer to the license.txt file included.
 +
 +#pragma once
++
++#include <stdint.h>
 +
 +// nx-mobile private libretro environment call: the core hands the frontend its local wireless room
 +// (room_link.cpp), so the frontend can follow it and leave it without waiting for a frame. *data
@@ -1127,10 +1142,16 @@ index 0000000..68440c3
 +    void (*route_socket)(int fd, int cable);
 +    /// Other devices in the room, 0 when in none.
 +    int (*others)(void);
++    /// The phone's own networks (its hotspot), which no Android network covers: each one's
++    /// broadcast address and mask, host order, up to 4. Rooms are looked for there too, and a
++    /// socket that talks there leaves the Wi-Fi.
++    void (*set_local)(const uint32_t* broadcasts, const uint32_t* masks, int n);
++    /// How many times the network this console joined lost its host to the host leaving the room.
++    int (*host_left)(void);
 +};
 diff --git a/src/citra_libretro/player_mii.cpp b/src/citra_libretro/player_mii.cpp
 new file mode 100644
-index 0000000..9c38545
+index 000000000..9c385458a
 --- /dev/null
 +++ b/src/citra_libretro/player_mii.cpp
 @@ -0,0 +1,136 @@
@@ -1272,7 +1293,7 @@ index 0000000..9c38545
 +} // namespace LibRetro
 diff --git a/src/citra_libretro/player_mii.h b/src/citra_libretro/player_mii.h
 new file mode 100644
-index 0000000..0e6cf75
+index 000000000..0e6cf758c
 --- /dev/null
 +++ b/src/citra_libretro/player_mii.h
 @@ -0,0 +1,16 @@
@@ -1294,10 +1315,10 @@ index 0000000..0e6cf75
 +} // namespace LibRetro
 diff --git a/src/citra_libretro/room_link.cpp b/src/citra_libretro/room_link.cpp
 new file mode 100644
-index 0000000..155d2c8
+index 000000000..4a9e972c0
 --- /dev/null
 +++ b/src/citra_libretro/room_link.cpp
-@@ -0,0 +1,793 @@
+@@ -0,0 +1,883 @@
 +// Copyright Citra Emulator Project / Azahar Emulator Project
 +// Licensed under GPLv2 or any later version
 +// Refer to the license.txt file included.
@@ -1313,8 +1334,10 @@ index 0000000..155d2c8
 +#include <random>
 +#include <string>
 +#include <thread>
++#include <vector>
 +
 +#include <arpa/inet.h>
++#include <poll.h>
 +#include <netinet/in.h>
 +#include <sys/socket.h>
 +#include <sys/time.h>
@@ -1422,6 +1445,47 @@ index 0000000..155d2c8
 +        to(fd, on_cable ? 1 : 0);
 +}
 +
++// The phone's own networks (its hotspot), from the frontend: no Android network covers them, so a
++// socket pinned to the Wi-Fi cannot reach them. Broadcast address and mask, host order.
++struct Subnet {
++    u32 broadcast;
++    u32 mask;
++};
++constexpr int LOCAL_MAX = 4;
++std::mutex local_mutex;
++std::vector<Subnet> local_nets;
++
++std::vector<Subnet> LocalNets() {
++    std::scoped_lock lock(local_mutex);
++    return local_nets;
++}
++
++bool OnLocal(u32 address) {
++    std::scoped_lock lock(local_mutex);
++    for (const auto& net : local_nets)
++        if ((address & net.mask) == (net.broadcast & net.mask))
++            return true;
++    return false;
++}
++
++/// Off the Wi-Fi: the cable's network or one of the phone's own; a socket sending there is let go
++/// of (it then follows the device's routes).
++bool OffWifi(u32 address) {
++    return OnCable(address) || OnLocal(address);
++}
++
++bool OffWifi(const std::string& ip) {
++    in_addr address{};
++    return inet_pton(AF_INET, ip.c_str(), &address) == 1 && OffWifi(ntohl(address.s_addr));
++}
++
++/// The room serves every member from one socket: off the Wi-Fi while the cable is up or the
++/// phone serves a network of its own.
++bool RoomOffWifi(int cable_state) {
++    std::scoped_lock lock(local_mutex);
++    return cable_state == NX_3DS_CABLE_UP || !local_nets.empty();
++}
++
 +void HoldForCable() {
 +    cable_hold_until = (Clock::now() + CABLE_HOLD).time_since_epoch().count();
 +}
@@ -1517,7 +1581,10 @@ index 0000000..155d2c8
 +        std::this_thread::sleep_for(std::chrono::milliseconds(50));
 +    if (member.IsConnected())
 +        LOG_INFO(Frontend, "3DS link: in the room at {}:{} ({})", ip, port,
-+                 ip == "127.0.0.1" ? "its own" : OnCable(ip) ? "over the cable" : "over the Wi-Fi");
++                 ip == "127.0.0.1"  ? "its own"
++                 : OnCable(ip)      ? "over the cable"
++                 : OffWifi(ip)      ? "over this phone's hotspot"
++                                    : "over the Wi-Fi");
 +    return member.IsConnected();
 +}
 +
@@ -1575,14 +1642,38 @@ index 0000000..155d2c8
 +        to.sin_addr.s_addr = htonl(cable_broadcast);
 +        sendto(fd, SEARCH_ASK, SEARCH_TAG, 0, reinterpret_cast<sockaddr*>(&to), sizeof(to));
 +    }
++    // The phone's own networks, from a socket of their own: the Wi-Fi one cannot reach them.
++    int local_fd = -1;
++    if (const auto nets = LocalNets(); !nets.empty()) {
++        local_fd = socket(AF_INET, SOCK_DGRAM, 0);
++        if (local_fd >= 0) {
++            setsockopt(local_fd, SOL_SOCKET, SO_BROADCAST, &on, sizeof(on));
++            Route(local_fd, true);
++            for (const auto& net : nets) {
++                to.sin_addr.s_addr = htonl(net.broadcast);
++                sendto(local_fd, SEARCH_ASK, SEARCH_TAG, 0, reinterpret_cast<sockaddr*>(&to),
++                       sizeof(to));
++            }
++        }
++    }
 +
 +    std::optional<Found> found;
 +    const auto until = Clock::now() + std::chrono::milliseconds(SEARCH_WAIT_MS);
 +    while (Clock::now() < until && !cancel) {
++        const auto left = std::chrono::duration_cast<std::chrono::milliseconds>(until - Clock::now());
++        std::array<pollfd, 2> fds{{{fd, POLLIN, 0}, {local_fd, POLLIN, 0}}};
++        if (poll(fds.data(), local_fd >= 0 ? 2 : 1, static_cast<int>(left.count()) + 1) <= 0)
++            continue;
++        const int ready = (fds[0].revents & POLLIN) ? fd : (fds[1].revents & POLLIN) ? local_fd : -1;
++        if (ready < 0) {
++            // An error with nothing to read (the network went away): wait out the search instead.
++            Sleep(static_cast<int>(left.count()));
++            break;
++        }
 +        std::array<u8, 32> answer{};
 +        sockaddr_in from{};
 +        socklen_t from_size = sizeof(from);
-+        const auto size = recvfrom(fd, answer.data(), answer.size(), 0,
++        const auto size = recvfrom(ready, answer.data(), answer.size(), MSG_DONTWAIT,
 +                                   reinterpret_cast<sockaddr*>(&from), &from_size);
 +        if (size < static_cast<ssize_t>(ANSWER_SIZE) ||
 +            std::memcmp(answer.data(), SEARCH_ANSWER, SEARCH_TAG) != 0)
@@ -1608,6 +1699,8 @@ index 0000000..155d2c8
 +            found = Found{ip, ntohs(port), id, settled, on_cable};
 +    }
 +    close(fd);
++    if (local_fd >= 0)
++        close(local_fd);
 +    return found;
 +}
 +
@@ -1620,7 +1713,7 @@ index 0000000..155d2c8
 +    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
 +    SetTimeout(fd, 200);
 +    Route(fd, false);
-+    bool routed_cable = false;
++    bool routed_off = false;
 +    sockaddr_in at{};
 +    at.sin_family = AF_INET;
 +    at.sin_port = htons(SEARCH_PORT);
@@ -1647,10 +1740,10 @@ index 0000000..155d2c8
 +        auto room = Network::GetRoom().lock();
 +        answer[ANSWER_SIZE - 1] =
 +            mode == Mode::Session || (room && room->GetRoomMemberList().size() > 1);
-+        // An answer to the cable leaves by the cable: off the Wi-Fi for that one.
-+        if (const bool to_cable = OnCable(ntohl(from.sin_addr.s_addr)); to_cable != routed_cable) {
-+            Route(fd, to_cable);
-+            routed_cable = to_cable;
++        // An answer to the cable or the phone's own network leaves there: off the Wi-Fi for that one.
++        if (const bool off = OffWifi(ntohl(from.sin_addr.s_addr)); off != routed_off) {
++            Route(fd, off);
++            routed_off = off;
 +        }
 +        sendto(fd, answer.data(), answer.size(), 0, reinterpret_cast<sockaddr*>(&from), from_size);
 +    }
@@ -1894,8 +1987,22 @@ index 0000000..155d2c8
 +        HoldForCable();
 +    // The room serves the cable and the Wi-Fi from one socket: off the Wi-Fi while the cable is
 +    // up (it then follows the device's routes, where the cable's two addresses lead to it).
-+    if ((before == NX_3DS_CABLE_UP) != (state == NX_3DS_CABLE_UP))
-+        Route(room_socket, state == NX_3DS_CABLE_UP);
++    if (const bool off = RoomOffWifi(state); off != RoomOffWifi(before))
++        Route(room_socket, off);
++}
++
++void SetLocal(const uint32_t* broadcasts, const uint32_t* masks, int n) {
++    std::vector<Subnet> nets;
++    for (int i = 0; broadcasts && masks && i < n && i < LOCAL_MAX; ++i)
++        nets.push_back(Subnet{broadcasts[i], masks[i]});
++    std::scoped_lock socket(room_socket_mutex);
++    const bool before = RoomOffWifi(cable);
++    {
++        std::scoped_lock lock(local_mutex);
++        local_nets = std::move(nets);
++    }
++    if (const bool off = RoomOffWifi(cable); off != before)
++        Route(room_socket, off);
 +}
 +
 +int Others() {
@@ -1906,15 +2013,19 @@ index 0000000..155d2c8
 +    return count > 1 ? count - 1 : 0;
 +}
 +
-+nx_3ds_link_interface link_interface{Presence, LeaveNow, Rejoin, SetCable, nullptr, Others};
++int HostLeft() {
++    return Service::NWM::host_left_count.load();
++}
++
++nx_3ds_link_interface link_interface{Presence, LeaveNow, Rejoin, SetCable, nullptr, Others, SetLocal, HostLeft};
 +
 +void OnSocket(int fd, bool server, const std::string& address) {
 +    if (server) {
 +        std::scoped_lock socket(room_socket_mutex);
 +        room_socket = fd;
-+        Route(fd, cable == NX_3DS_CABLE_UP);
++        Route(fd, RoomOffWifi(cable));
 +    } else {
-+        Route(fd, OnCable(address));
++        Route(fd, OffWifi(address));
 +    }
 +}
 +
@@ -2093,7 +2204,7 @@ index 0000000..155d2c8
 +} // namespace LibRetro::RoomLink
 diff --git a/src/citra_libretro/room_link.h b/src/citra_libretro/room_link.h
 new file mode 100644
-index 0000000..33333f9
+index 000000000..33333f9d9
 --- /dev/null
 +++ b/src/citra_libretro/room_link.h
 @@ -0,0 +1,29 @@
@@ -2128,7 +2239,7 @@ index 0000000..33333f9
 +} // namespace LibRetro::RoomLink
 diff --git a/src/citra_libretro/video_views.cpp b/src/citra_libretro/video_views.cpp
 new file mode 100644
-index 0000000..8f831b1
+index 000000000..8f831b100
 --- /dev/null
 +++ b/src/citra_libretro/video_views.cpp
 @@ -0,0 +1,90 @@
@@ -2224,7 +2335,7 @@ index 0000000..8f831b1
 +} // namespace LibRetro::VideoViews
 diff --git a/src/citra_libretro/video_views.h b/src/citra_libretro/video_views.h
 new file mode 100644
-index 0000000..3607023
+index 000000000..36070234a
 --- /dev/null
 +++ b/src/citra_libretro/video_views.h
 @@ -0,0 +1,45 @@
@@ -2274,7 +2385,7 @@ index 0000000..3607023
 +
 +} // namespace LibRetro::VideoViews
 diff --git a/src/common/file_util.cpp b/src/common/file_util.cpp
-index 3168a26..9829fcb 100644
+index 3168a2622..9829fcb81 100644
 --- a/src/common/file_util.cpp
 +++ b/src/common/file_util.cpp
 @@ -155,6 +155,21 @@ static void StripTailDirSlashes(std::string& fname) {
@@ -2333,7 +2444,7 @@ index 3168a26..9829fcb 100644
      written = std::fwrite(data, elem_size, length, m_file);
  #endif
 diff --git a/src/common/settings.h b/src/common/settings.h
-index c83f322..2c5a18e 100644
+index c83f322e2..2c5a18e7f 100644
 --- a/src/common/settings.h
 +++ b/src/common/settings.h
 @@ -575,6 +575,16 @@ struct Values {
@@ -2353,8 +2464,30 @@ index c83f322..2c5a18e 100644
      SwitchableSetting<SmallScreenPosition> small_screen_position{SmallScreenPosition::BottomRight,
                                                                   Keys::small_screen_position};
      Setting<u16> custom_top_x{0, Keys::custom_top_x};
+diff --git a/src/core/file_sys/ncch_container.cpp b/src/core/file_sys/ncch_container.cpp
+index 666d6037f..9fd1ea150 100644
+--- a/src/core/file_sys/ncch_container.cpp
++++ b/src/core/file_sys/ncch_container.cpp
+@@ -161,6 +161,17 @@ std::unique_ptr<FileUtil::IOFileBase> NCCHContainer::AutoOpenNCCHNCSD(
+                 continue;
+             }
+         }
++        // A Download Play child kept under this device's own key (no console unique data).
++        if (HW::UniqueData::IsUniqueCryptoFile(file.get(),
++                                               HW::UniqueData::UniqueCryptoFileID::DLPChild)) {
++            file = HW::UniqueData::OpenUniqueCryptoFile(
++                std::move(file), "rb", HW::UniqueData::UniqueCryptoFileID::DLPChild);
++            if (has_ncch_magic(file.get())) {
++                return file;
++            } else {
++                continue;
++            }
++        }
+ 
+         // 2nd: Z3DS file
+         if (FileUtil::Z3DSReadIOFile::IsZ3DSIOFile(file.get())) {
 diff --git a/src/core/file_sys/savedata_archive.cpp b/src/core/file_sys/savedata_archive.cpp
-index 4a6b7e9..d72c12e 100644
+index 4a6b7e9e4..d72c12e19 100644
 --- a/src/core/file_sys/savedata_archive.cpp
 +++ b/src/core/file_sys/savedata_archive.cpp
 @@ -35,6 +35,11 @@ public:
@@ -2370,7 +2503,7 @@ index 4a6b7e9..d72c12e 100644
                                                                    const Mode& mode,
                                                                    u32 attributes) {
 diff --git a/src/core/file_sys/savedata_archive.h b/src/core/file_sys/savedata_archive.h
-index bfe8ed9..45ca0a9 100644
+index bfe8ed998..45ca0a94d 100644
 --- a/src/core/file_sys/savedata_archive.h
 +++ b/src/core/file_sys/savedata_archive.h
 @@ -15,8 +15,9 @@ namespace FileSys {
@@ -2386,7 +2519,7 @@ index bfe8ed9..45ca0a9 100644
      std::string GetName() const override {
          return "SaveDataArchive: " + mount_point;
 diff --git a/src/core/frontend/framebuffer_layout.cpp b/src/core/frontend/framebuffer_layout.cpp
-index 3a31142..e65961a 100644
+index 3a31142a0..e65961a0c 100644
 --- a/src/core/frontend/framebuffer_layout.cpp
 +++ b/src/core/frontend/framebuffer_layout.cpp
 @@ -55,7 +55,8 @@ static Common::Rectangle<T> MaxRectangle(Common::Rectangle<T> bounding_window,
@@ -2438,8 +2571,132 @@ index 3a31142..e65961a 100644
          break;
      }
      if (upright_screen) {
+diff --git a/src/core/hle/service/am/am.cpp b/src/core/hle/service/am/am.cpp
+index 602582161..72a0b5324 100644
+--- a/src/core/hle/service/am/am.cpp
++++ b/src/core/hle/service/am/am.cpp
+@@ -116,8 +116,11 @@ public:
+     std::vector<CryptoPP::CBC_Mode<CryptoPP::AES>::Decryption> content;
+ };
+ 
+-NCCHCryptoFile::NCCHCryptoFile(const std::string& out_file, bool encrypted_content) {
+-    if (encrypted_content) {
++NCCHCryptoFile::NCCHCryptoFile(const std::string& out_file, bool encrypted_content, bool dlp_child) {
++    if (encrypted_content && dlp_child && !HW::UniqueData::HasConsoleCryptoKey()) {
++        file = HW::UniqueData::OpenUniqueCryptoFile(out_file, "wb",
++                                                    HW::UniqueData::UniqueCryptoFileID::DLPChild);
++    } else if (encrypted_content) {
+         // A console unique crypto file is used to store the decrypted NCCH file. This is done
+         // to prevent Azahar being used as a tool to download easy shareable decrypted contents
+         // from the eshop.
+@@ -452,6 +455,14 @@ void CIAFile::AuthorizeDecryptionFromHLE() {
+     decryption_authorized = true;
+ }
+ 
++void CIAFile::AuthorizeDlpChildInstall() {
++    decryption_authorized = true;
++    dlp_child = true;
++    if (!HW::UniqueData::HasConsoleCryptoKey()) {
++        HW::UniqueData::EnsureDlpChildKey();
++    }
++}
++
+ CIAFile::CIAFile(Core::System& system_, Service::FS::MediaType media_type, bool from_cdn_)
+     : system(system_), from_cdn(from_cdn_), decryption_authorized(false), media_type(media_type),
+       decryption_state(std::make_unique<DecryptionState>()) {
+@@ -656,7 +667,7 @@ ResultVal<std::size_t> CIAFile::WriteContentData(u64 offset, std::size_t length,
+                 }
+                 current_content_index = static_cast<u16>(i);
+                 current_content_file =
+-                    std::make_unique<NCCHCryptoFile>(content_file_paths[i], decryption_authorized);
++                    std::make_unique<NCCHCryptoFile>(content_file_paths[i], decryption_authorized, dlp_child);
+                 current_content_file->decryption_authorized = decryption_authorized;
+ 
+                 current_content_install_result.type = InstallResult::Type::APP;
+@@ -909,7 +920,7 @@ ResultVal<std::size_t> CIAFile::WriteContentDataIndexed(u16 content_index, u64 o
+ 
+         current_content_index = content_index;
+         current_content_file = std::make_unique<NCCHCryptoFile>(content_file_paths[content_index],
+-                                                                decryption_authorized);
++                                                                decryption_authorized, dlp_child);
+         current_content_file->decryption_authorized = decryption_authorized;
+ 
+         current_content_install_result.type = InstallResult::Type::APP;
+diff --git a/src/core/hle/service/am/am.h b/src/core/hle/service/am/am.h
+index 26e2e7d60..9696fd3b7 100644
+--- a/src/core/hle/service/am/am.h
++++ b/src/core/hle/service/am/am.h
+@@ -127,7 +127,7 @@ using ProgressCallback = void(std::size_t, std::size_t);
+ 
+ class NCCHCryptoFile final {
+ public:
+-    NCCHCryptoFile(const std::string& out_file, bool encrypted_content);
++    NCCHCryptoFile(const std::string& out_file, bool encrypted_content, bool dlp_child = false);
+ 
+     void Write(const u8* buffer, std::size_t length);
+     bool IsError() {
+@@ -261,6 +261,9 @@ public:
+     }
+ 
+     void AuthorizeDecryptionFromHLE();
++    /// A Download Play child: decryption authorized, and stored under this device's own key when
++    /// there is no console unique data (HW::UniqueData::UniqueCryptoFileID::DLPChild).
++    void AuthorizeDlpChildInstall();
+ 
+ private:
+     friend void AuthorizeCIAFileDecryption(CIAFile* cia_file, Kernel::HLERequestContext& ctx);
+@@ -274,6 +277,7 @@ private:
+     // Sections (tik, tmd, contents) are being imported individually
+     bool from_cdn;
+     bool decryption_authorized;
++    bool dlp_child = false;
+     bool is_done = false;
+     bool is_closed = false;
+     bool is_cancel = false;
+diff --git a/src/core/hle/service/apt/ns.cpp b/src/core/hle/service/apt/ns.cpp
+index ec712497c..056cf975f 100644
+--- a/src/core/hle/service/apt/ns.cpp
++++ b/src/core/hle/service/apt/ns.cpp
+@@ -4,6 +4,7 @@
+ 
+ #include "core/core.h"
+ #include "core/hle/service/am/am.h"
++#include "common/settings.h"
+ #include "core/hle/service/apt/ns.h"
+ #include "core/loader/loader.h"
+ 
+@@ -88,7 +89,15 @@ void RebootToTitle(Core::System& system, FS::MediaType media_type, u64 title_id,
+ 
+     std::optional<u8> mem_mode_u8;
+     if (mem_mode) {
+-        mem_mode_u8 = static_cast<u8>(mem_mode.value());
++        // A layout for the other model would not fill this console's FCRAM, which
++        // KernelSystem::MemoryInit asserts on: take this model's default layout instead.
++        auto mode = mem_mode.value();
++        const bool new_3ds = Settings::values.is_new_3ds.GetValue();
++        const bool new_layout = static_cast<u8>(mode) >= static_cast<u8>(Kernel::MemoryMode::NewProd);
++        if (new_3ds != new_layout) {
++            mode = new_3ds ? Kernel::MemoryMode::NewProd : Kernel::MemoryMode::Prod;
++        }
++        mem_mode_u8 = static_cast<u8>(mode);
+     }
+     system.RequestReset(new_path, mem_mode_u8);
+ }
+diff --git a/src/core/hle/service/dlp/dlp_clt_base.cpp b/src/core/hle/service/dlp/dlp_clt_base.cpp
+index 73bc2d5b0..086196776 100644
+--- a/src/core/hle/service/dlp/dlp_clt_base.cpp
++++ b/src/core/hle/service/dlp/dlp_clt_base.cpp
+@@ -838,7 +838,7 @@ bool DLP_Clt_Base::NeedsContentDownload(Network::MacAddress mac_addr) {
+ // interoperability between HLE & LLE service modules.
+ bool DLP_Clt_Base::InstallEncryptedCIAFromFragments(std::set<ReceivedFragment>& frags) {
+     auto cia_file = std::make_unique<AM::CIAFile>(system, FS::MediaType::NAND);
+-    cia_file->AuthorizeDecryptionFromHLE();
++    cia_file->AuthorizeDlpChildInstall();
+     bool install_errored = false;
+ 
+     for (u64 nb = 0; auto& frag : frags) {
 diff --git a/src/core/hle/service/nim/nim_aoc.cpp b/src/core/hle/service/nim/nim_aoc.cpp
-index 27137a2..dd6e725 100644
+index 27137a2bc..dd6e72533 100644
 --- a/src/core/hle/service/nim/nim_aoc.cpp
 +++ b/src/core/hle/service/nim/nim_aoc.cpp
 @@ -3,6 +3,7 @@
@@ -2474,7 +2731,7 @@ index 27137a2..dd6e725 100644
 +
  } // namespace Service::NIM
 diff --git a/src/core/hle/service/nim/nim_aoc.h b/src/core/hle/service/nim/nim_aoc.h
-index 003b3fd..b8b7ee4 100644
+index 003b3fd85..b8b7ee4e6 100644
 --- a/src/core/hle/service/nim/nim_aoc.h
 +++ b/src/core/hle/service/nim/nim_aoc.h
 @@ -14,6 +14,8 @@ public:
@@ -2487,7 +2744,7 @@ index 003b3fd..b8b7ee4 100644
  };
  
 diff --git a/src/core/hle/service/nwm/nwm_uds.cpp b/src/core/hle/service/nwm/nwm_uds.cpp
-index e602bd3..ceda121 100644
+index e602bd37c..8c4346e94 100644
 --- a/src/core/hle/service/nwm/nwm_uds.cpp
 +++ b/src/core/hle/service/nwm/nwm_uds.cpp
 @@ -22,6 +22,7 @@
@@ -2498,11 +2755,11 @@ index e602bd3..ceda121 100644
  #include "core/hle/service/nwm/uds_beacon.h"
  #include "core/hle/service/nwm/uds_connection.h"
  #include "core/hle/service/nwm/uds_data.h"
-@@ -538,6 +539,69 @@ void NWM_UDS::HandleDeauthenticationFrame(const Network::WifiPacket& packet) {
+@@ -538,6 +539,72 @@ void NWM_UDS::HandleDeauthenticationFrame(const Network::WifiPacket& packet) {
      SignalEventAsync(connection_status_event);
  }
  
-+void NWM_UDS::OnPeerGone(const Network::MacAddress& address) {
++void NWM_UDS::OnPeerGone(const Network::MacAddress& address, bool left_room) {
 +    if (!initialized) {
 +        return;
 +    }
@@ -2523,6 +2780,9 @@ index e602bd3..ceda121 100644
 +        return;
 +    }
 +    LOG_INFO(Service_NWM, "The network's host left the room: disconnected");
++    if (left_room) {
++        host_left_count++;
++    }
 +    const u16_le node_id = connection_status.network_node_id;
 +    connection_status = {};
 +    connection_status.status = NetworkStatus::NotConnected;
@@ -2551,7 +2811,7 @@ index e602bd3..ceda121 100644
 +    std::scoped_lock lock{room_peers_mutex};
 +    for (const auto& peer : room_peers) {
 +        if (std::find(peers.begin(), peers.end(), peer) == peers.end()) {
-+            OnPeerGone(peer);
++            OnPeerGone(peer, true);
 +        }
 +    }
 +    room_peers = std::move(peers);
@@ -2568,7 +2828,7 @@ index e602bd3..ceda121 100644
  void NWM_UDS::HandleDataFrame(const Network::WifiPacket& packet) {
      switch (GetFrameEtherType(packet.data)) {
      case EtherType::EAPoL:
-@@ -598,6 +662,8 @@ boost::optional<Network::MacAddress> NWM_UDS::GetNodeMacAddress(u16 dest_node_id
+@@ -598,6 +665,8 @@ boost::optional<Network::MacAddress> NWM_UDS::GetNodeMacAddress(u16 dest_node_id
  
  void NWM_UDS::ShutdownHLE() {
      initialized = false;
@@ -2577,7 +2837,7 @@ index e602bd3..ceda121 100644
  
      for (auto& bind_node : channel_data) {
          SignalEventAsync(bind_node.second.event);
-@@ -698,6 +764,8 @@ ResultVal<std::shared_ptr<Kernel::Event>> NWM_UDS::Initialize(
+@@ -698,6 +767,8 @@ ResultVal<std::shared_ptr<Kernel::Event>> NWM_UDS::Initialize(
  
      current_node = node;
      initialized = true;
@@ -2586,7 +2846,7 @@ index e602bd3..ceda121 100644
  
      recv_buffer_memory = std::move(sharedmem);
      ASSERT_MSG(recv_buffer_memory->GetSize() == sharedmem_size, "Invalid shared memory size.");
-@@ -939,6 +1007,8 @@ void NWM_UDS::Unbind(Kernel::HLERequestContext& ctx) {
+@@ -939,6 +1010,8 @@ void NWM_UDS::Unbind(Kernel::HLERequestContext& ctx) {
  Result NWM_UDS::BeginHostingNetwork(std::span<const u8> network_info_buffer,
                                      std::vector<u8> passphrase) {
      // TODO(Subv): Store the passphrase and verify it when attempting a connection.
@@ -2595,22 +2855,7 @@ index e602bd3..ceda121 100644
  
      {
          std::scoped_lock lock(connection_status_mutex);
-@@ -1359,6 +1429,14 @@ void NWM_UDS::GetChannel(Kernel::HLERequestContext& ctx) {
-     LOG_DEBUG(Service_NWM, "called");
- }
- 
-+void NWM_UDS::SetProbeResponseParam(Kernel::HLERequestContext& ctx) {
-+    IPC::RequestParser rp(ctx);
-+    rp.Skip(2, false);
-+    IPC::RequestBuilder rb = rp.MakeBuilder(1, 0);
-+    rb.Push(ResultSuccess);
-+    LOG_DEBUG(Service_NWM, "called");
-+}
-+
- class NWM_UDS::ThreadCallback : public Kernel::HLERequestContext::WakeupCallback {
- public:
-     explicit ThreadCallback(u16 command_id_) : command_id(command_id_) {}
-@@ -1648,8 +1726,9 @@ Network::MacAddress NWM_UDS::GetMacAddress() {
+@@ -1648,8 +1721,9 @@ Network::MacAddress NWM_UDS::GetMacAddress() {
          room_member && room_member->IsConnected()) {
          mac = room_member->GetMacAddress();
          if (mac != CFG::GetConsoleMacAddress(system)) {
@@ -2622,16 +2867,7 @@ index e602bd3..ceda121 100644
          }
      } else {
          // if we are not connected to the room, we can
-@@ -1709,7 +1788,7 @@ NWM_UDS::NWM_UDS(Core::System& system) : ServiceFramework("nwm::UDS"), system(sy
-         {0x001E, &NWM_UDS::ConnectToNetwork, "ConnectToNetwork"},
-         {0x001F, &NWM_UDS::DecryptBeaconData, "DecryptBeaconData"},
-         {0x0020, nullptr, "Flush"},
--        {0x0021, nullptr, "SetProbeResponseParam"},
-+        {0x0021, &NWM_UDS::SetProbeResponseParam, "SetProbeResponseParam"},
-         {0x0022, nullptr, "ScanOnConnection"},
-         // clang-format on
-     };
-@@ -1734,14 +1813,34 @@ NWM_UDS::NWM_UDS(Core::System& system) : ServiceFramework("nwm::UDS"), system(sy
+@@ -1734,14 +1808,34 @@ NWM_UDS::NWM_UDS(Core::System& system) : ServiceFramework("nwm::UDS"), system(sy
      if (auto room_member = Network::GetRoomMember().lock()) {
          wifi_packet_received = room_member->BindOnWifiPacketReceived(
              [this](const Network::WifiPacket& packet) { OnWifiPacketReceived(packet); });
@@ -2668,29 +2904,10 @@ index e602bd3..ceda121 100644
      system.CoreTiming().UnscheduleEvent(beacon_broadcast_event, 0);
  }
 diff --git a/src/core/hle/service/nwm/nwm_uds.h b/src/core/hle/service/nwm/nwm_uds.h
-index 694919c..731adbe 100644
+index 694919c39..d72ecb645 100644
 --- a/src/core/hle/service/nwm/nwm_uds.h
 +++ b/src/core/hle/service/nwm/nwm_uds.h
-@@ -350,6 +350,18 @@ private:
-      */
-     void GetChannel(Kernel::HLERequestContext& ctx);
- 
-+    /**
-+     * NWM_UDS::SetProbeResponseParam service function. Rooms carry no probe responses, so this
-+     * only acknowledges, quietly: games that host all the time (Festival Plaza) call it every ~2 s.
-+     *  Inputs:
-+     *      0 : Command header.
-+     *      1-2 : Probe response parameters (unused).
-+     *  Outputs:
-+     *      0 : Return header
-+     *      1 : Result of function, 0 on success, otherwise error code
-+     */
-+    void SetProbeResponseParam(Kernel::HLERequestContext& ctx);
-+
-     /**
-      * NWM_UDS::Initialize service function
-      *  Inputs:
-@@ -560,6 +572,14 @@ private:
+@@ -560,6 +560,14 @@ private:
      /// Handles the deauthentication frames sent from clients to hosts, when they leave a session
      void HandleDeauthenticationFrame(const Network::WifiPacket& packet);
  
@@ -2700,12 +2917,12 @@ index 694919c..731adbe 100644
 +    void OnRoomLost();
 +    /// A console left the room without a deauthentication: the game is told now, not at its own
 +    /// time-out. The host's network loses that node; a client whose host is gone loses the network.
-+    void OnPeerGone(const Network::MacAddress& address);
++    void OnPeerGone(const Network::MacAddress& address, bool left_room = false);
 +
      void HandleDataFrame(const Network::WifiPacket& packet);
  
      /// Callback to parse and handle a received wifi packet.
-@@ -639,6 +659,12 @@ private:
+@@ -639,6 +647,12 @@ private:
  
      // Callback identifier for the OnWifiPacketReceived event.
      Network::RoomMember::CallbackHandle<Network::WifiPacket> wifi_packet_received;
@@ -2720,16 +2937,17 @@ index 694919c..731adbe 100644
      // network thread.
 diff --git a/src/core/hle/service/nwm/uds_wireless_hook.h b/src/core/hle/service/nwm/uds_wireless_hook.h
 new file mode 100644
-index 0000000..ce2badf
+index 000000000..6f3743288
 --- /dev/null
 +++ b/src/core/hle/service/nwm/uds_wireless_hook.h
-@@ -0,0 +1,18 @@
+@@ -0,0 +1,23 @@
 +// Copyright Citra Emulator Project / Azahar Emulator Project
 +// Licensed under GPLv2 or any later version
 +// Refer to the license.txt file included.
 +
 +#pragma once
 +
++#include <atomic>
 +#include <functional>
 +
 +namespace Service::NWM {
@@ -2741,9 +2959,123 @@ index 0000000..ce2badf
 +/// room up only while a game uses local wireless. Empty: nobody listens.
 +inline std::function<void(WirelessState)> wireless_hook;
 +
++/// How many times the network this console had joined lost its host because the host left the
++/// room (not because this console left it): a Download Play child has nothing to play without it.
++inline std::atomic<int> host_left_count{0};
++
 +} // namespace Service::NWM
+diff --git a/src/core/hw/unique_data.cpp b/src/core/hw/unique_data.cpp
+index 810650529..faf9c216d 100644
+--- a/src/core/hw/unique_data.cpp
++++ b/src/core/hw/unique_data.cpp
+@@ -2,6 +2,7 @@
+ // Licensed under GPLv2 or any later version
+ // Refer to the license.txt file included.
+ 
++#include <cryptopp/osrng.h>
+ #include <cryptopp/sha.h>
+ #include "common/common_paths.h"
+ #include "common/file_derived.h"
+@@ -9,6 +10,7 @@
+ #include "core/file_sys/archive_systemsavedata.h"
+ #include "core/file_sys/certificate.h"
+ #include "core/file_sys/otp.h"
++#include "core/hle/service/fs/archive.h"
+ #include "core/hw/aes/key.h"
+ #include "core/hw/ecc.h"
+ #include "core/hw/rsa/rsa.h"
+@@ -284,8 +286,50 @@ void InvalidateSecureData() {
+     movable.Invalidate();
+ }
+ 
++/// A random secret made once for this device (sysdata/nx_dlp_child.key): the key of Download Play
++/// children installed without console unique data. Made only before a child is installed
++/// ([EnsureDlpChildKey]); a read without one finds no key rather than making a new one.
++static bool GetDlpChildKeyIV(std::vector<u8>& out_key, std::vector<u8>& out_iv, bool create) {
++    const std::string path =
++        FileUtil::GetUserPath(FileUtil::UserPath::SysDataDir) + "nx_dlp_child.key";
++    std::array<u8, 32> secret{};
++    bool have = false;
++    {
++        FileUtil::IOFile in(path, "rb");
++        have = in.IsOpen() && in.ReadBytes(secret.data(), secret.size()) == secret.size();
++    }
++    if (!have && !create) {
++        return false;
++    }
++    if (!have) {
++        // Children kept under a key that is gone can never be read again: removed, so their next
++        // session downloads them afresh rather than booting what will not open. Done before the
++        // install that asked for the key has written anything.
++        FileUtil::DeleteDirRecursively(fmt::format("{}{}/title/00040001/",
++                                                   FileUtil::GetUserPath(FileUtil::UserPath::NANDDir),
++                                                   SYSTEM_ID));
++        CryptoPP::AutoSeededRandomPool rng;
++        rng.GenerateBlock(secret.data(), secret.size());
++        FileUtil::CreateFullPath(path);
++        FileUtil::IOFile out(path, "wb");
++        if (!out.IsOpen() || out.WriteBytes(secret.data(), secret.size()) != secret.size()) {
++            LOG_ERROR(HW, "Could not store the Download Play child key");
++            return false;
++        }
++    }
++    u8 digest[CryptoPP::SHA256::DIGESTSIZE];
++    CryptoPP::SHA256().CalculateDigest(digest, secret.data(), secret.size());
++    out_key.assign(digest, digest + 0x10);
++    out_iv.assign(0x10, 0);
++    memcpy(out_iv.data(), digest + 0x10, 12);
++    return true;
++}
++
+ static bool GetUniqueCryptoFileKeyIV(std::vector<u8>& out_key, std::vector<u8>& out_iv,
+                                      UniqueCryptoFileID id) {
++    if (id == UniqueCryptoFileID::DLPChild) {
++        return GetDlpChildKeyIV(out_key, out_iv, false);
++    }
+ 
+     LoadOTP();
+ 
+@@ -313,6 +357,16 @@ static bool GetUniqueCryptoFileKeyIV(std::vector<u8>& out_key, std::vector<u8>&
+     return true;
+ }
+ 
++bool EnsureDlpChildKey() {
++    std::vector<u8> key, iv;
++    return GetDlpChildKeyIV(key, iv, true);
++}
++
++bool HasConsoleCryptoKey() {
++    LoadOTP();
++    return ct_cert.IsValid() && otp.Valid();
++}
++
+ bool IsUniqueCryptoFile(FileUtil::IOFileBase* file, UniqueCryptoFileID id) {
+ 
+     std::vector<u8> key(0x10);
+diff --git a/src/core/hw/unique_data.h b/src/core/hw/unique_data.h
+index cbb1db510..053c24591 100644
+--- a/src/core/hw/unique_data.h
++++ b/src/core/hw/unique_data.h
+@@ -163,8 +163,17 @@ MovableSedFull& GetMovableSed();
+ 
+ enum class UniqueCryptoFileID {
+     NCCH = 0,
++    // A Download Play child installed without console unique data, kept under a key of this
++    // device's own (sysdata/nx_dlp_child.key) so it is still unreadable elsewhere.
++    DLPChild = 1,
+ };
+ 
++/// Whether the console unique key for NCCH crypto files is available (OTP and CT certificate set up).
++bool HasConsoleCryptoKey();
++/// Makes this device's Download Play child key if it has none (clearing children kept under a lost
++/// one); call before a child's install writes anything. False when it could not be stored.
++bool EnsureDlpChildKey();
++
+ void InvalidateSecureData();
+ 
+ bool IsUniqueCryptoFile(FileUtil::IOFileBase* file, UniqueCryptoFileID id);
 diff --git a/src/core/savestate.cpp b/src/core/savestate.cpp
-index 16c3db6..6f878d6 100644
+index 16c3db6fd..6f878d60a 100644
 --- a/src/core/savestate.cpp
 +++ b/src/core/savestate.cpp
 @@ -299,10 +299,10 @@ bool System::LoadStateBuffer(std::vector<u8> buffer) {
@@ -2762,7 +3094,7 @@ index 16c3db6..6f878d6 100644
  
      std::vector<u8> state(buffer.begin() + sizeof(CSTHeader), buffer.end());
 diff --git a/src/network/CMakeLists.txt b/src/network/CMakeLists.txt
-index 5c5789b..7634638 100644
+index 5c5789b87..763463806 100644
 --- a/src/network/CMakeLists.txt
 +++ b/src/network/CMakeLists.txt
 @@ -12,6 +12,7 @@ add_library(network STATIC EXCLUDE_FROM_ALL
@@ -2774,7 +3106,7 @@ index 5c5789b..7634638 100644
      socket_manager.cpp
      socket_manager.h
 diff --git a/src/network/room.cpp b/src/network/room.cpp
-index c7e34ee..ab929e8 100644
+index c7e34ee89..ab929e8f5 100644
 --- a/src/network/room.cpp
 +++ b/src/network/room.cpp
 @@ -13,6 +13,7 @@
@@ -2796,7 +3128,7 @@ index c7e34ee..ab929e8 100644
  
      room_impl->room_information.name = name;
 diff --git a/src/network/room_member.cpp b/src/network/room_member.cpp
-index 4afa0ce..57411ec 100644
+index 4afa0ce2c..57411eca9 100644
 --- a/src/network/room_member.cpp
 +++ b/src/network/room_member.cpp
 @@ -12,10 +12,11 @@
@@ -2824,7 +3156,7 @@ index 4afa0ce..57411ec 100644
  
 diff --git a/src/network/socket_hook.h b/src/network/socket_hook.h
 new file mode 100644
-index 0000000..81c568d
+index 000000000..81c568d61
 --- /dev/null
 +++ b/src/network/socket_hook.h
 @@ -0,0 +1,17 @@
@@ -2847,7 +3179,7 @@ index 0000000..81c568d
 +} // namespace Network
 diff --git a/src/video_core/cursor_dot.h b/src/video_core/cursor_dot.h
 new file mode 100644
-index 0000000..bb33f02
+index 000000000..bb33f0274
 --- /dev/null
 +++ b/src/video_core/cursor_dot.h
 @@ -0,0 +1,41 @@
@@ -2893,7 +3225,7 @@ index 0000000..bb33f02
 +
 +} // namespace CursorDot
 diff --git a/src/video_core/host_shaders/vulkan_cursor.frag b/src/video_core/host_shaders/vulkan_cursor.frag
-index e83cd2e..b9b273f 100644
+index e83cd2ecc..b9b273fb0 100644
 --- a/src/video_core/host_shaders/vulkan_cursor.frag
 +++ b/src/video_core/host_shaders/vulkan_cursor.frag
 @@ -5,8 +5,9 @@
@@ -2908,7 +3240,7 @@ index e83cd2e..b9b273f 100644
 +    color = frag_color;
  }
 diff --git a/src/video_core/host_shaders/vulkan_cursor.vert b/src/video_core/host_shaders/vulkan_cursor.vert
-index 7ff2cfe..5ba2a78 100644
+index 7ff2cfe08..5ba2a7845 100644
 --- a/src/video_core/host_shaders/vulkan_cursor.vert
 +++ b/src/video_core/host_shaders/vulkan_cursor.vert
 @@ -6,7 +6,11 @@
@@ -2924,7 +3256,7 @@ index 7ff2cfe..5ba2a78 100644
 +    frag_color = vert_color;
  }
 diff --git a/src/video_core/renderer_opengl/gl_shader_disk_cache.cpp b/src/video_core/renderer_opengl/gl_shader_disk_cache.cpp
-index fbcf5ce..9509c95 100644
+index fbcf5cecf..9509c9554 100644
 --- a/src/video_core/renderer_opengl/gl_shader_disk_cache.cpp
 +++ b/src/video_core/renderer_opengl/gl_shader_disk_cache.cpp
 @@ -124,6 +124,8 @@ std::optional<std::vector<ShaderDiskCacheRaw>> ShaderDiskCache::LoadTransferable
@@ -2955,7 +3287,7 @@ index fbcf5ce..9509c95 100644
      if (!result) {
          LOG_INFO(Render_OpenGL,
 diff --git a/src/video_core/renderer_vulkan/renderer_vulkan.cpp b/src/video_core/renderer_vulkan/renderer_vulkan.cpp
-index 5221fdf..b050db2 100644
+index 5221fdf15..b050db2b7 100644
 --- a/src/video_core/renderer_vulkan/renderer_vulkan.cpp
 +++ b/src/video_core/renderer_vulkan/renderer_vulkan.cpp
 @@ -20,6 +20,7 @@

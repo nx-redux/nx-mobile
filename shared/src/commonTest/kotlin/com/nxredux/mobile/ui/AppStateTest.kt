@@ -2303,8 +2303,8 @@ class AppStateTest {
         assertEquals(2, runner.launched.size)
     }
 
-    private fun TestScope.state(settings: MemorySettings, src: RomsSource = source, picker: NoopPicker = NoopPicker(), runner: RecordingRunner = RecordingRunner(), data: UserDataStore = NoUserData, store: LibraryIndexStore = MemoryLibraryIndexStore(), now: (() -> Long)? = null, gameTime: GameTimeData? = null, calendar: LocalCalendar = FixedOffsetCalendar(), launcher: AppLauncher? = null, rumblePreview: (GameRumble) -> Unit = {}, skinEditor: SkinEditorLauncher? = null, saveTransfer: SaveTransfer? = null, allFiles: AllFilesAccess? = null, mic: com.nxredux.mobile.runner.MicAccess? = null, localFiles: LocalFiles? = null, notifications: NotificationAccess? = null, builtInSecond: () -> Boolean = { false }, ownKeyboard: Boolean = false, onSecond: () -> Boolean = { false }, topFacts: TopFactsPlatform? = null, linkRomCache: com.nxredux.mobile.netplay.cablelink.LinkRomCache? = null, gpuDrivers: GpuDriverStore? = null, biosIntake: com.nxredux.mobile.bios.BiosIntake? = null, screenRotates: () -> Boolean = { true }, windowPx: () -> Pair<Int, Int>? = { null }) =
-        AppState(AppDeps(settings, src, runner, picker, data, gpuDrivers = gpuDrivers, topFacts = topFacts, ownKeyboard = ownKeyboard, promptOnSecondDisplay = onSecond, recents = RecentsRecorder(data, CoroutineScope(UnconfinedTestDispatcher(testScheduler))).also { runner.menu = it }, indexStore = store, now = now, gameTime = gameTime, compute = UnconfinedTestDispatcher(testScheduler), calendar = calendar, launcher = launcher, rumblePreview = rumblePreview, skinEditor = skinEditor, saveTransfer = saveTransfer, biosIntake = biosIntake, allFilesAccess = allFiles, micAccess = mic, linkRomCache = linkRomCache, localFiles = localFiles, notificationAccess = notifications, builtInSecondScreen = builtInSecond, screenRotates = screenRotates, windowPx = windowPx), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
+    private fun TestScope.state(settings: MemorySettings, src: RomsSource = source, picker: NoopPicker = NoopPicker(), runner: RecordingRunner = RecordingRunner(), data: UserDataStore = NoUserData, store: LibraryIndexStore = MemoryLibraryIndexStore(), now: (() -> Long)? = null, gameTime: GameTimeData? = null, calendar: LocalCalendar = FixedOffsetCalendar(), launcher: AppLauncher? = null, rumblePreview: (GameRumble) -> Unit = {}, skinEditor: SkinEditorLauncher? = null, saveTransfer: SaveTransfer? = null, allFiles: AllFilesAccess? = null, mic: com.nxredux.mobile.runner.MicAccess? = null, localFiles: LocalFiles? = null, notifications: NotificationAccess? = null, builtInSecond: () -> Boolean = { false }, ownKeyboard: Boolean = false, onSecond: () -> Boolean = { false }, topFacts: TopFactsPlatform? = null, linkRomCache: com.nxredux.mobile.netplay.cablelink.LinkRomCache? = null, gpuDrivers: GpuDriverStore? = null, biosIntake: com.nxredux.mobile.bios.BiosIntake? = null, screenRotates: () -> Boolean = { true }, windowPx: () -> Pair<Int, Int>? = { null }, n3dsDownloadPlay: Boolean = false) =
+        AppState(AppDeps(settings, src, runner, picker, data, n3dsDownloadPlay = n3dsDownloadPlay, gpuDrivers = gpuDrivers, topFacts = topFacts, ownKeyboard = ownKeyboard, promptOnSecondDisplay = onSecond, recents = RecentsRecorder(data, CoroutineScope(UnconfinedTestDispatcher(testScheduler))).also { runner.menu = it }, indexStore = store, now = now, gameTime = gameTime, compute = UnconfinedTestDispatcher(testScheduler), calendar = calendar, launcher = launcher, rumblePreview = rumblePreview, skinEditor = skinEditor, saveTransfer = saveTransfer, biosIntake = biosIntake, allFilesAccess = allFiles, micAccess = mic, linkRomCache = linkRomCache, localFiles = localFiles, notificationAccess = notifications, builtInSecondScreen = builtInSecond, screenRotates = screenRotates, windowPx = windowPx), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
 
     /** What a scan of [src] for [settings] stores, built without an AppState (so without the skeleton). */
     private suspend fun scannedIndex(settings: MemorySettings, src: RomsSource = source): LibraryIndex =
@@ -6405,6 +6405,19 @@ class AppStateTest {
         assertIs<Screen.RaSettings>(state.screen.value)
     }
 
+    // The launch's library path is what lets a custom GPU driver load (and keeps its crash record): the row needs one too.
+    @Test fun the_3ds_download_play_row_launches_with_its_library_path() = runTest {
+        val runner = RecordingRunner()
+        val state = state(MemorySettings(ContentRef("Home")), runner = runner, n3dsDownloadPlay = true)
+        state.load()
+        val n3ds = assertIs<Screen.Systems>(state.screen.value).tabs.flatMap { it.rows }.filterIsInstance<MainRow.System>().first { s -> s.systems.single().tag == "3DS" }
+        state.openList(ListSource.Console(n3ds.systems))
+        val games = assertIs<Screen.Games>(state.screen.value)
+        assertEquals(com.nxredux.mobile.runner.N3dsDownloadPlay.TITLE, games.entries[0].game.shownName)
+        tap(state, 0, opens = false)
+        assertEquals(games.entries[0].game.path, runner.launched.single().gamePath)
+    }
+
     @Test fun a_game_list_row_takes_two_taps_to_play() = runTest {
         val runner = RecordingRunner()
         val state = state(MemorySettings(ContentRef("Home")), runner = runner, data = FakeUserData(recents = listOf(Recent(mk), Recent(tetris))))
@@ -8281,6 +8294,13 @@ class AppStateTest {
         bare.load()
         assertEquals(listOf("games", "GB", "GBA", "NDS", "tools"), rowKinds(bare))   // no resolvable recent, no Collections folder, no pins
         assertEquals(listOf(MainRow.PickAGame), bare.screen.value.homeRows.filterNot { it is MainRow.Shelf })
+    }
+
+    // A guest without 3DS games still gets 3DS Download Play: a Nintendo 3DS console holding just its row.
+    @Test fun the_3ds_download_play_console_joins_the_consoles_when_switched_on() = runTest {
+        val state = state(MemorySettings(ContentRef("Home")), n3dsDownloadPlay = true)
+        state.load()
+        assertEquals(listOf("games", "GB", "GBA", "3DS", "NDS", "tools"), rowKinds(state))
     }
 
     @Test fun a_rescan_after_every_collection_file_went_drops_the_tab() = runTest {

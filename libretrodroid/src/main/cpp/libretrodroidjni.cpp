@@ -858,6 +858,15 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_loadGameFr
     });
 }
 
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_loadNoContent(
+        JNIEnv* env,
+        jclass obj
+) {
+    guarded(env, "loadNoContent", ERROR_LOAD_GAME, [&] {
+        LibretroDroid::getInstance().loadNoContent();
+    });
+}
+
 JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_destroy(
     JNIEnv* env,
     jclass obj
