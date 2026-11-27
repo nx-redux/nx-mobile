@@ -1,13 +1,3 @@
-Licence: modifies melonDS DS (https://github.com/JesseTG/melonds-ds), GPL-3.0 (its LICENSE file); this patch is
-distributed under the same licence.
-melonDS DS on GLES 3.2: lets the GL renderer build against GLES3 (with patches/melonds.patch on the melonDS
-dependency), requests a GLES 3.2 context, ports the compositor shaders to GLSL ES 3.00, and turns face culling off
-around the screen blit. Also carries JesseTG/melonds-ds#335 (video views: the frontend lays the screens out). Applied to cores/src/melondsds.
-
-Local wireless: tells the frontend when the emulated radio is on, off or hosting (nx_nds_radio.h), writes the firmware dump back with its own MAC and nickname, and waits for multiplayer replies by wall clock (up to 150 ms, so a Wi-Fi stall doesn't drop a console), counting blank replies by sender like standalone melonDS.
-
-Firmware Wi-fi settings: wfcsettings.bin (written only for melonDS's generated firmware) is loaded only into the
-generated firmware, not over a native dump's own access points, which left DS Download Play and PictoChat hanging.
 diff --git a/CHANGELOG.md b/CHANGELOG.md
 index 49d182d..9868bba 100644
 --- a/CHANGELOG.md
@@ -42,7 +32,7 @@ index 30aefe1..be99ae4 100644
  if (APPLE)
      # Apple's OpenGL stops at 4.1, but melonDS's compute renderer needs 4.3
 diff --git a/src/libretro/CMakeLists.txt b/src/libretro/CMakeLists.txt
-index d8b1062..0c33a8c 100644
+index d8b1062..01240d0 100644
 --- a/src/libretro/CMakeLists.txt
 +++ b/src/libretro/CMakeLists.txt
 @@ -76,6 +76,7 @@ add_library(melondsds_libretro ${LIBRARY_TYPE}
@@ -53,6 +43,15 @@ index d8b1062..0c33a8c 100644
      math.hpp
      message/error.cpp
      message/error.hpp
+@@ -86,6 +87,8 @@ add_library(melondsds_libretro ${LIBRARY_TYPE}
+     net/net.hpp
+     net/mp.cpp
+     net/mp.hpp
++    net/wmb.cpp
++    net/wmb.hpp
+     platform/aac.cpp
+     platform/file.cpp
+     platform/lan.cpp
 diff --git a/src/libretro/PlatformOGLPrivate.h b/src/libretro/PlatformOGLPrivate.h
 index 8abec16..e3a2610 100644
 --- a/src/libretro/PlatformOGLPrivate.h
@@ -884,7 +883,7 @@ index 0000000..cfaa783
 +
 +#endif //MELONDS_DS_LIBRETRO_VIEWS_H
 diff --git a/src/libretro/net/mp.cpp b/src/libretro/net/mp.cpp
-index caa185d..264c503 100644
+index caa185d..a2d2dee 100644
 --- a/src/libretro/net/mp.cpp
 +++ b/src/libretro/net/mp.cpp
 @@ -15,7 +15,8 @@
@@ -930,7 +929,7 @@ index caa185d..264c503 100644
      }
      _sendFn = sendFn;
  }
-@@ -106,9 +124,36 @@ void MpState::SetPollFn(retro_netpacket_poll_receive_t pollFn) noexcept {
+@@ -106,9 +124,48 @@ void MpState::SetPollFn(retro_netpacket_poll_receive_t pollFn) noexcept {
  void MpState::PacketReceived(const void *buf, size_t len, uint16_t client_id) noexcept {
      retro_assert(IsReady());
      Packet p = Packet::parsePk(buf, len);
@@ -961,13 +960,25 @@ index caa185d..264c503 100644
 +            host.timestamp = p.Timestamp();
 +        }
 +    }
++    if(p.PacketType() == Packet::Type::Other && _wmb.FrameReceived((const uint8_t*)p.Data(), p.Length())) {
++        for (const auto& [mac, offer] : _wmb.Offers()) {
++            retro::info("WMB offer from {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}: game {:08x} stream {:04x} host \"{}\" "
++                "players {} name \"{}\" description \"{}\"", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
++                offer.gameId, offer.streamCode, offer.hostName, offer.maxPlayers, offer.gameName, offer.description);
++            for (size_t at = 0; at < offer.icon.size(); at += 256) {
++                std::string icon;
++                for (size_t i = at; i < std::min(at + 256, offer.icon.size()); i++) icon += fmt::format("{:02x}", offer.icon[i]);
++                retro::info("WMB icon {} {}", at, icon);
++            }
++        }
++    }
 +    // Nothing takes packets while the game's wireless is off in a room: keep the newest only.
 +    if(receivedPackets.size() >= RECEIVED_PACKETS_MAX) {
 +        receivedPackets.pop();
      }
      receivedPackets.push(std::move(p));
  }
-@@ -132,9 +177,15 @@ std::optional<Packet> MpState::NextPacket() noexcept {
+@@ -132,9 +189,15 @@ std::optional<Packet> MpState::NextPacket() noexcept {
  std::optional<Packet> MpState::NextPacketBlock() noexcept {
      retro_assert(IsReady());
      if (receivedPackets.empty()) {
@@ -984,7 +995,7 @@ index caa185d..264c503 100644
              if(!receivedPackets.empty()) {
                  return NextPacket();
              }
-@@ -151,14 +202,80 @@ std::optional<Packet> MpState::NextPacketBlock() noexcept {
+@@ -151,14 +214,80 @@ std::optional<Packet> MpState::NextPacketBlock() noexcept {
      return std::nullopt;
  }
  
@@ -1069,10 +1080,10 @@ index caa185d..264c503 100644
      _sendFn(RETRO_NETPACKET_UNSEQUENCED | RETRO_NETPACKET_UNRELIABLE | RETRO_NETPACKET_FLUSH_HINT, p.ToBuf().data(), p.Length() + HeaderSize, dest);
  }
 diff --git a/src/libretro/net/mp.hpp b/src/libretro/net/mp.hpp
-index f6b5dfc..11a7ca6 100644
+index f6b5dfc..56f8eff 100644
 --- a/src/libretro/net/mp.hpp
 +++ b/src/libretro/net/mp.hpp
-@@ -14,13 +14,21 @@
+@@ -14,13 +14,22 @@
      with melonDS DS. If not, see http://www.gnu.org/licenses/.
  */
  #pragma once
@@ -1085,6 +1096,7 @@ index f6b5dfc..11a7ca6 100644
  #include <optional>
  #include <vector>
  #include <libretro.h>
++#include "wmb.hpp"
  
  namespace MelonDsDs {
 +/// Tell the frontend what the emulated radio is doing (emulation thread). Hosting is reported once per power-on.
@@ -1094,7 +1106,7 @@ index f6b5dfc..11a7ca6 100644
  // timestamp, aid, and isReply, respectively.
  constexpr size_t HeaderSize = sizeof(uint64_t) + sizeof(uint8_t) + sizeof(uint8_t);
  
-@@ -48,6 +56,13 @@ public:
+@@ -48,6 +57,13 @@ public:
      [[nodiscard]] uint64_t Length() const noexcept {
          return _data.size();
      };
@@ -1108,7 +1120,7 @@ index f6b5dfc..11a7ca6 100644
  
      std::vector<uint8_t> ToBuf() const;
  private:
-@@ -55,17 +70,31 @@ private:
+@@ -55,23 +71,51 @@ private:
      uint8_t _aid;
      Packet::Type _type;
      std::vector<uint8_t> _data;
@@ -1139,9 +1151,10 @@ index f6b5dfc..11a7ca6 100644
 +    /// The wait for the host is over: it was given up.
 +    void HostWaitEnded() noexcept;
  private:
++    WmbScanner _wmb;
      bool _warnedHighLatency = false;
      int _timeoutCount = 0;
-@@ -73,5 +102,18 @@ private:
+     retro_netpacket_send_t _sendFn;
      retro_netpacket_poll_receive_t _pollFn;
      std::optional<uint16_t> _hostId;
      std::queue<Packet> receivedPackets;
@@ -1160,6 +1173,142 @@ index f6b5dfc..11a7ca6 100644
 +    std::optional<std::chrono::steady_clock::time_point> _hostWaitStart;
  };
  }
+diff --git a/src/libretro/net/wmb.cpp b/src/libretro/net/wmb.cpp
+new file mode 100644
+index 0000000..094c60d
+--- /dev/null
++++ b/src/libretro/net/wmb.cpp
+@@ -0,0 +1,87 @@
++#include "wmb.hpp"
++#include <algorithm>
++#include <cstring>
++
++using namespace MelonDsDs;
++
++namespace {
++constexpr size_t RX_HEADER = 12;
++constexpr size_t MAC_HEADER = 24;
++constexpr size_t BEACON_FIXED = 12; // timestamp, interval, capability
++constexpr size_t SNIPPET = 0x62;
++constexpr uint16_t SNIPPETS_0_TO_8 = 0x1FF;
++
++uint16_t Le16(const uint8_t* p) noexcept { return p[0] | p[1] << 8; }
++uint32_t Le32(const uint8_t* p) noexcept { return Le16(p) | uint32_t(Le16(p + 2)) << 16; }
++
++/// [chars] UCS-2 characters, up to the first NUL, as UTF-8.
++std::string Ucs2(const uint8_t* p, size_t chars) {
++    std::string out;
++    for (size_t i = 0; i < chars; i++) {
++        const uint16_t c = Le16(p + i * 2);
++        if (c == 0) break;
++        if (c < 0x80) {
++            out += char(c);
++        } else if (c < 0x800) {
++            out += char(0xC0 | c >> 6);
++            out += char(0x80 | (c & 0x3F));
++        } else {
++            out += char(0xE0 | c >> 12);
++            out += char(0x80 | (c >> 6 & 0x3F));
++            out += char(0x80 | (c & 0x3F));
++        }
++    }
++    return out;
++}
++
++/// The Nintendo element's checksum over its entries 22h..87h.
++bool ChecksumOk(const uint8_t* dd) noexcept {
++    uint32_t sum = 0;
++    for (size_t i = 0x22; i < 0x88; i += 2) sum += Le16(dd + i);
++    return Le16(dd + 0x20) == (0xFFFF & ~(sum + (sum >> 16)));
++}
++}
++
++bool WmbScanner::FrameReceived(const uint8_t* frame, size_t len) noexcept {
++    const size_t ies = RX_HEADER + MAC_HEADER + BEACON_FIXED;
++    if (len < ies || frame[RX_HEADER] != 0x80 || frame[RX_HEADER + 1] != 0x00) return false;
++    std::array<uint8_t, 6> host;
++    std::copy_n(frame + RX_HEADER + 10, host.size(), host.begin());
++
++    for (size_t at = ies; at + 2 <= len;) {
++        const uint8_t tag = frame[at], size = frame[at + 1];
++        const uint8_t* dd = frame + at + 2;
++        at += 2 + size;
++        if (at > len) break;
++        if (tag != 0xDD || size < 0x88 || std::memcmp(dd, "\x00\x09\xBF\x00", 4) != 0) continue;
++        // GBATEK names beacon type 0Bh, but games send others (Mario Party DS: 03h): a Download Play beacon is told by its
++        // 70h bytes of advertisement repeating the game id, under a valid checksum.
++        if (dd[0x12] != 0x70 || Le32(dd + 0x18) != Le32(dd + 0x0C) || !ChecksumOk(dd)) return false;
++
++        const uint8_t snippet = dd[0x1F];
++        if (snippet > 8) return false; // #9 lists the guests already in, not the offer
++        Gathering& g = _gathering[host];
++        const uint32_t gameId = Le32(dd + 0x0C);
++        const uint16_t stream = Le16(dd + 0x10);
++        if (g.gameId != gameId || g.streamCode != stream) g = Gathering { gameId, stream };
++        const size_t snippetSize = std::min<size_t>(Le16(dd + 0x24), SNIPPET);
++        std::copy_n(dd + 0x26, snippetSize, g.data.begin() + snippet * SNIPPET);
++        const bool wasComplete = (g.have & SNIPPETS_0_TO_8) == SNIPPETS_0_TO_8;
++        g.have |= 1 << snippet;
++        if (wasComplete || (g.have & SNIPPETS_0_TO_8) != SNIPPETS_0_TO_8) return false;
++
++        const uint8_t* d = g.data.data();
++        WmbOffer offer;
++        offer.host = host;
++        offer.gameId = gameId;
++        offer.streamCode = stream;
++        std::copy_n(d, offer.icon.size(), offer.icon.begin());
++        offer.hostName = Ucs2(d + 0x222, std::min<size_t>(d[0x221], 10));
++        offer.maxPlayers = d[0x236];
++        offer.gameName = Ucs2(d + 0x238, 48);
++        offer.description = Ucs2(d + 0x298, 96);
++        _offers[host] = offer;
++        return true;
++    }
++    return false;
++}
+diff --git a/src/libretro/net/wmb.hpp b/src/libretro/net/wmb.hpp
+new file mode 100644
+index 0000000..fa447f3
+--- /dev/null
++++ b/src/libretro/net/wmb.hpp
+@@ -0,0 +1,37 @@
++#pragma once
++#include <array>
++#include <cstddef>
++#include <cstdint>
++#include <map>
++#include <string>
++
++namespace MelonDsDs {
++/// What a DS Download Play host offers, gathered from its beacons (GBATEK "DS Wifi Nintendo Beacons").
++struct WmbOffer {
++    std::array<uint8_t, 6> host {};
++    uint32_t gameId = 0;
++    uint16_t streamCode = 0;
++    std::string hostName;
++    std::string gameName;
++    std::string description;
++    uint8_t maxPlayers = 0;
++    std::array<uint8_t, 0x220> icon {}; // palette (0x20) then 4bpp bitmap (0x200), as a cartridge icon
++};
++
++/// Collects the advertisement snippets of every Download Play host heard, from received 802.11 frames.
++class WmbScanner {
++public:
++    /// [frame]: melonDS's 12-byte RX header, then the 802.11 frame. True when it completed a host's offer.
++    bool FrameReceived(const uint8_t* frame, size_t len) noexcept;
++    const std::map<std::array<uint8_t, 6>, WmbOffer>& Offers() const noexcept { return _offers; }
++private:
++    struct Gathering {
++        uint32_t gameId = 0;
++        uint16_t streamCode = 0;
++        uint16_t have = 0; // bit n: snippet n received
++        std::array<uint8_t, 9 * 0x62> data {};
++    };
++    std::map<std::array<uint8_t, 6>, Gathering> _gathering;
++    std::map<std::array<uint8_t, 6>, WmbOffer> _offers;
++};
++}
 diff --git a/src/libretro/nx_nds_radio.h b/src/libretro/nx_nds_radio.h
 new file mode 100644
 index 0000000..9d5cc94
