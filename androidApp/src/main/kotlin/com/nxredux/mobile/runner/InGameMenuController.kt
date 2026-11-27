@@ -508,8 +508,9 @@ internal class InGameMenuController(
     }
 
     /**
-     * A raw key while the menu is open: the Shortcuts page's press to bind takes it ([InGameMenuModel.takesKey]) before
-     * the menu's routing, as MainActivity's Controls → Shortcuts does; a repeat it takes is dropped. True when taken.
+     * A raw key while the menu is open: the Shortcuts or Button Mapping page's press to bind takes it
+     * ([InGameMenuModel.takesKey]) before the menu's routing, as MainActivity's Controls → Shortcuts does; a repeat it
+     * takes is dropped. True when taken.
      */
     fun captureKey(keyCode: Int, down: Boolean, repeat: Boolean): Boolean {
         if (host.quitting) return false
@@ -672,18 +673,20 @@ internal class InGameMenuController(
                     // A key Graphics API forced for this launch keeps its stored value: the running one is the session's only.
                     // Shortcuts: only the rows overridden here (overrides inherit), never a full snapshot of what
                     // fires, so a later Controls → Shortcuts change still reaches the others; a row given back to the
-                    // default loses its line ([Shortcuts.droppedOnSave]).
+                    // default loses its line ([Shortcuts.droppedOnSave]). The button mapping likewise: a game writes its own
+                    // lines only while it differs from the console file's ([ButtonMap.gameConfig]).
                     val overrides = host.shortcutOverrides
                     val map = host.buttonMap
                     val values = CoreConfig.valuesToSave(all.map { it.key to it.value }, host.storedValues, host.graphicsForcedOptions + dualForcedOptions()) + host.frontendValues.toList() +
-                        ShaderOptions.activeParamEntries(renderer.shaderValues, renderer.shaderParams) + Shortcuts.toConfig(overrides) + ButtonMap.toConfig(map) +
+                        ShaderOptions.activeParamEntries(renderer.shaderValues, renderer.shaderParams) + Shortcuts.toConfig(overrides) +
                         if (game) listOf(FrontendOptions.CHEATS to CheatSet.encode(host.cheatSet.enabledKeys())) else emptyList()
                     val dropShortcuts = Shortcuts.droppedOnSave(overrides)
-                    val dropMap = ButtonMap.droppedOnSave(map)
-                    val drop = { key: String -> dropShortcuts(key) || dropMap(key) }
                     withContext(Dispatchers.IO) {
                         runCatching {
-                            if (game) store.saveGame(values, drop) else store.saveConsole(values, drop).also { store.deleteGame() }
+                            val mapLines = if (game) ButtonMap.gameConfig(map, ButtonMap.fromFiles(null, store.read().first, host.gameTag)) else ButtonMap.toConfig(map)
+                            val dropMap = ButtonMap.droppedOnSave(mapLines)
+                            val drop = { key: String -> dropShortcuts(key) || dropMap(key) }
+                            if (game) store.saveGame(values + mapLines, drop) else store.saveConsole(values + mapLines, drop).also { store.deleteGame() }
                         }.onFailure { NxLog.w(TAG_LOG, "saving options failed", it) }.getOrNull()
                     }
                 }
@@ -710,7 +713,7 @@ internal class InGameMenuController(
         withCoreOptions { all ->
             if (all == null) { host.toast("Could not save options"); menuModel?.let(::republishEdits); return@withCoreOptions }
             lifecycleScope.launch {
-                val next = host.configWrites.withLock {   // after any hotkey save in flight, not interleaved with it
+                val restored = host.configWrites.withLock {   // after any hotkey save in flight, not interleaved with it
                     withContext(Dispatchers.IO) {
                         runCatching {
                             when (host.configSource) {
@@ -719,10 +722,12 @@ internal class InGameMenuController(
                                 ConfigSource.NONE -> Unit
                             }
                             val (console, game) = store.read()
-                            CoreConfig.resolve(host.descriptorDefaults, console, game, host.forcedOptions, host.hiddenValues)
+                            CoreConfig.resolve(host.descriptorDefaults, console, game, host.forcedOptions, host.hiddenValues) to
+                                ButtonMap.fromFiles(game, console, host.gameTag)
                         }.onFailure { NxLog.w(TAG_LOG, "restoring options failed", it) }.getOrNull()
                     }
                 }
+                val next = restored?.first
                 if (next == null) {
                     host.toast("Could not save options")
                 } else {
@@ -743,7 +748,7 @@ internal class InGameMenuController(
                     host.applyFrontend(FrontendOptions.fromConfig(next.values, host.gameTag))
                     renderer.applyShader(ShaderOptions.fromConfig(next.values))
                     host.applyShortcuts(Shortcuts.fromConfig(next.values))   // the layer fallen back to's, none for defaults
-                    host.buttonMap = ButtonMap.fromConfig(next.values, host.gameTag)
+                    host.buttonMap = restored.second
                 }
                 val model = menuModel ?: return@launch
                 host.publishShortcuts(model)   // the model dropped its overrides; a failed restore puts the ones in effect back
@@ -765,10 +770,10 @@ internal class InGameMenuController(
         menuState.value = model.state
     }
 
-    /** The game's button mapping, with the Wii controller and New 3DS controls its rows are named for. */
-    private fun publishButtonMap(model: InGameMenuModel) {
+    /** The game's button mapping, with the Wii controller, New 3DS controls or GameCube pad its rows are named for. */
+    fun publishButtonMap(model: InGameMenuModel) {
         val profile = host.padProfile()
-        model.setButtonMap(host.buttonMap, profile.wiiPad, profile.n3dsNew)
+        model.setButtonMap(host.buttonMap, profile.wiiPad, profile.n3dsNew, gameCube = profile.kind == PadProfile.Kind.GC)
     }
 
     /** The Players page's data in the open menu. */

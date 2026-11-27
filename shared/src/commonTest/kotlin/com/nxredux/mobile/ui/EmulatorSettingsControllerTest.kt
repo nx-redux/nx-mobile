@@ -32,6 +32,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import com.nxredux.mobile.runner.MapKey
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -727,8 +728,9 @@ class EmulatorSettingsControllerTest {
     private val padSource = FakeRomsSource(
         dirs = mapOf(
             "Home" to listOf("Roms"),
-            "Home/Roms" to listOf("Sony PlayStation (PS)", "Super Nintendo ES (SFC)"),
+            "Home/Roms" to listOf("Sony PlayStation (PS)", "Super Nintendo ES (SFC)", "Sega Dreamcast (DC)"),
             "Home/Roms/Sony PlayStation (PS)" to listOf("Crash.chd"),
+            "Home/Roms/Sega Dreamcast (DC)" to listOf("Crazy Taxi.chd"),
             "Home/Roms/Super Nintendo ES (SFC)" to listOf("Mario.sfc"),
         ),
     )
@@ -798,6 +800,33 @@ class EmulatorSettingsControllerTest {
         state.onButton(NxButton.B)   // out of the list, on its row
         assertFalse(options(state).buttonMapping)
         assertEquals(EmulatorRow.ButtonMapping, selected(state))
+    }
+
+    @Test fun dreamcastRefusesTheTriggers() = runTest {
+        val configs = MemoryConfigs()
+        val state = TestState(configs, src = padSource)
+        openMapping(state, "flycast")
+        assertTrue(options(state).rows.filterIsInstance<EmulatorRow.MapBind>().none { it.job == MapKey.L2 || it.job == MapKey.R2 })
+        select(state) { (it as? EmulatorRow.MapBind)?.label == "A" }
+        state.onButton(NxButton.A)
+        assertTrue(state.captureKey(105, down = true))   // R2
+        assertEquals("A" to "Pick A, B, X, Y, L1, R1, L3 or R3", state.message.value)
+        assertFalse(bindRow(state, "A").waiting)
+        advanceUntilIdle()
+        assertTrue(configs.files.keys.none { it.startsWith("DC-") })
+    }
+
+    @Test fun openingTheListDropsAStaleWait() = runTest {
+        val state = TestState(MemoryConfigs(), src = padSource)
+        openMapping(state, "pcsx_rearmed")
+        select(state) { (it as? EmulatorRow.MapBind)?.label == "×" }
+        state.onButton(NxButton.A)
+        assertTrue(state.captureKey(97, down = true))
+        await { bindRow(state, "×").key.name == "B" }
+        state.onButton(NxButton.B)   // out of the list with B still held
+        state.onButton(NxButton.A)   // and in again
+        assertTrue(options(state).buttonMapping)
+        assertFalse(state.captureKey(97, down = false))   // the old wait's release is no longer taken
     }
 
     @Test fun resetDropsOverrides() = runTest {

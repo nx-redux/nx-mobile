@@ -20,6 +20,8 @@ class ButtonMapRowsTest {
     fun ndsRows() {
         val rows = ButtonMapRows.rowsFor("NDS")
         assertTrue(MapRow(L2, "Swap screens") in rows)
+        val labels = rows.map { it.label }
+        assertEquals(labels.distinct(), labels)
         assertTrue(MapRow(R2, "Stylus") in rows)
         assertTrue(MapRow(L1, "L") in rows && MapRow(R1, "R") in rows)
     }
@@ -76,12 +78,16 @@ class ButtonMapRowsTest {
     fun gameCubeRows() {
         val rows = ButtonMapRows.rowsFor("GC")
         assertFalse(L1 in jobs(rows))
-        assertTrue(MapRow(R1, "Z") in rows && MapRow(L2, "L") in rows && MapRow(R2, "R") in rows)
+        assertTrue(MapRow(R1, "Z") in rows)
+        // L and R are analog triggers the core reads as they are: never remapped.
+        assertFalse(L2 in jobs(rows) || R2 in jobs(rows))
     }
 
     @Test
     fun dreamcastByLetter() {
-        assertEquals(listOf(MapRow(A, "A"), MapRow(B, "B"), MapRow(X, "X"), MapRow(Y, "Y")), ButtonMapRows.rowsFor("DC").take(4))
+        val rows = ButtonMapRows.rowsFor("DC")
+        assertEquals(listOf(MapRow(A, "A"), MapRow(B, "B"), MapRow(X, "X"), MapRow(Y, "Y")), rows.take(4))
+        assertFalse(L2 in jobs(rows) || R2 in jobs(rows))
     }
 
     @Test

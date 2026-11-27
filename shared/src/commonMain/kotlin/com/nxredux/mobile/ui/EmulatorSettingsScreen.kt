@@ -131,11 +131,11 @@ internal fun emulatorTouchRow(row: EmulatorRow): NxSettingRow = when (row) {
 
 /** Reset to defaults' line on the emulator's page (as every Settings page's) and its fuller text. */
 internal const val EMULATOR_RESET_INFO = "Resets every setting on this page"
-internal const val EMULATOR_RESET_DETAIL = "Put this console's settings and its in-game shortcuts back to their defaults; games with their own settings keep them"
+internal const val EMULATOR_RESET_DETAIL = "Put this console's settings, its in-game shortcuts and its button mapping back to their defaults; games with their own settings keep them"
 
 /** Reset to defaults' question on the emulator's page ([Screen.EmulatorOptions.confirmReset]). */
 internal val EMULATOR_RESET_ASK = SettingsResetAsk(
-    "Reset to defaults?", "Every setting saved for this console, its in-game shortcuts included, goes back to its default. Games with their own settings keep them.", "Reset",
+    "Reset to defaults?", "Every setting saved for this console, its in-game shortcuts and button mapping included, goes back to its default. Games with their own settings keep them.", "Reset",
 )
 
 /** Use emulator settings' line (what A does) and its fuller text. */

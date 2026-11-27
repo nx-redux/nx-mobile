@@ -75,8 +75,8 @@ internal interface GameInputHost : LifecycleOwner {
     /** The buttons were taken (the menu, the focus): held shortcuts end, toggled ones stay ([SpeedController.releaseHolds]). */
     fun releaseShortcutHolds()
     /**
-     * A raw key while the in-game menu is open: true when its Shortcuts page's press to bind took it ([InGameMenuModel.takesKey]),
-     * so the menu never sees it (MENU, B, Back included).
+     * A raw key while the in-game menu is open: true when its Shortcuts or Button Mapping page's press to bind took it
+     * ([InGameMenuModel.takesKey]), so the menu never sees it (MENU, B, Back included).
      */
     fun menuCaptureKey(keyCode: Int, down: Boolean, repeat: Boolean): Boolean
     fun backPressed()
@@ -297,6 +297,9 @@ internal class GameInputRouter(private val host: GameInputHost) {
 
     /** Dolphin is running a GameCube game, so the pad is the GameCube's ([PadProfile.Kind.GC]) and L / R are analog triggers. */
     val gcPad: Boolean get() = host.isDolphin && host.padProfile().kind == PadProfile.Kind.GC
+
+    /** The button mapping the pad's keys follow: L2 and R2 left alone where the core reads them as analog triggers. */
+    private val buttonMap: ButtonMap get() = inputMap(host.buttonMap, analogTriggers = host.isDc || gcPad)
 
     /** The GameCube pad's L and R: one tap/hold gesture, applied state, hold timer each. */
     private val gcGestures = mapOf(NxButton.L2 to TriggerGesture(), NxButton.R2 to TriggerGesture())
@@ -681,7 +684,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
      * the Wii U's SELECT chords, then the core. The DS's L2/R2 are its hotkeys only, as on the keys.
      */
     private fun sendAxisTrigger(trigger: NxButton, down: Boolean, port: Int) {
-        val code = axisJobKey(host.buttonMap, trigger)
+        val code = axisJobKey(buttonMap, trigger)
         when (thumbKeyRoute(code, host.isWii, host.isN3ds)) {
             ThumbKeyRoute.WII_RECENTER -> { if (down) host.recenterWiiMotion(); return }
             ThumbKeyRoute.WII_HOME -> { if (down) host.pressWiiHome(); return }
@@ -1114,7 +1117,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
         val port = portFor(event.device, claim = true) ?: return true   // no slot: dropped
         // From here a physical key acts as the key whose job the button mapping gives it; the menu chord and the shortcuts
         // match the raw key, and the L2/R2 axis dedupe goes by the physical trigger, as its axes do.
-        val mapped = mappedKey(host.buttonMap, keyCode, isPhysical(event))
+        val mapped = mappedKey(buttonMap, keyCode, isPhysical(event))
         val trigger = physicalTrigger(keyCode)
         // Wii: the left-stick click recentres the phone's motion, the right-stick click is HOME ([GameInputHost.pressWiiHome]); neither
         // reaches the core as itself. 3DS split: the left-stick click is SWAP between the displays. Elsewhere (the PS2's
@@ -1143,8 +1146,8 @@ internal class GameInputRouter(private val host: GameInputHost) {
                 if (!routeNds(b, down = true, repeat = !first)) return true
             }
         }
-        // A GameCube analog trigger is never remapped, so its key is dropped only while that key's job is the same trigger.
-        if (gcPad && trigger != null && mapped == keyCode && gcAnalogTriggerKey(trigger, event.device)) return true
+        // A GameCube trigger's key, which the mapping never moves ([buttonMap]), is dropped while its axis drives it.
+        if (gcPad && trigger != null && gcAnalogTriggerKey(trigger, event.device)) return true
         if (!host.isNds && !host.isDc && !earlyDedupe && first && trigger != null && !routeTriggerKey(trigger, down = true, port)) return true   // its axis pressed it
         if (host.isN3ds) placed?.let { b ->
             if (!routeN3ds(b, down = true, repeat = !first)) return true
@@ -1168,7 +1171,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
         // A held-back MENU (a MENU combo is bound): its release opens the menu if no combo fired, from any pad as its press.
         if (PadKeymap.buttonFor(keyCode) == NxButton.MENU) host.shortcutKeys?.takeIf { it.holdsMenu }?.let { shortcut(it.onUp(keyCode)); return true }
         val port = portFor(event.device, claim = false) ?: return true
-        val mapped = mappedKey(host.buttonMap, keyCode, isPhysical(event))
+        val mapped = mappedKey(buttonMap, keyCode, isPhysical(event))
         val trigger = physicalTrigger(keyCode)
         val thumb = thumbKeyRoute(mapped, host.isWii, host.isN3ds)
         val earlyDedupe = dedupesBeforeThumb(thumb, trigger)
@@ -1188,7 +1191,7 @@ internal class GameInputRouter(private val host: GameInputHost) {
                 if (!routeNds(b, down = false)) return true
             }
         }
-        if (gcPad && trigger != null && mapped == keyCode && gcAnalogTriggerKey(trigger, event.device)) return true
+        if (gcPad && trigger != null && gcAnalogTriggerKey(trigger, event.device)) return true
         if (!host.isNds && !host.isDc && !earlyDedupe && trigger != null && !routeTriggerKey(trigger, down = false, port)) return true   // not held
         if (host.isN3ds) placed?.let { b ->
             if (!routeN3ds(b, down = false)) return true
@@ -1201,6 +1204,9 @@ internal class GameInputRouter(private val host: GameInputHost) {
         return true
     }
 }
+
+/** [map] as the pad's keys follow it: with L2 and R2 on their own keys when they are [analogTriggers] ([ButtonMap.keepingTriggers]). */
+internal fun inputMap(map: ButtonMap, analogTriggers: Boolean): ButtonMap = if (analogTriggers) map.keepingTriggers() else map
 
 /** The key whose job a key does under [map]: a physical pad's keys follow it, a key from no physical pad goes as is. */
 internal fun mappedKey(map: ButtonMap, keyCode: Int, physical: Boolean): Int =

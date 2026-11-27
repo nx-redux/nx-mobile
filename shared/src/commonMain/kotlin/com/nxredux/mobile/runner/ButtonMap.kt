@@ -1,5 +1,8 @@
 package com.nxredux.mobile.runner
 
+import com.nxredux.mobile.options.ConfigFile
+import com.nxredux.mobile.options.FrontendOptions
+
 /** The ten remappable pad keys, with their Android keycodes (no Android imports in shared). */
 enum class MapKey(val keyCode: Int, val label: String) {
     A(96, "A"), B(97, "B"), X(99, "X"), Y(100, "Y"),
@@ -35,6 +38,9 @@ class ButtonMap(private val jobOf: Map<MapKey, MapKey>) {
     fun keyCodeFor(physicalKeyCode: Int): Int =
         MapKey.ofKeyCode(physicalKeyCode)?.let { jobFor(it).keyCode } ?: physicalKeyCode
 
+    /** This map with L2 and R2 on their own keys ([analogTriggers]); the keys that fed or took their jobs swap among the rest. */
+    fun keepingTriggers(): ButtonMap = bind(MapKey.L2, MapKey.L2).bind(MapKey.R2, MapKey.R2)
+
     val isDefault: Boolean get() = MapKey.entries.all { jobFor(it) == it }
 
     override fun equals(other: Any?): Boolean =
@@ -57,9 +63,12 @@ class ButtonMap(private val jobOf: Map<MapKey, MapKey>) {
         /**
          * Reads the `nx_map_<JOB>=<PHYSICAL>` lines of a cfg over the identity; anything that isn't a permutation of
          * [MapKey] is the default. Without any such line, a Nintendo Controller Layout on a console that took the pad's
-         * letters carries over as the A/B and X/Y swap.
+         * letters carries over as the A/B and X/Y swap. L2 and R2 stay put where they are [analogTriggers].
          */
-        fun fromConfig(values: Map<String, String>, tag: String): ButtonMap {
+        fun fromConfig(values: Map<String, String>, tag: String): ButtonMap =
+            read(values, tag).let { if (analogTriggers(tag)) it.keepingTriggers() else it }
+
+        private fun read(values: Map<String, String>, tag: String): ButtonMap {
             val lines = values.filterKeys { it.startsWith(PREFIX) }
             if (lines.isEmpty()) return legacy(values[LEGACY_LAYOUT], tag)
             val jobOf = MapKey.entries.associateWith { it }.toMutableMap()
@@ -78,6 +87,41 @@ class ButtonMap(private val jobOf: Map<MapKey, MapKey>) {
             return DEFAULT.bind(MapKey.A, MapKey.B).bind(MapKey.X, MapKey.Y)
         }
 
+        /**
+         * The consoles whose L2 and R2 are analog triggers the core reads straight from the pad's axes (the Dreamcast's,
+         * the GameCube's): a remapped trigger key would press as well as the pull, so those two keys keep their own jobs.
+         * A GameCube disc under the Wii tag goes as "GC".
+         */
+        fun analogTriggers(tag: String): Boolean = DcInput.appliesTo(tag) || tag.trim().uppercase() == "GC"
+
+        /** Whether [physical] may take a job on [tag]'s Button Mapping page ([analogTriggers]). */
+        fun binds(tag: String, physical: MapKey): Boolean =
+            !(analogTriggers(tag) && (physical == MapKey.L2 || physical == MapKey.R2))
+
+        /**
+         * The mapping a game plays with: the game file's ([gameValues]) when it has `nx_map_*` lines or a retired layout
+         * that carries over, else the console file's ([consoleValues]), so a game saved with its own options still
+         * follows the console's Button Mapping. Both are a file's values with the old keys migrated.
+         */
+        fun resolve(gameValues: Map<String, String>?, consoleValues: Map<String, String>?, tag: String): ButtonMap {
+            if (gameValues != null) {
+                val game = fromConfig(gameValues, tag)
+                if (game != DEFAULT || gameValues.keys.any { it.startsWith(PREFIX) }) return game
+            }
+            return fromConfig(consoleValues.orEmpty(), tag)
+        }
+
+        /** [resolve] for the game's and the console's files as read, their old keys migrated ([FrontendOptions.migrateKeys]). */
+        fun fromFiles(game: ConfigFile?, console: ConfigFile?, tag: String): ButtonMap =
+            resolve(game?.values?.let(FrontendOptions::migrateKeys), console?.values?.let(FrontendOptions::migrateKeys), tag)
+
+        /**
+         * The lines a game's save writes for [m] over the console file's mapping ([console]): none while they match, so
+         * the game keeps following the console; else every key's, so even the default stays the game's own ([resolve]).
+         */
+        fun gameConfig(m: ButtonMap, console: ButtonMap): List<Pair<String, String>> =
+            if (m == console) emptyList() else MapKey.entries.map { PREFIX + it.name to m.keyFor(it).name }
+
         fun toConfig(m: ButtonMap): List<Pair<String, String>> =
             MapKey.entries.filter { m.keyFor(it) != it }.map { PREFIX + it.name to m.keyFor(it).name }
 
@@ -85,8 +129,11 @@ class ButtonMap(private val jobOf: Map<MapKey, MapKey>) {
          * For a config save writing [m] ([toConfig]): drops every `nx_map_*` line it doesn't write, since the cfg render
          * keeps any line it isn't given, and the retired layout key so it can't migrate again.
          */
-        fun droppedOnSave(m: ButtonMap): (String) -> Boolean {
-            val written = toConfig(m).map { it.first }.toSet()
+        fun droppedOnSave(m: ButtonMap): (String) -> Boolean = droppedOnSave(toConfig(m))
+
+        /** As [droppedOnSave] for a save writing the `nx_map_*` [lines] ([toConfig] or [gameConfig]). */
+        fun droppedOnSave(lines: List<Pair<String, String>>): (String) -> Boolean {
+            val written = lines.map { it.first }.toSet()
             return { key -> key == LEGACY_LAYOUT || (key.startsWith(PREFIX) && key !in written) }
         }
     }

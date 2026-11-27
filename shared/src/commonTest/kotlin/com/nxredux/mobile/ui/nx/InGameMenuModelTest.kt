@@ -3012,9 +3012,9 @@ class InGameMenuModelTest {
 
     // ------------------------------------------------------------------ Options → Controls → Button Mapping
 
-    private fun buttonMapping(tag: String = "PS", map: ButtonMap = ButtonMap.DEFAULT): InGameMenuModel {
+    private fun buttonMapping(tag: String = "PS", map: ButtonMap = ButtonMap.DEFAULT, gameCube: Boolean = false): InGameMenuModel {
         val m = model().openConsoleSettings(group = OptionGroup.CONTROLS, tag = tag)
-        m.setButtonMap(map, wiiPad = null, newControls = false)
+        m.setButtonMap(map, wiiPad = null, newControls = false, gameCube = gameCube)
         assertNull(m.activate(m.state.page.rows.indexOfFirst { it.label == "Button Mapping" }))
         assertEquals(PageKind.ButtonMapping, m.state.page.kind)
         return m
@@ -3057,6 +3057,26 @@ class InGameMenuModelTest {
         assertEquals("Pick A, B, X, Y, L1, R1, L2, R2, L3 or R3", m.state.page.footer)
         m.press(NxButton.A)
         assertEquals("A", m.row("×").valueLabel)
+    }
+
+    @Test fun analogTriggersRefusedOnDreamcastAndGameCube() {
+        for ((tag, gameCube) in listOf("DC" to false, "GC" to false, "WII" to true)) {
+            val m = buttonMapping(tag, gameCube = gameCube)
+            m.selectRow("A"); m.press(NxButton.A)
+            assertNull(m.captureKey(KeyCodes.BUTTON_L2, down = true), tag)
+            assertEquals(ButtonMap.DEFAULT, m.buttonMap, tag)
+            assertEquals(PageKind.Message, m.state.page.kind, tag)
+            assertEquals("Pick A, B, X, Y, L1, R1, L3 or R3", m.state.page.footer, tag)
+        }
+    }
+
+    @Test fun gameCubeDiscUnderWiiShowsGameCubeRows() {
+        val m = buttonMapping("WII", map = ButtonMap.DEFAULT.bind(MapKey.A, MapKey.L2), gameCube = true)
+        val labels = m.state.page.rows.map { it.label }
+        assertTrue("Z" in labels, labels.toString())
+        assertFalse("Recenter" in labels || "HOME" in labels, labels.toString())
+        assertFalse(MapKey.L2 in MapKey.entries.filter { m.buttonMap.keyFor(it) != it }, m.buttonMap.toString())   // L2 kept on its own key
+        assertEquals("A", m.row("A").valueLabel)
     }
 
     @Test fun dpadAndBackDoNotBind() {

@@ -2339,6 +2339,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             it.setFrontend(frontendValues, renderer.overlayNames(), menuLocked(), gameTag, overlayAvailable = !renderer.ndsSplit)
         }
     }
+    override fun publishMenuButtonMap() = withMenu(menu::publishButtonMap)
     override val gameContainer: FrameLayout get() = findViewById(R.id.gameContainer)
 
     override fun careInput() = care.input()

@@ -476,6 +476,8 @@ internal class EmulatorSettingsController(
                 EmulatorRow.UseEmulatorSettings -> useEmulatorSettings(s)
                 EmulatorRow.ResetDefaults -> screen.value = s.copy(confirmReset = true)   // asks first
                 EmulatorRow.ButtonMapping -> {
+                    mapping = null
+                    mapHeld.clear()
                     val rows = EmulatorRows.buttonMapping(s.page, null)
                     screen.value = s.copy(rows = rows, buttonMapping = true)
                     selection.value = ListSelection(0, rows.size)
@@ -571,8 +573,8 @@ internal class EmulatorSettingsController(
     /**
      * A raw key from the platform while a Button Mapping row waits, and the release of any key pressed since (system keys
      * never): true when the wait took it. A pad key ([MapKey]) binds the waiting row, swapping with the key that had the
-     * job ([ButtonMap.bind]); Back cancels, since B is a key to bind here; any other key (START, SELECT, MENU, the d-pad)
-     * is refused with a message.
+     * job ([ButtonMap.bind]); Back cancels, since B is a key to bind here; any other key (START, SELECT, MENU, the d-pad,
+     * and L2 / R2 where they are analog triggers: [ButtonMap.binds]) is refused with a message.
      */
     fun captureKey(keyCode: Int, down: Boolean): Boolean {
         val s = screen.value as? Screen.EmulatorOptions
@@ -583,9 +585,9 @@ internal class EmulatorSettingsController(
         val job = mapping ?: return true
         endMapping()
         if (keyCode == KeyCodes.BACK || s == null) return true
-        val physical = MapKey.ofKeyCode(keyCode)
+        val physical = MapKey.ofKeyCode(keyCode)?.takeIf { ButtonMap.binds(s.page.tag, it) }
         if (physical == null) {
-            host.showMessage(s.page.mapRows.firstOrNull { it.job == job }?.label ?: job.label, InGameMenuModel.MAP_PICK_NOTE)
+            host.showMessage(s.page.mapRows.firstOrNull { it.job == job }?.label ?: job.label, InGameMenuModel.mapPickNote(s.page.tag))
             return true
         }
         writeMap(s) { it.bind(job, physical) }

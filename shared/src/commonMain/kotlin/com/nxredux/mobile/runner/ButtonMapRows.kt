@@ -9,7 +9,8 @@ data class MapRow(val job: MapKey, val label: String)
 /**
  * The rows a console's Button Mapping page lists: each key whose job the console's pad draws, labelled as the pad labels
  * the button that key reaches ([PhysicalKeys.toRunner], then [PadProfile]), then the hotkeys a key reaches although the
- * pad leaves its button out. A key that does nothing on the console has no row.
+ * pad leaves its button out. A key that does nothing on the console has no row, nor do analog triggers
+ * ([ButtonMap.analogTriggers]).
  */
 object ButtonMapRows {
     /** N64 buttons by name, as [N64Input] reads each key. */
@@ -27,7 +28,7 @@ object ButtonMapRows {
     /** Jobs a key reaches outside the drawn pad: the DS's and 3DS's hotkeys and the Wii's stick clicks. */
     private fun hotkeys(tag: String): Map<MapKey, String> = when (tag) {
         // NdsHotkeys: L2 and L3 swap the screens, R2 toggles stylus mode, R3 touches at the pen.
-        "NDS" -> mapOf(MapKey.L2 to "Swap screens", MapKey.R2 to "Stylus", MapKey.L3 to "Swap screens", MapKey.R3 to "Touch")
+        "NDS" -> mapOf(MapKey.L2 to "Swap screens", MapKey.R2 to "Stylus", MapKey.L3 to "Swap screens 2", MapKey.R3 to "Touch")
         // Azahar's swap-screens key and its touch at the right-stick cursor.
         "3DS" -> mapOf(MapKey.L3 to "Swap screens", MapKey.R3 to "Touch")
         "WII" -> mapOf(MapKey.L3 to "Recenter", MapKey.R3 to "HOME")
@@ -38,7 +39,7 @@ object ButtonMapRows {
         val t = tag.trim().uppercase()
         val profile = PadProfile.forTag(t, n3dsNew = newControls, wii = wiiPad)
         val hot = hotkeys(t)
-        val pad = MapKey.entries.filter { it !in hot }.mapNotNull { job ->
+        val pad = MapKey.entries.filter { it !in hot && ButtonMap.binds(t, it) }.mapNotNull { job ->
             // Every MapKey has an NxButton of the same name; toRunner only swaps among the face keys.
             val button = NxButton.valueOf(MapKey.ofKeyCode(PhysicalKeys.toRunner(t, job.keyCode))!!.name)
             when {

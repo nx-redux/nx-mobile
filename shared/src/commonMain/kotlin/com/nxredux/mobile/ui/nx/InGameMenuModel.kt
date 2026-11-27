@@ -460,6 +460,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         private set
     private var mapWiiPad: WiiPad? = null
     private var mapNewControls = false
+    private var mapGameCube = false
     /** The job whose Button Mapping row waits for a physical key ([captureKey]). */
     private var mapping: MapKey? = null
     /** Keys pressed since a Button Mapping row started waiting: their releases stay the page's ([takesKey]). */
@@ -1982,7 +1983,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      * A raw key the host gave press to bind ([takesKey]): [MenuEffect.ShortcutsChanged] when it bound the waiting row. A
      * button or combo the console's hotkeys use (or the SELECT+START menu chord) is refused, saying which hotkey has it
      * (built-in hotkeys win); B or Back alone cancels. On the Button Mapping page a pad key binds the waiting row
-     * ([MenuEffect.SetButtonMap]); any other key is refused, and Back cancels (B is a key to bind there).
+     * ([MenuEffect.SetButtonMap]); any other key (L2 / R2 too where they are analog triggers: [ButtonMap.binds]) is
+     * refused, and Back cancels (B is a key to bind there).
      */
     fun captureKey(keyCode: Int, down: Boolean): MenuEffect? {
         if (takesMapKey(keyCode, down)) return captureMapKey(keyCode, down)
@@ -2099,13 +2101,14 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     /**
      * This console's or game's button [map] (the resolved config's `nx_map_*`, or what the page set since launch), and
-     * the Wii controller ([wiiPad]) and New 3DS controls ([newControls]) the rows are labelled for. Refreshes an open
-     * Button Mapping page.
+     * the Wii controller ([wiiPad]) and New 3DS controls ([newControls]) the rows are labelled for; [gameCube]: a
+     * GameCube disc under the Wii tag, which gets the GameCube's rows. Refreshes an open Button Mapping page.
      */
-    fun setButtonMap(map: ButtonMap, wiiPad: WiiPad?, newControls: Boolean) {
-        buttonMap = map
+    fun setButtonMap(map: ButtonMap, wiiPad: WiiPad?, newControls: Boolean, gameCube: Boolean = false) {
         mapWiiPad = wiiPad
         mapNewControls = newControls
+        mapGameCube = gameCube
+        buttonMap = if (ButtonMap.analogTriggers(mapTag())) map.keepingTriggers() else map
         refreshButtonMappingPage()
     }
 
@@ -2120,10 +2123,10 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         val job = mapping ?: return null
         mapping = null
         if (keyCode == KeyCodes.BACK) { refreshButtonMappingPage(); return null }
-        val physical = MapKey.ofKeyCode(keyCode)
+        val physical = MapKey.ofKeyCode(keyCode)?.takeIf { ButtonMap.binds(mapTag(), it) }
         if (physical == null) {
             refreshButtonMappingPage()
-            push(message(mapRows().firstOrNull { it.job == job }?.label ?: job.label, MAP_PICK_NOTE))
+            push(message(mapRows().firstOrNull { it.job == job }?.label ?: job.label, mapPickNote(mapTag())))
             return null
         }
         return setMap(buttonMap.bind(job, physical)) ?: run { refreshButtonMappingPage(); null }
@@ -2139,7 +2142,9 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private fun mapJob(key: String): MapKey? =
         if (key.startsWith(MAP_KEY_PREFIX)) MapKey.entries.firstOrNull { it.name == key.removePrefix(MAP_KEY_PREFIX) } else null
 
-    private fun mapRows() = ButtonMapRows.rowsFor(frontendTag, mapWiiPad, mapNewControls)
+    private fun mapTag() = if (mapGameCube) "GC" else frontendTag
+
+    private fun mapRows() = ButtonMapRows.rowsFor(mapTag(), mapWiiPad, mapNewControls)
 
     private fun refreshButtonMappingPage() {
         state = state.copy(stack = state.stack.map { p -> if (p.kind == PageKind.ButtonMapping) rebuilt(p, buttonMappingPage()).copy(footer = SHORTCUTS_FOOTER) else p })
@@ -2224,7 +2229,11 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         const val RESET_BUTTON_MAP_LABEL = "Reset to default"
         /** The waiting Button Mapping row's line: B binds there, so Back cancels. */
         const val MAP_CAPTURE_LINE = "Press Back to cancel"
-        const val MAP_PICK_NOTE = "Pick A, B, X, Y, L1, R1, L2, R2, L3 or R3"
+        /** The refusal of a key the Button Mapping page can't bind: the keys [tag]'s page binds ([ButtonMap.binds]). */
+        fun mapPickNote(tag: String): String {
+            val keys = MapKey.entries.filter { ButtonMap.binds(tag, it) }.map { it.label }
+            return "Pick ${keys.dropLast(1).joinToString(", ")} or ${keys.last()}"
+        }
         /** A Shortcuts row inheriting Controls → Shortcuts. */
         private const val DEFAULT_SUFFIX = " (default)"
         private val LOCAL_WIRELESS_KEYS = setOf(NdsOptions.LOCAL_WIRELESS, N3dsOptions.LOCAL_WIRELESS)
