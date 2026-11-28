@@ -35,6 +35,15 @@ class Ps2PatchesTest {
         assertEquals(emptySet(), Ps2Patches.initialEnabled(null, null))
     }
 
+    @Test fun a_game_file_without_the_old_line_keeps_the_console_default() {
+        val console = mapOf("armsx2_widescreen_patches" to "enabled")
+        assertEquals(mapOf("armsx2_widescreen_patches" to "enabled", "armsx2_upscale" to "2x"),
+            Ps2Patches.layered(console, mapOf("armsx2_upscale" to "2x")))
+        assertEquals(mapOf("armsx2_widescreen_patches" to "disabled"),
+            Ps2Patches.layered(console, mapOf("armsx2_widescreen_patches" to "disabled")))
+        assertNull(Ps2Patches.layered(null, null))
+    }
+
     @Test fun saved_set_is_read_from_the_game_file_only() {
         val values = mapOf(FrontendOptions.PATCHES to "60 FPS|No-Interlacing")
         assertEquals(listOf("60 FPS", "No-Interlacing"), Ps2Patches.savedFrom(values, ConfigSource.GAME))

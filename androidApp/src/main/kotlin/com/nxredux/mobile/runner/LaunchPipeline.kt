@@ -694,7 +694,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             val savedCheats = CheatSet.savedFrom(resolved.values, resolved.source)
             if (patchesSupported) {
                 // The retired Widescreen / No-Interlacing options' stored values: the resolve drops locked keys.
-                val raw = withContext(Dispatchers.IO) { store.read() }.let { (console, perGame) -> (perGame ?: console)?.values }
+                val raw = withContext(Dispatchers.IO) { store.read() }.let { (console, perGame) -> Ps2Patches.layered(console?.values, perGame?.values) }
                 patchSet = Ps2PatchSet.start(Ps2Patches.initialEnabled(Ps2Patches.savedFrom(resolved.values, resolved.source), raw))
             }
             val dolphinContent = CompletableDeferred<String>()

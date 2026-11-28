@@ -51,6 +51,10 @@ object Ps2Patches {
         }
     }
 
+    /** The stored values as the resolve layers them: a game file overrides only the lines it has. */
+    fun layered(console: Map<String, String>?, game: Map<String, String>?): Map<String, String>? =
+        if (console == null && game == null) null else console.orEmpty() + game.orEmpty()
+
     /** The saved set, only from the game file (a console file never carries it). */
     fun savedFrom(values: Map<String, String>, source: ConfigSource): List<String>? =
         if (source == ConfigSource.GAME) values[FrontendOptions.PATCHES]?.let(CheatSet::decode) else null
