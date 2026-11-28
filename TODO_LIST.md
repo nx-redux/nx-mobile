@@ -31,6 +31,7 @@ Still owed:
 - [x] DS: L2 swaps screens, R2 stylus, SELECT+Right layout; dimmed rows and combos; L2 refused while binding (Nova).
 - [x] Dreamcast: L/R dimmed and refused; with A on Y, L2 alone doesn't press a face button (Soulcalibur). GameCube (Luigi's Mansion): L/R dimmed (Nova).
 - [x] A saved Nintendo Controller Layout on SFC shows as the A↔B, X↔Y swap (Nova).
+- [x] Dreamcast rows read L / R; Settings has no top-right mark; a Game Settings file holding only the mapping goes when bound back, one with other values stays (Nova).
 - [x] Docs: nx-redux-docs PR #96 (pages, retaken screenshots, Button Mapping shots).
 - [ ] Docs release notes entry when this ships.
 
