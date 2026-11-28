@@ -110,9 +110,9 @@ object EmulatorRows {
         val core = page.core
         if (category != null) return core.orEmpty().let { CoreOptionFilter.inCategory(it, category) }.map { EmulatorRow.Core(it, inCategory = true) }
         // The app's settings by what they are for, a header per group (Display, Controls, Gameplay, Multiplayer, Audio), a gap
-        // between; the console's own page ends Controls with Button Mapping.
+        // between; Controls ends with Button Mapping, the console's or the game's.
         val byGroup = OptionGroup.grouped(page.console) { it.option.key }.toMap()
-        val mapping = !page.forGame && page.mapRows.isNotEmpty()
+        val mapping = page.mapRows.isNotEmpty()
         val appGroups = OptionGroup.entries.mapNotNull { g ->
             val rows = byGroup[g].orEmpty().map<ConsoleRow, EmulatorRow>(EmulatorRow::Console) +
                 if (g == OptionGroup.CONTROLS && mapping) listOf(EmulatorRow.ButtonMapping) else emptyList()
@@ -646,23 +646,30 @@ internal class EmulatorSettingsController(
      * ([EmulatorSettings.consoleMapWrite]), then shown. Nothing is written when it stays the same.
      */
     private fun writeMap(s: Screen.EmulatorOptions, next: (ButtonMap) -> ButtonMap) {
-        if (s.game != null) return
         val d = descriptorOf(s) ?: return
         val tag = s.page.tag
+        val game = s.game
+        val rom = game?.game?.fileName
         scope.launch {
             lock.withLock {
                 val page = withContext(work) {
                     tryOrAny({
                         error.value = "Could not save the setting"
-                        tryOrNull { readPage(tag, d, null) }
+                        tryOrNull { readPage(tag, d, game) }
                     }) {
-                        val files = configs.read(tag, d.id, null)
-                        val page = build(tag, d, null, files)
+                        val files = configs.read(tag, d.id, rom)
+                        val page = build(tag, d, game, files)
                         val map = next(page.buttonMap)
                         if (map == page.buttonMap) return@withContext page
-                        val text = EmulatorSettings.consoleMapWrite(files.first, map)
-                        configs.writeConsole(tag, d.id, text)
-                        build(tag, d, null, CoreConfig.parse(text) to files.second)
+                        if (rom == null) {
+                            val text = EmulatorSettings.consoleMapWrite(files.first, map)
+                            configs.writeConsole(tag, d.id, text)
+                            build(tag, d, game, CoreConfig.parse(text) to files.second)
+                        } else {
+                            val text = EmulatorSettings.gameMapWrite(page, files.first, files.second, map) ?: return@withContext page
+                            configs.writeGame(tag, d.id, rom, text)
+                            build(tag, d, game, files.first to CoreConfig.parse(text))
+                        }
                     }
                 }
                 page?.let { show(s, it) }

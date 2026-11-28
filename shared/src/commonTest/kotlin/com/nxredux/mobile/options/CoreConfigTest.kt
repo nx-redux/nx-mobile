@@ -166,6 +166,13 @@ class CoreConfigTest {
         assertEquals(setOf("nx_overlay"), r.locked)
     }
 
+    @Test fun with_key_leaves_the_console_mapping_out_of_a_new_game_file() {
+        val console = CoreConfig.parse("nx_map_A = B\nnx_map_B = A\nopt = 1\n")
+        assertEquals("opt = 1\nnx_nds_pip_size = large\n", CoreConfig.withKey(console, null, "nx_nds_pip_size", "large"))
+        // A game file of its own keeps its lines.
+        assertEquals("nx_map_A = B\nnx_map_B = A\nnx_nds_pip_size = large\n", CoreConfig.withKey(null, console, "nx_nds_pip_size", "large").let { it.replace("opt = 1\n", "") })
+    }
+
     @Test fun with_key_updates_an_existing_game_file_and_starts_one_from_nothing() {
         assertEquals("a = 1\nnx_nds_pip_size = large\n", CoreConfig.withKey(CoreConfig.parse("b = 2\n"), CoreConfig.parse("a = 1\n"), "nx_nds_pip_size", "large"))
         assertEquals("nx_nds_pip_size = small\n", CoreConfig.withKey(null, null, "nx_nds_pip_size", "small"))

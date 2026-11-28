@@ -449,6 +449,55 @@ class EmulatorSettingsControllerTest {
         assertEquals("opt_a", (selected(state) as EmulatorRow.Core).option.key)
     }
 
+    @Test fun a_first_game_change_leaves_the_console_mapping_out() = runTest {
+        val configs = MemoryConfigs(mapOf("GBA-gpsp/minarch.cfg" to "nx_map_L1 = R1\nnx_map_R1 = L1\nopt_a = z\n"))
+        val state = TestState(configs)
+        openGame(state)
+        selectOptA(state)
+        state.padStep(NxButton.RIGHT)
+        await { onOptA(state) && coreValue(state, "opt_a") == "x" }
+        val text = configs.files.getValue("GBA-gpsp/Mario.cfg")
+        assertFalse("nx_map_" in text, text)   // the game keeps following the console's mapping
+        assertEquals(MapKey.R1, options(state).page.buttonMap.keyFor(MapKey.L1))
+    }
+
+    @Test fun game_settings_button_mapping_writes_the_game_file() = runTest {
+        val configs = MemoryConfigs(mapOf("GBA-gpsp/minarch.cfg" to "nx_map_L1 = R1\nnx_map_R1 = L1\nopt_a = z\n"))
+        val state = TestState(configs)
+        openGame(state)
+        select(state) { it == EmulatorRow.ButtonMapping }
+        state.onButton(NxButton.A)
+        assertTrue(options(state).buttonMapping)
+        assertEquals("Mario › Button Mapping", emulatorOptionsTitle(options(state)))
+        assertEquals(MapKey.R1, bindRow(state, "A").let { options(state).page.buttonMap.keyFor(MapKey.L1) })   // the console's, inherited
+        select(state) { (it as? EmulatorRow.MapBind)?.label == "A" }
+        state.onButton(NxButton.A)
+        assertTrue(state.captureKey(97, down = true))
+        await { bindRow(state, "A").key == MapKey.B }
+        val game = configs.files.getValue("GBA-gpsp/Mario.cfg").lines()
+        assertTrue("nx_map_A = B" in game && "nx_map_B = A" in game && "nx_map_L1 = R1" in game, game.toString())
+        assertTrue("opt_a = z" in game)
+        assertEquals("nx_map_L1 = R1\nnx_map_R1 = L1\nopt_a = z\n", configs.files["GBA-gpsp/minarch.cfg"])   // the console file is untouched
+        // Bound back to the console's mapping, the game drops its lines and follows the console again.
+        assertTrue(state.captureKey(97, down = false))
+        state.onButton(NxButton.A)
+        assertTrue(state.captureKey(96, down = true))
+        await { bindRow(state, "A").key == MapKey.A }
+        assertFalse("nx_map_" in configs.files.getValue("GBA-gpsp/Mario.cfg"))
+    }
+
+    @Test fun game_settings_button_mapping_does_not_write_an_unchanged_map() = runTest {
+        val configs = MemoryConfigs(mapOf("GBA-gpsp/minarch.cfg" to "opt_a = z\n"))
+        val state = TestState(configs)
+        openGame(state)
+        select(state) { it == EmulatorRow.ButtonMapping }
+        state.onButton(NxButton.A)
+        select(state) { it == EmulatorRow.ResetButtonMap }
+        state.onButton(NxButton.A)
+        advanceUntilIdle()
+        assertNull(configs.files["GBA-gpsp/Mario.cfg"])
+    }
+
     @Test fun use_emulator_settings_deletes_the_game_file() = runTest {
         val configs = MemoryConfigs(mapOf("GBA-gpsp/minarch.cfg" to "opt_a = z\n", "GBA-gpsp/Mario.cfg" to "opt_a = y\n"))
         val state = TestState(configs)
@@ -866,9 +915,11 @@ class EmulatorSettingsControllerTest {
         assertEquals("A", bindRow(state, "B").key.name)
     }
 
-    @Test fun game_settings_has_no_button_mapping() = runTest {
+    @Test fun game_settings_has_button_mapping_under_controls() = runTest {
         val state = TestState(MemoryConfigs())
         openGame(state)
-        assertFalse(EmulatorRow.ButtonMapping in options(state).rows)
+        val rows = options(state).rows
+        val at = rows.indexOf(EmulatorRow.ButtonMapping)
+        assertTrue(rows.indexOf(EmulatorRow.Header("Controls")) in 0 until at, rows.toString())
     }
 }

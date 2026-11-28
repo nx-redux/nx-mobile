@@ -20,8 +20,12 @@ data class EmulatorPage(
     /** Null when the core has no bundled table; empty when it has one with nothing to show. */
     val core: List<CoreOption>?,
     val forGame: Boolean, val gameFileExists: Boolean,
-    /** The stored button mapping ([ButtonMap.fromConfig]) and the Button Mapping rows it is shown on ([ButtonMapRows.rowsFor]). */
+    /**
+     * The button mapping the page edits ([ButtonMap.resolve]: a game's own lines, else the console's) and the Button Mapping
+     * rows it is shown on ([ButtonMapRows.rowsFor]); [consoleMap]: the console file's, which a game's follows until it differs.
+     */
     val buttonMap: ButtonMap = ButtonMap.DEFAULT, val mapRows: List<MapRow> = emptyList(),
+    val consoleMap: ButtonMap = ButtonMap.DEFAULT,
 )
 
 object EmulatorSettings {
@@ -74,7 +78,8 @@ object EmulatorSettings {
         }
         return EmulatorPage(
             tag, descriptor.id, descriptor.name, consoleRows, core, forGame, forGame && game != null,
-            ButtonMap.fromConfig(resolved.values, tag).keeping(ButtonMap.locked(tag)), mapRows(tag, resolved.values),
+            ButtonMap.fromFiles(if (forGame) game else null, console, tag).keeping(ButtonMap.locked(tag)), mapRows(tag, resolved.values),
+            ButtonMap.fromFiles(null, console, tag).keeping(ButtonMap.locked(tag)),
         )
     }
 
@@ -96,14 +101,27 @@ object EmulatorSettings {
         CoreConfig.render(console, ButtonMap.toConfig(map), FrontendOptions::migrateKey, drop = ButtonMap.droppedOnSave(map))
 
     /**
+     * The game file's text with [map] as its mapping ([ButtonMap.gameConfig]: no lines while it matches [page]'s console
+     * mapping), in place or as [gameWrite]'s first snapshot; null when there is no game file and nothing to write.
+     */
+    fun gameMapWrite(page: EmulatorPage, console: ConfigFile?, game: ConfigFile?, map: ButtonMap): String? {
+        val lines = ButtonMap.gameConfig(map, page.consoleMap)
+        val drop = ButtonMap.droppedOnSave(lines)
+        if (game != null) return CoreConfig.render(game, lines, FrontendOptions::migrateKey, drop = drop)
+        if (lines.isEmpty()) return null
+        return CoreConfig.render(console, page.core.orEmpty().map { it.key to it.value } + lines, FrontendOptions::migrateKey, drop = drop)
+    }
+
+    /**
      * The game file's text after [key] = [value]: in place, or a full snapshot of [console] + [page]'s core values on the
      * first change. The snapshot takes values from [page] (never the resolved map), so keys the page hides are not added;
      * invisible table options are left to their defaults, not written.
      */
     fun gameWrite(page: EmulatorPage, console: ConfigFile?, game: ConfigFile?, key: String, value: String): String {
         if (game != null) return CoreConfig.render(game, listOf(key to value), FrontendOptions::migrateKey)
-        // A game file replaces the console file whole when read, so the first one starts as a full copy (in-game "Save for game").
+        // A game file replaces the console file whole when read, so the first one starts as a full copy (in-game "Save for game"),
+        // less the console's button mapping, which the game keeps following ([ButtonMap.resolve]).
         val core = page.core.orEmpty().map { it.key to it.value }
-        return CoreConfig.render(console, core + (key to value), FrontendOptions::migrateKey)
+        return CoreConfig.render(console, core + (key to value), FrontendOptions::migrateKey, drop = { it.startsWith(ButtonMap.PREFIX) })
     }
 }

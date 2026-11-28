@@ -146,12 +146,12 @@ internal const val USE_EMULATOR_SETTINGS_DETAIL = "Delete this game's settings, 
 
 /**
  * "<emulator> — <console> (<TAG>)", or the game's name for Game Settings; an open category is appended. Button Mapping
- * belongs to the console, not the emulator, so its title leaves the emulator out and fits beside the logo.
+ * belongs to the console or the game, not the emulator, so its title leaves the emulator out and fits beside the logo.
  */
 internal fun emulatorOptionsTitle(s: Screen.EmulatorOptions): String {
     val p = s.page
     val console = "${CoreRegistry.consoleOf(p.tag)?.displayName ?: p.tag} (${CoreRegistry.handheldTag(p.tag)})"
-    if (s.buttonMapping) return "$console › ${InGameMenuModel.BUTTON_MAPPING_LABEL}"
+    if (s.buttonMapping) return "${s.game?.game?.shownName ?: console} › ${InGameMenuModel.BUTTON_MAPPING_LABEL}"
     val base = s.game?.game?.shownName ?: "${p.emulator} — $console"
     val category = s.category?.let { key -> p.core.orEmpty().firstOrNull { it.category == key }?.categoryLabel?.ifEmpty { null } ?: key }
     return if (category == null) base else "$base › $category"
