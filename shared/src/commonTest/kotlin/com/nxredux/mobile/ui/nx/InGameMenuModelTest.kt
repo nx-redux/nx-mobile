@@ -12,7 +12,6 @@ import com.nxredux.mobile.options.BottomScreenOptions
 import com.nxredux.mobile.options.ConsoleSettings
 import com.nxredux.mobile.options.CoreOption
 import com.nxredux.mobile.options.FrontendOptions
-import com.nxredux.mobile.options.PadOptions
 import com.nxredux.mobile.options.ShaderBrowse
 import com.nxredux.mobile.options.ShaderOptions
 import com.nxredux.mobile.options.AudioOptions
@@ -20,6 +19,10 @@ import com.nxredux.mobile.options.SpeedOptions
 import com.nxredux.mobile.options.N3dsOptions
 import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.OptionGroup
+import com.nxredux.mobile.options.WiiOptions
+import com.nxredux.mobile.runner.ButtonMap
+import com.nxredux.mobile.runner.MapKey
+import com.nxredux.mobile.runner.WiiController
 import com.nxredux.mobile.options.NdsView
 import com.nxredux.mobile.shortcuts.ConsoleHotkeys
 import com.nxredux.mobile.shortcuts.KeyCodes
@@ -38,11 +41,11 @@ import kotlin.test.assertTrue
 
 class InGameMenuModelTest {
     /**
-     * A console with no rows of its own: the Controller Layout, speed and audio rows every tag has are locked here (a
-     * locked row is hidden, and a group with none left is not offered).
+     * A console with no rows of its own: the speed and audio rows every tag has are locked here (a locked row is hidden,
+     * and a group with none left is not offered).
      */
-    private val plainTag = "GBA"   // a console with the Controller Layout row only (N64 has Graphics API too)
-    private val plainLocked = setOf(PadOptions.LAYOUT) + (SpeedOptions.table + AudioOptions.rows).map { it.key }
+    private val plainTag = "GBA"   // a console with the shared rows only (N64 has Graphics API too)
+    private val plainLocked = (SpeedOptions.table + AudioOptions.rows).map { it.key }.toSet()
 
     private fun plain(m: InGameMenuModel) = m.apply { setFrontend(FrontendOptions.defaults(plainTag), emptyList(), plainLocked, plainTag) }
 
@@ -511,20 +514,20 @@ class InGameMenuModelTest {
         assertEquals(listOf(true, true, true, true, true, false), m.state.page.rows.map { (it as MenuRow.Option).visual })
     }
 
-    // Controls: the console's pad rows, then the landscape pad opacity every console has.
+    // Controls: the console's pad rows, then the landscape pad opacity every console has, then Button Mapping.
     @Test fun controls_page_holds_the_landscape_pad_opacity() {
         val m = model().openFrontend()
         m.press(NxButton.B)                                  // back to Options
         assertNull(m.activate(m.optionsRow("Controls")))
         assertEquals(PageKind.Settings(OptionGroup.CONTROLS), m.state.page.kind)
-        assertEquals(listOf("Controller Layout", "Pad Opacity (landscape)"), m.state.page.rows.map { it.label })
-        val opacity = m.optionRow(1)
+        assertEquals(listOf("Pad Opacity (landscape)", "Button Mapping"), m.state.page.rows.map { it.label })
+        val opacity = m.optionRow(0)
         assertEquals(listOf("100%", "60%", "40%", "25%"), opacity.choices)
         assertEquals(1, opacity.index)                       // 60%, the default
-        m.select(1)
+        m.select(0)
         assertNull(m.press(NxButton.A))                                    // A starts changing segments
         assertEquals(MenuEffect.SetFrontend(FrontendOptions.PAD_LANDSCAPE_OPACITY, "40"), m.press(NxButton.RIGHT))
-        assertEquals("40%", m.optionRow(1).valueLabel)                     // not a visual row: in place
+        assertEquals("40%", m.optionRow(0).valueLabel)                     // not a visual row: in place
     }
 
     @Test fun a_changes_a_row_left_right_go_between_pages() {
@@ -1499,8 +1502,8 @@ class InGameMenuModelTest {
     }
 
     /** The DS's [group] page (Display: the screens first). */
-    private fun InGameMenuModel.openConsoleSettings(locked: Set<String> = emptySet(), group: OptionGroup = OptionGroup.DISPLAY): InGameMenuModel {
-        setFrontend(FrontendOptions.defaults("NDS"), emptyList(), locked, "NDS", overlayAvailable = false)
+    private fun InGameMenuModel.openConsoleSettings(locked: Set<String> = emptySet(), group: OptionGroup = OptionGroup.DISPLAY, tag: String = "NDS"): InGameMenuModel {
+        setFrontend(FrontendOptions.defaults(tag), emptyList(), locked, tag, overlayAvailable = false)
         select(4); activate(4)                               // Options page
         assertNull(activate(optionsRow(group.label)))
         assertEquals(PageKind.Settings(group), state.page.kind)
@@ -1539,7 +1542,7 @@ class InGameMenuModelTest {
         assertEquals(
             mapOf(
                 "Display" to PICTURE_ROWS,
-                "Controls" to listOf("Controller Layout", "Pad Opacity (landscape)"),
+                "Controls" to listOf("Pad Opacity (landscape)", "Button Mapping"),
                 "Gameplay" to SPEED_ROWS,
                 "Audio" to listOf("Audio Resampling Quality", "Fill Audio Gaps"),   // Audio Buffer is read at launch
             ),
@@ -1557,7 +1560,7 @@ class InGameMenuModelTest {
         assertEquals(SPEED_ROWS + "Frame Skip", gc.getValue("Gameplay"))
         val wii = inGameGroups("WII")
         assertEquals(listOf("3D Resolution", "Max Scale") + PICTURE_ROWS, wii.getValue("Display"))   // no Wii Screen
-        assertEquals(listOf("Wii Controller", "Motion Controls", "Controller Layout", "Pad Opacity (landscape)"), wii.getValue("Controls"))
+        assertEquals(listOf("Wii Controller", "Motion Controls", "Pad Opacity (landscape)", "Button Mapping"), wii.getValue("Controls"))
         assertEquals(SPEED_ROWS + "Frame Skip", wii.getValue("Gameplay"))
     }
 
@@ -2718,24 +2721,24 @@ class InGameMenuModelTest {
     }
 
     @Test fun a_opens_the_picker_and_the_dpad_drives_it() {
-        val m = model().openConsoleSettings(group = OptionGroup.CONTROLS)
-        val layout = m.rowIndex("Controller Layout")
+        val m = model().openConsoleSettings(group = OptionGroup.CONTROLS, tag = "WII")
+        val layout = m.rowIndex("Wii Controller")
         m.select(layout)
         assertEquals(NxSettingControl.PICKER, m.optionRow(layout).control)
         assertNull(m.press(NxButton.A))
-        val labels = PadOptions.layoutRow.valueLabels
-        assertEquals(MenuPopup.Picker(layout, "Controller Layout", labels, 0, 0), m.state.popup)
+        val labels = WiiOptions.controllerRow.valueLabels
+        assertEquals(MenuPopup.Picker(layout, "Wii Controller", labels, 0, 0), m.state.popup)
         m.press(NxButton.DOWN)
         assertEquals(1, (m.state.popup as MenuPopup.Picker).cursor)
         m.press(NxButton.UP); m.press(NxButton.UP)           // wraps
-        assertEquals(2, (m.state.popup as MenuPopup.Picker).cursor)
+        assertEquals(4, (m.state.popup as MenuPopup.Picker).cursor)
         assertNull(m.press(NxButton.LEFT))                   // LEFT/RIGHT do nothing in the picker
         assertEquals(PageKind.Settings(OptionGroup.CONTROLS), m.state.page.kind)
-        assertEquals(MenuEffect.SetFrontend(PadOptions.LAYOUT, PadOptions.NINTENDO), m.press(NxButton.A))
+        assertEquals(MenuEffect.SetFrontend(WiiOptions.CONTROLLER, WiiController.CLASSIC), m.press(NxButton.A))
         assertNull(m.state.popup)
-        assertEquals(2, m.optionRow(layout).index)
+        assertEquals(4, m.optionRow(layout).index)
         m.press(NxButton.A)
-        assertEquals(2, (m.state.popup as MenuPopup.Picker).current)
+        assertEquals(4, (m.state.popup as MenuPopup.Picker).current)
         assertNull(m.press(NxButton.B))                      // B closes it, nothing set
         assertNull(m.state.popup)
         assertEquals(PageKind.Settings(OptionGroup.CONTROLS), m.state.page.kind)
@@ -2797,7 +2800,7 @@ class InGameMenuModelTest {
 
     @Test fun option_hints_name_what_a_does_per_control() {
         val switch = MenuRow.Option("HUD", "h", "Off", "x", choices = listOf("Off", "On"), index = 0)
-        val picker = MenuRow.Option("Layout", "l", "Auto-detect", "x", choices = PadOptions.layoutRow.valueLabels, index = 0)
+        val picker = MenuRow.Option("Controller", "c", "Auto", "x", choices = WiiOptions.controllerRow.valueLabels, index = 0)
         val segments = MenuRow.Option("Size", "s", "Small", "x", choices = listOf("Small", "Large"), index = 0)
         val visual = segments.copy(visual = true)
         val page = MenuPage(DISPLAY, "F", listOf(switch, picker, segments, visual))
@@ -3068,5 +3071,147 @@ class InGameMenuModelTest {
         m.press(NxButton.A)
         assertEquals(listOf(Hint(NxButton.B, "Cancel")), hintsFor(m.state.page, m.row("Toggle FF")))
         assertEquals(NxButton.A, hintsFor(m.state.page, m.row("Touch button 1")).first().button)   // A changes it: no ◄►
+    }
+
+    // ------------------------------------------------------------------ Options → Controls → Button Mapping
+
+    private fun buttonMapping(tag: String = "PS", map: ButtonMap = ButtonMap.DEFAULT, gameCube: Boolean = false): InGameMenuModel {
+        val m = model().openConsoleSettings(group = OptionGroup.CONTROLS, tag = tag)
+        m.setButtonMap(map, wiiPad = null, newControls = false, gameCube = gameCube)
+        assertNull(m.activate(m.state.page.rows.indexOfFirst { it.label == "Button Mapping" }))
+        assertEquals(PageKind.ButtonMapping, m.state.page.kind)
+        return m
+    }
+
+    @Test fun controlsPageOpensButtonMapping() {
+        val controls = model().openConsoleSettings(group = OptionGroup.CONTROLS, tag = "PS")
+        assertEquals(MenuRow.Submenu("Button Mapping", PageKind.ButtonMapping), controls.state.page.rows.first { it.label == "Button Mapping" })
+        val m = buttonMapping()
+        val first = m.state.page.rows.first() as MenuRow.Option
+        assertEquals("×", first.label)
+        assertEquals("A", first.valueLabel)
+        assertEquals("Reset to default", m.state.page.rows.last().label)
+    }
+
+    @Test fun captureBindsAndSwaps() {
+        val m = buttonMapping()
+        m.selectRow("×")
+        assertNull(m.press(NxButton.A))
+        assertEquals("Press a button…", m.row("×").valueLabel)
+        assertTrue(m.takesKey(KeyCodes.BUTTON_B, down = true))
+        val effect = assertIs<MenuEffect.SetButtonMap>(m.captureKey(KeyCodes.BUTTON_B, down = true))
+        assertEquals(MapKey.B, effect.map.keyFor(MapKey.A))
+        assertEquals(effect.map, m.buttonMap)
+        assertEquals("B", m.row("×").valueLabel)
+        assertEquals("A", m.row("○").valueLabel)
+        // B's release is the page's too, never the menu's (it would go back).
+        assertTrue(m.takesKey(KeyCodes.BUTTON_B, down = false))
+        assertNull(m.captureKey(KeyCodes.BUTTON_B, down = false))
+        assertFalse(m.takesKey(KeyCodes.BUTTON_B, down = false))
+        assertEquals(PageKind.ButtonMapping, m.state.page.kind)
+    }
+
+    @Test fun captureRefusesStart() {
+        val m = buttonMapping()
+        m.selectRow("×"); m.press(NxButton.A)
+        assertNull(m.captureKey(KeyCodes.BUTTON_START, down = true))
+        assertEquals(ButtonMap.DEFAULT, m.buttonMap)
+        // The wait goes on, its row saying which keys bind.
+        assertEquals(PageKind.ButtonMapping, m.state.page.kind)
+        assertEquals("Press a button…", m.row("×").valueLabel)
+        assertEquals("Pick A, B, X, Y, L1, R1, L2, R2, L3 or R3. Back cancels.", m.row("×").info)
+        val bound = assertIs<MenuEffect.SetButtonMap>(m.captureKey(KeyCodes.BUTTON_B, down = true))   // a pad key after it still binds
+        assertEquals(MapKey.B, bound.map.keyFor(MapKey.A))
+    }
+
+    @Test fun analogTriggersRefusedOnDreamcastAndGameCube() {
+        for ((tag, gameCube) in listOf("DC" to false, "GC" to false, "WII" to true)) {
+            val m = buttonMapping(tag, gameCube = gameCube)
+            m.selectRow("A"); m.press(NxButton.A)
+            assertNull(m.captureKey(KeyCodes.BUTTON_L2, down = true), tag)
+            assertEquals(ButtonMap.DEFAULT, m.buttonMap, tag)
+            assertEquals(PageKind.ButtonMapping, m.state.page.kind, tag)
+            assertEquals("Pick A, B, X, Y, L1, R1, L3 or R3. Back cancels.", m.row("A").info, tag)
+        }
+    }
+
+    @Test fun dsHotkeysAndCombosShowDimmed() {
+        val m = buttonMapping("NDS")
+        val swap = m.row("Swap screens")
+        assertEquals("L2", swap.valueLabel)
+        assertFalse(swap.enabled)
+        assertTrue(m.row("A").enabled)
+        m.selectRow("Swap screens")
+        assertNull(m.press(NxButton.A))
+        assertEquals("L2", m.row("Swap screens").valueLabel)   // no wait
+        assertEquals(listOf(Hint(NxButton.B, "Back")), hintsFor(m.state.page, m.row("Swap screens")))
+        val next = m.state.page.rows.filterIsInstance<MenuRow.Option>().single { it.label == "Next layout" }
+        assertEquals("SELECT + Right", next.valueLabel)
+        assertFalse(next.enabled)
+        assertEquals("Reset to default", m.state.page.rows.last().label)
+        // L2 can't be picked for another row either.
+        m.selectRow("A"); m.press(NxButton.A)
+        assertNull(m.captureKey(KeyCodes.BUTTON_L2, down = true))
+        assertEquals("Pick A, B, X, Y, L1 or R1. Back cancels.", m.row("A").info)
+    }
+
+    @Test fun gameCubeDiscUnderWiiShowsGameCubeRows() {
+        val m = buttonMapping("WII", map = ButtonMap.DEFAULT.bind(MapKey.A, MapKey.L2), gameCube = true)
+        val labels = m.state.page.rows.map { it.label }
+        assertTrue("Z" in labels, labels.toString())
+        assertFalse("Recenter" in labels || "HOME" in labels, labels.toString())
+        assertFalse(MapKey.L2 in MapKey.entries.filter { m.buttonMap.keyFor(it) != it }, m.buttonMap.toString())   // L2 kept on its own key
+        assertEquals("A", m.row("A").valueLabel)
+    }
+
+    @Test fun dpadAndBackDoNotBind() {
+        val m = buttonMapping()
+        m.selectRow("×"); m.press(NxButton.A)
+        assertNull(m.captureKey(KeyCodes.DPAD_LEFT, down = true))           // refused, as a d-pad direction is on Shortcuts
+        assertEquals(PageKind.ButtonMapping, m.state.page.kind)
+        assertEquals("Press a button…", m.row("×").valueLabel)              // still waiting
+        assertNull(m.captureKey(KeyCodes.BACK, down = true))                // Back cancels
+        assertEquals(PageKind.ButtonMapping, m.state.page.kind)
+        assertEquals("A", m.row("×").valueLabel)
+        assertFalse(m.takesKey(KeyCodes.BUTTON_A, down = true))
+        m.selectRow("×"); m.press(NxButton.A)
+        assertNull(m.press(NxButton.B))                                     // a touch B cancels
+        assertEquals("A", m.row("×").valueLabel)
+        assertEquals(PageKind.ButtonMapping, m.state.page.kind)
+    }
+
+    @Test fun resetToDefault() {
+        val m = buttonMapping()
+        m.selectRow("×"); m.press(NxButton.A)
+        m.captureKey(KeyCodes.BUTTON_B, down = true)
+        m.captureKey(KeyCodes.BUTTON_B, down = false)
+        assertEquals(MenuEffect.SetButtonMap(ButtonMap.DEFAULT), m.activate(m.state.page.rows.indexOfFirst { it.label == "Reset to default" }))
+        assertEquals(ButtonMap.DEFAULT, m.buttonMap)
+        assertEquals("A", m.row("×").valueLabel)
+    }
+
+    @Test fun restoreDefaultsResetsTheButtonMap() {
+        val m = model()
+        m.setButtonMap(ButtonMap.DEFAULT.bind(MapKey.A, MapKey.B), wiiPad = null, newControls = false)
+        m.select(4); m.activate(4)
+        m.activate(m.state.page.rows.indexOfFirst { it.label == "Save Changes" })
+        assertEquals(MenuEffect.RestoreDefaults, m.activate(m.state.page.rows.indexOfFirst { it.label == "Restore defaults" }))
+        assertEquals(ButtonMap.DEFAULT, m.buttonMap)
+    }
+
+    @Test fun buttonMappingHints() {
+        val m = buttonMapping()
+        m.selectRow("×")
+        assertEquals(listOf(Hint(NxButton.A, "Bind"), Hint(NxButton.B, "Back")), hintsFor(m.state.page, m.row("×")))
+        m.press(NxButton.A)
+        assertEquals(emptyList(), hintsFor(m.state.page, m.row("×")))     // B binds: Back cancels, as the row says
+    }
+
+    @Test fun noControllerLayoutRow() {
+        for (tag in listOf("GBA", "SNES", "NES", "GB", "GBC", "NDS", "3DS", "N64", "PS", "PSP", "PS2", "GC", "WII", "WIIU", "MD", "DC", "SATURN")) {
+            val m = model().openConsoleSettings(group = OptionGroup.CONTROLS, tag = tag)
+            assertFalse(m.state.page.rows.any { it.label == "Controller Layout" }, tag)
+            assertTrue(m.state.page.rows.any { it.label == "Button Mapping" }, tag)
+        }
     }
 }

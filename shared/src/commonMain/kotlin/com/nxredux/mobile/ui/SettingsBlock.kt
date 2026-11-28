@@ -92,7 +92,7 @@ internal fun settingsPlateEnd(): Dp = nxPageInset().pillEnd
 /** A section word's size on every screen, upright or not (before Appearance → Text size). */
 val SETTINGS_SECTION_SIZE: TextUnit = 26.sp
 
-/** The NX mark at the top right: its size and its inset from the top. Its right inset is the plates' edge ([settingsPlateEnd]). */
+/** The small NX mark's size (the top screen's, [com.nxredux.mobile.ui.nx.TopMark]), and the Settings root's status lines' inset from the top. */
 val SETTINGS_MARK = 48.dp
 val SETTINGS_MARK_TOP = 16.dp
 
@@ -290,16 +290,12 @@ fun SettingsMark(modifier: Modifier = Modifier) {
 }
 
 /**
- * The Settings screens' background: plain, the small mark at the top right (the page inset in, [SETTINGS_MARK_TOP] down)
- * and nothing else above; the large centred mark the other tool pages have is not drawn.
+ * The Settings screens' background: plain, with no mark, so a page's rows can fill its height without one over them;
+ * the large centred mark the other tool pages have is not drawn either.
  */
 @Composable
 internal fun SettingsBackground() {
-    Box(Modifier.fillMaxSize().background(LocalNxColors.current.background)) {
-        // at the content edge, as the words on the other side (a highlight's edge, [settingsPlateEnd], is a list inset
-        // further out: in a pad skin's glass that left the mark against the frame)
-        SettingsMark(Modifier.align(Alignment.TopEnd).padding(top = SETTINGS_MARK_TOP, end = nxPageInset().end))
-    }
+    Box(Modifier.fillMaxSize().background(LocalNxColors.current.background))
 }
 
 /**

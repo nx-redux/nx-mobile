@@ -8,7 +8,7 @@ package com.nxredux.mobile.options
 enum class OptionGroup(val label: String) {
     /** The picture: scaling, sharpness, overlay, offsets, the DS / 3DS / Wii screens, 3D resolution, Graphics API, Debug HUD. */
     DISPLAY("Display"),
-    /** The pad and the console's own controls: layout, type, portrait pad, landscape opacity, 3DS, Wii and Wii U controls. */
+    /** The pad and the console's own controls: Sega pad type, portrait pad, landscape opacity, 3DS, Wii and Wii U controls. */
     CONTROLS("Controls"),
     /** How the game runs: fast forward, rewind (with their audio), Frame Skip, the PS2 BIOS. */
     GAMEPLAY("Gameplay"),
@@ -19,7 +19,7 @@ enum class OptionGroup(val label: String) {
 
     companion object {
         private val CONTROL_KEYS = setOf(
-            PadOptions.LAYOUT, PadOptions.SEGA_PAD, FrontendOptions.PAD_LANDSCAPE_OPACITY,
+            PadOptions.SEGA_PAD, FrontendOptions.PAD_LANDSCAPE_OPACITY,
             N3dsOptions.NEW_CONTROLS,
             WiiOptions.CONTROLLER, WiiOptions.MOTION, WiiOptions.POINTER_WIDTH, WiiOptions.POINTER_HEIGHT, WiiOptions.POINTER_OFFSET,
             WiiuOptions.MOTION,

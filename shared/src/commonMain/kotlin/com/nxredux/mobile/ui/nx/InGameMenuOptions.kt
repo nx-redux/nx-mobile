@@ -123,7 +123,7 @@ private fun OptionTouchRow(
     NxTouchRow(
         row.label, row.info, row.hasMoreInfo, selected, sizes,
         onTap = onTap, onInfo = { onOption(OptionEvent.Info(index)) }, onTruncated = onTruncated,
-        editing = editing,
+        enabled = (row as? MenuRow.Option)?.enabled ?: true, editing = editing,
         below = if (row is MenuRow.Option && sizes.segmentsBelow(row)) {
             { NxEditArrows(editing, sizes.value) { NxSegments(row.choices, row.index, sizes.value) { onOption(OptionEvent.Choose(index, it)) } } }
         } else null,

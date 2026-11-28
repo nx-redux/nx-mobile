@@ -37,6 +37,18 @@ Still owed:
 - [ ] Phone, tablet, Fold cover, Flip inner, each way up: a console of each kind looks as on its review sheet (nx-skins `renders/review/`).
 - [ ] Known limit: a non-folding tablet upright of 1.33–1.4 aspect gets the inner screen's 12 dp lift.
 
+## Per-console Button Mapping (Controller Layout removed): device checks owed
+
+- [x] Nova in Nintendo ABXY mode, Marvel Super Heroes (PS1): ○ on the bottom key by default, ✕ after binding it in Default Settings; the refused key keeps the wait; the list re-reads on open.
+- [x] In-game Button Mapping: bind, swap, Reset to default; Save for game writes the game cfg, Save for console the console cfg and drops the game cfg (Nova).
+- [x] Game Settings → Button Mapping (Tetris): binds into the game cfg only; bound back, the game has no lines (Nova).
+- [x] DS: L2 swaps screens, R2 stylus, SELECT+Right layout; dimmed rows and combos; L2 refused while binding (Nova).
+- [x] Dreamcast: L/R dimmed and refused; with A on Y, L2 alone doesn't press a face button (Soulcalibur). GameCube (Luigi's Mansion): L/R dimmed (Nova).
+- [x] A saved Nintendo Controller Layout on SFC shows as the A↔B, X↔Y swap (Nova).
+- [x] Dreamcast rows read L / R; Settings has no top-right mark; a Game Settings file holding only the mapping goes when bound back, one with other values stays (Nova).
+- [x] Docs: nx-redux-docs PR #96 (pages, retaken screenshots, Button Mapping shots).
+- [ ] Docs release notes entry when this ships.
+
 ## Review round 3: device checks owed
 
 - [ ] RA: revoke/sign out mid-game, unlock, sign in, sync → the unlock arrives; quit right after an unlock → no toast during the quit.

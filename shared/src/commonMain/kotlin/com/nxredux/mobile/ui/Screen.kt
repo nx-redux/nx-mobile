@@ -198,10 +198,11 @@ sealed interface Screen {
     /**
      * One tag's emulator settings page, or a game's (Game Settings, [game] set). [category]: the open category (null =
      * top level). [confirmReset]: Reset to defaults asks first ([EmulatorRow.ResetDefaults]): A resets, B keeps.
+     * [buttonMapping]: the console's Button Mapping list is open ([EmulatorRows.buttonMapping]).
      */
     data class EmulatorOptions(
         val page: EmulatorPage, val rows: List<EmulatorRow>, val category: String? = null, val game: Listed? = null,
-        val confirmReset: Boolean = false,
+        val confirmReset: Boolean = false, val buttonMapping: Boolean = false,
     ) : Screen
     /** Tools -> Game Tracker: play time per game group, most played first; [modal]: an options / pick / confirm modal is open. */
     data class GameTime(val rows: List<GameTimeRow>, val grandTotalMs: Long, val modal: GameTimeModal? = null, val loading: Boolean = false) : Screen

@@ -167,6 +167,7 @@ internal interface LaunchHost : GameScreenHost {
     var canRewind: Boolean
     var canSaveStates: Boolean
     var padMap: PadMap
+    var buttonMap: ButtonMap
     var segaPad: SegaPad?
     var segaHeader: SegaPad?
     var launchedSegaSetting: String?
@@ -673,7 +674,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 DeviceTraits.gpu = AndroidDeviceInfo.gpu()
             }
             val store = CoreConfigStore(File(dataRoot, paths.consoleConfig), File(dataRoot, paths.gameConfig)).also { configStore = it }
-            val resolved = withContext(Dispatchers.IO) {
+            val (resolved, storedMap) = withContext(Dispatchers.IO) {
                 // fceumm's turbo default (Player 1): a cfg saved before it holds the old None as if picked ([FceummTurbo])
                 if (coreId == "fceumm") store.migrateFceummTurbo(fceummTurboSince())
                 val (console, perGame) = store.read()
@@ -684,7 +685,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                         chosen = console?.values?.get(GpuDriverOptions.KEY), appWide = settings.gpuDriver)
                     n3dsDownloadPlayConfigs(rowDefaults, console, perGame)
                 }
-                CoreConfig.resolve(descriptorDefaults, consoleFile, gameFile, forcedOptions, hiddenValues)
+                // The mapping reads both files: a game file without its own lines keeps the console's.
+                CoreConfig.resolve(descriptorDefaults, consoleFile, gameFile, forcedOptions, hiddenValues) to ButtonMap.fromFiles(perGame, console, tag)
             }
             configSource = resolved.source
             lockedOptions = resolved.locked
@@ -746,6 +748,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             canSaveStates = descriptor?.saveStates != false && !SystemRows.isRow(content.value)
             speed.setSession(netplay = np != null)   // first: the touch buttons [ShortcutsMicController.launch] builds follow the session
             shortcuts.launch(microphone = descriptor?.microphone == true, netplay = np != null, tag, Shortcuts.fromConfig(resolved.values), saveStates = canSaveStates)
+            buttonMap = storedMap
             val netplayPad = if (np != null) NetplayPads.forSession(tag, descriptor?.id, sessionPad) else null
             renderer.shaderValues = ShaderOptions.fromConfig(resolved.values)
             renderer.presetNames = withContext(Dispatchers.IO) { Shaders.presets(shaderRoots) }

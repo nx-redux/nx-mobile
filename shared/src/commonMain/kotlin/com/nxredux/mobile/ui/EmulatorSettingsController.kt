@@ -21,9 +21,14 @@ import com.nxredux.mobile.options.GpuDriverOptions
 import com.nxredux.mobile.options.GraphicsApiOptions
 import com.nxredux.mobile.options.OptionGroup
 import com.nxredux.mobile.options.Ps2Options
+import com.nxredux.mobile.runner.ButtonMap
+import com.nxredux.mobile.runner.ButtonMapRows
 import com.nxredux.mobile.runner.CoreDescriptor
 import com.nxredux.mobile.runner.CoreRegistry
+import com.nxredux.mobile.runner.MapKey
 import com.nxredux.mobile.runner.Res3dConsole
+import com.nxredux.mobile.shortcuts.KeyCodes
+import com.nxredux.mobile.shortcuts.ShortcutCapture
 import com.nxredux.mobile.storage.EmulatorConfigStore
 import com.nxredux.mobile.ui.nx.InGameMenuModel
 import com.nxredux.mobile.ui.nx.ListSelection
@@ -58,6 +63,20 @@ sealed interface EmulatorRow {
      * [choices] as its Settings page would draw them; it changes that setting as Settings does ([EmulatorSettingsHost]).
      */
     data class App(val row: SettingsRow, val choices: SettingChoices?) : EmulatorRow
+    /** The console's page, under Controls: opens its Button Mapping list. */
+    data object ButtonMapping : EmulatorRow
+    /**
+     * A Button Mapping row: [job]'s button, named [label], sits on physical [key]; [waiting] for a press to bind.
+     * [locked]: the console keeps the key ([ButtonMap.locked]): dimmed, A does nothing. [waitLine]: the waiting row's line.
+     */
+    data class MapBind(
+        val job: MapKey, val label: String, val key: MapKey, val waiting: Boolean = false, val locked: Boolean = false,
+        val waitLine: String = InGameMenuModel.MAP_CAPTURE_LINE,
+    ) : EmulatorRow
+    /** A built-in combo on the Button Mapping list ([ButtonMapRows.combos]): what it does and its [keys], dimmed. */
+    data class MapCombo(val label: String, val keys: String) : EmulatorRow
+    /** The Button Mapping list's last row: every button back on its own key. */
+    data object ResetButtonMap : EmulatorRow
 }
 
 /** App-wide Settings rows a page shows last, under [label]: Cable Link's on mGBA's page ([EmulatorRows.hostsCableLink]). */
@@ -90,12 +109,20 @@ object EmulatorRows {
     fun build(page: EmulatorPage, category: String?, app: EmulatorAppSection? = null): List<EmulatorRow> {
         val core = page.core
         if (category != null) return core.orEmpty().let { CoreOptionFilter.inCategory(it, category) }.map { EmulatorRow.Core(it, inCategory = true) }
+        // The app's settings by what they are for, a header per group (Display, Controls, Gameplay, Multiplayer, Audio), a gap
+        // between; Controls ends with Button Mapping, the console's or the game's.
+        val byGroup = OptionGroup.grouped(page.console) { it.option.key }.toMap()
+        val mapping = page.mapRows.isNotEmpty()
+        val appGroups = OptionGroup.entries.mapNotNull { g ->
+            val rows = byGroup[g].orEmpty().map<ConsoleRow, EmulatorRow>(EmulatorRow::Console) +
+                if (g == OptionGroup.CONTROLS && mapping) listOf(EmulatorRow.ButtonMapping) else emptyList()
+            rows.takeIf { it.isNotEmpty() }?.let { g to it }
+        }
         return buildList {
-            // The app's settings by what they are for, a header per group (Display, Controls, Gameplay, Multiplayer, Audio), a gap between.
-            OptionGroup.grouped(page.console) { it.option.key }.forEachIndexed { i, (group, rows) ->
+            appGroups.forEachIndexed { i, (group, rows) ->
                 if (i > 0) add(EmulatorRow.Gap)
                 add(EmulatorRow.Header(group.label))
-                rows.forEach { add(EmulatorRow.Console(it)) }
+                addAll(rows)
             }
             val coreRows = buildList {
                 if (core == null) {
@@ -111,10 +138,10 @@ object EmulatorRows {
                     }
                 }
             }
-            if (page.console.isNotEmpty() && coreRows.isNotEmpty()) add(EmulatorRow.Gap)   // space between the two groups
+            if (appGroups.isNotEmpty() && coreRows.isNotEmpty()) add(EmulatorRow.Gap)   // space between the two groups
             addAll(coreRows)
             // The emulator's page with values of its own: Reset to defaults after them, before the app-wide rows it leaves alone.
-            if (!page.forGame && (page.console.isNotEmpty() || !core.isNullOrEmpty())) { add(EmulatorRow.Gap); add(EmulatorRow.ResetDefaults) }
+            if (!page.forGame && (appGroups.isNotEmpty() || !core.isNullOrEmpty())) { add(EmulatorRow.Gap); add(EmulatorRow.ResetDefaults) }
             if (app != null && app.rows.isNotEmpty()) {
                 if (isNotEmpty()) add(EmulatorRow.Gap)
                 add(EmulatorRow.Header(app.label))
@@ -124,6 +151,18 @@ object EmulatorRows {
             if (page.forGame && page.gameFileExists) { if (isNotEmpty()) add(EmulatorRow.Gap); add(EmulatorRow.UseEmulatorSettings) }
         }
     }
+
+    /**
+     * [page]'s Button Mapping list: a row per button showing the key that does its job, [waiting]'s waiting (after a
+     * [refused] key, saying which keys bind); the console's built-in combos; then Reset to default.
+     */
+    fun buttonMapping(page: EmulatorPage, waiting: MapKey?, refused: Boolean = false): List<EmulatorRow> =
+        page.mapRows.map {
+            val line = if (refused) InGameMenuModel.mapRefusedLine(page.tag) else InGameMenuModel.MAP_CAPTURE_LINE
+            EmulatorRow.MapBind(it.job, it.label, page.buttonMap.keyFor(it.job), it.job == waiting, it.locked, line)
+        } +
+            ButtonMapRows.combos(page.tag).map { EmulatorRow.MapCombo(it.label, it.keys(page.buttonMap)) } +
+            EmulatorRow.ResetButtonMap
 
     fun firstSelectable(rows: List<EmulatorRow>): Int = rows.indexOfFirst { it.selectable }.coerceAtLeast(0)
 
@@ -148,6 +187,10 @@ object EmulatorRows {
                 EmulatorRow.UseEmulatorSettings -> r == EmulatorRow.UseEmulatorSettings
                 EmulatorRow.ResetDefaults -> r == EmulatorRow.ResetDefaults
                 is EmulatorRow.App -> r is EmulatorRow.App && r.row.kind == previous.row.kind
+                EmulatorRow.ButtonMapping -> r == EmulatorRow.ButtonMapping
+                is EmulatorRow.MapBind -> r is EmulatorRow.MapBind && r.job == previous.job
+                is EmulatorRow.MapCombo -> r is EmulatorRow.MapCombo && r.label == previous.label
+                EmulatorRow.ResetButtonMap -> r == EmulatorRow.ResetButtonMap
                 else -> false
             }
         }
@@ -180,6 +223,9 @@ internal interface EmulatorSettingsHost {
 
     /** Page [key] rebuilt, the selected row from [from] to [to] (null: gone): the row being changed follows ([SettingsController.followRowEdit]). */
     fun followRowEdit(key: Any?, from: Int, to: Int?) {}
+
+    /** A message dialog over the page, [title] over [text]; A or B closes it. */
+    fun showMessage(title: String, text: String)
 }
 
 /**
@@ -231,6 +277,9 @@ internal class EmulatorSettingsController(
     private var listRow: EmulatorListRow? = null          // the core whose picker or page is open
     private var fromPicker = false                       // the emulator page was opened from the console picker
     private var gameReturn: Pair<Screen, ListSelection>? = null   // the game list Game Settings came from
+    private var mapping: MapKey? = null                  // the job whose Button Mapping row waits for a press ([captureKey])
+    private var mapRefused = false                       // the wait took a key that can't bind: its row says which can
+    private val mapHeld = HashSet<Int>()                 // keys pressed since a wait began: their releases stay the wait's
 
     companion object {
         /**
@@ -311,6 +360,12 @@ internal class EmulatorSettingsController(
             is Screen.EmulatorConsoles -> showList(listRow)
             is Screen.EmulatorOptions -> when {
                 s.confirmReset -> screen.value = s.copy(confirmReset = false)   // B on the question keeps everything
+                s.buttonMapping -> {
+                    mapping = null
+                    val rows = rows(s.page, null, s.game)
+                    screen.value = s.copy(rows = rows, buttonMapping = false)
+                    selection.value = ListSelection(rows.indexOf(EmulatorRow.ButtonMapping).coerceAtLeast(0), rows.size)
+                }
                 s.category != null -> {
                     val rows = rows(s.page, null, s.game)
                     screen.value = s.copy(rows = rows, category = null)
@@ -352,6 +407,10 @@ internal class EmulatorSettingsController(
     /** [page]'s rows ([EmulatorRows.build]), the app's own rows ([EmulatorSettingsHost.appSection]) last at the top level. */
     private fun rows(page: EmulatorPage, category: String?, game: Listed?): List<EmulatorRow> =
         EmulatorRows.build(page, category, if (category == null) host.appSection(page, game) else null)
+
+    /** [s]'s rows for [page]: its Button Mapping list while that is open, else [rows]. */
+    private fun rowsOf(s: Screen.EmulatorOptions, page: EmulatorPage): List<EmulatorRow> =
+        if (s.buttonMapping) EmulatorRows.buttonMapping(page, mapping, mapRefused) else rows(page, s.category, s.game)
 
     private fun build(tag: String, d: CoreDescriptor, game: Listed?, files: Pair<ConfigFile?, ConfigFile?>): EmulatorPage {
         val screen = screenClass()
@@ -416,6 +475,8 @@ internal class EmulatorSettingsController(
             }
             return
         }
+        // A pad's keys are the wait's ([captureKey]), so a press here is a touch: it ends the wait, and B does nothing more.
+        if (mapping != null) { endMapping(); if (button == NxButton.B) return }
         val row = s.rows.getOrNull(selection.value.index)
         when (button) {
             NxButton.UP -> selection.value = ListSelection(EmulatorRows.step(s.rows, selection.value.index, -1), s.rows.size)
@@ -433,6 +494,17 @@ internal class EmulatorSettingsController(
                 }
                 EmulatorRow.UseEmulatorSettings -> useEmulatorSettings(s)
                 EmulatorRow.ResetDefaults -> screen.value = s.copy(confirmReset = true)   // asks first
+                EmulatorRow.ButtonMapping -> {
+                    mapping = null
+                    mapHeld.clear()
+                    val rows = EmulatorRows.buttonMapping(s.page, null)
+                    val open = s.copy(rows = rows, buttonMapping = true)
+                    screen.value = open
+                    selection.value = ListSelection(0, rows.size)
+                    reload(open)
+                }
+                is EmulatorRow.MapBind -> if (!row.locked) { mapping = row.job; mapRefused = false; refreshMapping() }
+                EmulatorRow.ResetButtonMap -> writeMap(s) { ButtonMap.DEFAULT }
                 else -> Unit
             }
             NxButton.B -> back(s)
@@ -508,6 +580,102 @@ internal class EmulatorSettingsController(
                             configs.writeGame(tag, d.id, rom, text)
                             if (key == GpuDriverOptions.KEY) game?.let { clearGpuDriverCrash(it.game.path) }
                             build(tag, d, game, files.first to CoreConfig.parse(text))
+                        }
+                    }
+                }
+                page?.let { show(s, it) }
+            }
+        }
+    }
+
+    /** [s]'s page read again and shown, for a list that shows what the files hold now (the cfg may have changed since). */
+    private fun reload(s: Screen.EmulatorOptions) {
+        val d = descriptorOf(s) ?: return
+        scope.launch {
+            lock.withLock {
+                withContext(work) { tryOrNull { readPage(s.page.tag, d, s.game) } }?.let { show(s, it) }
+            }
+        }
+    }
+
+    /** A Button Mapping row waits for a press: the platform hands raw keys to [captureKey] first. */
+    val mappingWaits: Boolean get() = mapping != null && (screen.value as? Screen.EmulatorOptions)?.buttonMapping == true
+
+    /**
+     * A raw key from the platform while a Button Mapping row waits, and the release of any key pressed since (system keys
+     * never): true when the wait took it. A pad key ([MapKey]) binds the waiting row, swapping with the key that had the
+     * job ([ButtonMap.bind]); Back cancels, since B is a key to bind here; any other key (START, SELECT, MENU, the d-pad,
+     * and the keys the console keeps: [ButtonMap.binds]) is refused and the wait goes on, its row saying which keys bind.
+     */
+    fun captureKey(keyCode: Int, down: Boolean): Boolean {
+        val s = screen.value as? Screen.EmulatorOptions
+        if (mapping != null && s?.buttonMapping != true) mapping = null   // a stale wait: never another page's keys
+        if (keyCode in ShortcutCapture.SYSTEM || !(keyCode in mapHeld || (down && mapping != null))) return false
+        if (!down) { mapHeld -= keyCode; return true }
+        mapHeld += keyCode
+        val job = mapping ?: return true
+        if (keyCode == KeyCodes.BACK || s == null) { endMapping(); return true }
+        val physical = MapKey.ofKeyCode(keyCode)?.takeIf { ButtonMap.binds(s.page.tag, it) }
+        if (physical == null) { mapRefused = true; refreshMapping(); return true }
+        endMapping()
+        writeMap(s) { it.bind(job, physical) }
+        return true
+    }
+
+    /** Ends a Button Mapping wait without a binding (the system Back); false when none waits. */
+    fun cancelMapping(): Boolean {
+        if (!mappingWaits) return false
+        endMapping()
+        return true
+    }
+
+    private fun endMapping() {
+        mapping = null
+        mapRefused = false
+        refreshMapping()
+    }
+
+    /** The open Button Mapping list redrawn for the wait starting or ending; nothing is read. */
+    private fun refreshMapping() {
+        val cur = screen.value as? Screen.EmulatorOptions ?: return
+        if (cur.buttonMapping) screen.value = cur.copy(rows = EmulatorRows.buttonMapping(cur.page, mapping, mapRefused))
+    }
+
+    /**
+     * The console's button mapping changed to [next] of the one the console file has now: written as its `nx_map_*` lines
+     * ([EmulatorSettings.consoleMapWrite]), then shown. Nothing is written when it stays the same.
+     */
+    private fun writeMap(s: Screen.EmulatorOptions, next: (ButtonMap) -> ButtonMap) {
+        val d = descriptorOf(s) ?: return
+        val tag = s.page.tag
+        val game = s.game
+        val rom = game?.game?.fileName
+        scope.launch {
+            lock.withLock {
+                val page = withContext(work) {
+                    tryOrAny({
+                        error.value = "Could not save the setting"
+                        tryOrNull { readPage(tag, d, game) }
+                    }) {
+                        val files = configs.read(tag, d.id, rom)
+                        val page = build(tag, d, game, files)
+                        val map = next(page.buttonMap)
+                        if (map == page.buttonMap) return@withContext page
+                        if (rom == null) {
+                            val text = EmulatorSettings.consoleMapWrite(files.first, map)
+                            configs.writeConsole(tag, d.id, text)
+                            build(tag, d, game, CoreConfig.parse(text) to files.second)
+                        } else {
+                            val text = EmulatorSettings.gameMapWrite(page, files.first, files.second, map) ?: return@withContext page
+                            val followsConsole = map == page.consoleMap &&
+                                EmulatorSettings.holdsNothingOwn(text, files.first, build(tag, d, null, files.first to null))
+                            if (followsConsole) {
+                                configs.deleteGame(tag, d.id, rom)
+                                build(tag, d, game, files.first to null)
+                            } else {
+                                configs.writeGame(tag, d.id, rom, text)
+                                build(tag, d, game, files.first to CoreConfig.parse(text))
+                            }
                         }
                     }
                 }
@@ -593,7 +761,7 @@ internal class EmulatorSettingsController(
         if (!samePage(cur, was)) return
         val from = selection.value.index
         val previous = cur.rows.getOrNull(from)
-        val rows = rows(page, cur.category, cur.game)
+        val rows = rowsOf(cur, page)
         val next = cur.copy(page = page, rows = rows)
         screen.value = next
         val same = EmulatorRows.indexOfSame(rows, previous)

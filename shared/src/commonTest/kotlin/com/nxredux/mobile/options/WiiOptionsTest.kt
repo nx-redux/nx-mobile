@@ -16,13 +16,13 @@ class WiiOptionsTest {
             listOf(
                 WiiOptions.CONTROLLER, WiiOptions.MOTION, WiiOptions.SCREEN, WiiOptions.POINTER_WIDTH, WiiOptions.POINTER_HEIGHT,
                 WiiOptions.POINTER_OFFSET,
-            ) + DolphinOptions.wiiResolutionRows(null).map { it.key } + listOf(GraphicsApiOptions.KEY, BottomScreenOptions.KEY, PadOptions.LAYOUT) + (SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.row).map { it.key },
+            ) + DolphinOptions.wiiResolutionRows(null).map { it.key } + listOf(GraphicsApiOptions.KEY, BottomScreenOptions.KEY) + (SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.row).map { it.key },
             ConsoleSettings.tableFor("WII").map { it.key },
         )
     }
 
     @Test fun gameCubeGetsNeither() {
-        assertEquals(DolphinOptions.resolutionRows(null).map { it.key } + listOf(GraphicsApiOptions.KEY, BottomScreenOptions.KEY, PadOptions.LAYOUT) + (SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.row).map { it.key }, ConsoleSettings.tableFor("GC").map { it.key })
+        assertEquals(DolphinOptions.resolutionRows(null).map { it.key } + listOf(GraphicsApiOptions.KEY, BottomScreenOptions.KEY) + (SpeedOptions.table + AudioOptions.rows + FrameSkipOptions.row).map { it.key }, ConsoleSettings.tableFor("GC").map { it.key })
         assertFalse(WiiOptions.appliesTo("GC"))
         assertTrue(WiiOptions.appliesTo(" wii "))
     }

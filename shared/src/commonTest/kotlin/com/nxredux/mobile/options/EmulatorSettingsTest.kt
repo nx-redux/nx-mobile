@@ -81,8 +81,8 @@ class EmulatorSettingsTest {
 
     @Test fun console_rows_follow_the_tag_and_read_the_cfg() {
         val p = EmulatorSettings.page("MD", descriptor, table, descriptor.defaultOptions, cfg("nx_sega_pad_type = 6\n"), null, forGame = false)
-        assertEquals(listOf(BottomScreenOptions.KEY, PadOptions.SEGA_PAD, PadOptions.LAYOUT) + (SpeedOptions.table + AudioOptions.rows).map { it.key }, p.console.map { it.option.key })
-        assertEquals("6", p.console[1].value); assertEquals(PadOptions.AUTO, p.console[2].value)
+        assertEquals(listOf(BottomScreenOptions.KEY, PadOptions.SEGA_PAD) + (SpeedOptions.table + AudioOptions.rows).map { it.key }, p.console.map { it.option.key })
+        assertEquals("6", p.console[1].value)
     }
 
     // The menu window's screen shapes the DS and 3DS layout rows, as in the game.
@@ -178,7 +178,7 @@ class EmulatorSettingsTest {
 
     @Test fun no_table_gives_null_core_and_keeps_console_rows() {
         val p = EmulatorSettings.page("MD", descriptor, null, descriptor.defaultOptions, null, null, forGame = false)
-        assertNull(p.core); assertEquals(3 + (SpeedOptions.table + AudioOptions.rows).size, p.console.size)
+        assertNull(p.core); assertEquals(2 + (SpeedOptions.table + AudioOptions.rows).size, p.console.size)
     }
 
     @Test fun offline_hidden_options_never_reach_the_page() {
@@ -195,9 +195,9 @@ class EmulatorSettingsTest {
     }
 
     @Test fun a_console_change_touches_one_key_and_keeps_locks_and_binds() {
-        val before = cfg("bind Up = UP\n-gpgx_cfglocked = b\ngpgx_region = auto\nnx_pad_layout = xbox\n")
+        val before = cfg("bind Up = UP\n-gpgx_cfglocked = b\ngpgx_region = auto\nnx_sega_pad_type = 6\n")
         val text = EmulatorSettings.consoleWrite(before, "gpgx_region", "ntsc-u")
-        assertEquals("bind Up = UP\n-gpgx_cfglocked = b\ngpgx_region = ntsc-u\nnx_pad_layout = xbox\n", text)
+        assertEquals("bind Up = UP\n-gpgx_cfglocked = b\ngpgx_region = ntsc-u\nnx_sega_pad_type = 6\n", text)
     }
 
     @Test fun a_console_change_to_a_locked_key_keeps_the_lock() {
@@ -206,16 +206,16 @@ class EmulatorSettingsTest {
     }
 
     @Test fun a_console_change_creates_the_file() {
-        assertEquals("nx_pad_layout = nintendo\n", EmulatorSettings.consoleWrite(null, "nx_pad_layout", "nintendo"))
+        assertEquals("nx_sega_pad_type = 6\n", EmulatorSettings.consoleWrite(null, "nx_sega_pad_type", "6"))
     }
 
     @Test fun the_first_game_change_snapshots_the_console_file_and_every_core_value() {
-        val console = cfg("bind Up = UP\nnx_pad_layout = xbox\ngpgx_res = 2x\n")
+        val console = cfg("bind Up = UP\nnx_sega_pad_type = 6\ngpgx_res = 2x\n")
         val page = EmulatorSettings.page("MD", descriptor, table, descriptor.defaultOptions, console, null, forGame = true)
         val text = EmulatorSettings.gameWrite(page, console, null, "gpgx_region", "ntsc-u")
         val out = cfg(text)
         assertEquals("UP", text.lines().first().removePrefix("bind Up = "))
-        assertEquals("xbox", out.values["nx_pad_layout"])
+        assertEquals("6", out.values["nx_sega_pad_type"])
         assertEquals("2x", out.values["gpgx_res"])
         assertEquals("ntsc-u", out.values["gpgx_region"])
         assertEquals("a", out.values["gpgx_cfglocked"])
@@ -230,8 +230,8 @@ class EmulatorSettingsTest {
 
     @Test fun the_first_game_change_never_writes_offline_hidden_keys() {
         val d = descriptor.copy(offlineHiddenOptions = setOf("gpgx_res"))
-        val page = EmulatorSettings.page("MD", d, table, d.defaultOptions, cfg("nx_pad_layout = xbox\n"), null, forGame = true)
-        val out = cfg(EmulatorSettings.gameWrite(page, cfg("nx_pad_layout = xbox\n"), null, "gpgx_region", "ntsc-u"))
+        val page = EmulatorSettings.page("MD", d, table, d.defaultOptions, cfg("nx_sega_pad_type = 6\n"), null, forGame = true)
+        val out = cfg(EmulatorSettings.gameWrite(page, cfg("nx_sega_pad_type = 6\n"), null, "gpgx_region", "ntsc-u"))
         assertTrue("gpgx_res" !in out.values)
         assertEquals("ntsc-u", out.values["gpgx_region"])
     }
@@ -251,19 +251,19 @@ class EmulatorSettingsTest {
     }
 
     @Test fun a_table_option_with_a_frontend_key_is_not_a_core_option() {
-        val t = table.copy(options = table.options + CoreOption(PadOptions.LAYOUT, "a", values = listOf("a", "b"), defaultValue = "a"))
+        val t = table.copy(options = table.options + CoreOption(PadOptions.SEGA_PAD, "a", values = listOf("a", "b"), defaultValue = "a"))
         val p = EmulatorSettings.page("MD", descriptor, t, descriptor.defaultOptions, null, null, forGame = false)
-        assertTrue(PadOptions.LAYOUT !in p.core!!.map { it.key })
+        assertTrue(PadOptions.SEGA_PAD !in p.core!!.map { it.key })
     }
 
     @Test fun a_console_row_locked_in_the_cfg_is_hidden() {
-        val p = EmulatorSettings.page("MD", descriptor, table, descriptor.defaultOptions, cfg("-${PadOptions.LAYOUT} = xbox\n"), null, forGame = false)
-        assertEquals(listOf(BottomScreenOptions.KEY, PadOptions.SEGA_PAD) + (SpeedOptions.table + AudioOptions.rows).map { it.key }, p.console.map { it.option.key })
+        val p = EmulatorSettings.page("MD", descriptor, table, descriptor.defaultOptions, cfg("-${PadOptions.SEGA_PAD} = 6\n"), null, forGame = false)
+        assertEquals(listOf(BottomScreenOptions.KEY) + (SpeedOptions.table + AudioOptions.rows).map { it.key }, p.console.map { it.option.key })
     }
 
     @Test fun a_legacy_minarch_key_is_renamed_in_place_on_a_one_key_write() {
-        val text = EmulatorSettings.consoleWrite(cfg("minarch_pad_layout = xbox\ngpgx_res = 2x\n"), "gpgx_res", "1x")
-        assertEquals("nx_pad_layout = xbox\ngpgx_res = 1x\n", text)
+        val text = EmulatorSettings.consoleWrite(cfg("minarch_sega_pad_type = 6\ngpgx_res = 2x\n"), "gpgx_res", "1x")
+        assertEquals("nx_sega_pad_type = 6\ngpgx_res = 1x\n", text)
     }
 
     // Graphics API picks the renderer for PSP and N64: those options are locked, so the page lists no row for them and a stored value is ignored.

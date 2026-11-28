@@ -40,6 +40,7 @@ class EmulatorSettingsControllerGpuDriverTest {
         override fun stepAppRow(row: SettingsRow, delta: Int) {}
         override fun chooseAppRow(row: SettingsRow, index: Int) {}
         override fun runAppRow(row: SettingsRow) {}
+        override fun showMessage(title: String, text: String) {}
     }
 
     private val rom = "Zelda.z64"

@@ -59,7 +59,7 @@ data class RowEdit(val key: Any, val index: Int)
  */
 internal fun rowEditKey(s: Screen): Any? = when (s) {
     is Screen.Settings -> s.section
-    is Screen.EmulatorOptions -> "emulator:${s.category}"
+    is Screen.EmulatorOptions -> if (s.buttonMapping) "emulator-map" else "emulator:${s.category}"
     is Screen.RaSettings -> "ra"
     is Screen.ArtworkSettings -> "artwork"
     is Screen.Onboarding -> "onboarding:${s.step}"
