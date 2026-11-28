@@ -114,8 +114,10 @@ object LibretroNetplay {
     @JvmStatic external fun dsPresence(): Int
     /** The DS link: other devices in the room, 0 in none; -1 when the core's room does not say (PSP). Any thread. */
     @JvmStatic external fun dsOthers(): Int
-    /** 3DS: how many times the network this device joined lost its host to the host leaving the room. */
+    /** 3DS, and DS Download Play's received game: how many times the network this device joined lost its host to the host leaving. */
     @JvmStatic external fun dsHostLeft(): Int
+    /** DS Download Play: the received game booted. Any thread. */
+    @JvmStatic external fun dsDownloadPlayStarted(): Boolean
     /** The DS link: leave the room at once, without the radio-off linger (backgrounded, like closing the lid). Any thread. */
     @JvmStatic external fun dsLeaveNow()
     /** The DS link: undoes [dsLeaveNow], a sheet session's host reopens its room, a joiner asks its host again, the automatic route searches again. Any thread. */

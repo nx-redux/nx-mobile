@@ -546,6 +546,28 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         refreshRoot()
     }
 
+    /**
+     * A Download Play client is showing (until the game it receives starts): the root is Continue / Quit. The client has
+     * no settings of its own, a reset only restarts it, and cheats mean nothing to it.
+     */
+    private var downloadPlayClient = false
+
+    fun setDownloadPlayClient(on: Boolean) {
+        if (on == downloadPlayClient) return
+        downloadPlayClient = on
+        if (on) popTo(PageKind.Root)
+        refreshRoot()
+    }
+
+    /** A Download Play row's session: no Reset, which would boot its client again under the game it received. */
+    private var downloadPlayRow = false
+
+    fun setDownloadPlayRow(on: Boolean) {
+        if (on == downloadPlayRow) return
+        downloadPlayRow = on
+        refreshRoot()
+    }
+
     /** From [setKidsLocked]: Kids Mode is on without Parent mode, so the root has no Options (a kid changes no settings). */
     private var kidsLocked = false
 
@@ -1300,8 +1322,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      */
     private fun panelTabs(): List<GamePanelTab> = GamePanelModel.tabs(
         raAvailable = achievementsAvailable && !achievements.isNullOrEmpty(),
-        players = !sessionLocked && GamePanelModel.playersShown(playerSlots, playerPads),
-        cheats = cheatsAvailable && !sessionLocked,
+        players = !sessionLocked && !downloadPlayClient && GamePanelModel.playersShown(playerSlots, playerPads),
+        cheats = cheatsAvailable && !sessionLocked && !downloadPlayClient,
     )
 
     private fun panelAchievements(): List<RaAchievement> = achievements.orEmpty().sortedBy(achievementOrder)
@@ -1747,6 +1769,9 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         PageKind.Root, NetplayText.LEAVE_TITLE,
         listOf(MenuRow.Action(NetplayText.CONTINUE, MenuAction.CONTINUE), MenuRow.Action(NetplayText.LEAVE, MenuAction.LEAVE_NETPLAY)),
         footer = NetplayText.LEAVE_TEXT,
+    ) else if (downloadPlayClient) MenuPage(
+        PageKind.Root, gameTitle,
+        listOf(MenuRow.Action("Continue", MenuAction.CONTINUE), MenuRow.Action("Quit", MenuAction.QUIT_ONLY)),
     ) else if (dsWireless) MenuPage(
         PageKind.Root, gameTitle,
         listOf(
@@ -1765,7 +1790,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
                 add(MenuRow.Slot("Save", SlotAction.SAVE))
                 add(MenuRow.Slot("Load", SlotAction.LOAD))
             }
-            add(MenuRow.Action("Reset", MenuAction.ASK_RESET))   // asks first ([resetPage])
+            if (!downloadPlayRow) add(MenuRow.Action("Reset", MenuAction.ASK_RESET))   // asks first ([resetPage])
             if (screenTaken) add(MenuRow.Action(USE_TOP_SCREEN_LABEL, MenuAction.USE_TOP_SCREEN))
             if (!kidsLocked) add(MenuRow.Submenu("Options", PageKind.Options))
             add(MenuRow.Action("Quit", if (quitSaves) MenuAction.QUIT else MenuAction.QUIT_ONLY))

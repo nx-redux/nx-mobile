@@ -11,6 +11,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.flowWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.nxredux.mobile.BuildConfig
+import com.nxredux.mobile.DsDownloadPlayFiles
 import com.nxredux.mobile.N3dsDownloadPlayFiles
 import com.nxredux.mobile.DebugLogFile
 import com.nxredux.mobile.R
@@ -180,6 +181,8 @@ internal interface LaunchHost : GameScreenHost {
     var launchEnv: Map<String, String?>
     var graphicsForcedOptions: Set<String>
     var frontendValues: Map<String, String>
+    /** A Download Play row's own layout while its client shows the top screen alone ([DownloadPlayScreen]); null otherwise. */
+    var downloadPlayLayout: Map<String, String>?
     var configStore: CoreConfigStore?
     var configSource: ConfigSource
     var lockedOptions: Set<String>
@@ -382,6 +385,9 @@ internal class LaunchPipeline(private val host: LaunchHost) {
         private set
     /** 3DS Download Play: Azahar's user folder (the client's hand-off file) and the 3DS config folder (the title index). */
     var n3dsDownloadPlayDirs: Pair<File, File>? = null
+        private set
+    /** This launch is DS Download Play's client: GameActivity follows the game it receives. */
+    var ndsDownloadPlay = false
         private set
 
     /**
@@ -861,8 +867,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // The files this launch needs, looked up by name when a Bios folder will not list.
             val requiredBios = CoreRegistry.requiredBios(cfg.tag, cfg::option)
             val biosNames = requiredBios.flatMap { it.anyOf } +
-                (systemSets + listOfNotNull(naomiBios)).flatMap { listOf("$it.zip", "$it.7z") } +
-                (if (cfg.dsMenu) DsMenu.FILES else emptyList())   // the DS menu's dumps, by name when Bios/NDS will not list
+                (systemSets + listOfNotNull(naomiBios)).flatMap { listOf("$it.zip", "$it.7z") }
             // Usually a stamp check: MainActivity pre-warms the copy after an update; if it is still running, this waits on its lock.
             val systemDir = withContext(Dispatchers.IO) { SystemFiles.ensure(host.activity) }
             // Bios/<TAG>/ lands in the core's BIOS folder: the system dir, or a subfolder of it (flycast's <system>/dc/).
@@ -1007,9 +1012,10 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 if (N3dsDownloadPlay.appPath == null) return refuse("3DS Download Play is still being set up. Try again in a moment.")
             }
             if (cfg.dsMenu) {
-                // melonDS DS reads its dumps from the system dir or its own subfolder there.
-                val coreDir = withContext(Dispatchers.IO) { File(biosDir, DsMenu.CORE_SUBDIR).list()?.toSet() ?: emptySet() }
-                DsMenu.missing(biosPresent + coreDir).takeIf { it.isNotEmpty() }?.let { return refuse(DsMenu.missingMessage(it)) }
+                // The menu process copies the client out of the APK (once per install or update); this, the game
+                // process, only finds the copy.
+                if (DsMenu.dir == null) DsMenu.dir = withContext(Dispatchers.IO) { DsDownloadPlayFiles.current(activity) }
+                if (DsMenu.appPath == null) return refuse("DS Download Play is still being set up. Try again in a moment.")
             }
             discRegion?.let { region ->
                 val core = cfg.descriptor?.id.orEmpty()
@@ -1035,6 +1041,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             }
             val savesDir = (cfg.sessionDir ?: File(dataRoot, paths.savesDir)).apply { mkdirs() }
             if (cfg.n3dsDownloadPlay) n3dsDownloadPlayDirs = File(savesDir, "Azahar") to File(dataRoot, paths.configDir)
+            ndsDownloadPlay = cfg.dsMenu
             // A Dreamcast session on a copy: flycast's console settings (dc_nvmem) are the host's, so the core gets the copy's
             // own system folder with this device's BIOS files beside them (the real BIOS only when both sides boot it).
             val launchSystemDir = if (cfg.np?.ggpo == true && cfg.sessionDir != null) {
@@ -1152,7 +1159,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                     // ParaLLEl-RDP's upscaling follows the driver just picked (Auto stays native on the Adreno's own one).
                     val res3dAlso = res3d.launchAlsoSet(customDriver = driver != null, gpu = launchGpu ?: DeviceTraits.gpu)
                     // netplay link: the link options are this launch's too (a session's port, mode and peer; a solo mGBA's cable): never saved.
-                    graphicsForcedOptions = graphics.forcedOptions.keys + cfg.linkOptions.keys + prepared.hleOptions.keys
+                    graphicsForcedOptions = graphics.forcedOptions.keys + cfg.linkOptions.keys + prepared.hleOptions.keys +
+                        DownloadPlayScreen.unsavedOptions(cfg.dsMenu, cfg.n3dsDownloadPlay)
                     GLRetroViewData(host.activity).apply {
                         coreFilePath = cfg.coreFile
                         systemDirectory = prepared.systemDir.absolutePath
@@ -1206,7 +1214,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                             "session" to cfg.np?.segaPad, "setting" to launchSega, "drawn" to launchSegaPad?.name,
                             "port0" to controllerPorts[0], "port1" to controllerPorts[1])
                         if (cfg.dsMenu) {
-                            loadWithoutContent = true
+                            gameFilePath = DsMenu.appPath
                         } else if (cfg.n3dsDownloadPlay) {
                             gameFilePath = N3dsDownloadPlay.appPath
                         } else if (prepared.inner != null) {
@@ -1418,6 +1426,10 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // Size changes (first layout, rotation, cutout margin) re-lay out the picture and the overlay box.
             container.addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
                 if (right - left != oldRight - oldLeft || bottom - top != oldBottom - oldTop) container.post { renderer.relayoutFrontend() }
+            }
+            if (cfg.dsMenu || cfg.n3dsDownloadPlay) {
+                downloadPlayLayout = frontendValues
+                frontendValues = DownloadPlayScreen.single(frontendValues, n3ds = cfg.n3dsDownloadPlay)
             }
             applyFrontend(frontendValues)
             // Set before the first chain push: a chain built with the view reports its errors through this.

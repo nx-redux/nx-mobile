@@ -50,8 +50,8 @@ class NxApplication : Application() {
         // Only the menu lists the row. The stamp check is quick, so the first list already has its art; the copy (once per
         // install or update) runs off the main thread, and lists built after it have the art.
         if (!game) {
-            com.nxredux.mobile.runner.DsMenu.artDir = DsMenuArt.current(this)
-                ?: null.also { Thread({ com.nxredux.mobile.runner.DsMenu.artDir = DsMenuArt.copy(this) }, "ds-menu-art").start() }
+            com.nxredux.mobile.runner.DsMenu.dir = DsDownloadPlayFiles.current(this)
+                ?: null.also { Thread({ com.nxredux.mobile.runner.DsMenu.dir = DsDownloadPlayFiles.copy(this) }, "nds-dlp-files").start() }
             com.nxredux.mobile.runner.N3dsDownloadPlay.dir = N3dsDownloadPlayFiles.current(this)
                 ?: null.also { Thread({ com.nxredux.mobile.runner.N3dsDownloadPlay.dir = N3dsDownloadPlayFiles.copy(this) }, "n3ds-dlp-files").start() }
         }
