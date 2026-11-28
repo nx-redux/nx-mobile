@@ -9,8 +9,14 @@ coming back on the next launch, no carry-over to a second game, a zipped disc's 
 console save keeping the old Widescreen line, and a resume with Widescreen on reaching 16:9 before the resume cover
 fades (three runs).
 
-- [ ] Nova: a 60 FPS patch (place 1) on and off live.
-- [ ] Docs: written in nx-redux-docs#97; a Patches-tab screenshot still owed, taken on the Nova with its 60 FPS check.
+Passed on the Nova (Ace Combat 5, God of War II): the list, both switches by controller in the tab (applied as the
+game resumes), a switch off live, and Widescreen on live over a resume.
+
+- [ ] A 60 FPS patch: none of the test games has one (PCSX2 has them for 625 games; Ace Combat 5's two every-frame
+  groups went through the same path). Check with a game that has one when one is on a device.
+- [ ] OpenGL (the Nova's PS2 renderer): the core letterboxes a widescreen picture inside its 640x448 frame instead of
+  widening the frame, so it shows about 7% too tall (1280x771, not 1280x720) and never fills a 16:9 screen. Vulkan
+  widens the frame (796x448). Same with the old Widescreen option; a core-side follow-up.
 
 Known limits: every switch sends the whole set again (once-on-enable lines of the other groups rerun); the list is read once a launch (an `.m3u` disc change keeps the first disc's list); a boot over 2 minutes leaves the dual-screen panel on "Loading" until the menu opens.
 
