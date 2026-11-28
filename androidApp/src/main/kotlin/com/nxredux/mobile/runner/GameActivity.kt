@@ -1972,6 +1972,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     }
 
     /** The enabled patch groups to the core in one job, after a reset that drops the last set ([applyCheats]'s calls). */
+    // The reset clears the core's whole list: safe because the PS2 core takes no code cheats (its descriptor's
+    // cheats = false), so applyCheats never resets it after this.
     override fun applyPatches(view: GLRetroView) {
         val codes = patchSet.codes()
         view.queueEvent {

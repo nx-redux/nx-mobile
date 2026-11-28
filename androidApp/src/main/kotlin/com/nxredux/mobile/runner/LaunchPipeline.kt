@@ -1546,6 +1546,9 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 activity.sendBroadcast(Intent(LaunchRecords.action(activity)).setPackage(activity.packageName))   // the menu records it
             }
             if (cfg.np != null && !gameNetplay.onFirstFrame(cfg.np, cfg.descriptor?.name ?: cfg.coreId)) return
+            // Patches before the resume: they only set the core's enabled list, which a state load keeps, and a
+            // widescreen group's aspect is then in place before the cover lifts.
+            if (patchesSupported) applyPatches(view)
             saves.resumeAtFirstFrame(view, dataRoot, paths)
             dropResumeCover(view)
             // Cheats sit on top of the resumed state, as minarch applies them after load.
@@ -1553,7 +1556,6 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             refreshDolphinCheats()
             if (cheatSet.hasEnabled()) applyCheats(view)
             if (patchesSupported) {
-                applyPatches(view)
                 // The core lists the patches once the game's own code starts, seconds after a cold boot's BIOS; the
                 // second-screen panel shows the tab all along, so it is not left waiting for the menu to open.
                 lifecycleScope.launch {
@@ -1620,7 +1622,10 @@ internal class LaunchPipeline(private val host: LaunchHost) {
     private fun dropResumeCover(view: GLRetroView) {
         val cover = resumeCover ?: return
         host.lifecycleScope.launch {
-            view.getGLRetroEvents().filter { it is GLRetroView.GLRetroEvents.FrameRendered }.take(ResumeCover.SETTLE_FRAMES).collect {}
+            val settle = CoverSettle(ResumeCover.SETTLE_FRAMES, ResumeCover.SETTLE_MAX_FRAMES)
+            val shapes = launch { view.getGameGeometryChanges().collect { settle.geometryChanged() } }
+            view.getGLRetroEvents().filter { it is GLRetroView.GLRetroEvents.FrameRendered }.first { settle.frame() }
+            shapes.cancel()
             cover.fadeOut()
             if (resumeCover === cover) resumeCover = null
         }
