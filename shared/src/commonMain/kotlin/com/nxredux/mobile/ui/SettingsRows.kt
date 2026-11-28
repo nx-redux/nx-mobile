@@ -285,6 +285,7 @@ internal class SettingsRows(
         deps.micAccess?.takeIf { it.usable }?.let { add(SettingsRow(SettingsKind.MIC_ACCESS, "Microphone access", onOff(it.granted()))) }
         add(SettingsRow(SettingsKind.SAVES, "Saves"))
         if (deps.biosIntake != null) add(SettingsRow(SettingsKind.IMPORT_BIOS, "Import BIOS"))
+        deps.downloadPlayData?.let { add(SettingsRow(SettingsKind.CLEAR_DOWNLOAD_PLAY, "Clear Download Play data", formatBytes(it.sizeBytes()))) }
         if (deps.launcher != null) add(SettingsRow(SettingsKind.ANDROID_GAMES, "Android games", host.androidGames()?.let { gamesCountLabel(it.size) } ?: "…"))
         host.unassignedSystem()?.let { add(SettingsRow(SettingsKind.UNASSIGNED, "Unassigned games", gamesLabel(it.gameCount))) }
         if (host.hiddenPaths().isNotEmpty()) add(SettingsRow(SettingsKind.HIDDEN, "Hidden games", gamesLabel(host.hiddenPaths().size)))

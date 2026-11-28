@@ -1,13 +1,12 @@
-"""Builds the 3DS Download Play row's art from the DS Download Play row's (androidApp/src/main/assets/nds-menu/).
+"""Builds the 3DS Download Play row's art from the DS Download Play row's (androidApp/src/main/assets/nds-dlp/).
 
 Usage: make_art.py <ds art dir> <client capture.png> <out dir>
 
-Kept from the DS art: the screenshot as is, the case and its paper cover. Replaced: the title (3DS Download Play), the
+Kept from the DS art: the case and its paper cover. Replaced: the title (3DS Download Play), the
 DS menu's Download Play tile and the DS Lite (our own two-handheld icon and a plain handheld showing our client),
-and the spine. The client capture is a phone screenshot of the client; its top screen is found by its black margin.
+and the spine. No screenshot: the row shows the generated picture a game without one gets. The client capture is a phone screenshot of the client; its top screen is found by its black margin.
 Fonts are macOS's (Arial Rounded Bold, Avenir Next), as the DS art's.
 """
-import shutil
 import sys
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
@@ -86,9 +85,6 @@ def client_top(capture):
     return band.crop((x0, 0, x0 + sw, top_h))
 
 
-# --- screenshot: the DS row's, as is
-shutil.copy(f'{DS}/screenshot.png', f'{OUT}/screenshot.png')
-
 # --- 2D box: the DS cover's size and grid paper (redrawn as the DS art draws it), a plain white strip, a new title
 # and our icon in place of the DS menu tile
 ds2d = Image.open(f'{DS}/boxart2d.png').convert('RGB')
@@ -122,6 +118,7 @@ icon = halo(pair_icon(120), 6)
 cover.paste(icon, (int(cx - icon.width / 2), 150), icon)
 centered(d, cx, 372, 'Play together from one Game Card', font(AVENIR, 21, 2), (70, 70, 70), 4, (255, 255, 255))
 cover.save(f'{OUT}/boxart2d.png')
+
 
 
 def warp(src, quad, size):

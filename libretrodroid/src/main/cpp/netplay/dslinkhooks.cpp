@@ -28,6 +28,8 @@
 #include <cstring>
 #include <android/multinetwork.h>
 #include <mutex>
+
+#include "ds_radio_events.h"
 #include <string>
 #include <vector>
 
@@ -94,6 +96,9 @@ bool registered = false;
 // GL thread only: the core had start() and not yet stop().
 bool coreStarted = false;
 unsigned lastRadio = NDL_RADIO_OFF;
+// Written from inside retro_run, read by the app's watcher on another thread.
+std::mutex radioEventsMutex;
+DsRadioEvents radioEvents;
 Settings current;
 
 // Written only by the GL thread, under linkMutex; the GL thread reads it without the lock, the other threads with it,
@@ -332,6 +337,10 @@ void forgetCore() {
     registered = false;
     coreStarted = false;
     lastRadio = NDL_RADIO_OFF;
+    {
+        std::lock_guard<std::mutex> guard(radioEventsMutex);
+        radioEvents.reset();
+    }
     destroyLink();
     current = Settings {};
     setCoreRoom(nullptr);
@@ -386,7 +395,10 @@ void setNetwork(int64_t handle) {
 }
 
 void radio(unsigned state) {
-    if (state > NDL_RADIO_HOSTING) return;
+    {
+        std::lock_guard<std::mutex> guard(radioEventsMutex);
+        if (!radioEvents.apply(state)) return;
+    }
     lastRadio = state;
     ndl_radio_changed(theLink, (ndl_radio) state);
 }
@@ -567,8 +579,17 @@ int others() {
 }
 
 int hostLeft() {
-    std::lock_guard<std::mutex> guard(coreRoomMutex);
-    return hasCoreRoom && coreRoom.host_left != nullptr ? coreRoom.host_left() : 0;
+    {
+        std::lock_guard<std::mutex> guard(coreRoomMutex);
+        if (hasCoreRoom && coreRoom.host_left != nullptr) return coreRoom.host_left();
+    }
+    std::lock_guard<std::mutex> guard(radioEventsMutex);
+    return radioEvents.hostLeft;
+}
+
+bool downloadPlayStarted() {
+    std::lock_guard<std::mutex> guard(radioEventsMutex);
+    return radioEvents.dlpStarted;
 }
 
 void leaveNow() {

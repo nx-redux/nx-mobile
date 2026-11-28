@@ -1,6 +1,6 @@
 # DS Download Play art
 
-Builds the art the DS Download Play row ships with (`androidApp/src/main/assets/nds-menu/`): 3D box, 2D box,
+Builds the art the DS Download Play row ships with (`androidApp/src/main/assets/nds-dlp/`): 3D box, 2D box,
 wheel, screenshot and mix.
 
 Inputs, in a work folder:

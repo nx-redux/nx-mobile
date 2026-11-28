@@ -1334,6 +1334,29 @@ class AppStateTest {
         assertTrue(ContextKind.NETPLAY !in menuKinds(state))
     }
 
+    @Test fun library_clears_download_play_data_after_asking() = runTest {
+        val data = object : com.nxredux.mobile.runner.DownloadPlayData {
+            var size = 26_000_000L
+            override fun sizeBytes(): Long = size
+            override fun clear(): Long = size.also { size = 0 }
+        }
+        val state = AppState(AppDeps(MemorySettings(ContentRef("Home")), source, RecordingRunner(), NoopPicker(), compute = UnconfinedTestDispatcher(testScheduler), downloadPlayData = data), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
+        state.load()
+        state.openSettings(SettingsSection.LIBRARY)
+        val rows = assertIs<Screen.Settings>(state.screen.value).rows
+        val at = rows.indexOfFirst { it.kind == SettingsKind.CLEAR_DOWNLOAD_PLAY }
+        assertTrue(at >= 0)
+        assertEquals("Clear Download Play data", rows[at].label)
+        assertEquals(formatBytes(26_000_000L), rows[at].secondary)
+        state.select(at); state.openSelected()
+        assertTrue(assertIs<Screen.Settings>(state.screen.value).confirmReset)   // asks first
+        assertEquals(26_000_000L, data.size)
+        state.onButton(NxButton.A)
+        assertEquals(0L, data.size)
+        val after = assertIs<Screen.Settings>(state.screen.value).rows.first { it.kind == SettingsKind.CLEAR_DOWNLOAD_PLAY }
+        assertEquals(formatBytes(0L), after.secondary)
+    }
+
     @Test fun a_transient_read_failure_keeps_the_tree_and_shows_the_picker() = runTest {
         val flaky = object : RomsSource {
             override suspend fun listChildren(dir: ContentRef): List<Entry> = throw IllegalStateException("boom")

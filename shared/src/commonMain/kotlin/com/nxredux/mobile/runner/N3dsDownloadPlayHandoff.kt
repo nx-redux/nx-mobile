@@ -10,6 +10,8 @@ object N3dsDownloadPlayHandoff {
     /** In Azahar's user folder (`<saves>/Azahar/`), as the client writes to `sdmc:/nx-redux/`. */
     const val PICK_FILE = "sdmc/nx-redux/download-play.txt"
     const val ACK_FILE = "sdmc/nx-redux/download-play.ack"
+    /** Left by the client when the game it named did not start after all. */
+    const val FAILED_FILE = "sdmc/nx-redux/download-play.failed"
     /** In the 3DS core's config folder: one `title id<TAB>file name` line per game launched. */
     const val INDEX_FILE = "titles.tsv"
 
