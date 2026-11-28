@@ -25,17 +25,15 @@ Still owed:
 
 ## Per-console Button Mapping (Controller Layout removed): device checks owed
 
-- [x] Nova in Nintendo ABXY mode, Marvel Super Heroes (PS1): the bottom key is ○ by default; Default Settings → PS → Button Mapping, bind × to B: the bottom key is × in game.
-- [x] In-game Options → Controls → Button Mapping: bind, swap, Reset to default (Nova, DS).
-- [ ] Save for console and Save for game keep it; a game with its own settings follows a later console change.
-- [x] DS: L2 swaps screens, R2 stylus still work; their rows and the SELECT combos show dimmed; L2 can't be picked for another row.
-- [x] Dreamcast: L and R rows dimmed, L2 refused when binding (Nova).
-- [ ] Dreamcast / GameCube in play: a remapped face key doesn't press a trigger twice.
-- [ ] AYANEO (360 pad with Nintendo letters): PS bottom key is ○ until remapped; letter consoles (SNES) follow the letters.
-- [x] A saved Nintendo Controller Layout on a letter console carries over as the A↔B, X↔Y swap.
-- [ ] Docs: drop Controller Layout, add the Button Mapping page (nx-redux-docs).
-- [ ] Follow-up: Wii / 3DS MENU shortcuts on a key remapped onto a stick-click job do that job instead.
-- [ ] Follow-up: editing the map while a GameCube disc runs under the Wii tag, then Save for console, can reset the Wii's L2 / R2.
+- [x] Nova in Nintendo ABXY mode, Marvel Super Heroes (PS1): ○ on the bottom key by default, ✕ after binding it in Default Settings; the refused key keeps the wait; the list re-reads on open.
+- [x] In-game Button Mapping: bind, swap, Reset to default; Save for game writes the game cfg, Save for console the console cfg and drops the game cfg (Nova).
+- [x] Game Settings → Button Mapping (Tetris): binds into the game cfg only; bound back, the game has no lines (Nova).
+- [x] DS: L2 swaps screens, R2 stylus, SELECT+Right layout; dimmed rows and combos; L2 refused while binding (Nova).
+- [x] Dreamcast: L/R dimmed and refused; with A on Y, L2 alone doesn't press a face button (Soulcalibur). GameCube (Luigi's Mansion): L/R dimmed (Nova).
+- [x] A saved Nintendo Controller Layout on SFC shows as the A↔B, X↔Y swap (Nova).
+- [x] Docs: nx-redux-docs PR #96 (pages, retaken screenshots, Button Mapping shots).
+- [ ] AYANEO (360 pad with Nintendo letters): PS bottom key is ○ until remapped. Same rule as the Nova's Nintendo mode.
+- [ ] Docs release notes entry when this ships.
 
 ## Review round 3: device checks owed
 
