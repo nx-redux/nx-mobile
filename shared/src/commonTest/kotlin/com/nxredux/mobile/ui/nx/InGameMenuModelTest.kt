@@ -3070,10 +3070,12 @@ class InGameMenuModelTest {
         m.selectRow("×"); m.press(NxButton.A)
         assertNull(m.captureKey(KeyCodes.BUTTON_START, down = true))
         assertEquals(ButtonMap.DEFAULT, m.buttonMap)
-        assertEquals(PageKind.Message, m.state.page.kind)
-        assertEquals("Pick A, B, X, Y, L1, R1, L2, R2, L3 or R3", m.state.page.footer)
-        m.press(NxButton.A)
-        assertEquals("A", m.row("×").valueLabel)
+        // The wait goes on, its row saying which keys bind.
+        assertEquals(PageKind.ButtonMapping, m.state.page.kind)
+        assertEquals("Press a button…", m.row("×").valueLabel)
+        assertEquals("Pick A, B, X, Y, L1, R1, L2, R2, L3 or R3. Back cancels.", m.row("×").info)
+        val bound = assertIs<MenuEffect.SetButtonMap>(m.captureKey(KeyCodes.BUTTON_B, down = true))   // a pad key after it still binds
+        assertEquals(MapKey.B, bound.map.keyFor(MapKey.A))
     }
 
     @Test fun analogTriggersRefusedOnDreamcastAndGameCube() {
@@ -3082,8 +3084,8 @@ class InGameMenuModelTest {
             m.selectRow("A"); m.press(NxButton.A)
             assertNull(m.captureKey(KeyCodes.BUTTON_L2, down = true), tag)
             assertEquals(ButtonMap.DEFAULT, m.buttonMap, tag)
-            assertEquals(PageKind.Message, m.state.page.kind, tag)
-            assertEquals("Pick A, B, X, Y, L1, R1, L3 or R3", m.state.page.footer, tag)
+            assertEquals(PageKind.ButtonMapping, m.state.page.kind, tag)
+            assertEquals("Pick A, B, X, Y, L1, R1, L3 or R3. Back cancels.", m.row("A").info, tag)
         }
     }
 
@@ -3104,7 +3106,7 @@ class InGameMenuModelTest {
         // L2 can't be picked for another row either.
         m.selectRow("A"); m.press(NxButton.A)
         assertNull(m.captureKey(KeyCodes.BUTTON_L2, down = true))
-        assertEquals("Pick A, B, X, Y, L1 or R1", m.state.page.footer)
+        assertEquals("Pick A, B, X, Y, L1 or R1. Back cancels.", m.row("A").info)
     }
 
     @Test fun gameCubeDiscUnderWiiShowsGameCubeRows() {
@@ -3120,9 +3122,8 @@ class InGameMenuModelTest {
         val m = buttonMapping()
         m.selectRow("×"); m.press(NxButton.A)
         assertNull(m.captureKey(KeyCodes.DPAD_LEFT, down = true))           // refused, as a d-pad direction is on Shortcuts
-        assertEquals(PageKind.Message, m.state.page.kind)
-        m.press(NxButton.A)
-        m.selectRow("×"); m.press(NxButton.A)
+        assertEquals(PageKind.ButtonMapping, m.state.page.kind)
+        assertEquals("Press a button…", m.row("×").valueLabel)              // still waiting
         assertNull(m.captureKey(KeyCodes.BACK, down = true))                // Back cancels
         assertEquals(PageKind.ButtonMapping, m.state.page.kind)
         assertEquals("A", m.row("×").valueLabel)

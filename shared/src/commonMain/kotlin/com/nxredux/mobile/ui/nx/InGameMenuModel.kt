@@ -465,6 +465,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private var mapGameCube = false
     /** The job whose Button Mapping row waits for a physical key ([captureKey]). */
     private var mapping: MapKey? = null
+    private var mapRefused = false   // the wait took a key that can't bind: its row says which can
     /** Keys pressed since a Button Mapping row started waiting: their releases stay the page's ([takesKey]). */
     private val mapHeld = HashSet<Int>()
 
@@ -2042,6 +2043,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     /** Ends a wait without a binding; the keys already down keep their releases swallowed ([takesKey]). */
     private fun endWait() {
         mapping = null
+        mapRefused = false
         if (capturing == null) return
         capture.cancel()
         capturing = null
@@ -2141,6 +2143,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     private fun startMapping(job: MapKey) {
         mapping = job
+        mapRefused = false
         refreshButtonMappingPage()
     }
 
@@ -2148,14 +2151,11 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         if (!down) { mapHeld -= keyCode; return null }
         mapHeld += keyCode
         val job = mapping ?: return null
-        mapping = null
-        if (keyCode == KeyCodes.BACK) { refreshButtonMappingPage(); return null }
+        if (keyCode == KeyCodes.BACK) { endWait(); refreshButtonMappingPage(); return null }
         val physical = MapKey.ofKeyCode(keyCode)?.takeIf { ButtonMap.binds(mapTag(), it) }
-        if (physical == null) {
-            refreshButtonMappingPage()
-            push(message(mapRows().firstOrNull { it.job == job }?.label ?: job.label, mapPickNote(mapTag())))
-            return null
-        }
+        if (physical == null) { mapRefused = true; refreshButtonMappingPage(); return null }
+        mapping = null
+        mapRefused = false
         return setMap(buttonMap.bind(job, physical)) ?: run { refreshButtonMappingPage(); null }
     }
 
@@ -2184,7 +2184,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private fun buttonMappingPage(): MenuPage {
         val rows = mapRows().map { r ->
             val key = MAP_KEY_PREFIX + r.job.name
-            if (r.job == mapping) MenuRow.Option(r.label, key, SHORTCUT_PROMPT, MAP_CAPTURE_LINE)
+            if (r.job == mapping) MenuRow.Option(r.label, key, SHORTCUT_PROMPT, if (mapRefused) mapRefusedLine(mapTag()) else MAP_CAPTURE_LINE)
             else MenuRow.Option(r.label, key, buttonMap.keyFor(r.job).label, enabled = !r.locked)
         }
         val combos = ButtonMapRows.combos(mapTag()).mapIndexed { i, c ->
@@ -2269,6 +2269,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             val keys = MapKey.entries.filter { ButtonMap.binds(tag, it) }.map { it.label }
             return "Pick ${keys.dropLast(1).joinToString(", ")} or ${keys.last()}"
         }
+        /** The waiting row's line after a key that can't bind: the wait goes on. */
+        fun mapRefusedLine(tag: String): String = "${mapPickNote(tag)}. Back cancels."
         /** A Shortcuts row inheriting Controls → Shortcuts. */
         private const val DEFAULT_SUFFIX = " (default)"
         private val LOCAL_WIRELESS_KEYS = setOf(NdsOptions.LOCAL_WIRELESS, N3dsOptions.LOCAL_WIRELESS)

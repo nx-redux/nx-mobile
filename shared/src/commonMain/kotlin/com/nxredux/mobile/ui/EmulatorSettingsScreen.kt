@@ -125,7 +125,7 @@ internal fun emulatorTouchRow(row: EmulatorRow): NxSettingRow = when (row) {
     EmulatorRow.ButtonMapping -> NxSettingRow(InGameMenuModel.BUTTON_MAPPING_LABEL, opens = true)
     is EmulatorRow.MapBind ->
         if (row.locked) NxSettingRow(row.label, value = row.key.label, enabled = false)
-        else if (row.waiting) NxSettingRow(row.label, info = InGameMenuModel.MAP_CAPTURE_LINE, value = SHORTCUT_PROMPT)
+        else if (row.waiting) NxSettingRow(row.label, info = row.waitLine, value = SHORTCUT_PROMPT)
         else NxSettingRow(row.label, value = row.key.label)
     is EmulatorRow.MapCombo -> NxSettingRow(row.label, value = row.keys, enabled = false)
     EmulatorRow.ResetButtonMap -> NxSettingRow(InGameMenuModel.RESET_BUTTON_MAP_LABEL)
@@ -144,11 +144,15 @@ internal val EMULATOR_RESET_ASK = SettingsResetAsk(
 internal const val USE_EMULATOR_SETTINGS_INFO = "Deletes this game's own settings"
 internal const val USE_EMULATOR_SETTINGS_DETAIL = "Delete this game's settings, so it follows the emulator's again"
 
-/** "<emulator> — <console> (<TAG>)", or the game's name for Game Settings; an open category or Button Mapping is appended. */
+/**
+ * "<emulator> — <console> (<TAG>)", or the game's name for Game Settings; an open category is appended. Button Mapping
+ * belongs to the console, not the emulator, so its title leaves the emulator out and fits beside the logo.
+ */
 internal fun emulatorOptionsTitle(s: Screen.EmulatorOptions): String {
     val p = s.page
-    val base = s.game?.game?.shownName ?: "${p.emulator} — ${CoreRegistry.consoleOf(p.tag)?.displayName ?: p.tag} (${CoreRegistry.handheldTag(p.tag)})"
-    if (s.buttonMapping) return "$base › ${InGameMenuModel.BUTTON_MAPPING_LABEL}"
+    val console = "${CoreRegistry.consoleOf(p.tag)?.displayName ?: p.tag} (${CoreRegistry.handheldTag(p.tag)})"
+    if (s.buttonMapping) return "$console › ${InGameMenuModel.BUTTON_MAPPING_LABEL}"
+    val base = s.game?.game?.shownName ?: "${p.emulator} — $console"
     val category = s.category?.let { key -> p.core.orEmpty().firstOrNull { it.category == key }?.categoryLabel?.ifEmpty { null } ?: key }
     return if (category == null) base else "$base › $category"
 }

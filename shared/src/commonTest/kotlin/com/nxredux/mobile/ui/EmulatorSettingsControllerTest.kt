@@ -784,15 +784,14 @@ class EmulatorSettingsControllerTest {
         openMapping(state, "pcsx_rearmed")
         select(state) { (it as? EmulatorRow.MapBind)?.label == "×" }
         state.onButton(NxButton.A)
-        assertTrue(state.captureKey(108, down = true))   // START
-        assertEquals("×" to "Pick A, B, X, Y, L1, R1, L2, R2, L3 or R3", state.message.value)
-        assertFalse(bindRow(state, "×").waiting)
-        state.onButton(NxButton.A)   // closes the message
-        state.onButton(NxButton.A)
+        assertTrue(state.captureKey(108, down = true))   // START: refused, the wait goes on and says which keys bind
+        assertNull(state.message.value)
+        assertTrue(bindRow(state, "×").waiting)
+        assertEquals("Pick A, B, X, Y, L1, R1, L2, R2, L3 or R3. Back cancels.", emulatorTouchRow(bindRow(state, "×")).info)
+        assertTrue(state.captureKey(108, down = false))
         assertTrue(state.captureKey(19, down = true))   // the d-pad never binds
-        assertEquals("×" to "Pick A, B, X, Y, L1, R1, L2, R2, L3 or R3", state.message.value)
-        state.onButton(NxButton.B)
-        state.onButton(NxButton.A)
+        assertTrue(bindRow(state, "×").waiting)
+        assertTrue(state.captureKey(19, down = false))
         assertTrue(state.captureKey(4, down = true))   // Back cancels quietly
         assertNull(state.message.value)
         assertFalse(bindRow(state, "×").waiting)
@@ -817,7 +816,9 @@ class EmulatorSettingsControllerTest {
         select(state) { (it as? EmulatorRow.MapBind)?.label == "A" }
         state.onButton(NxButton.A)
         assertTrue(state.captureKey(105, down = true))   // R2
-        assertEquals("A" to "Pick A, B, X, Y, L1, R1, L3 or R3", state.message.value)
+        assertEquals("Pick A, B, X, Y, L1, R1, L3 or R3. Back cancels.", bindRow(state, "A").waitLine)
+        assertTrue(state.captureKey(105, down = false))
+        assertTrue(state.captureKey(4, down = true))
         assertFalse(bindRow(state, "A").waiting)
         advanceUntilIdle()
         assertTrue(configs.files.keys.none { it.startsWith("DC-") })
