@@ -42,6 +42,8 @@ internal interface WiiDolphinHost : GameScreenHost {
     fun relayoutPadAfterPress()
     /** The open menu's frontend rows again (its Wii rows follow [menuLocked]). */
     fun publishMenuFrontend()
+    /** The open menu's Button Mapping again: its rows follow the pad the disc resolved. */
+    fun publishMenuButtonMap()
 }
 
 /**
@@ -113,6 +115,7 @@ internal class WiiDolphinController(
             host.relayoutPad()   // the pad was composed from the intent tag in onCreate
             NxLog.i(TAG_LOG, "GameCube disc ${wiiDisc.id} under the Wii tag: no Wii controls")
             host.publishMenuFrontend()   // a menu opened during the read drops its Wii rows
+            host.publishMenuButtonMap()
         }
         if (WiiOptions.appliesTo(tag) && !gameCube) {
             val id = wiiDisc?.id
@@ -129,6 +132,7 @@ internal class WiiDolphinController(
             host.relayoutPad()
             // A menu opened during the read: its Motion Controls row (left out until the sensors were known) and its Wii rows.
             host.publishMenuFrontend()
+            host.publishMenuButtonMap()
         }
     }
 

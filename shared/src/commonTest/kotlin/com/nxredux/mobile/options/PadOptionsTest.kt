@@ -1,19 +1,22 @@
 package com.nxredux.mobile.options
 
-import com.nxredux.mobile.runner.PadFaceLayout
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class PadOptionsTest {
-    @Test fun layout_row_for_every_tag_n64_included() {
-        for (tag in listOf("DC", "MD", "SFC", "NDS", "PS", "GBA", "N64", "3DS", "UNKNOWN"))
-            assertTrue(PadOptions.layoutRow in ConsoleSettings.tableFor(tag), tag)
-        assertEquals(listOf(PadOptions.AUTO, PadOptions.XBOX, PadOptions.NINTENDO), PadOptions.layoutRow.values)
-        assertEquals(PadOptions.AUTO, PadOptions.layoutRow.default)
-        assertEquals(PadOptions.LAYOUT, PadOptions.layoutRow.key)
+    @Test fun only_the_sega_pad_tags_have_a_pad_row() {
+        assertEquals(emptyList(), PadOptions.tableFor("SFC"))
+        for (tag in listOf("DC", "SFC", "NDS", "PS", "GBA", "N64", "3DS", "UNKNOWN")) assertEquals(emptyList(), PadOptions.tableFor(tag), tag)
+        assertEquals(listOf(PadOptions.segaPadRow), PadOptions.tableFor("MD"))
+        assertEquals(listOf(PadOptions.segaPadRow), PadOptions.all)
+    }
+
+    @Test fun no_console_lists_a_controller_layout_row() {
+        for (tag in listOf("DC", "MD", "SFC", "NDS", "PS", "GBA", "N64", "3DS", "WII", "GC", "UNKNOWN"))
+            assertFalse(ConsoleSettings.tableFor(tag).any { it.key == "nx_pad_layout" || it.label == "Controller Layout" }, tag)
+        assertFalse(ConsoleSettings.all.any { it.key == "nx_pad_layout" })
     }
 
     @Test fun sega_pad_row_only_for_sega_pad_tags() {
@@ -23,52 +26,24 @@ class PadOptionsTest {
         assertEquals("auto", PadOptions.segaPadRow.default)
     }
 
-    @Test fun nds_keeps_its_rows_and_gains_the_layout_row() {
-        assertEquals(NdsOptions.table + NdsOptions.shaderScreensRow + NdsOptions.localWirelessRow + BottomScreenOptions.row + PadOptions.layoutRow + (SpeedOptions.table + AudioOptions.rows), ConsoleSettings.tableFor("NDS"))
+    @Test fun nds_keeps_its_rows() {
+        assertEquals(NdsOptions.table + NdsOptions.shaderScreensRow + NdsOptions.localWirelessRow + BottomScreenOptions.row + (SpeedOptions.table + AudioOptions.rows), ConsoleSettings.tableFor("NDS"))
     }
 
     @Test fun keys_are_unique_and_findable() {
         val keys = ConsoleSettings.all.map { it.key }
         assertEquals(keys.toSet().size, keys.size)
-        assertEquals(PadOptions.layoutRow, FrontendOptions.option(PadOptions.LAYOUT))
         assertEquals(PadOptions.segaPadRow, FrontendOptions.option(PadOptions.SEGA_PAD))
     }
 
-    @Test fun printed_layout_forced_or_detected() {
-        val auto = mapOf(PadOptions.LAYOUT to "auto")
-        assertEquals(PadFaceLayout.XBOX, PadOptions.printedLayout(auto, PadFaceLayout.XBOX))
-        assertEquals(PadFaceLayout.NINTENDO, PadOptions.printedLayout(emptyMap(), PadFaceLayout.NINTENDO))
-        assertEquals(PadFaceLayout.XBOX, PadOptions.printedLayout(mapOf(PadOptions.LAYOUT to "xbox"), PadFaceLayout.NINTENDO))
-        assertEquals(PadFaceLayout.NINTENDO, PadOptions.printedLayout(mapOf(PadOptions.LAYOUT to "nintendo"), PadFaceLayout.XBOX))
-        assertNull(PadOptions.printedLayout(mapOf(PadOptions.LAYOUT to "xbox"), null))   // an injected key is sent as is
-    }
-
-    @Test fun the_layout_row_reads_as_before() {
-        val row = PadOptions.layoutRow
-        assertEquals("nx_pad_layout", row.key)
-        assertEquals("Controller Layout", row.label)
-        assertEquals(listOf("Auto-detect", "Xbox (A at the bottom)", "Nintendo (A on the right)"), row.valueLabels)
-        assertFalse(row.visual)
-        assertTrue("work as printed" in row.info)
-        assertTrue(row.info.lines().all { it.length <= 48 }, row.info)
+    @Test fun the_sega_pad_row_reads_as_before() {
         assertEquals(listOf("Auto", "3 buttons", "6 buttons"), PadOptions.segaPadRow.valueLabels)
         assertFalse(PadOptions.segaPadRow.visual)
     }
 
-    @Test fun an_unknown_value_follows_detection_and_a_forced_one_wins_for_every_detection() {
-        assertEquals(PadFaceLayout.XBOX, PadOptions.printedLayout(mapOf(PadOptions.LAYOUT to "junk"), PadFaceLayout.XBOX))
-        for (detected in PadFaceLayout.entries) {
-            assertEquals(PadFaceLayout.XBOX, PadOptions.printedLayout(mapOf(PadOptions.LAYOUT to "xbox"), detected))
-            assertEquals(PadFaceLayout.NINTENDO, PadOptions.printedLayout(mapOf(PadOptions.LAYOUT to "nintendo"), detected))
-        }
-        for (v in listOf("auto", "xbox", "nintendo")) assertNull(PadOptions.printedLayout(mapOf(PadOptions.LAYOUT to v), null))
-    }
-
-    @Test fun defaults_include_the_layout_row_for_every_console() {
-        assertEquals("auto", FrontendOptions.defaults("DC")[PadOptions.LAYOUT])
-        assertEquals("auto", FrontendOptions.defaults("GBA")[PadOptions.LAYOUT])
-        assertEquals("auto", FrontendOptions.defaults("N64")[PadOptions.LAYOUT])
+    @Test fun defaults_have_the_sega_pad_row_on_sega_tags_only() {
         assertEquals("auto", FrontendOptions.defaults("MD")[PadOptions.SEGA_PAD])
         assertFalse(PadOptions.SEGA_PAD in FrontendOptions.defaults("GBA"))
+        for (tag in listOf("DC", "GBA", "N64")) assertFalse("nx_pad_layout" in FrontendOptions.defaults(tag), tag)
     }
 }

@@ -29,7 +29,7 @@ enum class PadIcon(val label: String) {
 class PadProfile private constructor(
     val kind: Kind,
     private val map: PadMap,
-    private val n3dsNew: Boolean = false,
+    val n3dsNew: Boolean = false,
     val wiiPad: WiiPad? = null,
 ) {
     enum class Kind {

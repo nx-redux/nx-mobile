@@ -1,5 +1,6 @@
 package com.nxredux.mobile.ui
 
+import com.nxredux.mobile.ui.nx.Hint
 import com.nxredux.mobile.library.FakeRomsSource
 import com.nxredux.mobile.library.GameEntry
 import com.nxredux.mobile.library.SystemFolder
@@ -32,6 +33,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import com.nxredux.mobile.runner.MapKey
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -61,7 +63,7 @@ class EmulatorSettingsControllerTest {
         "opt_b", "on", label = "Option B", labelCategorized = "B", category = "video", categoryLabel = "Video",
         values = listOf("on", "off"), defaultValue = "on",
     )
-    private val layout = ConsoleRow(PadOptions.all.first { it.key == PadOptions.LAYOUT }, PadOptions.AUTO)
+    private val layout = ConsoleRow(PadOptions.segaPadRow, PadOptions.segaPadRow.default)
 
     private fun page(console: List<ConsoleRow> = listOf(layout), core: List<CoreOption>? = listOf(optA, optB), forGame: Boolean = false, gameFile: Boolean = false) =
         EmulatorPage("GBA", "gpsp", "gpSP", console, core, forGame, gameFile)
@@ -416,17 +418,18 @@ class EmulatorSettingsControllerTest {
         await { BottomScreenOptions.KEY !in keys() }
     }
 
-    // GBA with its Controller Layout and speed rows locked in the cfg and no core options: Bottom screen is the page's only row.
-    @Test fun a_page_left_empty_when_the_second_screen_goes_closes() = runTest {
+    // GBA with its speed and audio rows locked in the cfg and no core options: Bottom screen is its only value row, and
+    // Button Mapping keeps the page open when it goes.
+    @Test fun a_console_page_keeps_button_mapping_when_the_second_screen_goes() = runTest {
         val noOptions = object : CoreOptionSource { override fun table(coreId: String) = CoreOptionTable(coreId, "gpSP", emptyList()) }
-        val state = TestState(MemoryConfigs(mapOf("GBA-gpsp/minarch.cfg" to "-${PadOptions.LAYOUT} = ${PadOptions.AUTO}\n" +
+        val state = TestState(MemoryConfigs(mapOf("GBA-gpsp/minarch.cfg" to
             (SpeedOptions.table + AudioOptions.rows).joinToString("") { "-${it.key} = ${it.default}\n" })), tables = noOptions)
         state.onSecondScreenChanged(true)
         openOptions(state, "gpsp")
         assertEquals(listOf(BottomScreenOptions.KEY), options(state).rows.filterIsInstance<EmulatorRow.Console>().map { it.row.option.key })
         state.onSecondScreenChanged(false)
-        await { state.screen.value is Screen.EmulatorList }   // back to the core list, as B goes
-        assertEquals("gpsp", assertIs<Screen.EmulatorList>(state.screen.value).rows[state.selection.value.index].coreId)
+        await { options(state).rows.none { it is EmulatorRow.Console } }
+        assertEquals(listOf(EmulatorRow.Header("Controls"), EmulatorRow.ButtonMapping, EmulatorRow.Gap, EmulatorRow.ResetDefaults), options(state).rows)
     }
 
     @Test fun a_first_game_change_writes_a_snapshot_with_the_console_binds() = runTest {
@@ -444,6 +447,69 @@ class EmulatorSettingsControllerTest {
         assertEquals("bind Up = UP\nopt_a = z\n", configs.files["GBA-gpsp/minarch.cfg"])   // the console file is untouched
         assertEquals(EmulatorRow.UseEmulatorSettings, options(state).rows.last())
         assertEquals("opt_a", (selected(state) as EmulatorRow.Core).option.key)
+    }
+
+    @Test fun a_first_game_change_leaves_the_console_mapping_out() = runTest {
+        val configs = MemoryConfigs(mapOf("GBA-gpsp/minarch.cfg" to "nx_map_L1 = R1\nnx_map_R1 = L1\nopt_a = z\n"))
+        val state = TestState(configs)
+        openGame(state)
+        selectOptA(state)
+        state.padStep(NxButton.RIGHT)
+        await { onOptA(state) && coreValue(state, "opt_a") == "x" }
+        val text = configs.files.getValue("GBA-gpsp/Mario.cfg")
+        assertFalse("nx_map_" in text, text)   // the game keeps following the console's mapping
+        assertEquals(MapKey.R1, options(state).page.buttonMap.keyFor(MapKey.L1))
+    }
+
+    @Test fun game_settings_button_mapping_writes_the_game_file() = runTest {
+        val configs = MemoryConfigs(mapOf("GBA-gpsp/minarch.cfg" to "nx_map_L1 = R1\nnx_map_R1 = L1\nopt_a = z\n"))
+        val state = TestState(configs)
+        openGame(state)
+        select(state) { it == EmulatorRow.ButtonMapping }
+        state.onButton(NxButton.A)
+        assertTrue(options(state).buttonMapping)
+        assertEquals("Mario › Button Mapping", emulatorOptionsTitle(options(state)))
+        assertEquals(MapKey.R1, bindRow(state, "A").let { options(state).page.buttonMap.keyFor(MapKey.L1) })   // the console's, inherited
+        select(state) { (it as? EmulatorRow.MapBind)?.label == "A" }
+        state.onButton(NxButton.A)
+        assertTrue(state.captureKey(97, down = true))
+        await { bindRow(state, "A").key == MapKey.B }
+        val game = configs.files.getValue("GBA-gpsp/Mario.cfg").lines()
+        assertTrue("nx_map_A = B" in game && "nx_map_B = A" in game && "nx_map_L1 = R1" in game, game.toString())
+        assertTrue("opt_a = z" in game)
+        assertEquals("nx_map_L1 = R1\nnx_map_R1 = L1\nopt_a = z\n", configs.files["GBA-gpsp/minarch.cfg"])   // the console file is untouched
+        // Bound back to the console's mapping, the game drops its lines and follows the console again.
+        assertTrue(state.captureKey(97, down = false))
+        state.onButton(NxButton.A)
+        assertTrue(state.captureKey(96, down = true))
+        await { bindRow(state, "A").key == MapKey.A }
+        // The file held nothing else of the game's own, so it goes: the game follows the console again.
+        await { configs.files["GBA-gpsp/Mario.cfg"] == null }
+    }
+
+    @Test fun game_settings_button_mapping_bound_back_keeps_a_game_file_with_its_own_values() = runTest {
+        val configs = MemoryConfigs(mapOf("GBA-gpsp/minarch.cfg" to "opt_a = z\n", "GBA-gpsp/Mario.cfg" to "opt_a = y\nnx_map_A = B\nnx_map_B = A\n"))
+        val state = TestState(configs)
+        openGame(state)
+        select(state) { it == EmulatorRow.ButtonMapping }
+        state.onButton(NxButton.A)
+        select(state) { it == EmulatorRow.ResetButtonMap }
+        state.onButton(NxButton.A)
+        await { bindRow(state, "A").key == MapKey.A }
+        val text = configs.files.getValue("GBA-gpsp/Mario.cfg")
+        assertTrue("opt_a = y" in text && "nx_map_" !in text, text)
+    }
+
+    @Test fun game_settings_button_mapping_does_not_write_an_unchanged_map() = runTest {
+        val configs = MemoryConfigs(mapOf("GBA-gpsp/minarch.cfg" to "opt_a = z\n"))
+        val state = TestState(configs)
+        openGame(state)
+        select(state) { it == EmulatorRow.ButtonMapping }
+        state.onButton(NxButton.A)
+        select(state) { it == EmulatorRow.ResetButtonMap }
+        state.onButton(NxButton.A)
+        advanceUntilIdle()
+        assertNull(configs.files["GBA-gpsp/Mario.cfg"])
     }
 
     @Test fun use_emulator_settings_deletes_the_game_file() = runTest {
@@ -719,5 +785,155 @@ class EmulatorSettingsControllerTest {
     @Test fun with_gpsp_the_default_mgba_is_not_listed_without_cable_link() = runTest {
         val state = mgbaState(null, mgba = false)
         assertEquals(listOf("gpsp"), openList(state).rows.map { it.coreId })
+    }
+
+    // --- Button Mapping on a console's page ---
+
+    private val padSource = FakeRomsSource(
+        dirs = mapOf(
+            "Home" to listOf("Roms"),
+            "Home/Roms" to listOf("Sony PlayStation (PS)", "Super Nintendo ES (SFC)", "Sega Dreamcast (DC)"),
+            "Home/Roms/Sony PlayStation (PS)" to listOf("Crash.chd"),
+            "Home/Roms/Sega Dreamcast (DC)" to listOf("Crazy Taxi.chd"),
+            "Home/Roms/Super Nintendo ES (SFC)" to listOf("Mario.sfc"),
+        ),
+    )
+
+    private fun select(state: AppState, row: (EmulatorRow) -> Boolean) {
+        repeat(options(state).rows.size) { if (!row(selected(state))) state.onButton(NxButton.DOWN) }
+        assertTrue(row(selected(state)))
+    }
+
+    private fun TestScope.openMapping(state: AppState, coreId: String) {
+        openOptions(state, coreId)
+        select(state) { it == EmulatorRow.ButtonMapping }
+        state.onButton(NxButton.A)
+        assertTrue(options(state).buttonMapping)
+    }
+
+    private fun bindRow(state: AppState, label: String) = options(state).rows.filterIsInstance<EmulatorRow.MapBind>().single { it.label == label }
+
+    @Test fun consolePageHasButtonMapping() = runTest {
+        val state = TestState(MemoryConfigs(), src = padSource)
+        openOptions(state, "pcsx_rearmed")
+        val rows = options(state).rows
+        val at = rows.indexOf(EmulatorRow.ButtonMapping)
+        val controls = rows.indexOf(EmulatorRow.Header("Controls"))
+        assertTrue(controls in 0 until at)
+        assertTrue(rows.subList(controls + 1, at).none { it is EmulatorRow.Header || it == EmulatorRow.Gap })   // under Controls
+    }
+
+    @Test fun bindWritesConsoleOverride() = runTest {
+        val configs = MemoryConfigs()
+        val state = TestState(configs, src = padSource)
+        openMapping(state, "pcsx_rearmed")
+        assertTrue(emulatorOptionsTitle(options(state)).endsWith("Sony PlayStation (PS) › Button Mapping"))
+        select(state) { (it as? EmulatorRow.MapBind)?.label == "×" }
+        state.onButton(NxButton.A)
+        assertTrue(bindRow(state, "×").waiting)
+        assertEquals(SHORTCUT_PROMPT, emulatorTouchRow(bindRow(state, "×")).value)
+        assertTrue(state.captureKey(97, down = true))
+        await { bindRow(state, "×").key.name == "B" }
+        assertTrue(state.captureKey(97, down = false))   // B's release stays the wait's
+        val text = configs.files.getValue("PS-pcsx_rearmed/minarch.cfg").lines()
+        assertTrue("nx_map_A = B" in text && "nx_map_B = A" in text)
+        assertFalse(bindRow(state, "×").waiting)
+        assertFalse(state.captureKey(96, down = true))   // no wait: the menu's keys again
+    }
+
+    @Test fun captureRefusesStartAndBackCancels() = runTest {
+        val configs = MemoryConfigs()
+        val state = TestState(configs, src = padSource)
+        openMapping(state, "pcsx_rearmed")
+        select(state) { (it as? EmulatorRow.MapBind)?.label == "×" }
+        state.onButton(NxButton.A)
+        assertTrue(state.captureKey(108, down = true))   // START: refused, the wait goes on and says which keys bind
+        assertNull(state.message.value)
+        assertTrue(bindRow(state, "×").waiting)
+        assertEquals("Pick A, B, X, Y, L1, R1, L2, R2, L3 or R3. Back cancels.", emulatorTouchRow(bindRow(state, "×")).info)
+        assertTrue(state.captureKey(108, down = false))
+        assertTrue(state.captureKey(19, down = true))   // the d-pad never binds
+        assertTrue(bindRow(state, "×").waiting)
+        assertTrue(state.captureKey(19, down = false))
+        assertTrue(state.captureKey(4, down = true))   // Back cancels quietly
+        assertNull(state.message.value)
+        assertFalse(bindRow(state, "×").waiting)
+        advanceUntilIdle()
+        assertNull(configs.files["PS-pcsx_rearmed/minarch.cfg"])
+        state.onButton(NxButton.B)   // out of the list, on its row
+        assertFalse(options(state).buttonMapping)
+        assertEquals(EmulatorRow.ButtonMapping, selected(state))
+    }
+
+    @Test fun dreamcastRefusesTheTriggers() = runTest {
+        val configs = MemoryConfigs()
+        val state = TestState(configs, src = padSource)
+        openMapping(state, "flycast")
+        val triggers = options(state).rows.filterIsInstance<EmulatorRow.MapBind>().filter { it.job == MapKey.L2 || it.job == MapKey.R2 }
+        assertTrue(triggers.size == 2 && triggers.all { it.locked && !emulatorTouchRow(it).enabled }, triggers.toString())
+        // A locked row takes no wait.
+        select(state) { (it as? EmulatorRow.MapBind)?.job == MapKey.L2 }
+        state.onButton(NxButton.A)
+        assertFalse(options(state).rows.filterIsInstance<EmulatorRow.MapBind>().any { it.waiting })
+        assertEquals(listOf(Hint(NxButton.B, "Back")), emulatorOptionsHints(selected(state)))
+        select(state) { (it as? EmulatorRow.MapBind)?.label == "A" }
+        state.onButton(NxButton.A)
+        assertTrue(state.captureKey(105, down = true))   // R2
+        assertEquals("Pick A, B, X, Y, L1, R1, L3 or R3. Back cancels.", bindRow(state, "A").waitLine)
+        assertTrue(state.captureKey(105, down = false))
+        assertTrue(state.captureKey(4, down = true))
+        assertFalse(bindRow(state, "A").waiting)
+        advanceUntilIdle()
+        assertTrue(configs.files.keys.none { it.startsWith("DC-") })
+    }
+
+    @Test fun listShowsTheBuiltInCombosDimmed() = runTest {
+        val state = TestState(MemoryConfigs(), src = padSource)
+        openMapping(state, "pcsx_rearmed")
+        val rows = options(state).rows
+        val combo = rows.filterIsInstance<EmulatorRow.MapCombo>().single()
+        assertEquals(EmulatorRow.MapCombo("Menu", "SELECT + START"), combo)
+        assertFalse(emulatorTouchRow(combo).enabled)
+        assertEquals(EmulatorRow.ResetButtonMap, rows.last())
+    }
+
+    @Test fun openingTheListDropsAStaleWait() = runTest {
+        val state = TestState(MemoryConfigs(), src = padSource)
+        openMapping(state, "pcsx_rearmed")
+        select(state) { (it as? EmulatorRow.MapBind)?.label == "×" }
+        state.onButton(NxButton.A)
+        assertTrue(state.captureKey(97, down = true))
+        await { bindRow(state, "×").key.name == "B" }
+        state.onButton(NxButton.B)   // out of the list with B still held
+        state.onButton(NxButton.A)   // and in again
+        assertTrue(options(state).buttonMapping)
+        assertFalse(state.captureKey(97, down = false))   // the old wait's release is no longer taken
+    }
+
+    @Test fun resetDropsOverrides() = runTest {
+        val configs = MemoryConfigs(mapOf("PS-pcsx_rearmed/minarch.cfg" to "nx_map_A = B\nnx_map_B = A\nnx_pad_layout = nintendo\nopt_a = z\n"))
+        val state = TestState(configs, src = padSource)
+        openMapping(state, "pcsx_rearmed")
+        assertEquals("B", bindRow(state, "×").key.name)
+        select(state) { it == EmulatorRow.ResetButtonMap }
+        state.onButton(NxButton.A)
+        await { bindRow(state, "×").key.name == "A" }
+        assertEquals("opt_a = z\n", configs.files["PS-pcsx_rearmed/minarch.cfg"])
+        assertEquals(EmulatorRow.ResetButtonMap, selected(state))
+    }
+
+    @Test fun migratedLegacyShows() = runTest {
+        val state = TestState(MemoryConfigs(mapOf("SFC-snes9x/minarch.cfg" to "nx_pad_layout = nintendo\n")), src = padSource)
+        openMapping(state, "snes9x")
+        assertEquals("B", bindRow(state, "A").key.name)
+        assertEquals("A", bindRow(state, "B").key.name)
+    }
+
+    @Test fun game_settings_has_button_mapping_under_controls() = runTest {
+        val state = TestState(MemoryConfigs())
+        openGame(state)
+        val rows = options(state).rows
+        val at = rows.indexOf(EmulatorRow.ButtonMapping)
+        assertTrue(rows.indexOf(EmulatorRow.Header("Controls")) in 0 until at, rows.toString())
     }
 }

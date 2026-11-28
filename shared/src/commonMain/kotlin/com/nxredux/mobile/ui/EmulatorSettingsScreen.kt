@@ -7,6 +7,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import com.nxredux.mobile.options.CoreOptionFilter
 import com.nxredux.mobile.runner.CoreRegistry
+import com.nxredux.mobile.ui.nx.InGameMenuModel
 import com.nxredux.mobile.ui.nx.Hint
 import com.nxredux.mobile.ui.nx.NxButton
 import com.nxredux.mobile.ui.nx.NxRow
@@ -121,25 +122,37 @@ internal fun emulatorTouchRow(row: EmulatorRow): NxSettingRow = when (row) {
     is EmulatorRow.Notice -> NxSettingRow(row.text)
     EmulatorRow.Gap -> NxSettingRow("", spacer = true)
     is EmulatorRow.App -> settingsTouchRow(row.row, row.choices, SettingsSection.EMULATORS)
+    EmulatorRow.ButtonMapping -> NxSettingRow(InGameMenuModel.BUTTON_MAPPING_LABEL, opens = true)
+    is EmulatorRow.MapBind ->
+        if (row.locked) NxSettingRow(row.label, value = row.key.label, enabled = false)
+        else if (row.waiting) NxSettingRow(row.label, info = row.waitLine, value = SHORTCUT_PROMPT)
+        else NxSettingRow(row.label, value = row.key.label)
+    is EmulatorRow.MapCombo -> NxSettingRow(row.label, value = row.keys, enabled = false)
+    EmulatorRow.ResetButtonMap -> NxSettingRow(InGameMenuModel.RESET_BUTTON_MAP_LABEL)
 }
 
 /** Reset to defaults' line on the emulator's page (as every Settings page's) and its fuller text. */
 internal const val EMULATOR_RESET_INFO = "Resets every setting on this page"
-internal const val EMULATOR_RESET_DETAIL = "Put this console's settings and its in-game shortcuts back to their defaults; games with their own settings keep them"
+internal const val EMULATOR_RESET_DETAIL = "Put this console's settings, its in-game shortcuts and its button mapping back to their defaults; games with their own settings keep them"
 
 /** Reset to defaults' question on the emulator's page ([Screen.EmulatorOptions.confirmReset]). */
 internal val EMULATOR_RESET_ASK = SettingsResetAsk(
-    "Reset to defaults?", "Every setting saved for this console, its in-game shortcuts included, goes back to its default. Games with their own settings keep them.", "Reset",
+    "Reset to defaults?", "Every setting saved for this console, its in-game shortcuts and button mapping included, goes back to its default. Games with their own settings keep them.", "Reset",
 )
 
 /** Use emulator settings' line (what A does) and its fuller text. */
 internal const val USE_EMULATOR_SETTINGS_INFO = "Deletes this game's own settings"
 internal const val USE_EMULATOR_SETTINGS_DETAIL = "Delete this game's settings, so it follows the emulator's again"
 
-/** "<emulator> — <console> (<TAG>)", or the game's name for Game Settings; an open category is appended. */
+/**
+ * "<emulator> — <console> (<TAG>)", or the game's name for Game Settings; an open category is appended. Button Mapping
+ * belongs to the console or the game, not the emulator, so its title leaves the emulator out and fits beside the logo.
+ */
 internal fun emulatorOptionsTitle(s: Screen.EmulatorOptions): String {
     val p = s.page
-    val base = s.game?.game?.shownName ?: "${p.emulator} — ${CoreRegistry.consoleOf(p.tag)?.displayName ?: p.tag} (${CoreRegistry.handheldTag(p.tag)})"
+    val console = "${CoreRegistry.consoleOf(p.tag)?.displayName ?: p.tag} (${CoreRegistry.handheldTag(p.tag)})"
+    if (s.buttonMapping) return "${s.game?.game?.shownName ?: console} › ${InGameMenuModel.BUTTON_MAPPING_LABEL}"
+    val base = s.game?.game?.shownName ?: "${p.emulator} — $console"
     val category = s.category?.let { key -> p.core.orEmpty().firstOrNull { it.category == key }?.categoryLabel?.ifEmpty { null } ?: key }
     return if (category == null) base else "$base › $category"
 }
@@ -156,7 +169,9 @@ internal fun emulatorOptionsHints(row: EmulatorRow?, touch: NxSettingRow? = null
         is EmulatorRow.Console, is EmulatorRow.Core -> valueRow()
         // A hosted Settings row: a value row hints as a console row; Clear link ROM cache A Select, as on Settings.
         is EmulatorRow.App -> if (touch != null && touch.choices.size >= 2) valueRow() else LIST_HINTS + x
-        is EmulatorRow.Category, EmulatorRow.UseEmulatorSettings, EmulatorRow.ResetDefaults -> LIST_HINTS + x
+        is EmulatorRow.Category, EmulatorRow.UseEmulatorSettings, EmulatorRow.ResetDefaults, EmulatorRow.ButtonMapping, EmulatorRow.ResetButtonMap -> LIST_HINTS + x
+        // Waiting, the pad's B binds and the row's line says Back cancels, so no hints.
+        is EmulatorRow.MapBind -> if (row.waiting) emptyList() else if (row.locked) listOf(Hint(NxButton.B, "Back")) else listOf(Hint(NxButton.B, "Back"), Hint(NxButton.A, "Bind"))
         else -> listOf(Hint(NxButton.B, "Back"))
     }
 }

@@ -23,13 +23,18 @@ import com.nxredux.mobile.options.NdsView
 import com.nxredux.mobile.options.ShaderBrowse
 import com.nxredux.mobile.options.ShaderOptions
 import com.nxredux.mobile.options.shownFor
+import com.nxredux.mobile.runner.ButtonMap
+import com.nxredux.mobile.runner.ButtonMapRows
+import com.nxredux.mobile.runner.MapKey
 import com.nxredux.mobile.runner.Nds3dMode
 import com.nxredux.mobile.runner.Res3dConsole
+import com.nxredux.mobile.runner.WiiPad
 import com.nxredux.mobile.settings.stepFrom
 import com.nxredux.mobile.shaders.ShaderParam
 import com.nxredux.mobile.shortcuts.CaptureResult
 import com.nxredux.mobile.shortcuts.ClaimedInput
 import com.nxredux.mobile.shortcuts.ConsoleHotkeys
+import com.nxredux.mobile.shortcuts.KeyCodes
 import com.nxredux.mobile.shortcuts.KeyLabels
 import com.nxredux.mobile.shortcuts.ShortcutAction
 import com.nxredux.mobile.shortcuts.ShortcutCapture
@@ -40,7 +45,7 @@ import com.nxredux.mobile.shortcuts.TouchSlot
 import com.nxredux.mobile.ui.SHORTCUTS_NO_CONTROLLER
 import com.nxredux.mobile.ui.SHORTCUT_PROMPT
 
-enum class MenuAction { CONTINUE, QUIT, SAVE_AND_QUIT, QUIT_ONLY, LEAVE_NETPLAY, DISCONNECT_DS, SAVE_FOR_CONSOLE, SAVE_FOR_GAME, RESTORE_DEFAULTS, RESET_SHADER_PARAMS, RESET, ASK_RESET, CANCEL, ADJUST_BUTTONS, USE_TOP_SCREEN }
+enum class MenuAction { CONTINUE, QUIT, SAVE_AND_QUIT, QUIT_ONLY, LEAVE_NETPLAY, DISCONNECT_DS, SAVE_FOR_CONSOLE, SAVE_FOR_GAME, RESTORE_DEFAULTS, RESET_SHADER_PARAMS, RESET_BUTTON_MAP, RESET, ASK_RESET, CANCEL, ADJUST_BUTTONS, USE_TOP_SCREEN }
 enum class SlotAction { SAVE, LOAD }
 
 /** After the picker word of the shader preset in use. */
@@ -59,6 +64,11 @@ sealed interface PageKind {
      * press, X sets None here, Y goes back to the default; saved with Save Changes like the other rows.
      */
     data object Shortcuts : PageKind
+    /**
+     * Which physical key does each of the console's buttons ([InGameMenuModel.setButtonMap]): A waits for the key, applied
+     * at once; saved with Save Changes like the other rows.
+     */
+    data object ButtonMapping : PageKind
     data object Shaders : PageKind
     data object ShaderParams : PageKind
     /**
@@ -111,6 +121,8 @@ sealed interface MenuRow : NxDescribedRow {
         override val detail: String = "",
         /** The row opens a list page of its own to choose from (the shader picker), drawn and pressed as a picker row. */
         val opensList: Boolean = false,
+        /** False: shown dimmed and takes no change (a Button Mapping key the console keeps, a built-in combo). */
+        val enabled: Boolean = true,
     ) : MenuRow
 }
 
@@ -257,6 +269,8 @@ sealed interface MenuEffect {
      * only by Save Changes, which writes the overridden rows alone (overrides inherit).
      */
     data class ShortcutsChanged(val overrides: ShortcutOverrides) : MenuEffect
+    /** The Button Mapping page changed this console's or game's [map]: the game's keys follow now; persisted only by Save Changes. */
+    data class SetButtonMap(val map: ButtonMap) : MenuEffect
     /**
      * The panel's Fast forward or Rewind tile: set the toggles ([ff], [rewind]; null leaves one alone), then close the
      * menu so the game runs with it on. Turning one on turns the other off, as a Toggle binding does.
@@ -442,6 +456,18 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     /** A Shortcuts row waits for a press: the host gives raw keys to [captureKey] first ([takesKey]). */
     val capturingShortcut: Boolean get() = capturing != null
+
+    /** This console's or game's button mapping as the Button Mapping page shows and edits it ([setButtonMap]). */
+    var buttonMap: ButtonMap = ButtonMap.DEFAULT
+        private set
+    private var mapWiiPad: WiiPad? = null
+    private var mapNewControls = false
+    private var mapGameCube = false
+    /** The job whose Button Mapping row waits for a physical key ([captureKey]). */
+    private var mapping: MapKey? = null
+    private var mapRefused = false   // the wait took a key that can't bind: its row says which can
+    /** Keys pressed since a Button Mapping row started waiting: their releases stay the page's ([takesKey]). */
+    private val mapHeld = HashSet<Int>()
 
     private var shaders: Map<String, String> = ShaderOptions.fromConfig(emptyMap())
     private var presets: List<String> = emptyList()
@@ -654,6 +680,8 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
                 else -> Unit
             }
         }
+        // B is a key to bind here: a pad's reaches [captureKey], so only a touch B cancels.
+        if (mapping != null) { if (button == NxButton.B) cancelCapture(); return null }
         // Another tab than Menu hides the words: the input is the tab's (its tab row while nothing in it has the focus).
         if (state.panelFocus != null || offMenuTab()) return pressPanel(button)
         if ((button == NxButton.L1 || button == NxButton.R1) && tabsShown()) { stepTab(if (button == NxButton.L1) -1 else 1); return null }
@@ -835,7 +863,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     /** Highlights row [index] of the top page; on the root the focus comes back from the panel to the list. */
     fun select(index: Int) {
         if (index in state.page.rows.indices) {
-            if (capturing != null && index != state.page.selected) cancelCapture()   // another row: the wait ends
+            if (waiting() && index != state.page.selected) cancelCapture()   // another row: the wait ends
             val editing = state.editing && index == state.page.selected   // another row ends a change
             replaceTop(state.page.copy(selected = index))
             state = state.copy(panelFocus = null, editing = editing)
@@ -845,7 +873,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     fun activate(index: Int): MenuEffect? {
         if (state.page.kind is PageKind.Adjust) return null
         // A tap while a Shortcuts row waits ends the wait, as B (a touch-only player can't press one).
-        if (capturing != null) { cancelCapture(); return null }
+        if (waiting()) { cancelCapture(); return null }
         val row = state.page.rows.getOrNull(index) ?: return null
         select(index)
         return when (row) {
@@ -857,6 +885,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
                 state.page.kind == PageKind.Achievements -> null
                 // A bind row waits for a press ([captureKey]).
                 state.page.kind == PageKind.Shortcuts && row.choices.isEmpty() -> { bindAction(row.key)?.let(::startCapture); null }
+                state.page.kind == PageKind.ButtonMapping -> { if (row.enabled) mapJob(row.key)?.let(::startMapping); null }
                 // The root has no descriptions (Disc N/M): A shows it.
                 state.page.kind == PageKind.Root -> { if (row.fullInfo.isNotBlank()) push(message(row.label, row.fullInfo)); null }
                 row.visual && !inPanel -> { push(adjustPage(row.key)); null }
@@ -1446,7 +1475,10 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         MenuAction.SAVE_FOR_CONSOLE -> { popTo(PageKind.Options); MenuEffect.SaveForConsole }
         MenuAction.SAVE_FOR_GAME -> { popTo(PageKind.Options); MenuEffect.SaveForGame }
         // The overrides go with the file (Restore defaults drops them); the host sets the restored layer's after.
-        MenuAction.RESTORE_DEFAULTS -> { popTo(PageKind.Options); shortcutOverrides = ShortcutOverrides.NONE; MenuEffect.RestoreDefaults }
+        MenuAction.RESTORE_DEFAULTS -> {
+            popTo(PageKind.Options); shortcutOverrides = ShortcutOverrides.NONE; buttonMap = ButtonMap.DEFAULT; MenuEffect.RestoreDefaults
+        }
+        MenuAction.RESET_BUTTON_MAP -> setMap(ButtonMap.DEFAULT)
         MenuAction.RESET_SHADER_PARAMS -> {
             val entries = ShaderOptions.resetEntries(params)
             shaders = shaders + entries
@@ -1461,6 +1493,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
             PageKind.Options -> push(optionsPage())
             is PageKind.Settings -> push(groupPage(target.group))
             PageKind.Shortcuts -> push(shortcutsPage())
+            PageKind.ButtonMapping -> push(buttonMappingPage())
             PageKind.Shaders -> push(shadersPage())
             PageKind.ShaderParams -> push(shaderParamsPage())
             is PageKind.ShaderBrowse -> push(browsePage(target.path))
@@ -1686,7 +1719,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
 
     // A push or pop leaves the panel: back on the root, the focus is on the list.
     // A push or pop also closes a popup: it belonged to the page it was over.
-    // A push or pop also ends a Shortcuts wait: its row is no longer on top.
+    // A push or pop also ends a Shortcuts or Button Mapping wait: its row is no longer on top.
     // A push or pop also ends a change ([MenuState.editing]): its row is no longer on top.
     private fun push(page: MenuPage) { endWait(); state = state.copy(stack = state.stack + page, panelFocus = null, popup = null, editing = false) }
     private fun pop() { endWait(); if (state.stack.size > 1) state = state.copy(stack = state.stack.dropLast(1), panelFocus = null, popup = null, editing = false) }
@@ -1785,6 +1818,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private fun groupPage(group: OptionGroup) = MenuPage(
         PageKind.Settings(group), group.label,
         settingRows().filter { OptionGroup.of(it.key) == group }.map(::frontendRow) +
+            (if (group == OptionGroup.CONTROLS) listOf(MenuRow.Submenu(BUTTON_MAPPING_LABEL, PageKind.ButtonMapping)) else emptyList()) +
             // Controls ends with Adjust buttons, only while the pad skin's buttons are drawn (a controller draws none)
             (if (group == OptionGroup.CONTROLS && adjustable()) listOf(MenuRow.Action(ADJUST_BUTTONS_LABEL, MenuAction.ADJUST_BUTTONS)) else emptyList()),
     )
@@ -1795,10 +1829,9 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     /** Every app setting the running game shows: this console's rows, then the frontend's. */
     private fun settingRows(): List<FrontendOption> = consoleRows() + frontendRows()
 
-    /** The groups with rows to show, in order. */
+    /** The groups with rows to show, in order; Controls always (Button Mapping), in its place among them. */
     private fun shownGroups(): List<OptionGroup> = OptionGroup.grouped(settingRows()) { it.key }.map { it.first }.let { groups ->
-        // Controls for Adjust buttons alone too, in its place among the groups
-        if (!adjustable() || OptionGroup.CONTROLS in groups) groups else (groups + OptionGroup.CONTROLS).sortedBy { it.ordinal }
+        if (OptionGroup.CONTROLS in groups) groups else (groups + OptionGroup.CONTROLS).sortedBy { it.ordinal }
     }
 
     /**
@@ -1960,6 +1993,7 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         controllerConnected = connected
         if (!connected) endWait()
         refreshShortcutsPage()
+        refreshButtonMappingPage()
         refreshRoot()   // Adjust buttons comes and goes with it
     }
 
@@ -1968,14 +2002,20 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
      * key while a row waits, and the release of one pressed since ([ShortcutCapture.takes]), so MENU's release after
      * MENU+R1 or B's after a cancel never reach the menu. A key repeat it takes the host drops.
      */
-    fun takesKey(keyCode: Int, down: Boolean): Boolean = capture.takes(keyCode, down)
+    fun takesKey(keyCode: Int, down: Boolean): Boolean = capture.takes(keyCode, down) || takesMapKey(keyCode, down)
+
+    private fun takesMapKey(keyCode: Int, down: Boolean): Boolean =
+        keyCode !in ShortcutCapture.SYSTEM && (keyCode in mapHeld || (down && mapping != null))
 
     /**
      * A raw key the host gave press to bind ([takesKey]): [MenuEffect.ShortcutsChanged] when it bound the waiting row. A
      * button or combo the console's hotkeys use (or the SELECT+START menu chord) is refused, saying which hotkey has it
-     * (built-in hotkeys win); B or Back alone cancels.
+     * (built-in hotkeys win); B or Back alone cancels. On the Button Mapping page a pad key binds the waiting row
+     * ([MenuEffect.SetButtonMap]); any other key (and one the console keeps: [ButtonMap.binds]) is
+     * refused, and Back cancels (B is a key to bind there).
      */
     fun captureKey(keyCode: Int, down: Boolean): MenuEffect? {
+        if (takesMapKey(keyCode, down)) return captureMapKey(keyCode, down)
         val result = capture.onKey(keyCode, down) ?: return null
         val action = capturing ?: return null
         capturing = null
@@ -1995,10 +2035,15 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
     private fun cancelCapture() {
         endWait()
         refreshShortcutsPage()
+        refreshButtonMappingPage()
     }
+
+    private fun waiting() = capturing != null || mapping != null
 
     /** Ends a wait without a binding; the keys already down keep their releases swallowed ([takesKey]). */
     private fun endWait() {
+        mapping = null
+        mapRefused = false
         if (capturing == null) return
         capture.cancel()
         capturing = null
@@ -2081,6 +2126,77 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         return MenuPage(PageKind.Shortcuts, SHORTCUTS_LABEL, binds + touch, footer = SHORTCUTS_FOOTER, intro = if (controllerConnected) "" else SHORTCUTS_NO_CONTROLLER)
     }
 
+    // ------------------------------------------------------------------ Options → Controls → Button Mapping
+
+    /**
+     * This console's or game's button [map] (the resolved config's `nx_map_*`, or what the page set since launch), and
+     * the Wii controller ([wiiPad]) and New 3DS controls ([newControls]) the rows are labelled for; [gameCube]: a
+     * GameCube disc under the Wii tag, which gets the GameCube's rows. Refreshes an open Button Mapping page.
+     */
+    fun setButtonMap(map: ButtonMap, wiiPad: WiiPad?, newControls: Boolean, gameCube: Boolean = false) {
+        mapWiiPad = wiiPad
+        mapNewControls = newControls
+        mapGameCube = gameCube
+        buttonMap = map.keeping(ButtonMap.locked(mapTag()))
+        refreshButtonMappingPage()
+    }
+
+    private fun startMapping(job: MapKey) {
+        mapping = job
+        mapRefused = false
+        refreshButtonMappingPage()
+    }
+
+    private fun captureMapKey(keyCode: Int, down: Boolean): MenuEffect? {
+        if (!down) { mapHeld -= keyCode; return null }
+        mapHeld += keyCode
+        val job = mapping ?: return null
+        if (keyCode == KeyCodes.BACK) { endWait(); refreshButtonMappingPage(); return null }
+        val physical = MapKey.ofKeyCode(keyCode)?.takeIf { ButtonMap.binds(mapTag(), it) }
+        if (physical == null) { mapRefused = true; refreshButtonMappingPage(); return null }
+        mapping = null
+        mapRefused = false
+        return setMap(buttonMap.bind(job, physical)) ?: run { refreshButtonMappingPage(); null }
+    }
+
+    private fun setMap(next: ButtonMap): MenuEffect? {
+        if (next == buttonMap) return null
+        buttonMap = next
+        refreshButtonMappingPage()
+        return MenuEffect.SetButtonMap(next)
+    }
+
+    private fun mapJob(key: String): MapKey? =
+        if (key.startsWith(MAP_KEY_PREFIX)) MapKey.entries.firstOrNull { it.name == key.removePrefix(MAP_KEY_PREFIX) } else null
+
+    private fun mapTag() = if (mapGameCube) "GC" else frontendTag
+
+    private fun mapRows() = ButtonMapRows.rowsFor(mapTag(), mapWiiPad, mapNewControls)
+
+    private fun refreshButtonMappingPage() {
+        state = state.copy(stack = state.stack.map { p -> if (p.kind == PageKind.ButtonMapping) rebuilt(p, buttonMappingPage()).copy(footer = SHORTCUTS_FOOTER) else p })
+    }
+
+    /**
+     * One row per button the console has, showing the physical key that does its job (dimmed where the console keeps the
+     * key); the row waiting for a key says so. Then the console's built-in combos, dimmed, and Reset to default.
+     */
+    private fun buttonMappingPage(): MenuPage {
+        val rows = mapRows().map { r ->
+            val key = MAP_KEY_PREFIX + r.job.name
+            if (r.job == mapping) MenuRow.Option(r.label, key, SHORTCUT_PROMPT, if (mapRefused) mapRefusedLine(mapTag()) else MAP_CAPTURE_LINE)
+            else MenuRow.Option(r.label, key, buttonMap.keyFor(r.job).label, enabled = !r.locked)
+        }
+        val combos = ButtonMapRows.combos(mapTag()).mapIndexed { i, c ->
+            MenuRow.Option(c.label, MAP_COMBO_KEY_PREFIX + i, c.keys(buttonMap), enabled = false)
+        }
+        return MenuPage(
+            PageKind.ButtonMapping, BUTTON_MAPPING_LABEL,
+            rows + combos + MenuRow.Action(RESET_BUTTON_MAP_LABEL, MenuAction.RESET_BUTTON_MAP),
+            footer = SHORTCUTS_FOOTER,
+        )
+    }
+
     private fun saveChangesPage() = MenuPage(
         PageKind.SaveChanges, "Save Changes",
         listOf(
@@ -2141,6 +2257,20 @@ class InGameMenuModel(private val gameTitle: String, private val slotCount: Int,
         const val SHORTCUTS_FOOTER = "Changes here apply to this console or game. Save them with Save Changes."
         const val BIND_KEY_PREFIX = "nx:bind:"
         const val TOUCH_KEY_PREFIX = "nx:touch:"
+        const val BUTTON_MAPPING_LABEL = "Button Mapping"
+        const val MAP_KEY_PREFIX = "nx:map:"
+        /** A built-in combo's row on the Button Mapping page: shown, never bound. */
+        const val MAP_COMBO_KEY_PREFIX = "nx:combo:"
+        const val RESET_BUTTON_MAP_LABEL = "Reset to default"
+        /** The waiting Button Mapping row's line: B binds there, so Back cancels. */
+        const val MAP_CAPTURE_LINE = "Press Back to cancel"
+        /** The refusal of a key the Button Mapping page can't bind: the keys [tag]'s page binds ([ButtonMap.binds]). */
+        fun mapPickNote(tag: String): String {
+            val keys = MapKey.entries.filter { ButtonMap.binds(tag, it) }.map { it.label }
+            return "Pick ${keys.dropLast(1).joinToString(", ")} or ${keys.last()}"
+        }
+        /** The waiting row's line after a key that can't bind: the wait goes on. */
+        fun mapRefusedLine(tag: String): String = "${mapPickNote(tag)}. Back cancels."
         /** A Shortcuts row inheriting Controls → Shortcuts. */
         private const val DEFAULT_SUFFIX = " (default)"
         private val LOCAL_WIRELESS_KEYS = setOf(NdsOptions.LOCAL_WIRELESS, N3dsOptions.LOCAL_WIRELESS)

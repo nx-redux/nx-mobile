@@ -5,8 +5,11 @@ import com.nxredux.mobile.options.NdsOptions
 import com.nxredux.mobile.options.WiiOptions
 import com.nxredux.mobile.options.WiiuOptions
 
-/** An input the frontend already uses; [note] names it for the player ("L2 swaps the DS screens"). */
-data class ClaimedInput(val binding: ShortcutBinding, val note: String)
+/**
+ * An input the frontend already uses; [note] names it for the player ("L2 swaps the DS screens"), [action] what it does
+ * alone, for a chord's Button Mapping row ("Next layout").
+ */
+data class ClaimedInput(val binding: ShortcutBinding, val note: String, val action: String = "")
 
 /**
  * The inputs each console's built-in hotkeys claim; they win over user bindings. Restated in key codes from
@@ -15,7 +18,7 @@ data class ClaimedInput(val binding: ShortcutBinding, val note: String)
  */
 object ConsoleHotkeys {
     private fun single(code: Int, note: String) = ClaimedInput(ShortcutBinding(null, code), note)
-    private fun chord(code: Int, note: String) = ClaimedInput(ShortcutBinding(KeyCodes.BUTTON_SELECT, code), note)
+    private fun chord(code: Int, note: String, action: String) = ClaimedInput(ShortcutBinding(KeyCodes.BUTTON_SELECT, code), note, action)
 
     /**
      * Every console: MENU alone opens the in-game menu, SELECT + START is its chord. SELECT and START themselves are never
@@ -23,7 +26,7 @@ object ConsoleHotkeys {
      */
     val always: List<ClaimedInput> = listOf(
         single(KeyCodes.BUTTON_MODE, "MENU opens the menu"),
-        chord(KeyCodes.BUTTON_START, "SELECT+START opens the menu"),
+        chord(KeyCodes.BUTTON_START, "SELECT+START opens the menu", "Menu"),
     )
 
     private val nds = listOf(
@@ -31,26 +34,26 @@ object ConsoleHotkeys {
         single(KeyCodes.BUTTON_THUMBR, "R3 taps with the stylus"),
         single(KeyCodes.BUTTON_L2, "L2 swaps the DS screens"),
         single(KeyCodes.BUTTON_R2, "R2 is the stylus"),
-        chord(KeyCodes.BUTTON_L1, "SELECT+L1 swaps the DS screens"),
-        chord(KeyCodes.BUTTON_R1, "SELECT+R1 toggles the stylus"),
-        chord(KeyCodes.DPAD_LEFT, "SELECT+Left cycles the DS layout"),
-        chord(KeyCodes.DPAD_RIGHT, "SELECT+Right cycles the DS layout"),
-        chord(KeyCodes.DPAD_UP, "SELECT+Up moves the DS inset"),
-        chord(KeyCodes.DPAD_DOWN, "SELECT+Down moves the DS inset"),
+        chord(KeyCodes.BUTTON_L1, "SELECT+L1 swaps the DS screens", "Swap screens"),
+        chord(KeyCodes.BUTTON_R1, "SELECT+R1 toggles the stylus", "Stylus"),
+        chord(KeyCodes.DPAD_LEFT, "SELECT+Left cycles the DS layout", "Previous layout"),
+        chord(KeyCodes.DPAD_RIGHT, "SELECT+Right cycles the DS layout", "Next layout"),
+        chord(KeyCodes.DPAD_UP, "SELECT+Up moves the DS inset", "Inset to the previous corner"),
+        chord(KeyCodes.DPAD_DOWN, "SELECT+Down moves the DS inset", "Inset to the next corner"),
     )
 
     private val n3ds = listOf(
-        chord(KeyCodes.DPAD_LEFT, "SELECT+Left cycles the 3DS layout"),
-        chord(KeyCodes.DPAD_RIGHT, "SELECT+Right cycles the 3DS layout"),
-        chord(KeyCodes.BUTTON_L1, "SELECT+L1 swaps the 3DS screens"),
-        chord(KeyCodes.BUTTON_R1, "SELECT+R1 toggles the stylus"),
+        chord(KeyCodes.DPAD_LEFT, "SELECT+Left cycles the 3DS layout", "Previous layout"),
+        chord(KeyCodes.DPAD_RIGHT, "SELECT+Right cycles the 3DS layout", "Next layout"),
+        chord(KeyCodes.BUTTON_L1, "SELECT+L1 swaps the 3DS screens", "Swap screens"),
+        chord(KeyCodes.BUTTON_R1, "SELECT+R1 toggles the stylus", "Stylus"),
         single(KeyCodes.BUTTON_THUMBL, "L3 swaps screens"),
     )
 
     private val wiiu = listOf(
-        chord(KeyCodes.DPAD_LEFT, "SELECT+Left cycles the Wii U layout"),
-        chord(KeyCodes.DPAD_RIGHT, "SELECT+Right cycles the Wii U layout"),
-        chord(KeyCodes.BUTTON_L1, "SELECT+L1 swaps the Wii U screens"),
+        chord(KeyCodes.DPAD_LEFT, "SELECT+Left cycles the Wii U layout", "Previous layout"),
+        chord(KeyCodes.DPAD_RIGHT, "SELECT+Right cycles the Wii U layout", "Next layout"),
+        chord(KeyCodes.BUTTON_L1, "SELECT+L1 swaps the Wii U screens", "Swap screens"),
     )
 
     private val wii = listOf(

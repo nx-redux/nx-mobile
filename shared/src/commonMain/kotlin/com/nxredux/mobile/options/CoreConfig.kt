@@ -1,5 +1,6 @@
 package com.nxredux.mobile.options
 
+import com.nxredux.mobile.runner.ButtonMap
 import com.nxredux.mobile.storage.TextLines
 
 sealed interface ConfigLine {
@@ -83,12 +84,13 @@ object CoreConfig {
      * The game file after one [key] changed outside the menu (a DS hotkey): [game] updated in place, or, for a game
      * without one, a copy of [console] with the key. Reading uses the game file instead of the console file whole, so a
      * game file holding only the key would drop every console value. A locked line keeps its value. The old key [key]
-     * replaced ([FrontendOptions.SUPERSEDED_KEYS]) goes: the new one holds the pick (and its lock).
+     * replaced ([FrontendOptions.SUPERSEDED_KEYS]) goes: the new one holds the pick (and its lock). The copy leaves out the
+     * console's button mapping, so the game keeps following it ([ButtonMap.resolve]).
      */
     fun withKey(console: ConfigFile?, game: ConfigFile?, key: String, value: String): String =
         render(
             game ?: console, listOf(key to value), FrontendOptions::migrateKey,
-            drop = { it in ShaderOptions.MIGRATED_KEYS || FrontendOptions.SUPERSEDED_KEYS[it] == key },
+            drop = { it in ShaderOptions.MIGRATED_KEYS || FrontendOptions.SUPERSEDED_KEYS[it] == key || (game == null && it.startsWith(ButtonMap.PREFIX)) },
             lockMovesTo = FrontendOptions.SUPERSEDED_KEYS::get,
         )
 

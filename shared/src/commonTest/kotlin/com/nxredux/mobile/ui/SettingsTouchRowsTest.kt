@@ -196,10 +196,10 @@ class SettingsTouchRowsTest {
         assertEquals(listOf("x", "y", "z"), core.choices); assertEquals(1, core.index)
         assertEquals("", core.info); assertEquals("What A does", core.detail); assertTrue(core.hasMoreInfo)   // the core's text: info icon only
         assertEquals(NxSettingControl.SEGMENTED, core.control)
-        val layout = PadOptions.all.first { it.key == PadOptions.LAYOUT }
-        val console = emulatorTouchRow(EmulatorRow.Console(ConsoleRow(layout, PadOptions.AUTO)))
-        assertEquals(layout.values.map(layout::labelOf), console.choices); assertEquals(layout.values.indexOf(PadOptions.AUTO), console.index)
-        assertEquals("", console.info); assertEquals(layout.info, console.detail)
+        val pad = PadOptions.segaPadRow
+        val console = emulatorTouchRow(EmulatorRow.Console(ConsoleRow(pad, pad.default)))
+        assertEquals(pad.values.map(pad::labelOf), console.choices); assertEquals(pad.values.indexOf(pad.default), console.index)
+        assertEquals("", console.info); assertEquals(pad.info, console.detail)
         assertEquals(USE_EMULATOR_SETTINGS_INFO, emulatorTouchRow(EmulatorRow.UseEmulatorSettings).info)
         assertEquals(EMULATOR_RESET_INFO, emulatorTouchRow(EmulatorRow.ResetDefaults).info)
         assertEquals(EMULATOR_RESET_DETAIL, emulatorTouchRow(EmulatorRow.ResetDefaults).detail)

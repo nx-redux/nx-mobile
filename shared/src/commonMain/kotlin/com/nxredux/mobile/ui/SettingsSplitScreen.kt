@@ -111,7 +111,7 @@ internal fun SettingsStage(
                     Column(Modifier.width(if (blockPage) maxOf(left, sectionRight + gutter) else left).fillMaxHeight()) {
                         Box(Modifier.weight(1f).fillMaxWidth()) {
                             // On a page it has the focus: the current word drops to the open grey, with its "›" ([openedLabel]).
-                            WithCurrent(current) { SettingsRootScreen(title, words, lines, it, onWordTap, rowsFocused = !root, clearMark = false) }
+                            WithCurrent(current) { SettingsRootScreen(title, words, lines, it, onWordTap, rowsFocused = !root) }
                         }
                         // Keep the bar's room here so the word block shares the right pane's baseline; root hints draw full-width below.
                         NxHintBar(emptyList(), onHint = onHint)
