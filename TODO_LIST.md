@@ -10,7 +10,7 @@ console save keeping the old Widescreen line, and a resume with Widescreen on re
 fades (three runs).
 
 - [ ] Nova: a 60 FPS patch (place 1) on and off live.
-- [ ] Docs: the Patches tab, and Widescreen / No-Interlacing moved out of Options.
+- [ ] Docs: written in nx-redux-docs#97; a Patches-tab screenshot (Fold) still owed.
 
 Known limits: every switch sends the whole set again (once-on-enable lines of the other groups rerun); the list is read once a launch (an `.m3u` disc change keeps the first disc's list); a boot over 2 minutes leaves the dual-screen panel on "Loading" until the menu opens.
 
