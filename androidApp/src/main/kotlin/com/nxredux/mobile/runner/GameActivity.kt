@@ -494,6 +494,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         private set
     override var frontendValues: Map<String, String> = FrontendOptions.defaults()   // every frontend key, as in effect now
         private set
+    /** The player's layout while a Download Play client shows the top screen alone ([DownloadPlayScreen]). */
+    var downloadPlayLayout: Map<String, String>? = null
     /** The core can rewind ([com.nxredux.mobile.runner.CoreDescriptor.rewind]); false until the launch resolves the core. */
     override var canRewind = false
         private set
@@ -717,6 +719,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             }
             if (launchPipeline.dsCableAuto && !isDestroyed) dsCable.watch(launchPipeline.dsCableWithGame)
             launchPipeline.n3dsDownloadPlayDirs?.let { (azahar, config) -> if (!isDestroyed) watchDownloadPlayPick(azahar, config) }
+            if (launchPipeline.ndsDownloadPlay && !isDestroyed) watchDsDownloadPlay()
         }
     }
 
@@ -752,7 +755,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         withMenu { it.setLocalWirelessNow(localWirelessNow) }
     }
 
-    /** 3DS Download Play: the downloaded game has started ([watchDownloadPlayPick]); its host is all it can play with. */
+    /** 3DS or DS Download Play: the downloaded game has started; its host is all it can play with. */
     @Volatile private var downloadPlayChildStarted = false
     private var downloadPlayHostGone: Job? = null
 
@@ -773,7 +776,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
     private suspend fun endDownloadPlaySession(afterMs: Long) {
         delay(afterMs)
         if (quitting || focusPaused || !localWirelessShownOn() || !lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return
-        NxLog.i(TAG_LOG, "3DS Download Play: the host left, quitting")
+        NxLog.i(TAG_LOG, "Download Play: the host left, quitting")
         dual.pictureToast("The host left")
         delay(1500)
         if (!quitting) quitWithAutoState(chosen = false, autoState = false)
@@ -812,17 +815,20 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
      */
     private fun watchDownloadPlayPick(azahar: File, config: File) {
         val pick = File(azahar, N3dsDownloadPlayHandoff.PICK_FILE)
+        val failed = File(azahar, N3dsDownloadPlayHandoff.FAILED_FILE)
         lifecycleScope.launch(Dispatchers.IO) {
             pick.delete()   // a stale one from a session that ended mid-hand-off
+            failed.delete()
             var hostLeft = -1
             while (isActive) {
-                if (downloadPlayChildStarted) {
-                    val now = LibretroNetplay.dsHostLeft()
-                    if (hostLeft in 0 until now) withContext(Dispatchers.Main) {
-                        downloadPlayHostGone?.cancel()
-                        downloadPlayHostGone = lifecycleScope.launch { endDownloadPlaySession(0) }
+                if (downloadPlayChildStarted) hostLeft = checkDownloadPlayHostLeft(hostLeft)
+                // The named game did not start: the client is back, on its one screen.
+                if (failed.isFile) {
+                    failed.delete()
+                    if (downloadPlayChildStarted) {
+                        downloadPlayChildStarted = false
+                        withContext(Dispatchers.Main) { showDownloadPlayClient() }
                     }
-                    hostLeft = now
                 }
                 if (pick.isFile) {
                     val child = runCatching { pick.readText() }.getOrDefault("")
@@ -848,10 +854,57 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
                     }
                     if (!queued) ack()
                     downloadPlayChildStarted = true
+                    withContext(Dispatchers.Main) { restoreDownloadPlayLayout() }
                 }
                 delay(250)
             }
         }
+    }
+
+    /** DS Download Play: the core says when the game it received booted; from then on its host is followed as on 3DS. */
+    private fun watchDsDownloadPlay() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            var hostLeft = -1
+            while (isActive) {
+                if (!downloadPlayChildStarted && LibretroNetplay.dsDownloadPlayStarted()) {
+                    downloadPlayChildStarted = true
+                    withContext(Dispatchers.Main) { restoreDownloadPlayLayout() }
+                }
+                if (downloadPlayChildStarted) hostLeft = checkDownloadPlayHostLeft(hostLeft)
+                delay(250)
+            }
+        }
+    }
+
+    override val downloadPlayClientShowing: Boolean get() = downloadPlayLayout != null
+    override val downloadPlayRow: Boolean get() = launchPipeline.ndsDownloadPlay || launchPipeline.n3dsDownloadPlayDirs != null
+
+    override fun frontendValuesToSave(): Map<String, String> = DownloadPlayScreen.toSave(frontendValues, downloadPlayLayout, n3ds = isN3ds)
+
+    /** The client again (a game that did not start): its one screen and its menu, the player's layout kept aside. */
+    private fun showDownloadPlayClient() {
+        if (downloadPlayLayout != null) return
+        downloadPlayLayout = frontendValues
+        applyFrontend(DownloadPlayScreen.single(frontendValues, n3ds = isN3ds))
+        withMenu { it.setDownloadPlayClient(true) }
+    }
+
+    /** The received game plays on both screens, as the player lays them out. */
+    private fun restoreDownloadPlayLayout() {
+        val stored = downloadPlayLayout ?: return
+        downloadPlayLayout = null
+        applyFrontend(DownloadPlayScreen.restored(frontendValues, stored, n3ds = isN3ds))
+        withMenu { it.setDownloadPlayClient(false) }
+    }
+
+    /** The core's count of hosts gone, against the last one [seen]: a new one ends the session at once. The count now. */
+    private suspend fun checkDownloadPlayHostLeft(seen: Int): Int {
+        val now = LibretroNetplay.dsHostLeft()
+        if (seen in 0 until now) withContext(Dispatchers.Main) {
+            downloadPlayHostGone?.cancel()
+            downloadPlayHostGone = lifecycleScope.launch { endDownloadPlaySession(0) }
+        }
+        return now
     }
 
     /** Leaves the room with the game running: on the automatic route, Local Wireless switched off (PSP has no row). */
@@ -2594,6 +2647,7 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         override var launchEnv by game::launchEnv
         override var graphicsForcedOptions by game::graphicsForcedOptions
         override var frontendValues by game::frontendValues
+        override var downloadPlayLayout by game::downloadPlayLayout
         override var configStore by game::configStore
         override var configSource by game::configSource
         override var lockedOptions by game::lockedOptions

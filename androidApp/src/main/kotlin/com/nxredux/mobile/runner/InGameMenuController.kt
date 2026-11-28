@@ -142,6 +142,12 @@ internal interface InGameMenuHost : GameScreenHost {
     fun padProfile(): PadProfile
     fun menuLocked(): Set<String>
     fun applyFrontend(values: Map<String, String>)
+    /** The DS or 3DS Download Play row runs (its client, then the game it received): no Reset. */
+    val downloadPlayRow: Boolean
+    /** A Download Play client is showing: the menu is Continue / Quit until the game it receives starts. */
+    val downloadPlayClientShowing: Boolean
+    /** The frontend values a save writes: the player's layout, not a Download Play client's single screen. */
+    fun frontendValuesToSave(): Map<String, String>
     fun applyOptions(vars: List<Variable>)
     fun applyCheats(view: GLRetroView)
     fun applyAchievements(model: InGameMenuModel)
@@ -273,6 +279,8 @@ internal class InGameMenuController(
                 it.netplay = true; it.netplayLink = host.netplay?.endsAsLocalGame == true; it.netplayEnded = host.netplayEnded; it.netplayQuitOnly = host.netplayQuitOnly; it.refresh()
             }
             it.setDsWireless(host.dsWireless)   // a DS game's wireless on the automatic route: Continue, Disconnect, Quit
+            it.setDownloadPlayClient(host.downloadPlayClientShowing)
+            it.setDownloadPlayRow(host.downloadPlayRow)
             it.setLocalWirelessNow(host.localWirelessNow)
             it.setIdleSeconds(host.dsIdleSeconds)
             it.setKidsLocked(host.kidsSettingsHidden)   // Kids Mode without Parent mode: no Options for a kid
@@ -684,7 +692,7 @@ internal class InGameMenuController(
                     // default loses its line ([Shortcuts.droppedOnSave]).
                     val overrides = host.shortcutOverrides
                     val running = all.map { it.key to it.value }.let { if (host.patchesSupported) Ps2Patches.withoutRetired(it) else it }
-                    val values = CoreConfig.valuesToSave(running, host.storedValues, host.graphicsForcedOptions + dualForcedOptions()) + host.frontendValues.toList() +
+                    val values = CoreConfig.valuesToSave(running, host.storedValues, host.graphicsForcedOptions + dualForcedOptions()) + host.frontendValuesToSave().toList() +
                         ShaderOptions.activeParamEntries(renderer.shaderValues, renderer.shaderParams) + Shortcuts.toConfig(overrides) +
                         if (game) listOf(FrontendOptions.CHEATS to CheatSet.encode(host.cheatSet.enabledKeys())) else emptyList()
                     val patchValues = if (game && host.patchesSupported) listOf(FrontendOptions.PATCHES to CheatSet.encode(host.patchSet.savedKeys())) else emptyList()

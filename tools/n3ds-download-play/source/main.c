@@ -1,6 +1,6 @@
 // 3DS Download Play: lists the Download Play games hosted nearby, downloads the one picked and starts it. Drawn the
-// way NX Redux draws its menus: black, light text, the selected row a light pill, button hints bottom right of the top
-// screen; the bottom screen shows the picked game.
+// way NX Redux draws its menus, on the top screen only, as the DS client is: black, light text, the selected row a light
+// pill, button hints bottom right.
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -23,6 +23,8 @@
 #define PICK_DIR "sdmc:/nx-redux"
 #define PICK_FILE PICK_DIR "/download-play.txt"
 #define PICK_ACK PICK_DIR "/download-play.ack"
+// Left when the picked game did not start after all: the app shows the client as it was.
+#define PICK_FAILED PICK_DIR "/download-play.failed"
 
 typedef enum { LISTING, DOWNLOADING, STARTING, FAILED } Phase;
 
@@ -69,8 +71,6 @@ static void drawTop(void) {
             text(&font_title, 24, 90, line, INK);
             text(&font_body, 24, 118, "Ask the other player to start", HINT);
             text(&font_body, 24, 138, "local multiplayer in their game.", HINT);
-            Hint h[] = {{"START", "Quit"}};
-            hints(h, 1);
             return;
         }
         for (int i = 0; i < host_count; i++) {
@@ -84,17 +84,21 @@ static void drawTop(void) {
             snprintf(size, sizeof size, "%lu MB", (unsigned long)((hosts[i].size + 512 * 1024) / (1024 * 1024)));
             text(&font_small, 376 - textWidth(&font_small, size), y + 10, size, on ? ON_PILL : HINT);
         }
-        Hint h[] = {{"A", "Download"}, {"START", "Quit"}};
-        hints(h, 2);
+        Hint h[] = {{"A", "Download"}};
+        hints(h, 1);
         return;
     }
+    // The picked game: icon, name and size, then how the download goes, as the DS client shows it.
     ascii(name, hosts[picked].title_short, 64);
-    icon(0, hosts[picked].icon, 24, 52, 72);
-    text(&font_big, 112, 60, name, INK);
+    icon(0, hosts[picked].icon, 24, 40, 72);
+    text(&font_big, 112, 48, name, INK);
+    char size[24];
+    snprintf(size, sizeof size, "%lu MB", (unsigned long)((hosts[picked].size + 512 * 1024) / (1024 * 1024)));
+    text(&font_small, 112, 84, size, HINT);
     if (phase == FAILED) {
-        text(&font_body, 112, 94, message, INK);
-        Hint h[] = {{"A", "Back to the list"}, {"START", "Quit"}};
-        hints(h, 2);
+        text(&font_body, 24, 140, message, INK);
+        Hint h[] = {{"A", "Back to the list"}};
+        hints(h, 1);
         return;
     }
     const char* line;
@@ -105,45 +109,20 @@ static void drawTop(void) {
         snprintf(pct, sizeof pct, "Downloading  %lu%%", (unsigned long)(100ULL * status.downloaded / status.total));
         line = pct;
     }
-    text(&font_body, 112, 94, line, phase == STARTING ? GOOD : HINT);
-    roundRect(112, 124, 264, 6, 3, LINE);
-    float fill = status.total ? 264.0f * status.downloaded / status.total : 0;
-    if (phase == STARTING) fill = 264;
-    if (fill >= 6) roundRect(112, 124, fill, 6, 3, PILL);
+    text(&font_body, 24, 140, line, phase == STARTING ? GOOD : HINT);
+    roundRect(24, 170, 352, 6, 3, LINE);
+    float fill = status.total ? 352.0f * status.downloaded / status.total : 0;
+    if (phase == STARTING) fill = 352;
+    if (fill >= 6) roundRect(24, 170, fill, 6, 3, PILL);
     if (phase == DOWNLOADING) {
-        Hint h[] = {{"B", "Back"}, {"START", "Quit"}};
-        hints(h, 2);
+        Hint h[] = {{"B", "Back"}};
+        hints(h, 1);
     }
 }
 
+// The bottom screen stays black: the client is one screen, as the DS one, and the app shows only the top one.
 static void drawBottom(void) {
     onBottom();
-    if (phase != LISTING || host_count == 0) return;
-    char name[129];
-    ascii(name, hosts[picked].title_long, 128);
-    icon(7, hosts[picked].icon, 136, 28, 48);
-    // The long title centred, over two lines at most, broken at a space.
-    char first[64] = {0};
-    const char* rest = NULL;
-    int n = (int)strlen(name);
-    if (textWidth(&font_body, name) > 288) {
-        int cut = n < (int)sizeof first - 1 ? n : (int)sizeof first - 1;
-        while (cut > 0) {
-            memcpy(first, name, cut);
-            first[cut] = 0;
-            if (textWidth(&font_body, first) <= 288 && (name[cut] == ' ' || name[cut] == 0)) break;
-            cut--;
-        }
-        rest = name + cut + (name[cut] == ' ');
-    } else {
-        strcpy(first, name);
-    }
-    text(&font_body, 160 - textWidth(&font_body, first) / 2, 92, first, INK);
-    if (rest) text(&font_body, 160 - textWidth(&font_body, rest) / 2, 112, rest, INK);
-    const char* note = "The host sends it for this session.";
-    text(&font_small, 160 - textWidth(&font_small, note) / 2, 160, note, HINT);
-    const char* note2 = "Nothing of yours is needed.";
-    text(&font_small, 160 - textWidth(&font_small, note2) / 2, 178, note2, HINT);
 }
 
 static void present(void) {
@@ -204,15 +183,12 @@ int main(void) {
 
     if (R_FAILED(dlpOpen())) {
         fail("Download Play could not start.");
+        // Left from the in-game menu, as every other game is.
         while (aptMainLoop()) {
-            hidScanInput();
-            if (hidKeysDown() & (KEY_START | KEY_A)) break;
             frameBegin(BG);
             onTop();
             text(&font_small, 16, 10, "3DS Download Play", HINT);
             text(&font_title, 24, 100, message, INK);
-            Hint h[] = {{"START", "Quit"}};
-            hints(h, 1);
             frameEnd();
         }
         drawExit();
@@ -227,7 +203,6 @@ int main(void) {
         hidScanInput();
         u32 down = hidKeysDown();
         bool tapped = (down & KEY_TOUCH) != 0;
-        if (down & KEY_START) break;
 
         if (phase == LISTING) {
             if (osGetTime() - last_refresh > 500) {
@@ -267,6 +242,8 @@ int main(void) {
                     // The restart takes over from here.
                     for (int i = 0; i < 600 && aptMainLoop(); i++) gspWaitForVBlank();
                     dlpForgetChild(child);
+                    FILE* failed = fopen(PICK_FAILED, "w");
+                    if (failed) fclose(failed);
                     fail("The game did not start.");
                 } else if ((was_connected && !now.connected) || (!now.connected && osGetTime() - phase_started > 10000)) {
                     dlpStopSession();

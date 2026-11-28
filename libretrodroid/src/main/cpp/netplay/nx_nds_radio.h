@@ -6,3 +6,5 @@
 #define NX_NDS_RADIO_OFF 0      // the game powered the radio off, or the game ended
 #define NX_NDS_RADIO_ON 1       // the game powered the radio on
 #define NX_NDS_RADIO_HOSTING 2  // the game sent a beacon: it created a group (once per ON)
+#define NX_NDS_RADIO_DLP_STARTED 3 // a game received over DS Download Play booted
+#define NX_NDS_RADIO_HOST_LEFT 4   // that game's host is gone (once per host)

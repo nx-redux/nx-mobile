@@ -249,7 +249,7 @@ internal fun settingsTouchRow(row: SettingsRow, choices: SettingChoices?, sectio
 internal fun settingsRowAction(row: SettingsRow, section: SettingsSection?): String? = when (row.kind) {
     SettingsKind.COPY_INFO -> "Copy"
     SettingsKind.PLAYER_NAME -> "Edit"
-    SettingsKind.CLEAR_LINK_ROMS -> "Clear"
+    SettingsKind.CLEAR_LINK_ROMS, SettingsKind.CLEAR_DOWNLOAD_PLAY -> "Clear"
     SettingsKind.APP_UPDATE -> appUpdateHint(row.label)
     SettingsKind.RESET_DEFAULTS -> if (section == SettingsSection.SHORTCUTS) "Clear all" else "Reset"
     SettingsKind.BUTTON_LAYOUT_RESET -> "Reset"
@@ -276,6 +276,9 @@ internal fun settingsResetAsk(page: Screen.Settings, selected: Int): SettingsRes
         SettingsSection.CONTROLS -> SettingsResetAsk("Reset to defaults?", "Pad vibration and Game rumble go back to their defaults.", "Reset")
         else -> SettingsResetAsk("Reset to defaults?", "This page's settings go back to their defaults.", "Reset")
     }
+    SettingsKind.CLEAR_DOWNLOAD_PLAY -> SettingsResetAsk(
+        "Clear Download Play data?", "The games kept from DS and 3DS Download Play are deleted. Joining one downloads it again.", "Clear",
+    )
     SettingsKind.BUTTON_LAYOUT_RESET -> {
         val console = page.rows.firstOrNull { it.kind == SettingsKind.BUTTON_LAYOUT_CONSOLE }?.secondary ?: "This console"
         SettingsResetAsk("Reset button layout?", "$console's buttons go back to where the skin puts them, portrait and landscape.", "Reset")

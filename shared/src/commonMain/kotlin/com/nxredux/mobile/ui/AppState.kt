@@ -230,8 +230,8 @@ class AppDeps(
     val windowPx: () -> Pair<Int, Int>? = { null },
     /** The ".bin" names in Bios/PS2/ (Emulator Settings' PS2 BIOS row); blocking, called off the main thread. */
     val ps2BiosFiles: () -> List<String> = { emptyList() },
-    /** The ".bin" names in Bios/NDS/ (whether DS Download Play can boot the DS menu); blocking, called off the main thread. */
-    val ndsBiosFiles: () -> List<String> = { emptyList() },
+    /** DS Download Play (our own client, no files of the player's): its row, and its console in a library without DS games. */
+    val ndsDownloadPlay: Boolean = false,
     /** 3DS Download Play (our own client, no files of the player's): its row, and its console in a library without 3DS games. */
     val n3dsDownloadPlay: Boolean = false,
     /**
@@ -253,6 +253,8 @@ class AppDeps(
     val micAccess: MicAccess? = null,
     /** ROMs received over a Cable Link session (the Clear link ROM cache row on mGBA's Emulator Settings page); null: none on this platform. */
     val linkRomCache: LinkRomCache? = null,
+    /** The games kept by DS and 3DS Download Play: Library's Clear Download Play data. */
+    val downloadPlayData: com.nxredux.mobile.runner.DownloadPlayData? = null,
     /** Local folders for the list-style picker and the SAF → file conversion; null: Android's pickers only. */
     val localFiles: LocalFiles? = null,
     /**
@@ -1570,34 +1572,23 @@ class AppState(
     private suspend fun takeSystemsGen(): Long = systemsLock.withLock { ++systemsTaken }
 
     /**
-     * [systems], computed under [gen], becomes [systemsCache] unless a newer computation's is shown; true when it did. With
-     * [dsReady] (the DS dumps, read with it) the DS console DS Download Play needs is added, and the flag kept beside it.
+     * [systems], computed under [gen], becomes [systemsCache] unless a newer computation's is shown; true when it did. The
+     * DS and 3DS consoles their Download Play rows need are added when the library has none.
      */
-    private suspend fun offerSystems(gen: Long, systems: List<SystemFolder>, dsReady: Boolean = dsMenuReady): Boolean = systemsLock.withLock {
+    private suspend fun offerSystems(gen: Long, systems: List<SystemFolder>): Boolean = systemsLock.withLock {
         (gen > systemsWritten).also {
-            if (it) { systemsWritten = gen; dsMenuReady = dsReady; systemsCache = DsMenu.withConsole(systems, dsReady).let { if (deps.n3dsDownloadPlay) N3dsDownloadPlay.withConsole(it) else it }; topScreen.followTopStats() }
+            if (it) {
+                systemsWritten = gen
+                systemsCache = systems.let { if (deps.ndsDownloadPlay) DsMenu.withConsole(it) else it }
+                    .let { if (deps.n3dsDownloadPlay) N3dsDownloadPlay.withConsole(it) else it }
+                topScreen.followTopStats()
+            }
         }
-    }
-
-    private suspend fun readDsMenuReady(): Boolean =
-        tryOr({ false }) { withContext(deps.compute) { DsMenu.missing(deps.ndsBiosFiles().toSet()).isEmpty() } }
-
-    /** A BIOS import can bring or take the DS dumps: the DS Download Play row (and its console) follows at once. */
-    private suspend fun refreshDsMenu() {
-        val ready = readDsMenuReady()
-        if (ready == dsMenuReady) return
-        val ix = libraryIndex.current() ?: return
-        val gen = takeSystemsGen()
-        val hidden = hiddenPaths.toSet()
-        if (!offerSystems(gen, withContext(deps.compute) { ix.playableSystems(hidden) }, ready)) return
-        collectionCounter.invalidateCollectionCounts()
-        rebuildMainRows()
-        if (_screen.value is Screen.Games) refreshOpenList()
     }
 
     private suspend fun showSystems(playable: List<SystemFolder>) {
         val gen = takeSystemsGen()
-        offerSystems(gen, playable, readDsMenuReady())
+        offerSystems(gen, playable)
         collectionCounter.invalidateCollectionCounts()
         rebuildMainRows()
         when {
@@ -2493,7 +2484,6 @@ class AppState(
         when (result) {
             is com.nxredux.mobile.bios.BiosIntakeResult.Done -> {
                 topScreen.forgetBios()
-                scope.launch { refreshDsMenu() }
                 if ((_screen.value as? Screen.Settings)?.section != SettingsSection.IMPORT_BIOS) return showNotice(result.summary.headline())
                 dismissNotice()
                 _screen.value = Screen.BiosImportResult(result.summary)
@@ -2694,11 +2684,9 @@ class AppState(
      */
     private var consoleEntriesOf: Pair<List<SystemFolder>, HashMap<List<String>, Pair<List<SystemFolder>, List<Listed>>>>? = null
 
-    /** The dumps DS Download Play boots from are in Bios/NDS/, as read with [systemsCache] ([offerSystems]). */
-    private var dsMenuReady = false
-
     private fun buildConsoleEntries(systems: List<SystemFolder>): List<Listed> =
-        DsMenu.withEntry(systems, gameEntries(systems), dsMenuReady).let { if (deps.n3dsDownloadPlay) N3dsDownloadPlay.withEntry(systems, it) else it }
+        gameEntries(systems).let { if (deps.ndsDownloadPlay) DsMenu.withEntry(systems, it) else it }
+            .let { if (deps.n3dsDownloadPlay) N3dsDownloadPlay.withEntry(systems, it) else it }
 
     private fun gameEntries(systems: List<SystemFolder>): List<Listed> {
         systems.singleOrNull()?.let { s -> return s.games.map { Listed(s, it) } }
@@ -3420,6 +3408,7 @@ class AppState(
                     SettingsKind.HOME_SCREEN -> deps.launcher?.let { it.setHome(!it.isHome()); settingsUi.refreshSettings() }
                     SettingsKind.ANDROID_GAMES -> androidApps.openToolApps(AppPick.GAMES)
                     SettingsKind.RESET_DEFAULTS -> _screen.value = s.copy(confirmReset = true)   // asks first
+                    SettingsKind.CLEAR_DOWNLOAD_PLAY -> _screen.value = s.copy(confirmReset = true)   // asks first
                     SettingsKind.ALL_FILES -> deps.allFilesAccess?.openSettings()
                     SettingsKind.MIC_ACCESS -> deps.micAccess?.request()
                     SettingsKind.KIDS_PIN -> kidsUi.kidsChangePin()

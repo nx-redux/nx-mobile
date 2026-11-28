@@ -370,6 +370,23 @@ class InGameMenuModelTest {
         assertEquals(PageKind.Options, m.state.page.kind)
     }
 
+    @Test fun a_download_play_client_offers_only_continue_and_quit() {
+        val m = model().also { it.cheatsAvailable = true; it.saveStates = false }
+        m.setDownloadPlayClient(true)
+        assertEquals(listOf("Continue", "Quit"), m.state.page.rows.map { it.label })
+        assertEquals(listOf(GamePanelTab.SHORTCUTS), m.panelState().tabs)
+        m.setDsWireless(true)   // the client's room: still the client's two rows
+        assertEquals(listOf("Continue", "Quit"), m.state.page.rows.map { it.label })
+        m.setDownloadPlayClient(false)   // the received game started, in its room
+        assertEquals(listOf("Continue", "Disconnect", "Quit"), m.state.page.rows.map { it.label })
+    }
+
+    @Test fun a_received_download_play_game_has_no_reset() {
+        val m = model().also { it.saveStates = false }
+        m.setDownloadPlayRow(true)
+        assertEquals(listOf("Continue", "Options", "Quit"), m.state.page.rows.map { it.label })
+    }
+
     @Test fun options_has_no_cheats_row_the_panel_has_them() {
         val m = model().also { it.cheatsAvailable = true }
         m.select(4)
