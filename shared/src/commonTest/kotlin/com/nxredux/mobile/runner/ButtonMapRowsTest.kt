@@ -88,6 +88,7 @@ class ButtonMapRowsTest {
         val rows = ButtonMapRows.rowsFor("DC")
         assertEquals(listOf(MapRow(A, "A"), MapRow(B, "B"), MapRow(X, "X"), MapRow(Y, "Y")), rows.take(4))
         assertEquals(setOf(L2, R2), rows.filter { it.locked }.map { it.job }.toSet())
+        assertTrue(MapRow(L2, "L", locked = true) in rows && MapRow(R2, "R", locked = true) in rows, rows.toString())
     }
 
     @Test

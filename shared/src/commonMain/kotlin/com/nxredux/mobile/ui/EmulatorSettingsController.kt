@@ -667,8 +667,15 @@ internal class EmulatorSettingsController(
                             build(tag, d, game, CoreConfig.parse(text) to files.second)
                         } else {
                             val text = EmulatorSettings.gameMapWrite(page, files.first, files.second, map) ?: return@withContext page
-                            configs.writeGame(tag, d.id, rom, text)
-                            build(tag, d, game, files.first to CoreConfig.parse(text))
+                            val followsConsole = map == page.consoleMap &&
+                                EmulatorSettings.holdsNothingOwn(text, files.first, build(tag, d, null, files.first to null))
+                            if (followsConsole) {
+                                configs.deleteGame(tag, d.id, rom)
+                                build(tag, d, game, files.first to null)
+                            } else {
+                                configs.writeGame(tag, d.id, rom, text)
+                                build(tag, d, game, files.first to CoreConfig.parse(text))
+                            }
                         }
                     }
                 }

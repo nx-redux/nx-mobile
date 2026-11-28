@@ -113,6 +113,19 @@ object EmulatorSettings {
     }
 
     /**
+     * A game file written as [text] holds nothing of its own: past its button mapping, its values and locks are what a
+     * first snapshot ([gameWrite]) of [console] with [consolePage]'s core values holds. Such a file only stops the game
+     * following the console, so a mapping bound back to the console's deletes it.
+     */
+    fun holdsNothingOwn(text: String, console: ConfigFile?, consolePage: EmulatorPage): Boolean {
+        val snapshot = CoreConfig.render(
+            console, consolePage.core.orEmpty().map { it.key to it.value }, FrontendOptions::migrateKey, drop = { it.startsWith(ButtonMap.PREFIX) },
+        )
+        fun ConfigFile.own() = values.filterKeys { !it.startsWith(ButtonMap.PREFIX) } to locked.filterNot { it.startsWith(ButtonMap.PREFIX) }.toSet()
+        return CoreConfig.parse(text).own() == CoreConfig.parse(snapshot).own()
+    }
+
+    /**
      * The game file's text after [key] = [value]: in place, or a full snapshot of [console] + [page]'s core values on the
      * first change. The snapshot takes values from [page] (never the resolved map), so keys the page hides are not added;
      * invisible table options are left to their defaults, not written.

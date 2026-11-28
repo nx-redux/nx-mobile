@@ -61,6 +61,9 @@ object ButtonMapRows {
             val button = NxButton.valueOf(MapKey.ofKeyCode(PhysicalKeys.toRunner(t, job.keyCode))!!.name)
             when {
                 N64Input.appliesTo(t) -> N64_NAMES[button]
+                // The analog triggers by the console's names (the Dreamcast's pad draws them as L2 / R2).
+                ButtonMap.analogTriggers(t) && button == NxButton.L2 -> "L"
+                ButtonMap.analogTriggers(t) && button == NxButton.R2 -> "R"
                 button == NxButton.L3 || button == NxButton.R3 -> if (t in STICK_CLICK_TAGS) profile.label(button) else null
                 profile.isHidden(button) -> null
                 else -> profile.label(button)
