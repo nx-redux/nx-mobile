@@ -78,6 +78,14 @@ class ButtonMap(private val jobOf: Map<MapKey, MapKey>) {
         private fun fileLocked(tag: String): Set<MapKey> =
             if (tag.trim().uppercase() == "WII") locked("WII") intersect locked("GC") else locked(tag)
 
+        /**
+         * [edited], the map a game played as [playedAs] (a GameCube disc under the Wii tag: "GC") ran with, as its [tag]
+         * file saves it: the jobs only [playedAs] holds on their own keys go back on the keys [stored] (the file's mapping)
+         * has them on, so saving from a GameCube disc keeps the Wii's L2 and R2, and from a Wii disc a GameCube's L3 and R3.
+         */
+        fun toSave(edited: ButtonMap, stored: ButtonMap, tag: String, playedAs: String): ButtonMap =
+            (locked(playedAs) - fileLocked(tag)).fold(edited) { m, job -> m.bind(job, stored.keyFor(job)) }
+
         private fun read(values: Map<String, String>, tag: String): ButtonMap {
             val lines = values.filterKeys { it.startsWith(PREFIX) }
             if (lines.isEmpty()) return legacy(values[LEGACY_LAYOUT], tag)

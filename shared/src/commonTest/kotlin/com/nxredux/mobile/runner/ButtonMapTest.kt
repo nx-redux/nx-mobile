@@ -117,6 +117,32 @@ class ButtonMapTest {
     }
 
     @Test
+    fun savingFromAGameCubeDiscKeepsTheWiiTriggers() {
+        val stored = ButtonMap.DEFAULT.bind(MapKey.A, MapKey.L2)            // the Wii file: A's job on L2
+        val edited = stored.keepingTriggers().bind(MapKey.X, MapKey.Y)      // the GameCube session: L2 held, X and Y swapped
+        val saved = ButtonMap.toSave(edited, stored, "WII", "GC")
+        assertEquals(MapKey.L2, saved.keyFor(MapKey.A))
+        assertEquals(MapKey.A, saved.keyFor(MapKey.L2))
+        assertEquals(MapKey.Y, saved.keyFor(MapKey.X))
+        // A Wii disc's session keeps a GameCube's stick-click binding the same way; elsewhere the edit saves as is.
+        val gc = ButtonMap.DEFAULT.bind(MapKey.B, MapKey.L3)
+        assertEquals(MapKey.L3, ButtonMap.toSave(gc.keeping(ButtonMap.locked("WII")), gc, "WII", "WII").keyFor(MapKey.B))
+        assertEquals(edited, ButtonMap.toSave(edited, stored, "PS", "PS"))
+    }
+
+    @Test
+    fun stickClickJobsStayOnTheirKeysOnWiiAnd3ds() {
+        // A MENU shortcut on any other key can't land on recentre, HOME or the 3DS swap: only L3 and R3 do those jobs.
+        for (tag in listOf("WII", "3DS")) {
+            val m = ButtonMap.fromConfig(ButtonMap.toConfig(ButtonMap.DEFAULT.bind(MapKey.L3, MapKey.X).bind(MapKey.R3, MapKey.Y)).toMap(), tag)
+                .keeping(ButtonMap.locked(tag))
+            assertEquals(MapKey.L3, m.keyFor(MapKey.L3), tag)
+            assertEquals(MapKey.R3, m.keyFor(MapKey.R3), tag)
+            assertEquals(MapKey.X, m.jobFor(MapKey.X), tag)
+        }
+    }
+
+    @Test
     fun wiiFileKeepsAGameCubeStickClickBinding() {
         // A Wii file also serves GameCube discs, where L3 is free: reading it keeps A on L3; a Wii disc's input locks it.
         val stored = ButtonMap.toConfig(ButtonMap.DEFAULT.bind(MapKey.A, MapKey.L3)).toMap()

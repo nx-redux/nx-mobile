@@ -684,14 +684,19 @@ internal class InGameMenuController(
                     // default loses its line ([Shortcuts.droppedOnSave]). The button mapping likewise: a game writes its own
                     // lines only while it differs from the console file's ([ButtonMap.gameConfig]).
                     val overrides = host.shortcutOverrides
-                    val map = host.buttonMap
+                    val edited = host.buttonMap
+                    val playedAs = if (host.padProfile().kind == PadProfile.Kind.GC) "GC" else host.gameTag
                     val values = CoreConfig.valuesToSave(all.map { it.key to it.value }, host.storedValues, host.graphicsForcedOptions + dualForcedOptions()) + host.frontendValuesToSave().toList() +
                         ShaderOptions.activeParamEntries(renderer.shaderValues, renderer.shaderParams) + Shortcuts.toConfig(overrides) +
                         if (game) listOf(FrontendOptions.CHEATS to CheatSet.encode(host.cheatSet.enabledKeys())) else emptyList()
                     val dropShortcuts = Shortcuts.droppedOnSave(overrides)
                     withContext(Dispatchers.IO) {
                         runCatching {
-                            val mapLines = if (game) ButtonMap.gameConfig(map, ButtonMap.fromFiles(null, store.read().first, host.gameTag)) else ButtonMap.toConfig(map)
+                            val (consoleFile, gameFile) = store.read()
+                            val consoleMap = ButtonMap.fromFiles(null, consoleFile, host.gameTag)
+                            val stored = if (game) ButtonMap.fromFiles(gameFile, consoleFile, host.gameTag) else consoleMap
+                            val map = ButtonMap.toSave(edited, stored, host.gameTag, playedAs)
+                            val mapLines = if (game) ButtonMap.gameConfig(map, consoleMap) else ButtonMap.toConfig(map)
                             val dropMap = ButtonMap.droppedOnSave(mapLines)
                             val drop = { key: String -> dropShortcuts(key) || dropMap(key) }
                             if (game) store.saveGame(values + mapLines, drop) else store.saveConsole(values + mapLines, drop).also { store.deleteGame() }
