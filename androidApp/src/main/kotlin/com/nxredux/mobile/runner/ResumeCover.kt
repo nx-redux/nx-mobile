@@ -149,8 +149,10 @@ internal class ResumeCover(
     }
 
     companion object {
-        /** How many of the game's frames after the resume land before the cover fades: its surface shows them a frame or two late. */
+        /** How many of the game's frames in a row after the resume keep the picture's shape before the cover fades ([CoverSettle]): its surface shows them a frame or two late. */
         const val SETTLE_FRAMES = 6
+        /** The most frames the cover waits for the picture's shape to hold ([CoverSettle]): half a second at 60 fps. */
+        const val SETTLE_MAX_FRAMES = 30
         private const val FADE_MS = 150L
 
         /** How far a screenshot's aspect may be from the view's and still be this view's frame (rounding when scaled down). */

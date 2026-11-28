@@ -129,6 +129,7 @@ fun GamePanel(
                     GamePanelTab.SETTINGS -> SettingsTab(state.quick, bottom, onEvent)
                     GamePanelTab.ACHIEVEMENTS -> AchievementsTab(state.achievements, state.badges, focused, bottom)
                     GamePanelTab.CHEATS -> CheatsTab(state.cheats, state.noCheatsText, focused, bottom, onEvent)
+                    GamePanelTab.PATCHES -> PatchesTab(state.patches, state.patchesText, state.patchesReset, focused, bottom, onEvent)
                     GamePanelTab.PLAYERS -> PlayersTab(state.players, state.playerPads, focused, bottom, onEvent)
                 }
             }
@@ -634,6 +635,41 @@ private fun CheatsTab(cheats: List<CheatRow>, empty: String, focused: Int?, bott
                     if (c.source.isNotEmpty()) RowSubText(c.source, selected)
                 }
                 NxSwitch(c.on, onClick = flip, lit = selected)
+            }
+        }
+    }
+}
+
+/**
+ * The PS2 game's patch groups, each with its switch and, under the name, what a change still needs; a tap anywhere on
+ * a row flips it ([GamePanelModel.patchEvent]). While a row waits for a reset, a last row resets the game (the menu's
+ * Reset dialog asks first). None yet or none at all: [empty], centred.
+ */
+@Composable
+private fun PatchesTab(
+    patches: List<PatchRow>, empty: String, reset: Boolean, focused: Int?, bottom: Dp, onEvent: (GamePanelEvent) -> Unit,
+) {
+    if (patches.isEmpty()) {
+        CentredNote(empty, Modifier.fillMaxSize().padding(start = GP_GUTTER, end = GP_GUTTER, bottom = bottom), GP_SMALL_SIZE)
+        return
+    }
+    // Item indices are the focus indices: the rows, then the Reset game row.
+    PanelLazyList(focused, bottom) {
+        itemsIndexed(patches) { i, p ->
+            val flip = { GamePanelModel.patchEvent(i, patches)?.let(onEvent); Unit }
+            val selected = focused == i
+            PanelListRow(selected, Modifier.clickable(onClick = flip)) {
+                Column(Modifier.weight(1f)) {
+                    RowText(p.name, selected)
+                    if (p.note.isNotEmpty()) RowSubText(p.note, selected)
+                }
+                NxSwitch(p.on, onClick = flip, lit = selected)
+            }
+        }
+        if (reset) item {
+            val selected = focused == patches.size
+            PanelListRow(selected, Modifier.clickable { onEvent(GamePanelEvent.Reset) }) {
+                RowText(GamePanelModel.RESET_GAME, selected)
             }
         }
     }

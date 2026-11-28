@@ -19,6 +19,8 @@ import com.nxredux.mobile.lowLatencyWifiLock
 import com.nxredux.mobile.cheats.CheatFolders
 import com.nxredux.mobile.cheats.CheatSet
 import com.nxredux.mobile.cheats.DolphinCheats
+import com.nxredux.mobile.cheats.Ps2PatchSet
+import com.nxredux.mobile.cheats.Ps2Patches
 import com.nxredux.mobile.gametime.GameTimeRecorder
 import com.nxredux.mobile.gametime.GameTimeService
 import com.nxredux.mobile.layout.ScreenClass
@@ -198,6 +200,9 @@ internal interface LaunchHost : GameScreenHost {
     var dolphinPlayerCheats: CheatSet?
     var dolphinSavedCheats: List<String>
     var dolphinBuiltInPath: String?
+    var patchesSupported: Boolean
+    var patchSet: Ps2PatchSet
+    var patchListPath: String?
 
     /** The game's view exists: from here the saves, the quit and every controller act on it. */
     fun onViewCreated(view: GLRetroView)
@@ -241,6 +246,8 @@ internal interface LaunchHost : GameScreenHost {
     fun publishNds3d(model: InGameMenuModel)
     fun publishCheats()
     fun applyCheats(view: GLRetroView)
+    fun applyPatches(view: GLRetroView)
+    suspend fun refreshPatchList()
     suspend fun readDolphinBuiltIn(): String?
     suspend fun refreshDolphinCheats()
     fun prepareAchievements(tag: String, romFileName: String, content: ContentRef, inner: File?)
@@ -502,6 +509,9 @@ internal class LaunchPipeline(private val host: LaunchHost) {
         broadcasts = runCatching { wifi?.createMulticastLock("nx-3ds-wireless")?.apply { setReferenceCounted(false); acquire() } }.getOrNull()
     }
     companion object {
+        /** The core's patch list: looked for every 2 s for 2 minutes after the first frame (a slow disc boot included). */
+        private const val PATCH_LIST_POLL_MS = 2_000L
+        private const val PATCH_LIST_TRIES = 60
         /** Cores that send a video view map (our core patches add it). */
         private val VIDEO_VIEW_CORES = setOf("melondsds", "azahar")
         private const val KEY_FCEUMM_TURBO_SINCE = "fceumm_turbo_since"
@@ -615,6 +625,7 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             // A core that ignores codes still takes RAM patches (ramCheats).
             val cheatsOk = descriptor?.let { it.cheats || it.ramCheats } ?: true
             cheatsSupported = np == null && cheatsOk   // netplay: cheats would desync the other device
+            patchesSupported = np == null && descriptor?.patchesTab == true
             // A SAF document URI, or a file ref with All files access: opened only through [refs], never Uri.parse.
             val content = ContentRef(activity.intent.getStringExtra(EXTRA_CONTENT_URI) ?: return refuse("No content given"))
             val romFileName = activity.intent.getStringExtra(EXTRA_FILE_NAME)
@@ -683,6 +694,11 @@ internal class LaunchPipeline(private val host: LaunchHost) {
             ndsRenderMode = resolved.values[NdsRenderer.RENDER_MODE]
             input.n3dsCoreValues(resolved.values)
             val savedCheats = CheatSet.savedFrom(resolved.values, resolved.source)
+            if (patchesSupported) {
+                // The retired Widescreen / No-Interlacing options' stored values: the resolve drops locked keys.
+                val raw = withContext(Dispatchers.IO) { store.read() }.let { (console, perGame) -> Ps2Patches.layered(console?.values, perGame?.values) }
+                patchSet = Ps2PatchSet.start(Ps2Patches.initialEnabled(Ps2Patches.savedFrom(resolved.values, resolved.source), raw))
+            }
             val dolphinContent = CompletableDeferred<String>()
             // Off the critical path: the menu shows the set once it lands, the first-frame apply waits for it.
             val loadCheats = { lifecycleScope.launch {
@@ -1161,6 +1177,8 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                     // netplay link: the link options are this launch's too (a session's port, mode and peer; a solo mGBA's cable): never saved.
                     graphicsForcedOptions = graphics.forcedOptions.keys + cfg.linkOptions.keys + prepared.hleOptions.keys +
                         DownloadPlayScreen.unsavedOptions(cfg.dsMenu, cfg.n3dsDownloadPlay)
+                    // The core's card folder is named after the file it opens (/rom/<name>).
+                    if (patchesSupported) patchListPath = Ps2Patches.listPath(prepared.savesDir.absolutePath, CoreRegistry.contentName(cfg.tag, cfg.romFileName), prepared.inner?.name)
                     GLRetroViewData(host.activity).apply {
                         coreFilePath = cfg.coreFile
                         systemDirectory = prepared.systemDir.absolutePath
@@ -1531,12 +1549,26 @@ internal class LaunchPipeline(private val host: LaunchHost) {
                 activity.sendBroadcast(Intent(LaunchRecords.action(activity)).setPackage(activity.packageName))   // the menu records it
             }
             if (cfg.np != null && !gameNetplay.onFirstFrame(cfg.np, cfg.descriptor?.name ?: cfg.coreId)) return
+            // Patches before the resume: they only set the core's enabled list, which a state load keeps, and a
+            // widescreen group's aspect is then in place before the cover lifts.
+            if (patchesSupported) applyPatches(view)
             saves.resumeAtFirstFrame(view, dataRoot, paths)
             dropResumeCover(view)
             // Cheats sit on top of the resumed state, as minarch applies them after load.
             cheatsLoad?.join()
             refreshDolphinCheats()
             if (cheatSet.hasEnabled()) applyCheats(view)
+            if (patchesSupported) {
+                // The core lists the patches once the game's own code starts, seconds after a cold boot's BIOS; the
+                // second-screen panel shows the tab all along, so it is not left waiting for the menu to open.
+                lifecycleScope.launch {
+                    repeat(PATCH_LIST_TRIES) {
+                        refreshPatchList()
+                        if (patchSet.groups != null) return@launch
+                        delay(PATCH_LIST_POLL_MS)
+                    }
+                }
+            }
             achievements?.startSession()
         }
     }
@@ -1587,13 +1619,16 @@ internal class LaunchPipeline(private val host: LaunchHost) {
     }
 
     /**
-     * The resume is done (or failed): the cover fades once [ResumeCover.SETTLE_FRAMES] of the game's frames are drawn,
-     * so its own frame is on screen under it (the surface shows a drawn frame a frame or two later).
+     * The resume is done (or failed): the cover fades once [ResumeCover.SETTLE_FRAMES] of the game's frames in a row
+     * keep the picture's shape ([CoverSettle]), so its own frame is on screen under it (the surface shows a drawn frame a
+     * frame or two later).
      */
     private fun dropResumeCover(view: GLRetroView) {
         val cover = resumeCover ?: return
         host.lifecycleScope.launch {
-            view.getGLRetroEvents().filter { it is GLRetroView.GLRetroEvents.FrameRendered }.take(ResumeCover.SETTLE_FRAMES).collect {}
+            val settle = CoverSettle(ResumeCover.SETTLE_FRAMES, ResumeCover.SETTLE_MAX_FRAMES)
+            view.getGLRetroEvents().filter { it is GLRetroView.GLRetroEvents.FrameRendered }
+                .first { settle.frame(view.getGameGeometry().toList()) }
             cover.fadeOut()
             if (resumeCover === cover) resumeCover = null
         }

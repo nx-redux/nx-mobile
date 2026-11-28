@@ -1,5 +1,30 @@
 # TODO list
 
+## PS2 Patches tab: device checks owed
+
+Passed on the AYANEO (God of War II; DBZ BT3 zipped under another name; scripted with the GAME_PATCH / GAME_SAVE_OPTIONS hooks):
+the list (live and boot-only groups), Widescreen on from the old console option (also under a game file without that line),
+Widescreen off live back to 4:3, the Reset note and Reset applying a boot-only group, Save Changes → For game (`nx_patches`)
+coming back on the next launch, no carry-over to a second game, a zipped disc's list under its unpacked name, and a
+console save keeping the old Widescreen line, and a resume with Widescreen on reaching 16:9 before the resume cover
+fades (three runs).
+
+Passed on the Nova (Ace Combat 5, God of War II): the list, both switches by controller in the tab (applied as the
+game resumes), a switch off live, and Widescreen on live over a resume.
+
+- [ ] A 60 FPS patch, on and off live: none of the test games has one. PCSX2's patches have one for 625 games, among
+  them (US releases): ICO, Kingdom Hearts and Kingdom Hearts II, Metal Gear Solid 2 Substance and 3 Subsistence,
+  Silent Hill 2 and 3, Prince of Persia (Sands of Time, Warrior Within, The Two Thrones), Ratchet & Clank Up Your
+  Arsenal and Deadlocked, GTA III, Vice City, San Andreas, Liberty City and Vice City Stories, Burnout 3, Revenge and
+  Dominator, Need for Speed Underground 1 and 2, Spider-Man 2, Star Wars Battlefront I and II. Put one on the Nova
+  (SD `Roms/Playstation 2`) and check its `60 FPS` group.
+
+Fixed in this branch (patches/armsx2/0013), checked on the Nova: on OpenGL a widescreen picture was letterboxed inside
+the core's fixed 640x448 frame, about 7% too tall. The canvas now follows the aspect as on Vulkan (1593x896 shown at
+1280x720, at the internal resolution; GoW2 58 fps), back to 4:3 when turned off, and a resume settles at 16:9.
+
+Known limits: every switch sends the whole set again (once-on-enable lines of the other groups rerun); the list is read once a launch (an `.m3u` disc change keeps the first disc's list); a boot over 2 minutes leaves the dual-screen panel on "Loading" until the menu opens.
+
 ## PSP ad hoc over the USB cable
 
 To fix (both reproduce with `tools/device-tests/psp_cable.py`, checks `late` and `replug`):

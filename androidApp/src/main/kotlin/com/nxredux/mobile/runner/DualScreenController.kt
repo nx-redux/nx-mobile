@@ -35,6 +35,7 @@ import androidx.lifecycle.lifecycleScope
 import com.nxredux.mobile.R
 import com.nxredux.mobile.achievements.sortedBy
 import com.nxredux.mobile.cheats.CheatSet
+import com.nxredux.mobile.cheats.Ps2PatchSet
 import com.nxredux.mobile.gametime.GameTimeService
 import com.nxredux.mobile.netplay.NetplaySession
 import com.nxredux.mobile.layout.CoreFrame
@@ -123,6 +124,9 @@ internal interface DualScreenHost : GameScreenHost {
     val cheatsSupported: Boolean
     val cheatSet: CheatSet
     val cheatsFolder: String
+    /** The PS2 game's patch switches (toggled through [handleMenuEffect]) and whether it has the Patches tab. */
+    val patchesSupported: Boolean
+    val patchSet: Ps2PatchSet
     /** The in-game menu's view while it is open (the panel on main takes its place). */
     val menuView: ComposeView?
     fun layoutTag(): String
@@ -888,6 +892,7 @@ internal class DualScreenController(
             raAvailable = list.isNotEmpty(),
             players = !owner.sessionLocked && players != null && GamePanelModel.playersShown(players.first, players.second),
             cheats = owner.cheatsSupported && !owner.sessionLocked, settings = !owner.kidsSettingsHidden,
+            patches = owner.patchesSupported && !owner.sessionLocked,
         )
         val cheats = owner.cheatSet
         val (disc, count) = discs ?: (0 to 0)
@@ -911,6 +916,9 @@ internal class DualScreenController(
             playerPads = players?.second.orEmpty(),
             cheats = GamePanelModel.cheatRows(cheats.entries),
             noCheatsText = GamePanelModel.noCheatsText(owner.cheatsFolder, cheats.expected),
+            patches = GamePanelModel.patchRows(owner.patchSet),
+            patchesText = GamePanelModel.patchesText(owner.patchSet),
+            patchesReset = owner.patchSet.needsReset(),
             showGamePill = dualMode == DualMode.PANEL_UP,
             gamePillCorner = padLayout.cornerShown.value,   // the Panel pill was the corner buttons' (a controller attached)
         )
@@ -1008,6 +1016,7 @@ internal class DualScreenController(
             is GamePanelEvent.SelectTab -> { dualPanelTab = e.tab; refreshDualPanel() }
             is GamePanelEvent.SetPlayer -> owner.handleMenuEffect(MenuEffect.SetPlayer(e.slot, e.key))
             is GamePanelEvent.SetCheat -> owner.handleMenuEffect(MenuEffect.SetCheat(e.index, e.on))
+            is GamePanelEvent.SetPatch -> owner.patchSet.groups?.getOrNull(e.index)?.let { owner.handleMenuEffect(MenuEffect.SetPatch(it.name, e.on)) }
             GamePanelEvent.ShowGame -> flipPanelDown()
             // Hidden in netplay; a stale tap there does nothing. The tiles follow through the speed's onTiles.
             is GamePanelEvent.SetFastForward, is GamePanelEvent.SetRewind -> GamePanelModel.speedEffect(e)?.takeIf { !owner.sessionLocked }?.let {

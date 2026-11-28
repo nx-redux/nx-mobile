@@ -2,6 +2,7 @@ package com.nxredux.mobile.ui.nx
 
 import com.nxredux.mobile.achievements.RaAchievement
 import com.nxredux.mobile.cheats.CheatEntry
+import com.nxredux.mobile.cheats.Ps2PatchSet
 import com.nxredux.mobile.gametime.GameTimeFormat
 import com.nxredux.mobile.netplay.NetplayRole
 import com.nxredux.mobile.netplay.NetplaySession
@@ -10,7 +11,7 @@ import com.nxredux.mobile.shortcuts.ShortcutAction
 import com.nxredux.mobile.shortcuts.TouchSlot
 
 /** The game panel's tabs, in display order; [GamePanelModel.tabs] hides the ones that don't apply. */
-enum class GamePanelTab(val label: String) { SHORTCUTS("Shortcuts"), SETTINGS("Settings"), ACHIEVEMENTS("Achievements"), CHEATS("Cheats"), PLAYERS("Players") }
+enum class GamePanelTab(val label: String) { SHORTCUTS("Shortcuts"), SETTINGS("Settings"), ACHIEVEMENTS("Achievements"), CHEATS("Cheats"), PATCHES("Patches"), PLAYERS("Players") }
 
 /**
  * The tab's word in the in-game menu's tab row: Shortcuts is the Menu tab there (the menu's words with the shortcuts
@@ -69,6 +70,9 @@ data class GamePanelHeader(
  */
 data class CheatRow(val name: String, val source: String, val on: Boolean)
 
+/** One PS2 Patches tab row: the patch group's [name], its switch ([on]) and what a change still needs ([note]: blank when none). */
+data class PatchRow(val name: String, val note: String, val on: Boolean)
+
 /** One row of the Settings tab ([GamePanelState.quick]): what a player changes mid-game, applied as it is touched. */
 sealed interface QuickSetting {
     val label: String
@@ -114,6 +118,10 @@ data class GamePanelState(
     val playerPads: List<PlayerPadRow>,
     val cheats: List<CheatRow> = emptyList(),
     val noCheatsText: String = "",
+    /** The Patches tab's rows, what it says without any ([patchesText]), and its Reset game button ([patchesReset]). */
+    val patches: List<PatchRow> = emptyList(),
+    val patchesText: String = "",
+    val patchesReset: Boolean = false,
     val focus: PanelFocus? = null,
     val showGamePill: Boolean = false,
     // the Game pill in the corner buttons' look, as the Panel pill it answers there (a controller attached); else the hollow pill
@@ -148,6 +156,8 @@ sealed interface GamePanelEvent {
     data class SetPlayer(val slot: Int, val key: String?) : GamePanelEvent
     /** Turn cheat [index] (the game's cheat list) [on] or off, live. */
     data class SetCheat(val index: Int, val on: Boolean) : GamePanelEvent
+    /** Turn PS2 patch group [index] (the Patches tab's rows) [on] or off. */
+    data class SetPatch(val index: Int, val on: Boolean) : GamePanelEvent
     /** The Game pill: the DS/3DS screen comes back to the second display. */
     data object ShowGame : GamePanelEvent
     /** The toggled fast forward to [on] (the tile shows the live state, so this turns off a toggle a binding left on). */
@@ -165,13 +175,16 @@ object GamePanelModel {
     /**
      * Shortcuts always; Settings on the second-screen panel ([settings]); Achievements only with a RetroAchievements
      * set; Cheats while the core takes them ([cheats], even with none for the game: the tab says how to add some);
-     * Players as [playersShown] says.
+     * Patches for a PS2 game ([patches]); Players as [playersShown] says.
      */
-    fun tabs(raAvailable: Boolean, players: Boolean, cheats: Boolean = false, settings: Boolean = false): List<GamePanelTab> = buildList {
+    fun tabs(
+        raAvailable: Boolean, players: Boolean, cheats: Boolean = false, settings: Boolean = false, patches: Boolean = false,
+    ): List<GamePanelTab> = buildList {
         add(GamePanelTab.SHORTCUTS)
         if (settings) add(GamePanelTab.SETTINGS)
         if (raAvailable) add(GamePanelTab.ACHIEVEMENTS)
         if (cheats) add(GamePanelTab.CHEATS)
+        if (patches) add(GamePanelTab.PATCHES)
         if (players) add(GamePanelTab.PLAYERS)
     }
 
@@ -356,6 +369,24 @@ object GamePanelModel {
     fun noCheatsText(folder: String, expected: String): String =
         if (expected.isBlank() || folder.isBlank()) "$NO_CHEATS\n$ADD_CHEATS a RetroArch .cht file to the Cheats folder."
         else "$NO_CHEATS\n$ADD_CHEATS a RetroArch .cht file as $folder/$expected."
+
+    /** The Patches tab's rows, in the core's list order (a row's index is the group's). */
+    fun patchRows(set: Ps2PatchSet): List<PatchRow> = set.groups.orEmpty().map { PatchRow(it.name, set.note(it.name), set.isOn(it.name)) }
+
+    /** What the Patches tab says instead of rows: blank once the core has listed at least one group. */
+    fun patchesText(set: Ps2PatchSet): String = when {
+        set.groups == null -> LOADING_PATCHES
+        set.groups.isEmpty() -> NO_PATCHES
+        else -> ""
+    }
+
+    /** A tap (or A) on patch [index]: its switch flipped; null past the list. */
+    fun patchEvent(index: Int, rows: List<PatchRow>): GamePanelEvent.SetPatch? =
+        rows.getOrNull(index)?.let { GamePanelEvent.SetPatch(index, on = !it.on) }
+
+    const val NO_PATCHES = "No patches for this game.\nDownload them with Tools → Cheats & Patches."
+    const val LOADING_PATCHES = "Loading the game's patches…"
+    const val RESET_GAME = "Reset game"
 
     const val NO_CHEATS = "No cheats for this game."
     private const val ADD_CHEATS = "Download them with Tools → Cheats & Patches, or add"

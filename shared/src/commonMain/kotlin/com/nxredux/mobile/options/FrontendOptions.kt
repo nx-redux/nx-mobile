@@ -104,6 +104,8 @@ object FrontendOptions {
     const val PAD_OPACITY_DEFAULT = 60
     /** Enabled cheats (normalised info texts — desc with its source prefix — joined by `|`); written to the game config only, never a row. */
     const val CHEATS = "nx_cheats"
+    /** PS2 patch groups turned on (names, [CHEATS]'s encoding); game config only, never a row. */
+    const val PATCHES = "nx_patches"
     const val NONE = "None"
 
     /** Our frontend keys. */

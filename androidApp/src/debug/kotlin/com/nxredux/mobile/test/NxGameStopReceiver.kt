@@ -8,7 +8,8 @@ import com.swordfish.libretrodroid.NxLog
 
 /**
  * Debug builds only, in the game process: [NxTestReceiver]'s GAME_STOP, handed on, quits the live game there; its
- * GAME_FF (the `ff` extra) turns fast forward on or off; its GAME_DISC (the `disc` extra) changes disc, its GAME_RESET (`reset`) resets and its GAME_SLOT (`slot`, `save`) saves or loads a slot.
+ * GAME_FF (the `ff` extra) turns fast forward on or off; its GAME_DISC (the `disc` extra) changes disc, its GAME_RESET (`reset`) resets and its GAME_SLOT (`slot`, `save`) saves or loads a slot,
+ * its GAME_PATCH (`patch`, `on`) sets a Patches-tab switch and its GAME_SAVE_OPTIONS (`save_options`: game or console) saves the options.
  */
 class NxGameStopReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -16,6 +17,8 @@ class NxGameStopReceiver : BroadcastReceiver() {
             intent.hasExtra(EXTRA_FF) -> GameActivity.debugFastForward(intent.getBooleanExtra(EXTRA_FF, false))
             intent.hasExtra(EXTRA_DISC) -> GameActivity.debugDisc(intent.getIntExtra(EXTRA_DISC, 0))
             intent.hasExtra(EXTRA_RESET) -> GameActivity.debugReset()
+            intent.hasExtra(EXTRA_PATCH) -> GameActivity.debugPatch(intent.getStringExtra(EXTRA_PATCH)!!, intent.getBooleanExtra(EXTRA_ON, true))
+            intent.hasExtra(EXTRA_SAVE_OPTIONS) -> GameActivity.debugSaveOptions(intent.getStringExtra(EXTRA_SAVE_OPTIONS) != "console")
             intent.hasExtra(EXTRA_SLOT) -> GameActivity.debugSlot(intent.getIntExtra(EXTRA_SLOT, 0), intent.getBooleanExtra(EXTRA_SAVE, false))
             else -> GameActivity.debugQuit()
         }
@@ -28,5 +31,8 @@ class NxGameStopReceiver : BroadcastReceiver() {
         const val EXTRA_RESET = "reset"
         const val EXTRA_SLOT = "slot"
         const val EXTRA_SAVE = "save"
+        const val EXTRA_PATCH = "patch"
+        const val EXTRA_ON = "on"
+        const val EXTRA_SAVE_OPTIONS = "save_options"
     }
 }

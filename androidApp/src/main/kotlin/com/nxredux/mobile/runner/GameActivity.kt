@@ -81,6 +81,8 @@ import com.nxredux.mobile.achievements.RaLaunchHash
 import com.nxredux.mobile.achievements.RaLaunchTarget
 import com.nxredux.mobile.cheats.CheatSet
 import com.nxredux.mobile.cheats.DolphinCheats
+import com.nxredux.mobile.cheats.Ps2PatchSet
+import com.nxredux.mobile.cheats.Ps2Patches
 import com.nxredux.mobile.gametime.GameTimeRecorder
 import com.nxredux.mobile.gametime.GameTimeService
 import com.nxredux.mobile.gametime.GameTimeStore
@@ -299,6 +301,22 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             if (!BuildConfig.DEBUG) return false
             val game = debugGame?.get()?.takeIf { !it.isFinishing } ?: return false
             game.handleMenuEffect(MenuEffect.ResetGame)
+            return true
+        }
+
+        /** Debug builds only (the adb GAME_PATCH hook): the Patches tab's switch for [name], as the panel sets it. Main thread. */
+        internal fun debugPatch(name: String, on: Boolean): Boolean {
+            if (!BuildConfig.DEBUG) return false
+            val game = debugGame?.get()?.takeIf { !it.isFinishing } ?: return false
+            game.handleMenuEffect(MenuEffect.SetPatch(name, on))
+            return true
+        }
+
+        /** Debug builds only (the adb GAME_SAVE_OPTIONS hook): Save Changes for the game or the console, as the menu does. Main thread. */
+        internal fun debugSaveOptions(game: Boolean): Boolean {
+            if (!BuildConfig.DEBUG) return false
+            val screen = debugGame?.get()?.takeIf { !it.isFinishing } ?: return false
+            screen.handleMenuEffect(if (game) MenuEffect.SaveForGame else MenuEffect.SaveForConsole)
             return true
         }
 
@@ -562,6 +580,12 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         private set
     override var cheatsFolder = ""                     // the folder the empty Cheats tab names (CheatFolders.primary), set at start
         private set
+
+    // ---- PS2 patches ----
+    override var patchesSupported = false   // the panels' Patches tab; set at launch
+        private set
+    override var patchSet: Ps2PatchSet = Ps2PatchSet.EMPTY   // toggles live here until Save Changes
+    private var patchListPath: String? = null   // the core's list of the game's patch groups (Ps2Patches.listPath)
 
     // ---- netplay (Wi-Fi lockstep, see the "netplay" block) ----
     private val gameNetplay = GameNetplay(this)
@@ -1948,6 +1972,40 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         dual.refreshDualPanel()
     }
 
+    /** The enabled patch groups to the core in one job, after a reset that drops the last set ([applyCheats]'s calls). */
+    // The reset clears the core's whole list: safe because the PS2 core takes no code cheats (its descriptor's
+    // cheats = false), so applyCheats never resets it after this.
+    override fun applyPatches(view: GLRetroView) {
+        val codes = patchSet.codes()
+        view.queueEvent {
+            runCatching {
+                LibretroDroid.resetCheat()
+                codes.forEachIndexed { i, code -> view.setCheat(i, true, code, useEmulationThread = false) }
+            }.onFailure { NxLog.w(TAG_LOG, "applying patches failed", it) }
+        }
+    }
+
+    override suspend fun refreshPatchList() {
+        if (patchSet.groups != null) return
+        val path = patchListPath ?: return
+        val groups = withContext(Dispatchers.IO) {
+            runCatching { File(path).takeIf { it.isFile }?.readText() }.getOrNull()?.let(Ps2Patches::parse)
+        } ?: return
+        val before = patchSet
+        patchSet = patchSet.withGroups(groups)
+        publishPatches()
+        if (gameReady && Ps2PatchSet.resendAfterList(before, patchSet)) retroView?.let(::applyPatches)
+    }
+
+    private fun publishPatches() {
+        withMenu { it.setPatches(patchSet) }
+        dual.refreshDualPanel()
+    }
+
+    override fun onStateLoaded() {
+        if (patchesSupported) retroView?.let(::applyPatches)
+    }
+
     /**
      * Sends the enabled cheats to the core on the emulation thread in one job: a reset, then only the enabled
      * ones with contiguous indices (PCSX-ReARMed treats the index as a slot and skips a cheat behind a gap,
@@ -2375,6 +2433,11 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             // (only switching Local Wireless on would bring it back otherwise).
             withContext(Dispatchers.Main) { if (launchPipeline.dsAutoRoute && localWirelessShownOn()) LibretroNetplay.dsRejoin() }
         }
+        if (patchesSupported) {
+            patchSet = patchSet.afterReset()
+            publishPatches()
+            applyPatches(view)
+        }
     }
 
     /** The Adjust buttons editor over the paused game ([adjustButtons]) and its state; null while it isn't up. */
@@ -2621,6 +2684,9 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         override var dolphinPlayerCheats by game::dolphinPlayerCheats
         override var dolphinSavedCheats by game::dolphinSavedCheats
         override var dolphinBuiltInPath by game::dolphinBuiltInPath
+        override var patchesSupported by game::patchesSupported
+        override var patchSet by game::patchSet
+        override var patchListPath by game::patchListPath
 
         override fun onViewCreated(view: GLRetroView) { game.retroView = view }
         override fun onGameReady() { game.gameReady = true }
@@ -2660,6 +2726,8 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
         override fun publishNds3d(model: InGameMenuModel) = game.publishNds3d(model)
         override fun publishCheats() = game.publishCheats()
         override fun applyCheats(view: GLRetroView) = game.applyCheats(view)
+        override fun applyPatches(view: GLRetroView) = game.applyPatches(view)
+        override suspend fun refreshPatchList() = game.refreshPatchList()
         override suspend fun readDolphinBuiltIn() = game.readDolphinBuiltIn()
         override suspend fun refreshDolphinCheats() = game.refreshDolphinCheats()
         override fun prepareAchievements(tag: String, romFileName: String, content: ContentRef, inner: File?) =
