@@ -32,7 +32,6 @@ Still owed:
 - [x] Dreamcast: L/R dimmed and refused; with A on Y, L2 alone doesn't press a face button (Soulcalibur). GameCube (Luigi's Mansion): L/R dimmed (Nova).
 - [x] A saved Nintendo Controller Layout on SFC shows as the A↔B, X↔Y swap (Nova).
 - [x] Docs: nx-redux-docs PR #96 (pages, retaken screenshots, Button Mapping shots).
-- [ ] AYANEO (360 pad with Nintendo letters): PS bottom key is ○ until remapped. Same rule as the Nova's Nintendo mode.
 - [ ] Docs release notes entry when this ships.
 
 ## Review round 3: device checks owed
