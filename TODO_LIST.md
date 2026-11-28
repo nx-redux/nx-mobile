@@ -1,5 +1,18 @@
 # TODO list
 
+## PS2 Patches tab: device checks owed
+
+Passed on the AYANEO (God of War II): the list (two live groups, one boot-only), Widescreen on from the old option, Widescreen off live back to 4:3, High-Res Mode's Reset note, Reset applying it at boot.
+
+- [ ] Nova: a 60 FPS patch (place 1) on and off live.
+- [ ] Save Changes → For game keeps the switches; the next launch comes back with them, and a console save leaves the old Widescreen line alone.
+- [ ] No carry-over: a second PS2 game launched after the first starts with only its own saved or default patches.
+- [ ] Resume with Widescreen on: the picture is 16:9 from the first frame.
+- [ ] A zipped / 7z disc lists its patches (the list sits under the unpacked file's name).
+- [ ] Docs: the Patches tab, and Widescreen / No-Interlacing moved out of Options.
+
+Known limits: every switch sends the whole set again (once-on-enable lines of the other groups rerun); the list is read once a launch (an `.m3u` disc change keeps the first disc's list); a boot over 2 minutes leaves the dual-screen panel on "Loading" until the menu opens.
+
 ## PSP ad hoc over the USB cable
 
 To fix (both reproduce with `tools/device-tests/psp_cable.py`, checks `late` and `replug`):
