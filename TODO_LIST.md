@@ -23,6 +23,18 @@ Still owed:
 - [ ] Phone, tablet, Fold cover, Flip inner, each way up: a console of each kind looks as on its review sheet (nx-skins `renders/review/`).
 - [ ] Known limit: a non-folding tablet upright of 1.33–1.4 aspect gets the inner screen's 12 dp lift.
 
+## Per-console Button Mapping (Controller Layout removed): device checks owed
+
+- [ ] Nova in Nintendo ABXY mode, Marvel Super Heroes (PS1): the bottom key is ○ by default; Default Settings → PS → Button Mapping, bind × to B: the bottom key is × in game.
+- [ ] In-game Options → Controls → Button Mapping: bind, swap, Reset to default; Save for console and Save for game keep it; a game with its own settings follows a later console change.
+- [ ] DS: L2 swaps screens, R2 stylus still work; their rows and the SELECT combos show dimmed; L2 can't be picked for another row.
+- [ ] Dreamcast / GameCube: L and R stay analog (dimmed rows); a remapped face key doesn't press a trigger twice.
+- [ ] AYANEO (360 pad with Nintendo letters): PS bottom key is ○ until remapped; letter consoles (SNES) follow the letters.
+- [ ] A saved Nintendo Controller Layout on a letter console carries over as the A↔B, X↔Y swap.
+- [ ] Docs: drop Controller Layout, add the Button Mapping page (nx-redux-docs).
+- [ ] Follow-up: Wii / 3DS MENU shortcuts on a key remapped onto a stick-click job do that job instead.
+- [ ] Follow-up: editing the map while a GameCube disc runs under the Wii tag, then Save for console, can reset the Wii's L2 / R2.
+
 ## Review round 3: device checks owed
 
 - [ ] RA: revoke/sign out mid-game, unlock, sign in, sync → the unlock arrives; quit right after an unlock → no toast during the quit.

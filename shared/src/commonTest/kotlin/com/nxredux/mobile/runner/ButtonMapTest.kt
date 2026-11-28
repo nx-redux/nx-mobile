@@ -117,6 +117,15 @@ class ButtonMapTest {
     }
 
     @Test
+    fun wiiFileKeepsAGameCubeStickClickBinding() {
+        // A Wii file also serves GameCube discs, where L3 is free: reading it keeps A on L3; a Wii disc's input locks it.
+        val stored = ButtonMap.toConfig(ButtonMap.DEFAULT.bind(MapKey.A, MapKey.L3)).toMap()
+        val read = ButtonMap.fromConfig(stored, "WII")
+        assertEquals(MapKey.L3, read.keyFor(MapKey.A))
+        assertEquals(MapKey.A, read.keeping(ButtonMap.locked("WII")).keyFor(MapKey.A))
+    }
+
+    @Test
     fun gameLinesWinElseConsoles() {
         val console = mapOf("nx_map_L1" to "R1", "nx_map_R1" to "L1")
         val game = mapOf("nx_map_A" to "B", "nx_map_B" to "A", "opt" to "x")

@@ -74,7 +74,7 @@ object EmulatorSettings {
         }
         return EmulatorPage(
             tag, descriptor.id, descriptor.name, consoleRows, core, forGame, forGame && game != null,
-            ButtonMap.fromConfig(resolved.values, tag), mapRows(tag, resolved.values),
+            ButtonMap.fromConfig(resolved.values, tag).keeping(ButtonMap.locked(tag)), mapRows(tag, resolved.values),
         )
     }
 

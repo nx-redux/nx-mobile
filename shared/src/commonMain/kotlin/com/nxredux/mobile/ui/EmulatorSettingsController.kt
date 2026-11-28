@@ -183,7 +183,7 @@ object EmulatorRows {
                 is EmulatorRow.App -> r is EmulatorRow.App && r.row.kind == previous.row.kind
                 EmulatorRow.ButtonMapping -> r == EmulatorRow.ButtonMapping
                 is EmulatorRow.MapBind -> r is EmulatorRow.MapBind && r.job == previous.job
-                is EmulatorRow.MapCombo -> r is EmulatorRow.MapCombo && r.label == previous.label && r.keys == previous.keys
+                is EmulatorRow.MapCombo -> r is EmulatorRow.MapCombo && r.label == previous.label
                 EmulatorRow.ResetButtonMap -> r == EmulatorRow.ResetButtonMap
                 else -> false
             }

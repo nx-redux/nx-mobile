@@ -298,8 +298,18 @@ internal class GameInputRouter(private val host: GameInputHost) {
     /** Dolphin is running a GameCube game, so the pad is the GameCube's ([PadProfile.Kind.GC]) and L / R are analog triggers. */
     val gcPad: Boolean get() = host.isDolphin && host.padProfile().kind == PadProfile.Kind.GC
 
-    /** The button mapping the pad's keys follow: L2 and R2 left alone where the core reads them as analog triggers. */
-    private val buttonMap: ButtonMap get() = inputMap(host.buttonMap, analogTriggers = host.isDc || gcPad)
+    private var inputMapFor: Pair<ButtonMap, Set<MapKey>>? = null
+    private var inputMapCached: ButtonMap = ButtonMap.DEFAULT
+
+    /**
+     * The button mapping the pad's keys follow: the keys the console keeps ([ButtonMap.locked]: its hotkeys, its analog
+     * triggers) left alone, a GameCube disc's as the GameCube's. Cached, as every key reads it.
+     */
+    private val buttonMap: ButtonMap get() {
+        val key = host.buttonMap to ButtonMap.locked(if (gcPad) "GC" else host.gameTag)
+        if (key != inputMapFor) { inputMapFor = key; inputMapCached = inputMap(key.first, key.second) }
+        return inputMapCached
+    }
 
     /** The GameCube pad's L and R: one tap/hold gesture, applied state, hold timer each. */
     private val gcGestures = mapOf(NxButton.L2 to TriggerGesture(), NxButton.R2 to TriggerGesture())
@@ -1205,8 +1215,8 @@ internal class GameInputRouter(private val host: GameInputHost) {
     }
 }
 
-/** [map] as the pad's keys follow it: with L2 and R2 on their own keys when they are [analogTriggers] ([ButtonMap.keepingTriggers]). */
-internal fun inputMap(map: ButtonMap, analogTriggers: Boolean): ButtonMap = if (analogTriggers) map.keepingTriggers() else map
+/** [map] as the pad's keys follow it: the [locked] keys on their own jobs ([ButtonMap.keeping]). */
+internal fun inputMap(map: ButtonMap, locked: Set<MapKey>): ButtonMap = map.keeping(locked)
 
 /** The key whose job a key does under [map]: a physical pad's keys follow it, a key from no physical pad goes as is. */
 internal fun mappedKey(map: ButtonMap, keyCode: Int, physical: Boolean): Int =

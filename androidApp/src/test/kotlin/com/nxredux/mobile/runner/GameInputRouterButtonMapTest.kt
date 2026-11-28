@@ -28,11 +28,11 @@ class GameInputRouterButtonMapTest {
 
     @Test fun analogTriggersStayUnmapped() {
         // A Wii map with A on L2 running a GameCube disc: the pulled trigger stays L, A's key stays A.
-        val map = inputMap(ButtonMap.DEFAULT.bind(MapKey.A, MapKey.L2), analogTriggers = true)
+        val map = inputMap(ButtonMap.DEFAULT.bind(MapKey.A, MapKey.L2), ButtonMap.locked("GC"))
         assertEquals(KeyEvent.KEYCODE_BUTTON_L2, mappedKey(map, KeyEvent.KEYCODE_BUTTON_L2, physical = true))
         assertEquals(KeyEvent.KEYCODE_BUTTON_A, mappedKey(map, KeyEvent.KEYCODE_BUTTON_A, physical = true))
         val swapped = ButtonMap.DEFAULT.bind(MapKey.A, MapKey.L2)
-        assertEquals(KeyEvent.KEYCODE_BUTTON_A, mappedKey(inputMap(swapped, analogTriggers = false), KeyEvent.KEYCODE_BUTTON_L2, physical = true))
+        assertEquals(KeyEvent.KEYCODE_BUTTON_A, mappedKey(inputMap(swapped, ButtonMap.locked("WII")), KeyEvent.KEYCODE_BUTTON_L2, physical = true))
     }
 
     @Test fun releasesUseRecordedKey() {

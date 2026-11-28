@@ -66,9 +66,17 @@ class ButtonMap(private val jobOf: Map<MapKey, MapKey>) {
         /**
          * Reads the `nx_map_<JOB>=<PHYSICAL>` lines of a cfg over the identity; anything that isn't a permutation of
          * [MapKey] is the default. Without any such line, a Nintendo Controller Layout on a console that took the pad's
-         * letters carries over as the A/B and X/Y swap. The [locked] keys stay on their own jobs.
+         * letters carries over as the A/B and X/Y swap. The keys every game of the file keeps ([fileLocked]) stay on
+         * their own jobs.
          */
-        fun fromConfig(values: Map<String, String>, tag: String): ButtonMap = read(values, tag).keeping(locked(tag))
+        fun fromConfig(values: Map<String, String>, tag: String): ButtonMap = read(values, tag).keeping(fileLocked(tag))
+
+        /**
+         * The [locked] keys of every game a [tag] file serves. A Wii file also serves GameCube discs, whose L3 and R3 go to
+         * the core and may be bound; which a game is shows only once its disc is read, so the input applies the rest.
+         */
+        private fun fileLocked(tag: String): Set<MapKey> =
+            if (tag.trim().uppercase() == "WII") locked("WII") intersect locked("GC") else locked(tag)
 
         private fun read(values: Map<String, String>, tag: String): ButtonMap {
             val lines = values.filterKeys { it.startsWith(PREFIX) }
