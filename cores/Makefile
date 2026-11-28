@@ -510,6 +510,8 @@ dolphin_FLAGS = -DLIBRETRO=ON -DENABLE_LTO=ON -DANDROID_STL=c++_static
 # none, so no PS2 achievement could ever trigger).
 # patches/armsx2/0012: the game's named patch groups are written to nx-patches.txt beside its memory card, and
 # retro_cheat_set takes "patch:<name>" to turn one on or off, live; the app's in-game Patches tab is built on both.
+# patches/armsx2/0013: on OpenGL the output canvas follows the game's aspect and the frontend gets SET_GEOMETRY, as on
+# Vulkan; left at the fixed 640x448 window, a widescreen picture was letterboxed inside a 4:3 frame, too tall.
 # ARMSX2_EMBED_PATCHES=OFF: upstream fetches a patches.zip at configure time and compiles it in; that collection has no
 # licence, so it stays out of the .so. The app's Cheats & Patches tool downloads PCSX2's patches.zip at runtime and
 # extracts it into Cheats/PS2/Patches/, which patches/armsx2/0005 points the core at (cheats from Cheats/PS2/).

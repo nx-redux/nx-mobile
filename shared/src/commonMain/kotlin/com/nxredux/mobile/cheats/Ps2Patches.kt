@@ -51,7 +51,10 @@ object Ps2Patches {
         }
     }
 
-    /** The stored values as the resolve layers them: a game file overrides only the lines it has. */
+    /**
+     * The retired options' stored values, a game file overriding only the lines it has. Unlike the resolve, which uses
+     * one file or the other: a game file without these lines should still get the console's "on".
+     */
     fun layered(console: Map<String, String>?, game: Map<String, String>?): Map<String, String>? =
         if (console == null && game == null) null else console.orEmpty() + game.orEmpty()
 

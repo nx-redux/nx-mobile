@@ -1,0 +1,60 @@
+diff --git a/pcsx2/GS/Renderers/Common/GSRenderer.cpp b/pcsx2/GS/Renderers/Common/GSRenderer.cpp
+index e131e90..549bda9 100644
+--- a/pcsx2/GS/Renderers/Common/GSRenderer.cpp
++++ b/pcsx2/GS/Renderers/Common/GSRenderer.cpp
+@@ -19,6 +19,9 @@
+ #ifdef ENABLE_VULKAN
+ #include "GS/Renderers/Vulkan/VKLibretro.h"
+ #endif
++#ifdef ENABLE_OPENGL
++#include "GS/Renderers/OpenGL/GLLibretro.h"
++#endif
+ #include "Host.h"
+ #include "PerformanceMetrics.h"
+ #include "common/HostSys.h" // GetCPUTicks — present-cap pacer
+@@ -1278,7 +1281,13 @@ void GSRenderer::VSync(u32 field, bool registers_written, bool idle_frame)
+ 			// clamped to the geometry advertised to the frontend — so internal
+ 			// upscale survives the present pass. Resize before the draw rect
+ 			// below is computed so the whole frame stays consistent.
++			// OpenGL's output is a backbuffer this side sizes too: left at the
++			// fixed window, a widescreen game was letterboxed inside a 4:3 frame.
++#ifdef ENABLE_OPENGL
++			if (VKLibretro::Active || GLLibretro::Active)
++#else
+ 			if (VKLibretro::Active)
++#endif
+ 			{
+ 				const float aspect = GetCurrentAspectRatioFloat(GetVideoMode() == GSVideoMode::SDTV_480P);
+ 				float fwidth = static_cast<float>(current->GetWidth());
+diff --git a/pcsx2-libretro/Main.cpp b/pcsx2-libretro/Main.cpp
+index 35f985c..ee32e0d 100644
+--- a/pcsx2-libretro/Main.cpp
++++ b/pcsx2-libretro/Main.cpp
+@@ -2550,6 +2550,27 @@ RETRO_API void retro_run(void)
+ 		GLLibretro::Frame frame;
+ 		if (s_gl_hw_render.get_current_framebuffer && GLLibretro::ConsumeFrame(&frame))
+ 		{
++			// The canvas follows the game's aspect (GSRenderer sizes it), so the
++			// frontend is told each new size, as on Vulkan.
++			static u32 last_gl_geometry_width = 0;
++			static u32 last_gl_geometry_height = 0;
++			if (frame.width != last_gl_geometry_width || frame.height != last_gl_geometry_height)
++			{
++				last_gl_geometry_width = frame.width;
++				last_gl_geometry_height = frame.height;
++				retro_game_geometry geometry = {};
++				geometry.base_width = frame.width;
++				geometry.base_height = frame.height;
++#ifdef ENABLE_VULKAN
++				geometry.max_width = VKLibretro::kMaxCanvasWidth;
++				geometry.max_height = VKLibretro::kMaxCanvasHeight;
++#else
++				geometry.max_width = LibretroCore::kFrameWidth;
++				geometry.max_height = LibretroCore::kFrameHeight;
++#endif
++				geometry.aspect_ratio = static_cast<float>(frame.width) / static_cast<float>(frame.height);
++				environ_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &geometry);
++			}
+ 			// Sharing objects does not share ordering: the fence is what says
+ 			// the GS thread's rendering has actually landed rather than just
+ 			// been queued. Waiting on the server side costs this thread

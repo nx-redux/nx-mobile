@@ -12,11 +12,16 @@ fades (three runs).
 Passed on the Nova (Ace Combat 5, God of War II): the list, both switches by controller in the tab (applied as the
 game resumes), a switch off live, and Widescreen on live over a resume.
 
-- [ ] A 60 FPS patch: none of the test games has one (PCSX2 has them for 625 games; Ace Combat 5's two every-frame
-  groups went through the same path). Check with a game that has one when one is on a device.
-- [ ] OpenGL (the Nova's PS2 renderer): the core letterboxes a widescreen picture inside its 640x448 frame instead of
-  widening the frame, so it shows about 7% too tall (1280x771, not 1280x720) and never fills a 16:9 screen. Vulkan
-  widens the frame (796x448). Same with the old Widescreen option; a core-side follow-up.
+- [ ] A 60 FPS patch, on and off live: none of the test games has one. PCSX2's patches have one for 625 games, among
+  them (US releases): ICO, Kingdom Hearts and Kingdom Hearts II, Metal Gear Solid 2 Substance and 3 Subsistence,
+  Silent Hill 2 and 3, Prince of Persia (Sands of Time, Warrior Within, The Two Thrones), Ratchet & Clank Up Your
+  Arsenal and Deadlocked, GTA III, Vice City, San Andreas, Liberty City and Vice City Stories, Burnout 3, Revenge and
+  Dominator, Need for Speed Underground 1 and 2, Spider-Man 2, Star Wars Battlefront I and II. Put one on the Nova
+  (SD `Roms/Playstation 2`) and check its `60 FPS` group.
+
+Fixed in this branch (patches/armsx2/0013), checked on the Nova: on OpenGL a widescreen picture was letterboxed inside
+the core's fixed 640x448 frame, about 7% too tall. The canvas now follows the aspect as on Vulkan (1593x896 shown at
+1280x720, at the internal resolution; GoW2 58 fps), back to 4:3 when turned off, and a resume settles at 16:9.
 
 Known limits: every switch sends the whole set again (once-on-enable lines of the other groups rerun); the list is read once a launch (an `.m3u` disc change keeps the first disc's list); a boot over 2 minutes leaves the dual-screen panel on "Loading" until the menu opens.
 

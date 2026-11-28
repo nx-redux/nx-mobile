@@ -1619,16 +1619,16 @@ internal class LaunchPipeline(private val host: LaunchHost) {
     }
 
     /**
-     * The resume is done (or failed): the cover fades once [ResumeCover.SETTLE_FRAMES] of the game's frames are drawn,
-     * so its own frame is on screen under it (the surface shows a drawn frame a frame or two later).
+     * The resume is done (or failed): the cover fades once [ResumeCover.SETTLE_FRAMES] of the game's frames in a row
+     * keep the picture's shape ([CoverSettle]), so its own frame is on screen under it (the surface shows a drawn frame a
+     * frame or two later).
      */
     private fun dropResumeCover(view: GLRetroView) {
         val cover = resumeCover ?: return
         host.lifecycleScope.launch {
             val settle = CoverSettle(ResumeCover.SETTLE_FRAMES, ResumeCover.SETTLE_MAX_FRAMES)
-            val shapes = launch { view.getGameGeometryChanges().collect { settle.geometryChanged() } }
-            view.getGLRetroEvents().filter { it is GLRetroView.GLRetroEvents.FrameRendered }.first { settle.frame() }
-            shapes.cancel()
+            view.getGLRetroEvents().filter { it is GLRetroView.GLRetroEvents.FrameRendered }
+                .first { settle.frame(view.getGameGeometry().toList()) }
             cover.fadeOut()
             if (resumeCover === cover) resumeCover = null
         }
