@@ -62,6 +62,8 @@ import java.io.File
  * - GAME_RESET: the live game resets, as the menu's Reset does.
  * - GAME_SLOT (`--ei slot n --ez save true|false`, default load): the live game saves to or loads slot n, numbered from 1 as
  *   the menu shows it, as the menu does.
+ * - GAME_PATCH (`--es name <group> --ez on true|false`): the live PS2 game's Patches-tab switch, as the panel sets it.
+ * - GAME_SAVE_OPTIONS (`--es for game|console`): the live game's Save Changes, as the menu's.
  * - NETPLAY: one Wi-Fi session through the real handshake, then the game ([NxNetplayHook]). Send it with
  *   `--allow-background-activity-starts`, as GAME.
  */
@@ -100,6 +102,15 @@ class NxTestReceiver : BroadcastReceiver() {
                     .putExtra(NxGameStopReceiver.EXTRA_SLOT, intent.getIntExtra("slot", 0))
                     .putExtra(NxGameStopReceiver.EXTRA_SAVE, intent.getBooleanExtra("save", false)))
             } else NxLog.w(TAG, "GAME_SLOT: no live game")
+            ACTION_GAME_PATCH -> if (LiveGameStore.alive(app)) {
+                app.sendBroadcast(Intent(app, NxGameStopReceiver::class.java)
+                    .putExtra(NxGameStopReceiver.EXTRA_PATCH, intent.getStringExtra("name") ?: "")
+                    .putExtra(NxGameStopReceiver.EXTRA_ON, intent.getBooleanExtra("on", true)))
+            } else NxLog.w(TAG, "GAME_PATCH: no live game")
+            ACTION_GAME_SAVE_OPTIONS -> if (LiveGameStore.alive(app)) {
+                app.sendBroadcast(Intent(app, NxGameStopReceiver::class.java)
+                    .putExtra(NxGameStopReceiver.EXTRA_SAVE_OPTIONS, intent.getStringExtra("for") ?: "game"))
+            } else NxLog.w(TAG, "GAME_SAVE_OPTIONS: no live game")
             ACTION_NETPLAY -> NxNetplayHook.start(
                 app, scope, intent.getStringExtra("role"), intent.getStringExtra("peer"), intent.getStringExtra("path"),
                 intent.getStringExtra("tag"), intent.getStringExtra("core"), intent.getStringExtra("pad"),
@@ -119,6 +130,8 @@ class NxTestReceiver : BroadcastReceiver() {
         const val ACTION_GAME_DISC = "com.nxredux.mobile.test.GAME_DISC"
         const val ACTION_GAME_RESET = "com.nxredux.mobile.test.GAME_RESET"
         const val ACTION_GAME_SLOT = "com.nxredux.mobile.test.GAME_SLOT"
+        const val ACTION_GAME_PATCH = "com.nxredux.mobile.test.GAME_PATCH"
+        const val ACTION_GAME_SAVE_OPTIONS = "com.nxredux.mobile.test.GAME_SAVE_OPTIONS"
         const val ACTION_NETPLAY = "com.nxredux.mobile.test.NETPLAY"
         const val SYNC_TIMEOUT_MS = 20 * 60 * 1000L
 

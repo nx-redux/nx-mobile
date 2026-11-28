@@ -2,13 +2,15 @@
 
 ## PS2 Patches tab: device checks owed
 
-Passed on the AYANEO (God of War II): the list (two live groups, one boot-only), Widescreen on from the old option, Widescreen off live back to 4:3, High-Res Mode's Reset note, Reset applying it at boot.
+Passed on the AYANEO (God of War II; DBZ BT3 zipped under another name; scripted with the GAME_PATCH / GAME_SAVE_OPTIONS hooks):
+the list (live and boot-only groups), Widescreen on from the old console option (also under a game file without that line),
+Widescreen off live back to 4:3, the Reset note and Reset applying a boot-only group, Save Changes → For game (`nx_patches`)
+coming back on the next launch, no carry-over to a second game, a zipped disc's list under its unpacked name, and a
+console save keeping the old Widescreen line.
 
 - [ ] Nova: a 60 FPS patch (place 1) on and off live.
-- [ ] Save Changes → For game keeps the switches; the next launch comes back with them, and a console save leaves the old Widescreen line alone.
-- [ ] No carry-over: a second PS2 game launched after the first starts with only its own saved or default patches.
-- [ ] Resume with Widescreen on: the picture is 16:9 from the first frame.
-- [ ] A zipped / 7z disc lists its patches (the list sits under the unpacked file's name).
+- [ ] Resume with Widescreen on: the patches land about 2 s after the first frame (GoW2 on the AYANEO: 640x448, then
+  796x448). Check whether the 4:3 frames show after the resume cover drops; if so, send the patches before dropping it.
 - [ ] Docs: the Patches tab, and Widescreen / No-Interlacing moved out of Options.
 
 Known limits: every switch sends the whole set again (once-on-enable lines of the other groups rerun); the list is read once a launch (an `.m3u` disc change keeps the first disc's list); a boot over 2 minutes leaves the dual-screen panel on "Loading" until the menu opens.

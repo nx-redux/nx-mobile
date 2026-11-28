@@ -304,6 +304,22 @@ internal class GameActivity : ComponentActivity(), GameInputHost, PadLayoutHost,
             return true
         }
 
+        /** Debug builds only (the adb GAME_PATCH hook): the Patches tab's switch for [name], as the panel sets it. Main thread. */
+        internal fun debugPatch(name: String, on: Boolean): Boolean {
+            if (!BuildConfig.DEBUG) return false
+            val game = debugGame?.get()?.takeIf { !it.isFinishing } ?: return false
+            game.handleMenuEffect(MenuEffect.SetPatch(name, on))
+            return true
+        }
+
+        /** Debug builds only (the adb GAME_SAVE_OPTIONS hook): Save Changes for the game or the console, as the menu does. Main thread. */
+        internal fun debugSaveOptions(game: Boolean): Boolean {
+            if (!BuildConfig.DEBUG) return false
+            val screen = debugGame?.get()?.takeIf { !it.isFinishing } ?: return false
+            screen.handleMenuEffect(if (game) MenuEffect.SaveForGame else MenuEffect.SaveForConsole)
+            return true
+        }
+
         /** Debug builds only (the adb GAME_SLOT hook): saves to or loads [slot], as the menu does. Main thread. */
         internal fun debugSlot(slot: Int, save: Boolean): Boolean {
             if (!BuildConfig.DEBUG) return false
